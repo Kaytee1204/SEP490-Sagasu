@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.sagasu.SagasuApplicationTests
+-------------------------------------------------------------------------------
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 8.112 s -- in com.sagasu.SagasuApplicationTests
