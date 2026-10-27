@@ -1,5 +1,5 @@
 // src/components/layouts/admin/adminNavConfig.js
-import { LayoutDashboard, Package, AlertTriangle, Users } from 'lucide-react';
+import { LayoutDashboard, Package, AlertTriangle, Users, Tags } from 'lucide-react';
 
 export const ADMIN_NAV_SECTIONS = [
   {
@@ -16,6 +16,7 @@ export const ADMIN_NAV_SECTIONS = [
   {
     title: 'Quản lý dữ liệu',
     items: [
+      { label: 'Danh mục', path: '/admin/categories', icon: Tags, roles: ['MANAGER'] },
       {
         label: 'Tin đăng',
         path: '/admin/items',

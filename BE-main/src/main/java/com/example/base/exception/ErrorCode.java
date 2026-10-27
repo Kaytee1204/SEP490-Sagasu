@@ -3,6 +3,8 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CAT_404", "Không tìm thấy danh mục"),
+    CATEGORY_NAME_EXISTS(HttpStatus.CONFLICT, "CAT_409", "Tên danh mục đã tồn tại"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "ERR_500", "Lỗi hệ thống nội bộ"),
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "ERR_400", "Yêu cầu không hợp lệ"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "ERR_401", "Chưa xác thực hoặc phiên đăng nhập không hợp lệ"),

@@ -16,9 +16,10 @@ import AdminItemsPage from '@/features/admin/pages/AdminItemsPage';
 import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
+import CategoryManagementPage from '@/features/category/pages/CategoryManagementPage';
 
-function ProtectedRoute({ children, adminOnly = false }) {
-  const { isAuthenticated, isAdmin } = useAuth();
+function ProtectedRoute({ children, adminOnly = false, managerOnly = false }) {
+  const { isAuthenticated, isAdmin, isManager } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/dang-nhap" replace />;
@@ -28,6 +29,8 @@ function ProtectedRoute({ children, adminOnly = false }) {
   if (adminOnly && !isAdmin) {
     return <Navigate to="/" replace />;
   }
+
+  if (managerOnly && !isManager) return <Navigate to="/admin" replace />;
 
   return children;
 }
@@ -133,6 +136,7 @@ function AppRoutes() {
         <Route path="users/:id" element={<AdminUserDetailsPage />} />
         <Route path="items" element={<AdminItemsPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>
 
       <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
