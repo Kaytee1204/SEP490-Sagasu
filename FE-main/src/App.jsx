@@ -61,8 +61,8 @@ function AppRoutes() {
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>
         <Route path="/" element={<RootHomeRoute />} />
-        <Route path="/tim-kiem" element={<SearchPage />} />
-        <Route path="/chi-tiet/:id" element={<ItemDetailPage />} />
+        <Route path="/tim-kiem" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
+        <Route path="/chi-tiet/:id" element={<ProtectedRoute><ItemDetailPage /></ProtectedRoute>} />
 
         <Route
           path="/dang-tin"

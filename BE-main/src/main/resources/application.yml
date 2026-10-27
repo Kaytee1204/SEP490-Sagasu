@@ -35,9 +35,16 @@ spring:
   servlet:
     multipart:
       max-file-size: 20MB
-      max-request-size: 20MB
+      max-request-size: 27MB
 
 app:
+  storage:
+    r2:
+      enabled: ${R2_ENABLED:false}
+      endpoint: ${R2_ENDPOINT:https://903aac6785bb6371e4653ddc59df8b84.r2.cloudflarestorage.com}
+      bucket: ${R2_BUCKET:sagasu}
+      access-key-id: ${R2_ACCESS_KEY_ID:}
+      secret-access-key: ${R2_SECRET_ACCESS_KEY:}
   jwt:
     secret: sagasuSecretKeyMustBeAtLeast32BytesLongForSha256Security123456
     access-token-expiration-ms: 86400000     # 24 hours

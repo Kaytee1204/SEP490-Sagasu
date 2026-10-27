@@ -1,0 +1,7 @@
+.post-detail-page { min-height: 70vh; background: var(--bg-canvas); }
+.post-detail-breadcrumb { display: flex; align-items: center; gap: 8px; padding-top: 20px; padding-bottom: 20px; font-size: .875rem; overflow-wrap: anywhere; }
+.post-detail-breadcrumb a { color: var(--text-secondary); }
+.post-detail-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 40px; padding-top: 20px; padding-bottom: 48px; align-items: start; }
+.post-detail-info { display: flex; flex-direction: column; gap: 24px; overflow-wrap: anywhere; }
+.post-detail-message { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; text-align: center; }
+@media (max-width: 768px) { .post-detail-grid { grid-template-columns: 1fr; gap: 24px; } }

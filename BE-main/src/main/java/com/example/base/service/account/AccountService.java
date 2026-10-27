@@ -47,6 +47,7 @@ public class AccountService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Set<AccountRole> MANAGER_ALLOWED_ROLES = EnumSet.of(
             AccountRole.USER,
+            AccountRole.EXTERNAL_USER,
             AccountRole.CHECKER,
             AccountRole.APPROVER
     );

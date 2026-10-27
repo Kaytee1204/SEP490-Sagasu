@@ -1,93 +1,103 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
+import { getPostDetail } from '../api/postApi';
 import ItemGallery from '../components/detail/ItemGallery';
-import ItemMatchBreakdown from '../components/detail/ItemMatchBreakdown';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
-import ItemFinderCard from '../components/detail/ItemFinderCard';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
-import ItemActionSection from '../components/detail/ItemActionSection';
+import PrivateIdentifiersEditor from '../components/detail/PrivateIdentifiersEditor';
+import './ItemDetailPage.css';
 
-const ITEM = {
-  id: '1',
-  title: 'Ví da nam Pedro màu đen',
-  type: 'found',
-  category: 'Ví & Giấy tờ',
-  date: '18/09/2025',
-  time: '14:30',
-  location: 'Toà H1, Đại học Bách Khoa Hà Nội',
-  lat: 21.0041,
-  lng: 105.8437,
-  description: 'Nhặt được một ví da nam hiệu Pedro màu đen trên ghế đá gần sảnh Toà H1. Trong ví có một số giấy tờ tuỳ thân nhưng không tiện công khai. Mong chủ nhân liên hệ để nhận lại.',
-  characteristics: [
-    'Màu sắc: Đen',
-    'Thương hiệu: Pedro',
-    'Chất liệu: Da thật',
-    'Đặc điểm phụ: Có vết xước nhỏ ở góc phải dưới'
-  ],
-  finder: {
-    name: 'Thành viên uy tín',
-    verified: true,
-    avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=TV&backgroundColor=1e6b6b'
-  },
-  images: [
-    'https://images.unsplash.com/photo-1627123424574-724758594913?w=800&q=80',
-    'https://images.unsplash.com/photo-1605333396914-232f50c05b8a?w=800&q=80'
-  ],
-  matchData: {
-    score: 94.5,
-    visual: 98,
-    location: 90,
-    time: 92
-  }
+const STATUS_LABELS = {
+  OPEN: 'Đang tìm / chờ nhận',
+  RESERVED: 'Đang xử lý nhận đồ',
+  RETURNED: 'Đã trao trả',
+  CLOSED: 'Đã đóng',
 };
+
+function imageUrl(value) {
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function ItemDetailPage() {
   const { id } = useParams();
+  const [attempt, setAttempt] = useState(0);
+  return <PostDetail key={`${id}:${attempt}`} id={id} onRetry={() => setAttempt(value => value + 1)} />;
+}
+
+function PostDetail({ id, onRetry }) {
+  const [result, setResult] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
-  const [isOwner] = useState(true);
+  const validId = /^[1-9]\d*$/.test(id);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!validId) return;
+    getPostDetail(id)
+      .then(post => {
+        if (!cancelled) setResult({ id, post });
+      })
+      .catch(error => {
+        if (!cancelled) setResult({ id, error: error.message || 'Không tải được bài đăng.' });
+      });
+    return () => { cancelled = true; };
+  }, [id, validId]);
+
+  const current = validId ? result : { error: 'Mã bài đăng không hợp lệ.' };
+  if (!current || current.error) {
+    return (
+      <main className="container post-detail-message" aria-live="polite">
+        <h1>{current?.error ? 'Không thể xem bài đăng' : 'Đang tải bài đăng…'}</h1>
+        {current?.error && <>
+          <p role="alert">{current.error}</p>
+          <button className="btn btn-primary" onClick={onRetry}>Thử lại</button>
+        </>}
+        <Link to="/">Về trang chủ</Link>
+      </main>
+    );
+  }
+
+  const post = current.post;
+  const event = new Date(post.eventAt);
+  const item = {
+    id: post.id,
+    title: post.title,
+    type: post.postType === 'LOST' ? 'lost' : 'found',
+    category: post.categoryName,
+    location: post.locationText,
+    date: event.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+    time: event.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }),
+  };
+  const images = (post.images || []).map(image => imageUrl(image.url)).filter(Boolean);
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      <main style={{ flex: 1, background: 'var(--bg-canvas)' }}>
-        {/* ── BREADCRUMB ── */}
-        <div style={{ background: 'white', borderBottom: '1px solid var(--border)', padding: '16px 0' }}>
-          <div className="container">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-              <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>Trang chủ</Link>
-              <ChevronRight size={14} />
-              <Link to="/tim-kiem" style={{ color: 'inherit', textDecoration: 'none' }}>Tìm kiếm</Link>
-              <ChevronRight size={14} />
-              <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{ITEM.title}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="container" style={{ padding: '40px var(--space-6)', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '48px' }}>
-          {/* ── LEFT COLUMN: GALLERY & MATCH DATA ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <ItemGallery
-              images={ITEM.images}
-              title={ITEM.title}
-              type={ITEM.type}
-              activeImage={activeImage}
-              onSelectImage={setActiveImage}
-            />
-            <ItemMatchBreakdown matchData={ITEM.matchData} />
-          </div>
-
-          {/* ── RIGHT COLUMN: DETAILS & ACTIONS ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <ItemInfoSection item={ITEM} />
-            <ItemFinderCard finder={ITEM.finder} />
-            <ItemCharacteristics
-              description={ITEM.description}
-              characteristics={ITEM.characteristics}
-            />
-            <ItemActionSection item={ITEM} isOwner={isOwner} />
-          </div>
-        </div>
-      </main>
-    </div>
+    <main className="post-detail-page">
+      <nav className="container post-detail-breadcrumb" aria-label="Điều hướng">
+        <Link to="/">Trang chủ</Link><ChevronRight size={14} />
+        <span>{post.title}</span>
+      </nav>
+      <div className="container post-detail-grid">
+        <ItemGallery images={images} title={item.title} type={item.type}
+          activeImage={activeImage} onSelectImage={setActiveImage} />
+        <section className="post-detail-info" aria-label="Thông tin bài đăng">
+          <ItemInfoSection item={item} />
+          {post.moderationStatus === 'PENDING' && <p role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
+          <div><strong>Trạng thái: </strong>{STATUS_LABELS[post.status] || post.status}</div>
+          {post.postType === 'FOUND' && <div>
+            <strong>Hình thức trao trả: </strong>
+            {post.custodyMode === 'OFFICE'
+              ? 'Đã chọn bàn giao cho văn phòng; cần xác nhận tiếp nhận.'
+              : 'Người nhặt chọn tự giữ để trao trả.'}
+          </div>}
+          <ItemCharacteristics description={post.description} />
+          {post.canEditOwnPost && <PrivateIdentifiersEditor key={post.id} postId={post.id} />}
+        </section>
+      </div>
+    </main>
   );
 }

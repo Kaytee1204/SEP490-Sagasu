@@ -23,7 +23,7 @@ public class UpdateAccountRequest {
     @Schema(description = "Mật khẩu mới (tùy chọn - để trống nếu không đổi)")
     private String password;
 
-    @Schema(description = "Role mới: USER, CHECKER, APPROVER, MANAGER, ADMIN", example = "CHECKER")
+    @Schema(description = "Role mới: USER, EXTERNAL_USER, CHECKER, APPROVER, MANAGER, ADMIN", example = "CHECKER")
     private AccountRole role;
 
     @Schema(description = "Trạng thái mới: PENDING_ACTIVATION, ACTIVE, SUSPENDED, DELETED", example = "ACTIVE")

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ShieldCheck, MapPin, Clock } from 'lucide-react';
 
-export default function StepReview({ formData, postType }) {
+export default function StepReview({ formData, postType, requiresReview = false }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={{
@@ -14,17 +14,17 @@ export default function StepReview({ formData, postType }) {
             Bảo mật thông tin
           </div>
           <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Các thông tin nhạy cảm của vật phẩm sẽ được ẩn. Hệ thống AI chỉ dùng để so khớp ngầm. Người liên hệ cần chứng minh quyền sở hữu trước khi nhận đồ.
+            Tiêu đề, mô tả và ảnh là nội dung công khai khi bài được hiển thị. Không đưa số seri, thông tin cá nhân hoặc đặc điểm bí mật vào nội dung công khai.
           </div>
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-        <img
-          src={formData.images[0] || 'https://images.unsplash.com/photo-1627123424574-724758594913?w=300&q=80'}
+        {formData.images[0] && <img
+          src={formData.images[0]}
           alt="Preview"
           style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}
-        />
+        />}
         <div>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '8px' }}>
             {formData.itemName || 'Vật phẩm'}
@@ -34,6 +34,7 @@ export default function StepReview({ formData, postType }) {
               {postType === 'lost' ? 'Cần tìm' : 'Nhặt được'}
             </span>
           </div>
+          <p>Danh mục: {formData.categoryName}</p>
           <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <MapPin size={14} /> {formData.location || 'Chưa rõ địa điểm'}
@@ -44,6 +45,12 @@ export default function StepReview({ formData, postType }) {
           </div>
         </div>
       </div>
+      <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{formData.description}</p>
+      {postType === 'found' && <p>Giữ đồ: {formData.custodyMode === 'OFFICE'
+        ? 'Chọn giao văn phòng — chờ Checker xác nhận tiếp nhận.' : 'Tự giữ để trao trả.'}</p>}
+      <p>Dấu hiệu riêng tư: {formData.privateIdentifiers?.trim() ? 'Đã nhập, sẽ lưu riêng và không công khai.' : 'Chưa nhập; có thể bổ sung sau khi đăng.'}</p>
+      <p>{requiresReview ? <>Bài đăng sẽ <strong>chờ Approver duyệt</strong> trước khi hiển thị công khai.</>
+        : <>Bài đăng sẽ <strong>hiển thị ngay</strong> sau khi đăng thành công.</>}</p>
     </div>
   );
 }

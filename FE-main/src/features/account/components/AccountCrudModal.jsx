@@ -171,7 +171,8 @@ export default function AccountCrudModal({
                   fontSize: '0.85rem',
                 }}
               >
-                <option value="USER">USER (Người dùng)</option>
+                <option value="USER">USER (Sinh viên / Giảng viên nội bộ)</option>
+                <option value="EXTERNAL_USER">EXTERNAL_USER (Người ngoài trường)</option>
                 <option value="CHECKER">CHECKER (Kiểm duyệt)</option>
                 <option value="APPROVER">APPROVER (Phê duyệt)</option>
                 {isPureAdmin && <option value="MANAGER">MANAGER (Quản lý)</option>}

@@ -14,14 +14,20 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
-        return ResponseEntity.status(403).body(new ErrorResponse("ERR_403", "Không có quyền truy cập"));
+    public ResponseEntity<ErrorResponse> handleAccessDenied(Exception ex) {
+        return ResponseEntity.status(403).body(new ErrorResponse(ErrorCode.FORBIDDEN.getCode(), ErrorCode.FORBIDDEN.getDefaultMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(Exception ex) {
+        return ResponseEntity.status(413).body(new ErrorResponse("UPLOAD_413", "Tệp hoặc tổng yêu cầu vượt giới hạn tải lên"));
     }
 
     @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
-            org.springframework.http.converter.HttpMessageNotReadableException.class})
-    public ResponseEntity<ErrorResponse> handleInvalidRequest(Exception ex) {
-        return ResponseEntity.badRequest().body(new ErrorResponse("ERR_400", "Tham số hoặc dữ liệu gửi lên không hợp lệ"));
+            org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidBody(Exception ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(ErrorCode.BAD_REQUEST.getCode(), "Dữ liệu gửi lên không hợp lệ hoặc thiếu phần data"));
     }
 
     @ExceptionHandler(AppException.class)
