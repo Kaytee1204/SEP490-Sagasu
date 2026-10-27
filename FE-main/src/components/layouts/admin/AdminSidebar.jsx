@@ -55,7 +55,7 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1">
               {section.title}
             </div>
-            {section.items.map((item) => {
+            {section.items.filter((item) => !item.roles || item.roles.includes(user?.role)).map((item) => {
               const active = isItemActive(item.path, item.exact);
               const Icon = item.icon;
               const hasBadge = item.badgeKey === 'pendingReports' && pendingReportsCount > 0;

@@ -13,6 +13,17 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        return ResponseEntity.status(403).body(new ErrorResponse("ERR_403", "Không có quyền truy cập"));
+    }
+
+    @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(Exception ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse("ERR_400", "Tham số hoặc dữ liệu gửi lên không hợp lệ"));
+    }
+
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ErrorResponse> handleAppException(AppException ex) {
         ErrorCode errorCode = ex.getErrorCode();

@@ -17,6 +17,7 @@ export default function AdminHeader({ onMenuClick, pendingReportsCount = 0 }) {
   };
 
   const getBreadcrumb = () => {
+    if (location.pathname.startsWith('/admin/categories')) return 'Quản lý danh mục';
     if (location.pathname.startsWith('/admin/items')) return 'Tin đăng đồ thất lạc';
     if (location.pathname.startsWith('/admin/reports')) return 'Báo cáo & Vi phạm';
     if (location.pathname.startsWith('/admin/users/')) return 'Chi tiết tài khoản';
