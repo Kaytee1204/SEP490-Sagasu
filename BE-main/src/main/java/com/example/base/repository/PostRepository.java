@@ -10,8 +10,27 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
+import java.time.OffsetDateTime;
 
 public interface PostRepository extends JpaRepository<Post, Long> {
+    // Reuse the generated public-text tsvector and its GIN index. Private clues are excluded.
+    String VISIBLE_SEARCH = """
+            from post p where p.moderation_status='VISIBLE' and p.deleted_at is null
+              and (:keyword='' or p.search_document @@ plainto_tsquery('simple', :keyword))
+              and (cast(:categoryId as bigint) is null or p.category_id=cast(:categoryId as bigint))
+              and (:postType='' or p.post_type=:postType)
+              and (:location='' or strpos(lower(p.location_text), lower(:location)) > 0)
+              and (cast(:fromTime as timestamptz) is null or p.event_at >= cast(:fromTime as timestamptz))
+              and (cast(:untilTime as timestamptz) is null or p.event_at < cast(:untilTime as timestamptz))
+            """;
+
+    @Query(value = "select p.post_id " + VISIBLE_SEARCH + " order by p.created_at desc, p.post_id desc",
+            countQuery = "select count(*) " + VISIBLE_SEARCH, nativeQuery = true)
+    Page<Long> searchVisibleIds(@Param("keyword") String keyword, @Param("categoryId") Long categoryId,
+            @Param("postType") String postType, @Param("location") String location,
+            @Param("fromTime") OffsetDateTime fromTime, @Param("untilTime") OffsetDateTime untilTime,
+            Pageable pageable);
+
     @Query(value = """
             select p.id from Post p where p.createdBy.id=:authorId and p.deletedAt is null
               and (:filter='ALL' or p.moderationStatus=:filter)

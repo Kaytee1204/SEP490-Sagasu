@@ -1,64 +1,49 @@
-import React from 'react';
-import { Filter, Calendar, Map } from 'lucide-react';
+import { CalendarDays, Filter, Tags } from 'lucide-react';
 
-export default function SearchFilterSidebar() {
-  return (
-    <aside>
-      <div style={{
-        background: 'white', borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--border)', padding: '24px',
-        position: 'sticky', top: 160
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', fontWeight: 700, fontSize: '1.0625rem' }}>
-          <Filter size={18} />
-          Bộ lọc nâng cao
+const POST_TYPES = [['', 'Tất cả bài đăng'], ['LOST', 'Cần tìm'], ['FOUND', 'Nhặt được']];
+const TIME_RANGES = [['', 'Bất kỳ lúc nào'], ['24H', '24 giờ qua'], ['7D', '7 ngày qua'], ['CUSTOM', 'Tùy chỉnh…']];
+
+export default function SearchFilterSidebar({ values, onChange, onApply, onReset, error }) {
+  return <aside className="post-search-sidebar" aria-label="Bộ lọc nâng cao">
+    <form className="post-search-filter-panel" onSubmit={onApply}>
+      <h2><Filter size={19} aria-hidden="true" />Bộ lọc nâng cao</h2>
+      <fieldset className="post-search-filter-group">
+        <legend><Tags size={15} aria-hidden="true" />Loại bài</legend>
+        <div className="post-search-radio-list">
+          {POST_TYPES.map(([value, label]) => <label key={value} className="post-search-radio">
+            <input type="radio" name="postType" value={value} checked={values.postType === value} onChange={onChange} />
+            {label}
+          </label>)}
         </div>
-
-        {/* Time Filter */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Calendar size={14} className="text-muted" /> Thời gian
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label className="checkbox-wrap">
-              <input type="radio" name="time" defaultChecked /> Bất kỳ lúc nào
-            </label>
-            <label className="checkbox-wrap">
-              <input type="radio" name="time" /> 24 giờ qua
-            </label>
-            <label className="checkbox-wrap">
-              <input type="radio" name="time" /> 7 ngày qua
-            </label>
-            <label className="checkbox-wrap">
-              <input type="radio" name="time" /> Tuỳ chỉnh...
-            </label>
-          </div>
+      </fieldset>
+      <fieldset className="post-search-filter-group">
+        <legend><CalendarDays size={15} aria-hidden="true" />Thời gian</legend>
+        <div className="post-search-radio-list">
+          {TIME_RANGES.map(([value, label]) => <label key={value} className="post-search-radio">
+            <input type="radio" name="timeRange" value={value} checked={values.timeRange === value} onChange={onChange}
+              aria-controls="post-search-custom-dates" />
+            {label}
+          </label>)}
         </div>
-
-        <div className="divider" style={{ margin: '20px 0' }} />
-
-        {/* Location Filter */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Map size={14} className="text-muted" /> Khu vực
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label className="checkbox-wrap">
-              <input type="checkbox" defaultChecked /> Hà Nội
+        {values.timeRange === 'CUSTOM' && <div className="post-search-custom-dates" id="post-search-custom-dates">
+          <p className="post-search-hint">Ngày mất / nhặt (giờ Việt Nam).</p>
+          <div className="post-search-date-fields">
+            <label>Từ ngày
+              <input type="date" name="fromDate" value={values.fromDate} onChange={onChange}
+                min="0001-01-01" max={values.toDate || '9999-12-31'} />
             </label>
-            <label className="checkbox-wrap">
-              <input type="checkbox" /> TP. Hồ Chí Minh
-            </label>
-            <label className="checkbox-wrap">
-              <input type="checkbox" /> Khác
+            <label>Đến ngày
+              <input type="date" name="toDate" value={values.toDate} onChange={onChange}
+                min={values.fromDate || '0001-01-01'} max="9999-12-31" />
             </label>
           </div>
-        </div>
-
-        <button type="button" className="btn btn-outline-white btn-full" style={{ borderColor: 'var(--border-strong)', color: 'var(--text-primary)' }}>
-          Áp dụng bộ lọc
-        </button>
+        </div>}
+      </fieldset>
+      {error && <p className="post-search-filter-error" role="alert">{error}</p>}
+      <div className="post-search-filter-actions">
+        <button type="submit" className="btn post-search-apply">Áp dụng bộ lọc</button>
+        <button type="button" className="post-search-reset" onClick={onReset}>Xóa bộ lọc</button>
       </div>
-    </aside>
-  );
+    </form>
+  </aside>;
 }

@@ -1,7 +1,10 @@
 import apiClient from '@/services/apiClient';
 
-export async function getVisiblePosts(page = 1, size = 12) {
+export async function getVisiblePosts(page = 1, size = 12, filters = {}) {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
+  for (const key of ['keyword', 'categoryId', 'postType', 'location', 'timeRange', 'fromDate', 'toDate']) {
+    if (filters[key]) params.set(key, filters[key]);
+  }
   const response = await apiClient.get(`/posts?${params}`);
   return response.data;
 }

@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import com.example.base.dto.post.PostSearchFilter;
 
 @RestController
 @RequiredArgsConstructor
@@ -37,14 +38,22 @@ public class PostController {
     private final PostPrivateIdentifiersService privateIdentifiers;
 
     @GetMapping
-    @Operation(summary = "UC13: Danh sách bài đăng đang hiển thị, mới nhất trước", description = "Yêu cầu đăng nhập. Trang bắt đầu từ 1, tối đa 100 bài/trang. Không trả thông tin nhận dạng bí mật.")
+    @Operation(summary = "UC13/21: Xem và tìm bài LOST/FOUND đang VISIBLE", description = "Lọc theo keyword, categoryId, postType (LOST/FOUND), location; timeRange=24H/7D cho thời gian gần đây hoặc CUSTOM với fromDate/toDate (yyyy-MM-dd, ngày mất/nhặt theo giờ Việt Nam). Trang bắt đầu từ 1; không trả bài PENDING, bị ẩn hay đã xóa.")
     public ResponseEntity<ApiResponse<PostPageDto>> list(
             @RequestParam(defaultValue = "1") String page,
-            @RequestParam(defaultValue = "12") String size) {
+            @RequestParam(defaultValue = "12") String size,
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "") String categoryId,
+            @RequestParam(defaultValue = "") String postType,
+            @RequestParam(defaultValue = "") String location,
+            @RequestParam(defaultValue = "") String fromDate,
+            @RequestParam(defaultValue = "") String toDate,
+            @RequestParam(defaultValue = "") String timeRange) {
         try {
             return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                     .body(ApiResponse.ok(posts.listVisible(Integer.parseInt(page),
-                            Integer.parseInt(size))));
+                            Integer.parseInt(size), PostSearchFilter.parse(keyword, categoryId, postType,
+                                    location, fromDate, toDate, timeRange))));
         } catch (NumberFormatException ex) {
             throw new AppException(ErrorCode.POST_PAGINATION_FORMAT_INVALID);
         }

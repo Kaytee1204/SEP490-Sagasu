@@ -3,6 +3,9 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    POST_SEARCH_TIME_RANGE_INVALID(HttpStatus.BAD_REQUEST, "POST_400_SEARCH_TIME_RANGE", "Thời gian phải là 24H, 7D hoặc CUSTOM; không kết hợp mốc tương đối với khoảng ngày tùy chỉnh"),
+    POST_SEARCH_FILTER_INVALID(HttpStatus.BAD_REQUEST, "POST_400_SEARCH_FILTER", "Bộ lọc không hợp lệ: loại bài LOST/FOUND, mã danh mục dương, từ khóa tối đa 200 ký tự, địa điểm tối đa 1000 ký tự"),
+    POST_SEARCH_DATE_INVALID(HttpStatus.BAD_REQUEST, "POST_400_SEARCH_DATE", "Ngày phải có dạng yyyy-MM-dd; ngày bắt đầu không được sau ngày kết thúc"),
     POST_HANDOVER_TIME_REQUIRED(HttpStatus.BAD_REQUEST, "POST_400_HANDOVER_REQUIRED", "Vui lòng đề xuất ngày/giờ giao đồ cho Approver"),
     POST_HANDOVER_TIME_INVALID(HttpStatus.BAD_REQUEST, "POST_400_HANDOVER_TIME", "Lịch giao đồ phải ở tương lai và chỉ áp dụng khi giao Approver"),
     POST_NOT_EDITABLE(HttpStatus.CONFLICT, "POST_409_STATE", "Bài đã xóa, bị ẩn hoặc không còn mở để chỉnh sửa"),

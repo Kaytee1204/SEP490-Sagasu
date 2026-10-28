@@ -4,6 +4,7 @@ import com.example.base.dto.post.CategoryDto;
 import com.example.base.dto.post.PostDetailDto;
 import com.example.base.dto.post.PostPageDto;
 import com.example.base.dto.post.PostSummaryDto;
+import com.example.base.dto.post.PostSearchFilter;
 import com.example.base.entity.Post;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
@@ -38,12 +39,21 @@ public class PostService {
     /** UC13: only VISIBLE posts that have not been soft-deleted. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PostPageDto listVisible(int page, int size) {
+        return listVisible(page, size, PostSearchFilter.empty());
+    }
+
+    /** UC13/21: both LOST and FOUND are visible by default; filters never include unpublished posts. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public PostPageDto listVisible(int page, int size, PostSearchFilter filter) {
         if (page < 1 || size < 1 || size > 100) {
             throw new AppException(ErrorCode.POST_PAGINATION_INVALID);
         }
 
         // Page the IDs first; fetching a collection of images directly would break DB pagination.
-        var pageOfIds = posts.findVisibleIds(PageRequest.of(page - 1, size));
+        var pageable = PageRequest.of(page - 1, size);
+        var pageOfIds = filter.isEmpty() ? posts.findVisibleIds(pageable)
+                : posts.searchVisibleIds(filter.keyword(), filter.categoryId(), filter.postType(),
+                        filter.location(), filter.fromTime(), filter.untilTime(), pageable);
         Map<Long, Post> postsById = new HashMap<>();
         if (!pageOfIds.isEmpty()) {
             for (Post post : posts.findVisibleByIds(pageOfIds.getContent())) {

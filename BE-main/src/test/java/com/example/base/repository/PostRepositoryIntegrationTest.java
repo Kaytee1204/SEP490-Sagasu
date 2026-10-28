@@ -38,6 +38,102 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ImportAutoConfiguration(JdbcTemplateAutoConfiguration.class)
 @EnabledIfEnvironmentVariable(named = "SAGASU_DB_TESTS", matches = "true")
 class PostRepositoryIntegrationTest {
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"24H,23,25", "7D,167,169"})
+    void recentTimeRangesFilterByElapsedHoursAndStillExcludePending(String range, int insideHours, int outsideHours) {
+        String token = "recent" + UUID.randomUUID().toString().replace("-", "");
+        var now = OffsetDateTime.now();
+        long included = searchFixture(token, "LOST", "VISIBLE", "Sảnh", now.minusHours(insideHours).toString());
+        searchFixture(token, "FOUND", "VISIBLE", "Sảnh", now.minusHours(outsideHours).toString());
+        searchFixture(token, "FOUND", "PENDING", "Sảnh", now.minusHours(insideHours).toString());
+        searchFixture(token, "FOUND", "VISIBLE", "Sảnh", now.plusHours(1).toString());
+        var filter = com.example.base.dto.post.PostSearchFilter.parse(token, "", "", "", "", "", range);
+        assertThat(postService.listVisible(1, 12, filter).content())
+                .extracting(com.example.base.dto.post.PostSummaryDto::id).containsExactly(included);
+    }
+
+    @Test
+    void publicSearchIncludesBothTypesButNeverPendingHiddenRejectedOrDeleted() {
+        String keyword = "search" + UUID.randomUUID().toString().replace("-", "");
+        long lost = searchFixture(keyword, "LOST", "VISIBLE", "Hall A", "2026-10-10T10:00:00+07:00");
+        long found = searchFixture(keyword, "FOUND", "VISIBLE", "Hall A", "2026-10-10T10:00:00+07:00");
+        for (String type : List.of("LOST", "FOUND")) {
+            for (String moderation : List.of("PENDING", "HIDDEN", "REJECTED")) {
+                searchFixture(keyword, type, moderation, "Hall A", "2026-10-10T10:00:00+07:00");
+            }
+        }
+        long deleted = searchFixture(keyword, "FOUND", "VISIBLE", "Hall A", "2026-10-10T10:00:00+07:00");
+        jdbc.update("update post set deleted_at=now() where post_id=?", deleted);
+        var result = search(keyword, "", "", "", "", "", 1, 12);
+        assertThat(result.content()).extracting(com.example.base.dto.post.PostSummaryDto::id).containsExactly(found, lost);
+        assertThat(result.content()).extracting(com.example.base.dto.post.PostSummaryDto::postType).containsExactly("FOUND", "LOST");
+        assertThat(result.totalElements()).isEqualTo(2);
+        // UC13 without a filter also returns both types and excludes unpublished rows.
+        jdbc.update("update post set created_at='2101-01-01T00:00:00Z' where title=?", keyword);
+        entityManager.clear();
+        assertThat(postService.listVisible(1, 2).content())
+                .extracting(com.example.base.dto.post.PostSummaryDto::id).containsExactly(found, lost);
+    }
+
+    @Test
+    void combinesAllSearchFiltersAndIncludesTheWholeVietnameseDay() {
+        String keyword = "search" + UUID.randomUUID().toString().replace("-", "");
+        long start = searchFixture(keyword, "FOUND", "VISIBLE", "Thư viện 100% A", "2026-10-10T00:00:00+07:00");
+        long end = searchFixture(keyword, "FOUND", "VISIBLE", "Thư viện 100% A", "2026-10-10T23:59:59.999999+07:00");
+        searchFixture(keyword, "FOUND", "VISIBLE", "Thư viện 100% A", "2026-10-09T23:59:59+07:00");
+        searchFixture(keyword, "FOUND", "VISIBLE", "Thư viện 100% A", "2026-10-11T00:00:00+07:00");
+        searchFixture(keyword, "LOST", "VISIBLE", "Thư viện 100% A", "2026-10-10T12:00:00+07:00");
+        searchFixture(keyword, "FOUND", "VISIBLE", "Sảnh B", "2026-10-10T12:00:00+07:00");
+        String category = jdbc.queryForObject("select category_id::text from post where post_id=?", String.class, postId);
+        var result = search(keyword.toUpperCase(), category, "FOUND", "THƯ VIỆN 100%", "2026-10-10", "2026-10-10", 1, 12);
+        assertThat(result.content()).extracting(com.example.base.dto.post.PostSummaryDto::id).containsExactly(end, start);
+        assertThat(result.totalElements()).isEqualTo(2);
+        assertThat(search(keyword, Long.toString(Long.MAX_VALUE), "", "", "", "", 1, 12).content()).isEmpty();
+    }
+
+    @Test
+    void keywordUsesPublicDescriptionAndLocationButNotPrivateIdentifiers() {
+        String token = "search" + UUID.randomUUID().toString().replace("-", "");
+        long description = searchFixture("Title", "LOST", "VISIBLE", "Sảnh", "2026-10-10T10:00:00+07:00");
+        jdbc.update("update post set description=? where post_id=?", token, description);
+        long location = searchFixture("Title", "FOUND", "VISIBLE", token, "2026-10-10T10:00:00+07:00");
+        long privateOnly = searchFixture("Title", "FOUND", "VISIBLE", "Sảnh", "2026-10-10T10:00:00+07:00");
+        jdbc.update("update post set private_identifiers=? where post_id=?", token, privateOnly);
+        assertThat(search(token, "", "", "", "", "", 1, 12).content())
+                .extracting(com.example.base.dto.post.PostSummaryDto::id).containsExactly(location, description);
+        assertThat(search("' OR 1=1 --", "", "", "", "", "", 1, 12).content()).isEmpty();
+    }
+
+    @Test
+    void filteredPaginationCountsPostsOnceAndKeepsNewestOrder() {
+        String token = "search" + UUID.randomUUID().toString().replace("-", "");
+        long first = searchFixture(token, "LOST", "VISIBLE", "Sảnh", "2026-10-10T10:00:00+07:00");
+        long second = searchFixture(token, "FOUND", "VISIBLE", "Sảnh", "2026-10-10T10:00:00+07:00");
+        var page1 = search(token, "", "", "", "", "", 1, 1);
+        var page2 = search(token, "", "", "", "", "", 2, 1);
+        assertThat(page1.content()).extracting(com.example.base.dto.post.PostSummaryDto::id).containsExactly(second);
+        assertThat(page2.content()).extracting(com.example.base.dto.post.PostSummaryDto::id).containsExactly(first);
+        assertThat(page1.totalElements()).isEqualTo(2);
+        assertThat(page1.totalPages()).isEqualTo(2);
+        assertThat(search(token, "", "", "", "", "", 3, 1).content()).isEmpty();
+    }
+
+    private com.example.base.dto.post.PostPageDto search(String keyword, String category, String type,
+            String location, String from, String to, int page, int size) {
+        return postService.listVisible(page, size, com.example.base.dto.post.PostSearchFilter.parse(
+                keyword, category, type, location, from, to));
+    }
+
+    private long searchFixture(String title, String type, String moderation, String location, String eventAt) {
+        return jdbc.queryForObject("""
+                insert into post(account_id, created_by, category_id, post_type, title, description,
+                    location_text, event_at, moderation_status, moderated_by, moderated_at, moderation_note, created_at)
+                select account_id, created_by, category_id, ?, ?, 'Public description', ?, cast(? as timestamptz),
+                    ?, account_id, now(), 'Test moderation reason', '2026-10-01T00:00:00Z'
+                from post where post_id=? returning post_id
+                """, Long.class, type, title, location, eventAt, moderation, postId);
+    }
+
     @Autowired JdbcTemplate jdbc;
     @Autowired PostRepository posts;
     @Autowired EntityManager entityManager;

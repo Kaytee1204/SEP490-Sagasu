@@ -18,11 +18,12 @@ export default function SearchMatchCard({ item }) {
     timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short',
   });
   return <article className="card post-list-card">
-    <div className="post-list-image"><Thumbnail key={item.thumbnailUrl || 'empty'} url={item.thumbnailUrl} title={item.title} />
-      <span className={`badge post-list-type ${found ? 'badge-found' : 'badge-lost'}`}>{found ? 'Nhặt được' : 'Cần tìm'}</span>
-    </div>
+    <div className="post-list-image"><Thumbnail key={item.thumbnailUrl || 'empty'} url={item.thumbnailUrl} title={item.title} /></div>
     <div className="post-list-card-body">
-      <span className="post-list-category">{item.categoryName}</span>
+      <div className="post-list-badges">
+        <span className={`badge ${found ? 'badge-found' : 'badge-lost'}`}>{found ? 'Nhặt được' : 'Cần tìm'}</span>
+        <span className="post-list-category">{item.categoryName}</span>
+      </div>
       <h2><Link to={`/chi-tiet/${item.id}`}>{item.title}</Link></h2>
       <p><MapPin size={16} aria-hidden="true" />{item.locationText}</p>
       <p><Clock size={16} aria-hidden="true" />{eventTime}</p>

@@ -42,6 +42,64 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({ PostService.class, PostMapper.class, SecurityConfig.class, JwtAuthenticationFilter.class,
         JwtAuthenticationEntryPoint.class })
 class PostControllerTest {
+    @ParameterizedTest
+    @CsvSource({"24H,24", "7D,168"})
+    @WithMockUser
+    void recentTimeRangesUseExactRollingHours(String range, long hours) throws Exception {
+        when(posts.searchVisibleIds(anyString(), any(), anyString(), anyString(), any(), any(), any()))
+                .thenReturn(Page.empty(PageRequest.of(0, 12)));
+        mvc.perform(get("/api/posts").param("timeRange", range)).andExpect(status().isOk());
+        var from = org.mockito.ArgumentCaptor.forClass(OffsetDateTime.class);
+        var until = org.mockito.ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(posts).searchVisibleIds(eq(""), isNull(), eq(""), eq(""), from.capture(), until.capture(), any());
+        org.assertj.core.api.Assertions.assertThat(java.time.Duration.between(from.getValue(), until.getValue()))
+                .isEqualTo(java.time.Duration.ofHours(hours));
+    }
+
+    @Test
+    @WithMockUser
+    void recentTimeRangeCannotBeCombinedWithCustomDates() throws Exception {
+        mvc.perform(get("/api/posts").param("timeRange", "24H").param("fromDate", "2026-10-10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("POST_400_SEARCH_TIME_RANGE"));
+        verifyNoInteractions(posts);
+    }
+
+    @Test
+    @WithMockUser(roles = "EXTERNAL_USER")
+    void searchPassesNormalizedFiltersAndVietnamDateBoundaries() throws Exception {
+        when(posts.searchVisibleIds(anyString(), any(), anyString(), anyString(), any(), any(), any()))
+                .thenReturn(Page.empty(PageRequest.of(0, 12)));
+        mvc.perform(get("/api/posts").param("keyword", "  Ví  ").param("categoryId", "10")
+                .param("postType", "found").param("location", "  Sảnh A  ")
+                .param("fromDate", "2026-10-10").param("toDate", "2026-10-10"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"));
+        verify(posts).searchVisibleIds(eq("Ví"), eq(10L), eq("FOUND"), eq("Sảnh A"),
+                eq(OffsetDateTime.parse("2026-10-10T00:00:00+07:00")),
+                eq(OffsetDateTime.parse("2026-10-11T00:00:00+07:00")), any());
+        verify(posts, never()).findVisibleIds(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"postType,PENDING", "postType,ALL", "categoryId,0", "categoryId,-1", "categoryId,abc",
+            "categoryId,9999999999999999999999", "fromDate,2026-02-30", "toDate,2026/10/10", "fromDate,0000-01-01",
+            "timeRange,1D", "timeRange,invalid"})
+    @WithMockUser
+    void invalidSearchFiltersReturnBadRequest(String name, String value) throws Exception {
+        mvc.perform(get("/api/posts").param(name, value)).andExpect(status().isBadRequest());
+        verifyNoInteractions(posts);
+    }
+
+    @Test
+    @WithMockUser
+    void invertedDatesAndOversizedSearchTextAreRejected() throws Exception {
+        mvc.perform(get("/api/posts").param("fromDate", "2026-10-11").param("toDate", "2026-10-10"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/posts").param("keyword", "a".repeat(201))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/posts").param("location", "a".repeat(1001))).andExpect(status().isBadRequest());
+        verifyNoInteractions(posts);
+    }
+
     @Autowired
     MockMvc mvc;
     @MockBean
