@@ -5,39 +5,33 @@ import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.repository.PostRepository;
 import com.example.base.security.CustomUserDetails;
-import com.example.base.entity.AccountStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** UC17: secrets use owner-only endpoints and never enter a public post DTO. */
 @Service
 @RequiredArgsConstructor
 public class PostPrivateIdentifiersService {
     private final PostRepository posts;
 
     @Transactional(readOnly = true)
-    public PrivateIdentifiersDto read(long id, CustomUserDetails user) {
-        long ownerId = requireOwner(id, user);
-        var post = posts.findByIdAndAccount_IdAndDeletedAtIsNullAndWithdrawnAtIsNull(id, ownerId)
+    public PrivateIdentifiersDto read(long postId, CustomUserDetails user) {
+        long ownerId = PostAccessPolicy.requireActiveAccount(user);
+        PostAccessPolicy.requireValidPostId(postId);
+        var post = posts.findByIdAndAccount_IdAndDeletedAtIsNull(postId, ownerId)
                 .orElseThrow(() -> new AppException(ErrorCode.POST_OWNER_REQUIRED));
-        return new PrivateIdentifiersDto(post.getPrivateIdentifiers() == null ? "" : post.getPrivateIdentifiers());
+        String identifiers = post.getPrivateIdentifiers();
+        return new PrivateIdentifiersDto(identifiers == null ? "" : identifiers);
     }
 
     @Transactional
-    public void update(long id, PrivateIdentifiersDto request, CustomUserDetails user) {
-        long ownerId = requireOwner(id, user);
-        var post = posts.findOwnedForUpdate(id, ownerId)
+    public void update(long postId, PrivateIdentifiersDto request, CustomUserDetails user) {
+        long ownerId = PostAccessPolicy.requireActiveAccount(user);
+        PostAccessPolicy.requireValidPostId(postId);
+        var post = posts.findOwnedForUpdate(postId, ownerId)
                 .orElseThrow(() -> new AppException(ErrorCode.POST_OWNER_REQUIRED));
         post.updatePrivateIdentifiers(request.privateIdentifiers());
         posts.flush();
-    }
-
-    private long requireOwner(long id, CustomUserDetails user) {
-        if (user == null) throw new AppException(ErrorCode.UNAUTHORIZED);
-        if (user.getStatus() != AccountStatus.ACTIVE || !user.isAccountNonExpired() || !user.isAccountNonLocked()) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
-        if (id <= 0) throw new AppException(ErrorCode.POST_ID_INVALID);
-        return user.getId();
     }
 }

@@ -13,7 +13,7 @@ public record PostDetailDto(
         Long categoryId, String categoryName, String locationText,
         BigDecimal latitude, BigDecimal longitude, OffsetDateTime eventAt,
         String status, String custodyMode, OffsetDateTime createdAt,
-        List<ImageDto> images, boolean canEditOwnPost, String moderationStatus) {
+        List<ImageDto> images, boolean canEditOwnPost, String moderationStatus, OffsetDateTime handoverRequestedAt) {
     public record ImageDto(Long id, String url, int sortOrder) {
     }
 }

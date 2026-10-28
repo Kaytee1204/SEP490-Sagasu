@@ -102,14 +102,17 @@ class PostRepositoryIntegrationTest {
     void persistsFoundPostAndCustodyChoice(String custody) {
         var existing = posts.findById(postId).orElseThrow();
         var found = Post.found(existing.getAccount(), existing.getCategory(), "Found wallet", "Public",
-                "Hall A", OffsetDateTime.now().minusDays(1), custody);
+                "Hall A", OffsetDateTime.now().minusDays(1), custody, custody.equals("OFFICE") ? OffsetDateTime.now().plusDays(1) : null);
         found.updatePrivateIdentifiers("FOUND-SECRET");
         var saved = posts.saveAndFlush(found);
         entityManager.clear();
-        var loaded = posts.findVisibleDetail(saved.getId()).orElseThrow();
+        var loaded = posts.findManagedDetail(saved.getId(), existing.getAccount().getId()).orElseThrow();
         assertThat(loaded.getPostType()).isEqualTo("FOUND");
         assertThat(loaded.getCustodyMode()).isEqualTo(custody);
-        assertThat(loaded.getModerationStatus()).isEqualTo("VISIBLE");
+        assertThat(loaded.getModerationStatus()).isEqualTo(custody.equals("OFFICE") ? "PENDING" : "VISIBLE");
+        assertThat(posts.findVisibleDetail(saved.getId()).isPresent()).isEqualTo(custody.equals("P2P"));
+        assertThat(mapper.toDetail(loaded, -1L).handoverRequestedAt()).isNull();
+        if (custody.equals("OFFICE")) assertThat(mapper.toDetail(loaded, existing.getAccount().getId()).handoverRequestedAt()).isNotNull();
         assertThat(loaded.getPrivateIdentifiers()).isEqualTo("FOUND-SECRET");
     }
 
@@ -123,14 +126,14 @@ class PostRepositoryIntegrationTest {
         var category = categories.findById(existing.getCategory().getCategoryId()).orElseThrow();
         for (String type : List.of("LOST", "FOUND")) {
             var post = type.equals("LOST") ? Post.lost(owner, category, "Lost", "Public", "Hall A", OffsetDateTime.now())
-                    : Post.found(owner, category, "Found", "Public", "Hall A", OffsetDateTime.now(), "OFFICE");
+                    : Post.found(owner, category, "Found", "Public", "Hall A", OffsetDateTime.now(), "OFFICE", OffsetDateTime.now().plusDays(1));
             long id = posts.saveAndFlush(post).getId();
             assertThat(post.getModerationStatus()).isEqualTo("PENDING");
             assertThat(posts.findVisibleDetail(id)).isEmpty();
             assertThat(posts.findVisibleByIds(List.of(id))).isEmpty();
-            assertThat(postService.getVisibleDetail(id, ownerId).moderationStatus()).isEqualTo("PENDING");
+            assertThat(postService.getDetailForViewer(id, ownerId).moderationStatus()).isEqualTo("PENDING");
             org.junit.jupiter.api.Assertions.assertThrows(com.example.base.exception.AppException.class,
-                    () -> postService.getVisibleDetail(id, -1L));
+                    () -> postService.getDetailForViewer(id, -1L));
         }
     }
 
@@ -171,7 +174,7 @@ class PostRepositoryIntegrationTest {
         assertThat(firstPage.getContent()).containsExactly(newest);
         assertThat(secondPage.getContent()).containsExactly(postId);
         assertThat(firstPage.getTotalElements()).isEqualTo(jdbc.queryForObject("""
-                SELECT count(*) FROM post WHERE moderation_status='VISIBLE' AND withdrawn_at IS NULL AND deleted_at IS NULL
+                SELECT count(*) FROM post WHERE moderation_status='VISIBLE' AND deleted_at IS NULL
                 """, Long.class));
         assertThat(posts.findVisibleByIds(List.of(newest))).hasSize(1);
     }
@@ -236,10 +239,9 @@ class PostRepositoryIntegrationTest {
         assertThat(posts.findVisibleByIds(java.util.List.of(postId))).isEmpty();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"withdrawn_at", "deleted_at"})
-    void hidesWithdrawnOrDeletedPosts(String column) {
-        jdbc.update("UPDATE post SET " + column + "=now() WHERE post_id=?", postId);
+    @Test
+    void hidesSoftDeletedPosts() {
+        jdbc.update("UPDATE post SET deleted_at=now() WHERE post_id=?", postId);
         assertThat(posts.findVisibleDetail(postId)).isEmpty();
         assertThat(posts.findVisibleIds(PageRequest.of(0, 100)).getContent()).doesNotContain(postId);
     }

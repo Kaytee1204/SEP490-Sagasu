@@ -64,10 +64,10 @@ class PostCreationServiceTest {
     void createsFoundWithBothCustodyChoicesAndPrivateIdentifiers() {
         for (String custody : List.of("P2P", "OFFICE")) {
             var found = new com.example.base.dto.post.CreateFoundPostRequest("Title", "Description", 1L,
-                    "Hall A", request.eventAt(), custody, "  SECRET-SERIAL  ");
+                    "Hall A", request.eventAt(), custody, "  SECRET-SERIAL  ", custody.equals("OFFICE") ? OffsetDateTime.now().plusDays(1) : null);
             var result = service.createFound(found, null, user);
             assertThat(result.postType()).isEqualTo("FOUND");
-            assertThat(result.moderationStatus()).isEqualTo("VISIBLE");
+            assertThat(result.moderationStatus()).isEqualTo(custody.equals("OFFICE") ? "PENDING" : "VISIBLE");
             verify(posts).saveAndFlush(argThat(post -> post.getPostType().equals("FOUND")
                     && post.getCustodyMode().equals(custody)
                     && post.getPrivateIdentifiers().equals("SECRET-SERIAL")));
@@ -77,15 +77,38 @@ class PostCreationServiceTest {
     @Test
     void invalidCustodyNeverUploadsOrWrites() {
         var found = new com.example.base.dto.post.CreateFoundPostRequest("Title", "Description", 1L,
-                "Hall A", request.eventAt(), "INVALID", null);
+                "Hall A", request.eventAt(), "INVALID", null, null);
         assertThatThrownBy(() -> service.createFound(found, null, user)).isInstanceOf(AppException.class);
+        verifyNoInteractions(storage, posts, manager);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER", "CHECKER", "EXTERNAL_USER"})
+    void officeFoundAlwaysWaitsForReviewAndStoresProposedTime(AccountRole role) {
+        Account author = new Account(); author.setId(7L); author.setRole(role); author.setStatus(AccountStatus.ACTIVE);
+        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
+        var proposed = OffsetDateTime.now().plusDays(1);
+        var found = new com.example.base.dto.post.CreateFoundPostRequest("Title", "Description", 1L,
+                "Hall A", request.eventAt(), "OFFICE", null, proposed);
+        assertThat(service.createFound(found, null, new CustomUserDetails(author)).moderationStatus()).isEqualTo("PENDING");
+        verify(posts).saveAndFlush(argThat(post -> post.getHandoverRequestedAt().isEqual(proposed)
+                && post.getModeratedBy() == null && post.getModeratedAt() == null));
+    }
+
+    @Test
+    void officeFoundNeedsAFutureProposedTimeBeforeUploading() {
+        for (var proposed : java.util.Arrays.asList(null, OffsetDateTime.now().minusDays(1))) {
+            var found = new com.example.base.dto.post.CreateFoundPostRequest("Title", "Description", 1L,
+                    "Hall A", request.eventAt(), "OFFICE", null, proposed);
+            assertThatThrownBy(() -> service.createFound(found, null, user)).isInstanceOf(AppException.class);
+        }
         verifyNoInteractions(storage, posts, manager);
     }
 
     @Test
     void failedFoundSaveCompensatesUploadedImages() throws Exception {
         var found = new com.example.base.dto.post.CreateFoundPostRequest("Title", "Description", 1L,
-                "Hall A", request.eventAt(), "OFFICE", null);
+                "Hall A", request.eventAt(), "OFFICE", null, OffsetDateTime.now().plusDays(1));
         doThrow(new IllegalStateException("db failed")).when(posts).saveAndFlush(any());
         assertThatThrownBy(() -> service.createFound(found, List.of(png()), user))
                 .isInstanceOf(IllegalStateException.class);
@@ -182,7 +205,7 @@ class PostCreationServiceTest {
         var principal = new CustomUserDetails(author);
         assertThat(service.createLost(request, null, principal).moderationStatus()).isEqualTo(expected);
         var found = new com.example.base.dto.post.CreateFoundPostRequest("Title", "Description", 1L,
-                "Hall A", request.eventAt(), "P2P", null);
+                "Hall A", request.eventAt(), "P2P", null, null);
         assertThat(service.createFound(found, null, principal).moderationStatus()).isEqualTo(expected);
     }
 

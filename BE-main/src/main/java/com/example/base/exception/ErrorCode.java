@@ -3,6 +3,12 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    POST_HANDOVER_TIME_REQUIRED(HttpStatus.BAD_REQUEST, "POST_400_HANDOVER_REQUIRED", "Vui lòng đề xuất ngày/giờ giao đồ cho Approver"),
+    POST_HANDOVER_TIME_INVALID(HttpStatus.BAD_REQUEST, "POST_400_HANDOVER_TIME", "Lịch giao đồ phải ở tương lai và chỉ áp dụng khi giao Approver"),
+    POST_NOT_EDITABLE(HttpStatus.CONFLICT, "POST_409_STATE", "Bài đã xóa, bị ẩn hoặc không còn mở để chỉnh sửa"),
+    POST_STALE(HttpStatus.CONFLICT, "POST_409_STALE", "Bài đăng đã thay đổi. Vui lòng tải lại trước khi lưu"),
+    POST_IMAGES_INVALID(HttpStatus.BAD_REQUEST, "POST_400_IMAGES", "Danh sách ảnh không hợp lệ hoặc ảnh không thuộc bài đăng"),
+    POST_FILTER_INVALID(HttpStatus.BAD_REQUEST, "POST_400_FILTER", "Bộ lọc bài đăng không hợp lệ"),
     POST_CUSTODY_INVALID(HttpStatus.BAD_REQUEST, "POST_400_CUSTODY", "Chọn tự giữ hoặc giao văn phòng"),
     POST_OWNER_REQUIRED(HttpStatus.NOT_FOUND, "POST_404_OWNER", "Không tìm thấy bài đăng thuộc tài khoản của bạn"),
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CAT_404", "Không tìm thấy danh mục"),

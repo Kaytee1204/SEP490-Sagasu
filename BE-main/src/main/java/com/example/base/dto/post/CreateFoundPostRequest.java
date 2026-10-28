@@ -10,5 +10,10 @@ public record CreateFoundPostRequest(
                 @NotBlank @Size(max = 1000) String locationText,
                 @NotNull @PastOrPresent OffsetDateTime eventAt,
                 @NotNull @Pattern(regexp = "P2P|OFFICE") String custodyMode,
-                @Size(max = 5000) String privateIdentifiers) {
+                @Size(max = 5000) String privateIdentifiers,
+                @Future OffsetDateTime handoverRequestedAt) {
+    @AssertTrue(message = "Vui lòng đề xuất ngày/giờ giao đồ cho Approver")
+    public boolean isOfficeHandoverScheduled() {
+        return !"OFFICE".equals(custodyMode) || handoverRequestedAt != null;
+    }
 }

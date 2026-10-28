@@ -27,7 +27,7 @@ export default function PostItemPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(null);
-  const [formData, setFormData] = useState({ itemName: '', description: '', categoryId: '', date: '', time: '', location: '', custodyMode: 'P2P', privateIdentifiers: '' });
+  const [formData, setFormData] = useState({ itemName: '', description: '', categoryId: '', date: '', time: '', location: '', custodyMode: 'P2P', privateIdentifiers: '', handoverDate: '', handoverTime: '' });
   const isFound = params.get('type') === 'found' || location.state?.type === 'found' || location.pathname === '/dang-tin-nhat-duoc';
 
   useEffect(() => {
@@ -67,6 +67,11 @@ export default function PostItemPage() {
     const timestamp = new Date(`${formData.date}T${formData.time}:00+07:00`).getTime();
     if (!Number.isFinite(timestamp) || timestamp > Date.now()) return 'Thời gian xảy ra không được ở tương lai (giờ Việt Nam).';
     if (!categories?.some(category => String(category.id) === formData.categoryId)) return 'Vui lòng chọn danh mục hợp lệ.';
+    if (isFound && formData.custodyMode === 'OFFICE') {
+      if (!formData.handoverDate || !formData.handoverTime) return 'Vui lòng đề xuất ngày/giờ giao đồ cho Approver.';
+      const requestedAt = new Date(`${formData.handoverDate}T${formData.handoverTime}:00+07:00`).getTime();
+      if (!Number.isFinite(requestedAt) || requestedAt <= Date.now()) return 'Lịch giao đồ dự kiến phải ở tương lai (giờ Việt Nam).';
+    }
     return '';
   }
 
@@ -93,6 +98,8 @@ export default function PostItemPage() {
         categoryId: Number(formData.categoryId), locationText: formData.location.trim(),
         privateIdentifiers: formData.privateIdentifiers.trim(),
         ...(isFound ? { custodyMode: formData.custodyMode } : {}),
+        ...(isFound && formData.custodyMode === 'OFFICE'
+          ? { handoverRequestedAt: `${formData.handoverDate}T${formData.handoverTime}:00+07:00` } : {}),
         eventAt: `${formData.date}T${formData.time}:00+07:00`,
       }, images.map(image => image.file));
       setCreated(post);
@@ -114,7 +121,8 @@ export default function PostItemPage() {
     <h1 className="text-display-md">Đăng bài thành công #{created.id}</h1>
     <p role="status" style={{ marginBlock: 20 }}>{created.moderationStatus === 'VISIBLE'
       ? 'Bài đăng đã hiển thị trong danh sách.' : 'Bài đăng đang chờ Approver duyệt và chưa hiển thị công khai.'}</p>
-    {isFound && formData.custodyMode === 'OFFICE' && <p>Hãy mang đồ đến văn phòng để Checker xác nhận tiếp nhận.</p>}
+    {isFound && formData.custodyMode === 'OFFICE' && <p>Lịch giao đồ bạn đề xuất: {formData.handoverDate} {formData.handoverTime} (giờ Việt Nam).
+      Lịch này đang chờ Approver xem xét và chưa được xác nhận.</p>}
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
       <Link className="btn btn-primary" to={`/chi-tiet/${created.id}`}>Xem bài đăng</Link>
       <Link className="btn btn-ghost" to="/tim-kiem">Về danh sách</Link>

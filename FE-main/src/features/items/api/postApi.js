@@ -40,3 +40,24 @@ export async function getPrivateIdentifiers(id) {
 export async function updatePrivateIdentifiers(id, privateIdentifiers) {
   return apiClient.put(`/posts/${encodeURIComponent(id)}/private-identifiers`, { privateIdentifiers });
 }
+
+export async function getMyPosts(page = 1, filter = 'ALL') {
+  return (await apiClient.get(`/posts/mine?${new URLSearchParams({page: String(page), size: '12', filter})}`)).data;
+}
+
+export async function getPostForEdit(id) {
+  return (await apiClient.get(`/posts/${encodeURIComponent(id)}/edit`)).data;
+}
+
+export async function updatePost(id, data, images) {
+  const form = new FormData();
+  form.append('data', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+  images.forEach(file => form.append('images', file));
+  return (await apiClient.request(`/posts/${encodeURIComponent(id)}`, { method: 'PUT', body: form })).data;
+}
+
+export async function deletePost(id, reason) {
+  return apiClient.request(`/posts/${encodeURIComponent(id)}`, {
+    method: 'DELETE', body: JSON.stringify({ reason }),
+  });
+}

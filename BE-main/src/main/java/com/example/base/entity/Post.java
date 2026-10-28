@@ -49,6 +49,9 @@ public class Post {
     private String status = "OPEN";
     @Column(name = "custody_mode", nullable = false, length = 6)
     private String custodyMode = "P2P";
+    @JsonIgnore
+    @Column(name = "handover_requested_at")
+    private OffsetDateTime handoverRequestedAt;
     @Column(name = "moderation_status", nullable = false, length = 10)
     private String moderationStatus = "PENDING";
     @ManyToOne(fetch = FetchType.LAZY)
@@ -61,17 +64,16 @@ public class Post {
     private String moderationNote;
     @Column(name = "close_reason", columnDefinition = "text", length = org.hibernate.Length.LONG32)
     private String closeReason;
-    @Column(name = "withdrawal_reason", columnDefinition = "text", length = org.hibernate.Length.LONG32)
-    private String withdrawalReason;
-    @Column(name = "withdrawn_at")
-    private OffsetDateTime withdrawnAt;
+    @JsonIgnore
+    @Column(name = "deletion_reason", columnDefinition = "text", length = org.hibernate.Length.LONG32)
+    private String deletionReason;
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
-    @OneToMany(mappedBy = "post", cascade = CascadeType.PERSIST)
+    @OneToMany(mappedBy = "post", cascade = CascadeType.PERSIST, orphanRemoval = true)
     @OrderBy("sortOrder ASC, id ASC")
     @Getter(AccessLevel.NONE)
     private List<PostImage> images = new ArrayList<>();
@@ -97,15 +99,52 @@ public class Post {
     }
 
     public static Post found(Account owner, Category category, String title, String description,
-            String locationText, OffsetDateTime eventAt, String custodyMode) {
+            String locationText, OffsetDateTime eventAt, String custodyMode, OffsetDateTime handoverRequestedAt) {
         Post post = lost(owner, category, title, description, locationText, eventAt);
         post.postType = "FOUND";
         post.custodyMode = custodyMode;
+        post.handoverRequestedAt = handoverRequestedAt;
+        if ("OFFICE".equals(custodyMode)) {
+            post.moderationStatus = "PENDING";
+        }
         return post;
     }
 
     public void updatePrivateIdentifiers(String value) {
         privateIdentifiers = value == null || value.isBlank() ? null : value.strip();
+    }
+
+    public void edit(Category category, String title, String description, String locationText,
+                     OffsetDateTime eventAt, String custodyMode, OffsetDateTime handoverRequestedAt,
+                     AccountRole authorRole) {
+        this.category = category;
+        this.title = title.strip();
+        this.description = description.strip();
+        this.locationText = locationText.strip();
+        this.eventAt = eventAt;
+        this.custodyMode = custodyMode;
+        this.handoverRequestedAt = handoverRequestedAt;
+        this.updatedAt = OffsetDateTime.now();
+        // Rejected content must be resubmitted even if the author is internal.
+        boolean officeHandover = "FOUND".equals(postType) && "OFFICE".equals(custodyMode);
+        boolean needsReview = officeHandover || authorRole != AccountRole.USER || "REJECTED".equals(moderationStatus);
+        moderationStatus = needsReview ? "PENDING" : "VISIBLE";
+        moderatedBy = null;
+        moderatedAt = null;
+        moderationNote = null;
+    }
+
+    public void retainImages(List<Long> ids) {
+        images.removeIf(image -> !ids.contains(image.getId()));
+        images.sort(java.util.Comparator.comparingInt(image -> ids.indexOf(image.getId())));
+        for (int i = 0; i < images.size(); i++) images.get(i).reorder(i);
+    }
+
+
+
+    public void softDelete(String reason) {
+        deletedAt = OffsetDateTime.now();
+        deletionReason = reason.strip();
     }
 
     @PrePersist

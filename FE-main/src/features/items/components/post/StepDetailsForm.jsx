@@ -1,17 +1,30 @@
 import React from 'react';
 import { Calendar, Clock, MapPin } from 'lucide-react';
 
-export default function StepDetailsForm({ formData, postType, onChange, categories = [] }) {
+export default function StepDetailsForm({ formData, postType, onChange, categories = [], showPrivate = true }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {postType === 'found' && <div className="input-group">
         <label className="input-label" htmlFor="custodyMode">Bạn muốn giữ đồ như thế nào?</label>
         <select id="custodyMode" className="input" required value={formData.custodyMode}
-          onChange={e => onChange({ ...formData, custodyMode: e.target.value })}>
+          onChange={e => onChange({ ...formData, custodyMode: e.target.value,
+            ...(e.target.value === 'P2P' ? { handoverDate: '', handoverTime: '' } : {}) })}>
           <option value="P2P">Tôi tự giữ để trao trả</option>
-          <option value="OFFICE">Tôi chọn giao cho văn phòng trường</option>
+          <option value="OFFICE">Tôi chọn giao đồ cho Approver</option>
         </select>
-        {formData.custodyMode === 'OFFICE' && <p>Hãy mang đồ đến văn phòng để Checker kiểm tra và xác nhận tiếp nhận. Lựa chọn này chưa xác nhận trường đã nhận đồ.</p>}
+        {formData.custodyMode === 'OFFICE' && <>
+          <p>Bài sẽ chờ Approver xét duyệt. Bạn đề xuất lịch giao đồ bên dưới; lịch này chưa được xác nhận.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+            <div className="input-group"><label className="input-label" htmlFor="handoverDate">Ngày dự kiến giao đồ</label>
+              <input id="handoverDate" type="date" className="input" required
+                min={new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })}
+                value={formData.handoverDate || ''} onChange={e => onChange({ ...formData, handoverDate: e.target.value })} /></div>
+            <div className="input-group"><label className="input-label" htmlFor="handoverTime">Giờ dự kiến giao đồ</label>
+              <input id="handoverTime" type="time" className="input" required value={formData.handoverTime || ''}
+                onChange={e => onChange({ ...formData, handoverTime: e.target.value })} /></div>
+          </div>
+          <p>Chọn thời gian trong tương lai, theo giờ Việt Nam.</p>
+        </>}
       </div>}
       <div className="input-group">
         <label className="input-label" htmlFor="itemName">Tên / Tiêu đề ngắn gọn</label>
@@ -98,13 +111,13 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
           style={{ resize: 'vertical' }}
         />
       </div>
-      <div className="input-group">
+      {showPrivate && <div className="input-group">
         <label className="input-label" htmlFor="privateIdentifiers">Dấu hiệu nhận dạng riêng tư (không bắt buộc)</label>
         <textarea id="privateIdentifiers" className="input" rows={4} maxLength={5000}
           value={formData.privateIdentifiers} onChange={e => onChange({ ...formData, privateIdentifiers: e.target.value })}
           placeholder="Số seri, dấu vết riêng, chi tiết bên trong…" />
         <p>Chỉ bạn đọc và sửa được; không xuất hiện trong bài công khai. Tối đa 5.000 ký tự.</p>
-      </div>
+      </div>}
     </div>
   );
 }

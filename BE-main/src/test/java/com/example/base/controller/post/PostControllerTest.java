@@ -99,9 +99,10 @@ class PostControllerTest {
     @ValueSource(strings = { "P2P", "OFFICE" })
     @WithMockUser(roles = "USER")
     void createsFoundPost(String custody) throws Exception {
-        when(creation.createFound(any(), any(), any())).thenReturn(new CreatedPostDto(99L, "FOUND", "OPEN", "VISIBLE"));
+        when(creation.createFound(any(), any(), any())).thenReturn(new CreatedPostDto(99L, "FOUND", "OPEN", custody.equals("OFFICE") ? "PENDING" : "VISIBLE"));
         String json = new String(data("2026-01-01T10:00:00+07:00").getBytes(), java.nio.charset.StandardCharsets.UTF_8)
-                .replace("}", ",\"custodyMode\":\"" + custody + "\"}");
+                .replace("}", ",\"custodyMode\":\"" + custody + "\""
+                        + (custody.equals("OFFICE") ? ",\"handoverRequestedAt\":\"2999-01-01T10:00:00+07:00\"" : "") + "}");
         mvc.perform(multipart("/api/posts/found")
                 .file(new MockMultipartFile("data", "data.json", "application/json", json.getBytes())))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.postType").value("FOUND"));
@@ -111,6 +112,19 @@ class PostControllerTest {
     @WithMockUser(roles = "USER")
     void foundRequiresValidCustodyChoice() throws Exception {
         mvc.perform(multipart("/api/posts/found").file(data("2026-01-01T10:00:00+07:00")))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(creation);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "past"})
+    @WithMockUser(roles = "USER")
+    void officeFoundRequiresAFutureProposedTime(String scenario) throws Exception {
+        String json = new String(data("2026-01-01T10:00:00+07:00").getBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                .replace("}", ",\"custodyMode\":\"OFFICE\""
+                        + (scenario.equals("past") ? ",\"handoverRequestedAt\":\"2020-01-01T10:00:00+07:00\"" : "") + "}");
+        mvc.perform(multipart("/api/posts/found")
+                .file(new MockMultipartFile("data", "data.json", "application/json", json.getBytes())))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(creation);
     }

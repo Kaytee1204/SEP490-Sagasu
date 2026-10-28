@@ -86,14 +86,17 @@ function PostDetail({ id, onRetry }) {
           activeImage={activeImage} onSelectImage={setActiveImage} />
         <section className="post-detail-info" aria-label="Thông tin bài đăng">
           <ItemInfoSection item={item} />
+          {post.canEditOwnPost && <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng của tôi</Link>}
           {post.moderationStatus === 'PENDING' && <p role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
           <div><strong>Trạng thái: </strong>{STATUS_LABELS[post.status] || post.status}</div>
           {post.postType === 'FOUND' && <div>
             <strong>Hình thức trao trả: </strong>
             {post.custodyMode === 'OFFICE'
-              ? 'Đã chọn bàn giao cho văn phòng; cần xác nhận tiếp nhận.'
+              ? 'Đề nghị giao đồ cho Approver; chờ xét duyệt và thống nhất lịch giao đồ.'
               : 'Người nhặt chọn tự giữ để trao trả.'}
           </div>}
+          {post.handoverRequestedAt && <p>Lịch giao đồ đề xuất: {new Date(post.handoverRequestedAt).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})}.
+            Đây chưa phải lịch hẹn được xác nhận.</p>}
           <ItemCharacteristics description={post.description} />
           {post.canEditOwnPost && <PrivateIdentifiersEditor key={post.id} postId={post.id} />}
         </section>
