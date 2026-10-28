@@ -3,7 +3,11 @@
 .my-posts-heading {display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:24px;}
 .my-posts-heading h1 {font-size:1.8rem;margin-bottom:8px;}
 .my-posts-filters {display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;}
-.my-post-card {display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:20px;padding:24px;margin-block:16px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);}
+.my-post-card {position:relative;display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:20px;padding:24px;margin-block:16px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);}
+.my-post-card:hover {border-color:var(--border-strong);}
+.my-post-detail-link::after {content:"";position:absolute;inset:0;border-radius:var(--radius-lg);}
+.my-post-detail-link:focus-visible::after {outline:2px solid var(--accent);outline-offset:3px;}
+.my-post-card>.my-post-actions {position:relative;z-index:1;}
 .my-post-thumbnail {width:88px;height:88px;background:var(--bg-canvas);display:grid;place-items:center;border-radius:12px;overflow:hidden;color:var(--text-muted);font-size:.8rem;}
 .my-post-thumbnail img {width:100%;height:100%;object-fit:cover;}
 .my-post-body {min-width:0;overflow-wrap:anywhere;}
