@@ -22,6 +22,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(PostManagementController.class)
 @Import({SecurityConfig.class,JwtAuthenticationFilter.class,JwtAuthenticationEntryPoint.class})
 class PostManagementControllerTest {
+    @Test @WithMockUser(roles="EXTERNAL_USER") void removedRoleCannotManagePosts() throws Exception {
+        mvc.perform(get("/api/posts/mine")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/posts/1/edit")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/posts/1").contentType("application/json").content("{\"reason\":\"test\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(management);
+    }
+
     @Autowired MockMvc mvc;
     @MockBean PostManagementService management;
     @MockBean JwtTokenProvider tokens;
@@ -41,7 +49,7 @@ class PostManagementControllerTest {
         verifyNoInteractions(management);
     }
 
-    @Test @WithMockUser(roles="EXTERNAL_USER") void mineReturnsPaginationAndPreventsCaching() throws Exception {
+    @Test @WithMockUser(roles="USER") void mineReturnsPaginationAndPreventsCaching() throws Exception {
         when(management.listMine(eq(1),eq(12),eq("ALL"),any()))
                 .thenReturn(new MyPostPageDto(List.of(),1,12,0,0,true,true));
         mvc.perform(get("/api/posts/mine")).andExpect(status().isOk())

@@ -114,8 +114,8 @@ export default function PostItemPage() {
     }
   }
 
-  if (!['USER', 'EXTERNAL_USER', 'CHECKER'].includes(user?.role)) return <main className="container" style={{ paddingBlock: 60 }}>
-    <h1>{isFound ? 'Đăng tin nhặt được' : 'Đăng tin mất đồ'}</h1><p>Chức năng dành cho tài khoản nội bộ, người ngoài trường và Checker.</p>
+  if (!['USER', 'CHECKER'].includes(user?.role)) return <main className="container" style={{ paddingBlock: 60 }}>
+    <h1>{isFound ? 'Đăng tin nhặt được' : 'Đăng tin mất đồ'}</h1><p>Chức năng dành cho tài khoản nội bộ và Checker.</p>
   </main>;
   if (created) return <main className="container-sm" style={{ paddingBlock: 60 }}>
     <h1 className="text-display-md">Đăng bài thành công #{created.id}</h1>

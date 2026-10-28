@@ -20,7 +20,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Query("""
             select a from Account a where a.id = :id
               and a.role in (com.example.base.entity.AccountRole.USER,
-                  com.example.base.entity.AccountRole.EXTERNAL_USER, com.example.base.entity.AccountRole.CHECKER)
+                  com.example.base.entity.AccountRole.CHECKER)
               and a.status = com.example.base.entity.AccountStatus.ACTIVE
               and (a.validUntil is null or a.validUntil > CURRENT_TIMESTAMP)
               and (a.lockedUntil is null or a.lockedUntil <= CURRENT_TIMESTAMP)

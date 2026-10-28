@@ -92,7 +92,7 @@ function Editor({ id, onReload }) {
     {error&&<div role="alert"><p>{error}</p><button type="button" className="btn btn-ghost" disabled={saving} onClick={onReload}>Tải lại bài đăng</button></div>}
     {!loaded?!error&&<p role="status">Đang tải bài đăng…</p>:<form onSubmit={submit}>
       <fieldset disabled={saving} style={{border:0,padding:0,minWidth:0}}>
-        <p>Bài phải còn mở và chưa bị ẩn để chỉnh sửa. Bài Found giao Approver, bài của Checker/người ngoài trường và bài bị từ chối sẽ cần duyệt lại.</p>
+        <p>Bài phải còn mở và chưa bị ẩn để chỉnh sửa. Bài Found giao Approver, bài của Checker và bài bị từ chối sẽ cần duyệt lại.</p>
         <div className="card" style={{padding:24,marginBlock:20}}>
           <StepDetailsForm formData={form} onChange={setForm} postType={loaded.post.postType.toLowerCase()}
             categories={loaded.categories} showPrivate={false} />

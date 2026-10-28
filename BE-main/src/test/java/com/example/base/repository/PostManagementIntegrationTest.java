@@ -98,7 +98,7 @@ class PostManagementIntegrationTest {
         verifyNoInteractions(storage);
     }
 
-    @ParameterizedTest @ValueSource(strings={"USER","CHECKER","EXTERNAL_USER"})
+    @ParameterizedTest @ValueSource(strings={"USER","CHECKER"})
     void editingReappliesCurrentRolePolicyAndPreservesSecrets(String role) {
         jdbc.update("UPDATE accounts SET role=? WHERE id=?",role,ownerId); em.clear();
         user=new CustomUserDetails(accounts.findById(ownerId).orElseThrow());
