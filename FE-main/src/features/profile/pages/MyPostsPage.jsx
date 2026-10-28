@@ -1,174 +1,96 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, ArrowUpDown } from 'lucide-react';
-import MyPostsEmptyState from '../components/MyPostsEmptyState';
-import MyPostsFilterBar from '../components/MyPostsFilterBar';
+import { useAuth } from '@/context/AuthContext';
+import { getMyPosts, deletePost } from '@/features/items/api/postApi';
+import Pagination from '@/components/common/Pagination';
 import MyPostCard from '../components/MyPostCard';
+import MyPostsEmptyState from '../components/MyPostsEmptyState';
+import './MyPostsPage.css';
 
-const MOCK_POSTS = [
-  {
-    id: 1, type: 'found', status: 'active',
-    title: 'Ví da nam Pedro màu đen',
-    location: 'Toà H1, ĐH Bách Khoa',
-    date: '18/09/2025', time: '14:30',
-    views: 47, aiMatched: true, matchScore: 92,
-    img: 'https://images.unsplash.com/photo-1627123424574-724758594913?w=300&q=80',
-  },
-  {
-    id: 2, type: 'lost', status: 'active',
-    title: 'iPhone 15 Pro Max Xanh Titan',
-    location: 'Tuyến xe 32 – Hà Nội',
-    date: '15/09/2025', time: '09:15',
-    views: 124, aiMatched: false, matchScore: null,
-    img: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=300&q=80',
-  },
-  {
-    id: 3, type: 'found', status: 'resolved',
-    title: 'MacBook Pro M2 Space Gray 14 inch',
-    location: 'Thư viện Tạ Quang Bửu',
-    date: '08/09/2025', time: '16:00',
-    views: 88, aiMatched: true, matchScore: 97,
-    img: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=300&q=80',
-  },
-  {
-    id: 4, type: 'lost', status: 'discussing',
-    title: 'Chìa khoá xe Honda Wave Alpha',
-    location: 'Căng tin C2, ĐH Bách Khoa',
-    date: '20/09/2025', time: '11:00',
-    views: 12, aiMatched: false, matchScore: null,
-    img: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&q=80',
-  },
-  {
-    id: 5, type: 'found', status: 'active',
-    title: 'Thẻ sinh viên & Thẻ ATM Vietcombank',
-    location: 'Sân bóng khu A, ĐH Bách Khoa',
-    date: '21/09/2025', time: '18:45',
-    views: 5, aiMatched: false, matchScore: null,
-    img: 'https://images.unsplash.com/photo-1614680376408-81e91ffe3db7?w=300&q=80',
-  },
-];
+const FILTERS = [['ALL','Tất cả'],['VISIBLE','Đang hiển thị'],['PENDING','Chờ duyệt'],
+  ['REJECTED','Bị từ chối'],['HIDDEN','Bị ẩn']];
 
-const FILTERS = [
-  { key: 'all',        label: 'Tất cả' },
-  { key: 'active',     label: 'Đang hiển thị' },
-  { key: 'discussing', label: 'Đang trao đổi' },
-  { key: 'resolved',   label: 'Đã giải quyết' },
-  { key: 'lost',       label: 'Cần tìm' },
-  { key: 'found',      label: 'Nhặt được' },
-];
-
-export default function MyPostsPage() {
-  const [posts, setPosts] = useState(MOCK_POSTS);
-  const [filter, setFilter] = useState('all');
-  const [query, setQuery] = useState('');
-  const [sortAsc, setSortAsc] = useState(false);
-
-  const handleResolve = (id) => {
-    setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'resolved' } : p));
-  };
-
-  const handleDelete = (id) => {
-    setPosts(prev => prev.filter(p => p.id !== id));
-  };
-
-  const filtered = posts
-    .filter(p => {
-      if (filter === 'all') return true;
-      if (filter === 'lost' || filter === 'found') return p.type === filter;
-      return p.status === filter;
-    })
-    .filter(p => {
-      if (!query.trim()) return true;
-      const q = query.toLowerCase();
-      return p.title.toLowerCase().includes(q) || p.location.toLowerCase().includes(q);
-    })
-    .sort((a, b) => sortAsc ? a.id - b.id : b.id - a.id);
-
-  return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      <main style={{ flex: 1, background: 'var(--bg-canvas)', padding: '48px 0 80px' }}>
-        <div className="container">
-          {/* Header */}
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-            gap: '24px', flexWrap: 'wrap', marginBottom: '32px',
-          }}>
-            <div>
-              <h1 className="text-display-sm" style={{ marginBottom: '6px' }}>Tin đăng của tôi</h1>
-              <p className="text-body" style={{ color: 'var(--text-secondary)' }}>
-                Quản lý các tin tìm đồ và đồ nhặt được bạn đã đăng tải trên hệ thống.
-              </p>
-            </div>
-            <Link to="/dang-tin" className="btn btn-primary" style={{ flexShrink: 0 }}>
-              <Plus size={16} /> Đăng tin mới
-            </Link>
-          </div>
-
-          {/* Filter & Search Bar */}
-          <MyPostsFilterBar
-            query={query}
-            onChangeQuery={setQuery}
-            filter={filter}
-            onSelectFilter={setFilter}
-            filters={FILTERS}
-          />
-
-          {/* Table / List Card */}
-          <div style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-2xl)',
-            overflow: 'hidden',
-            boxShadow: 'var(--shadow-sm)',
-          }}>
-            {/* Table Header */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '56px 1fr 140px 110px 70px 36px',
-              gap: '16px', alignItems: 'center',
-              padding: '12px 24px',
-              borderBottom: '1px solid var(--border)',
-              background: 'var(--bg-canvas)',
-              fontSize: '0.75rem', fontWeight: 600,
-              color: 'var(--text-muted)', textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}>
-              <span>Ảnh</span>
-              <span>Thông tin vật phẩm</span>
-              <span>Trạng thái</span>
-              <button
-                type="button"
-                onClick={() => setSortAsc(!sortAsc)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '4px',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit',
-                  fontFamily: 'inherit', textTransform: 'inherit',
-                  letterSpacing: 'inherit', padding: 0,
-                }}
-              >
-                Ngày đăng <ArrowUpDown size={11} />
-              </button>
-              <span>Lượt xem</span>
-              <span />
-            </div>
-
-            {/* List */}
-            {filtered.length > 0 ? (
-              filtered.map(post => (
-                <MyPostCard
-                  key={post.id}
-                  post={post}
-                  onResolve={handleResolve}
-                  onDelete={handleDelete}
-                />
-              ))
-            ) : (
-              <MyPostsEmptyState />
-            )}
-          </div>
-        </div>
-      </main>
+export default function MyPostsPage({ embedded = false }) {
+  const { user } = useAuth();
+  const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState('ALL');
+  const [attempt, setAttempt] = useState(0);
+  const Wrapper = embedded ? 'section' : 'main';
+  return <Wrapper className={`my-posts-page ${embedded ? 'my-posts-embedded' : 'container'}`}>
+    <header className="my-posts-heading"><div><h1>Tin đăng của tôi</h1>
+      <p>Theo dõi kiểm duyệt và trạng thái xử lý các bài bạn đã đăng.</p></div>
+      <div className="my-post-actions"><button className="btn btn-ghost" onClick={()=>setAttempt(n=>n+1)}>Tải lại</button>
+        <Link className="btn btn-primary" to="/dang-tin">Đăng tin mới</Link></div></header>
+    <div className="my-posts-filters" aria-label="Lọc trạng thái bài đăng">
+      {FILTERS.map(([key,label]) => <button key={key} className={`chip ${filter===key ? 'active' : ''}`}
+        aria-pressed={filter===key} onClick={() => {setFilter(key); setPage(1);}}>{label}</button>)}
     </div>
-  );
+    <MyPostList key={`${user?.id}:${page}:${filter}:${attempt}`} page={page} filter={filter} onPage={setPage}
+      onReload={() => setAttempt(n=>n+1)} />
+  </Wrapper>;
+}
+
+function MyPostList({ page, filter, onPage, onReload }) {
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [postToDelete, setPostToDelete] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getMyPosts(page, filter).then(data => { if (!cancelled) setResult(data); })
+      .catch(err => {if (!cancelled) setError(err.message);});
+    return () => {cancelled=true;};
+  }, [page, filter]);
+
+  async function afterDelete() {
+    setPostToDelete(null); setNotice('Đã xóa bài đăng.');
+    try {
+      const data=await getMyPosts(page, filter);
+      if (!data.content.length && page>1) onPage(page-1);
+      else setResult(data);
+    } catch (err) {setError(err.message);}
+  }
+
+  return <>
+    {notice && <p role="status">{notice}</p>}
+    {error ? <div role="alert"><p>{error}</p><button className="btn btn-ghost" onClick={onReload}>Tải lại</button></div>
+      : !result ? <p role="status">Đang tải bài đăng…</p> : <>
+        <p>{result.totalElements} bài đăng</p>
+        {result.content.length ? result.content.map(post => <MyPostCard key={`${post.id}:${post.updatedAt}`} post={post}
+          onDelete={setPostToDelete} />) : <MyPostsEmptyState />}
+        <Pagination currentPage={page} totalPages={result.totalPages} onPageChange={onPage} />
+      </>}
+    {postToDelete && <DeletePostDialog post={postToDelete} onCancel={()=>setPostToDelete(null)} onSuccess={afterDelete} />}
+  </>;
+}
+
+function DeletePostDialog({ post, onCancel, onSuccess }) {
+  const [reason,setReason]=useState('');
+  const [error,setError]=useState('');
+  const [busy,setBusy]=useState(false);
+  const inFlight=useRef(false);
+  const firstField=useRef(null);
+  useEffect(()=>{firstField.current?.focus();},[]);
+  async function submit(event) {
+    event.preventDefault();
+    if(inFlight.current) return;
+    if(!reason.trim()) {setError('Vui lòng nhập lý do.'); return;}
+    inFlight.current=true; setBusy(true); setError('');
+    try {await deletePost(post.id,reason.trim()); await onSuccess();}
+    catch(err){setError(err.message);setBusy(false);inFlight.current=false;}
+  }
+  return <div className="my-post-dialog-backdrop" onKeyDown={e=>{if(e.key==='Escape'&&!busy)onCancel();}}>
+    <section role="dialog" aria-modal="true" aria-labelledby="delete-post-title" className="card my-post-dialog">
+      <h2 id="delete-post-title">Xóa bài: {post.title}</h2>
+      <p>Bài sẽ không còn xuất hiện trong danh sách và trang chi tiết. Hệ thống giữ dữ liệu lịch sử.</p>
+      <form onSubmit={submit}>
+        <label htmlFor="deletion-reason" className="input-label">Lý do xóa</label>
+        <textarea ref={firstField} id="deletion-reason" className="input" required maxLength={1000} rows={4}
+          value={reason} disabled={busy} onChange={e=>setReason(e.target.value)} />
+        {error&&<p role="alert">{error}</p>}
+        <div className="my-post-actions"><button type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}>Hủy</button>
+          <button className="btn btn-primary" disabled={busy}>{busy?'Đang xử lý…':'Xóa bài'}</button></div>
+      </form>
+    </section>
+  </div>;
 }

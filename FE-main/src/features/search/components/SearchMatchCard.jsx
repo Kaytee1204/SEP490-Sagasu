@@ -1,44 +1,34 @@
-import React from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { MapPin, Clock } from 'lucide-react';
 
-export default function SearchMatchCard({ item, isTopMatch = false }) {
-  const isFound = item.status === 'found';
-  return (
-    <div
-      className="card animate-fadeInUp"
-      style={{
-        display: 'flex', flexDirection: 'column',
-        border: '1px solid var(--border)',
-        overflow: 'hidden', position: 'relative'
-      }}
-    >
-      <div style={{ position: 'relative', paddingTop: '65%' }}>
-        <img
-          src={item.img}
-          alt={item.title}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 40%)' }} />
+const STATUS = { OPEN: 'Đang xử lý', RESERVED: 'Đang xác minh nhận đồ', RETURNED: 'Đã trao trả', CLOSED: 'Đã đóng' };
+
+function Thumbnail({ url, title }) {
+  const [failed, setFailed] = useState(false);
+  let safeUrl;
+  try { const parsed = new URL(url); if (['https:', 'http:'].includes(parsed.protocol)) safeUrl = parsed.href; } catch { /* No valid photo URL. */ }
+  if (failed || !safeUrl) return <div className="post-list-no-image" role="img" aria-label={`Chưa có ảnh: ${title}`}>Ảnh chưa khả dụng</div>;
+  return <img src={safeUrl} alt={title} loading="lazy" onError={() => setFailed(true)} />;
+}
+
+export default function SearchMatchCard({ item }) {
+  const found = item.postType === 'FOUND';
+  const eventTime = new Date(item.eventAt).toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short',
+  });
+  return <article className="card post-list-card">
+    <div className="post-list-image"><Thumbnail key={item.thumbnailUrl || 'empty'} url={item.thumbnailUrl} title={item.title} /></div>
+    <div className="post-list-card-body">
+      <div className="post-list-badges">
+        <span className={`badge ${found ? 'badge-found' : 'badge-lost'}`}>{found ? 'Nhặt được' : 'Cần tìm'}</span>
+        <span className="post-list-category">{item.categoryName}</span>
       </div>
-
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-          <span className={`badge ${isFound ? 'badge-found' : 'badge-lost'}`}>
-            {isFound ? 'Nhặt được' : 'Cần tìm'}
-          </span>
-          <span className="badge badge-accent">{item.category || 'Ví & Giấy tờ'}</span>
-        </div>
-
-        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '12px', color: 'var(--text-primary)', lineHeight: 1.3 }}>
-          {item.title}
-        </h3>
-
-        <div style={{ marginTop: 'auto' }}>
-          <Link to={`/chi-tiet/${item.id}`} className="btn btn-ghost btn-full">
-            Xem chi tiết
-          </Link>
-        </div>
-      </div>
+      <h2><Link to={`/chi-tiet/${item.id}`}>{item.title}</Link></h2>
+      <p><MapPin size={16} aria-hidden="true" />{item.locationText}</p>
+      <p><Clock size={16} aria-hidden="true" />{eventTime}</p>
+      <p className="post-list-handling">{STATUS[item.status] || item.status}</p>
+      <Link to={`/chi-tiet/${item.id}`} className="btn btn-ghost btn-full">Xem chi tiết</Link>
     </div>
-  );
+  </article>;
 }

@@ -1,175 +1,147 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { getPostCategories, getVisiblePosts } from '@/features/items/api/postApi';
+import Pagination from '@/components/common/Pagination';
 import SearchHeaderBar from '../components/SearchHeaderBar';
 import SearchFilterSidebar from '../components/SearchFilterSidebar';
 import SearchMatchCard from '../components/SearchMatchCard';
-import SearchEmptyState from '../components/SearchEmptyState';
+import './SearchPage.css';
 
-const TOP_MATCHES = [
-  {
-    id: 1, title: 'Ví da nam Pedro đen', location: 'Toà H1, ĐHBK Hà Nội',
-    category: 'Ví & Giấy tờ',
-    date: '18/09/2025', time: '14:30',
-    matchScore: 94.5,
-    matchBreakdown: { visual: 98, location: 90, time: 92 },
-    img: 'https://images.unsplash.com/photo-1627123424574-724758594913?w=400&q=80',
-    status: 'found',
-  },
-  {
-    id: 2, title: 'Ví nam Pedro viền nâu', location: 'Tuyến bus 32, Cầu Giấy',
-    category: 'Ví & Giấy tờ',
-    date: '17/09/2025', time: '08:15',
-    matchScore: 82.1,
-    matchBreakdown: { visual: 85, location: 60, time: 90 },
-    img: 'https://images.unsplash.com/photo-1605333396914-232f50c05b8a?w=400&q=80',
-    status: 'found',
-  },
-  {
-    id: 3, title: 'Bóp da đen nam', location: 'Khu A, ĐH Kinh tế Quốc dân',
-    category: 'Ví & Giấy tờ',
-    date: '16/09/2025', time: '17:00',
-    img: 'https://images.unsplash.com/photo-1559591937-bea52fc059ba?w=400&q=80',
-    status: 'found',
-  }
-];
+const FILTER_KEYS = ['keyword', 'categoryId', 'postType', 'timeRange', 'fromDate', 'toDate'];
 
-const MORE_RESULTS = [
-  {
-    id: 4, title: 'Ví đen không rõ hiệu', location: 'Hồ Hoàn Kiếm',
-    category: 'Ví & Giấy tờ',
-    date: '10/09/2025', time: '20:00',
-    matchScore: 58.2,
-    img: 'https://images.unsplash.com/photo-1628151015968-3a4429e9ef04?w=400&q=80',
-    status: 'found',
-  },
-  {
-    id: 5, title: 'Ví da cá sấu đen', location: 'Aeon Mall Hà Đông',
-    category: 'Ví & Giấy tờ',
-    date: '18/09/2025', time: '19:45',
-    matchScore: 55.4,
-    img: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=400&q=80',
-    status: 'found',
-  },
-  {
-    id: 6, title: 'iPhone 15 Pro Titan', location: 'Tuyến bus 32, Cầu Giấy',
-    category: 'Thiết bị điện tử',
-    date: '19/09/2025', time: '10:15',
-    matchScore: 89.0,
-    img: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=400&q=80',
-    status: 'lost',
-  },
-  {
-    id: 7, title: 'Chìa khóa smartkey Honda', location: 'Vinhomes Central Park, TP.HCM',
-    category: 'Chìa khóa',
-    date: '18/09/2025', time: '15:20',
-    matchScore: 78.5,
-    img: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
-    status: 'found',
-  },
-  {
-    id: 8, title: 'Mèo Anh lông ngắn xám', location: 'KĐT Sala, TP. Thủ Đức',
-    category: 'Thú cưng',
-    date: '17/09/2025', time: '09:00',
-    matchScore: 72.0,
-    img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&q=80',
-    status: 'lost',
-  },
-];
-
-const CATEGORIES = [
-  { value: 'all', label: 'Tất cả danh mục' },
-  { value: 'Ví & Giấy tờ', label: 'Ví & Giấy tờ' },
-  { value: 'Thiết bị điện tử', label: 'Thiết bị điện tử' },
-  { value: 'Chìa khóa', label: 'Chìa khóa' },
-  { value: 'Thú cưng', label: 'Thú cưng' },
-  { value: 'Khác', label: 'Khác' },
-];
+function readFilters(params) {
+  const filters = Object.fromEntries(FILTER_KEYS.map(key => [key,
+    params.get(key) || (key === 'keyword' ? params.get('q') : '') || '',
+  ]));
+  if (!filters.timeRange && (filters.fromDate || filters.toDate)) filters.timeRange = 'CUSTOM';
+  return filters;
+}
 
 export default function SearchPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialQuery = searchParams.get('q') || '';
-  const initialCategory = searchParams.get('cat') || 'all';
-
-  const [query, setQuery] = useState(initialQuery);
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-  const [activeSearch, setActiveSearch] = useState({ q: initialQuery, cat: initialCategory });
-
+  const [params, setParams] = useSearchParams();
+  const [reload, setReload] = useState(0);
+  const [categories, setCategories] = useState([]);
+  const [categoryError, setCategoryError] = useState('');
   useEffect(() => {
-    const q = searchParams.get('q') || '';
-    const cat = searchParams.get('cat') || 'all';
-    setQuery(q);
-    setSelectedCategory(cat);
-    setActiveSearch({ q, cat });
-  }, [searchParams]);
-
-  const handleSearch = (e) => {
-    e?.preventDefault();
-    const newParams = {};
-    if (query.trim()) newParams.q = query.trim();
-    if (selectedCategory && selectedCategory !== 'all') newParams.cat = selectedCategory;
-    setSearchParams(newParams);
-    setActiveSearch({ q: query.trim(), cat: selectedCategory });
+    let cancelled = false;
+    getPostCategories().then(data => { if (!cancelled) setCategories(data); })
+      .catch(() => { if (!cancelled) setCategoryError('Không tải được danh mục. Hãy tải lại trang để thử lại.'); });
+    return () => { cancelled = true; };
+  }, []);
+  const rawPage = params.get('page') || '1';
+  const page = /^[1-9]\d*$/.test(rawPage) && Number(rawPage) <= 2147483647 ? Number(rawPage) : 1;
+  const filters = readFilters(params);
+  const changePage = next => {
+    const updated = new URLSearchParams(params);
+    if (next === 1) updated.delete('page');
+    else updated.set('page', String(next));
+    setParams(updated);
+  };
+  const applyFilters = values => {
+    const updated = new URLSearchParams();
+    for (const key of FILTER_KEYS) {
+      if (values[key].trim()) updated.set(key, values[key].trim());
+    }
+    setParams(updated);
+    setReload(current => current + 1);
   };
 
-  const filterItem = (item) => {
-    const keyword = activeSearch.q.toLowerCase().trim();
-    const matchesQ = !keyword ||
-      item.title.toLowerCase().includes(keyword) ||
-      item.location.toLowerCase().includes(keyword);
-    const matchesCat = activeSearch.cat === 'all' || item.category === activeSearch.cat;
-    return matchesQ && matchesCat;
+  return <main className="post-search-page">
+    <SearchWorkspace key={JSON.stringify([filters.keyword, filters.timeRange, filters.fromDate, filters.toDate])} initial={filters} categories={categories}
+      categoryError={categoryError} onApply={applyFilters} onReset={() => setParams({})}>
+      <PostList key={`${params.toString()}:${reload}`} page={page} filters={filters}
+        onReload={() => setReload(value => value + 1)} onPageChange={changePage}
+        onReset={() => setParams({})} />
+    </SearchWorkspace>
+  </main>;
+}
+
+function SearchWorkspace({ initial, categories, categoryError, onApply, onReset, children }) {
+  const [draft, setDraft] = useState({ keyword: initial.keyword, timeRange: initial.timeRange,
+    fromDate: initial.fromDate, toDate: initial.toDate });
+  const [error, setError] = useState('');
+  const workspaceRef = useRef(null);
+  const toolbarRef = useRef(null);
+  const values = { ...initial, ...draft };
+
+  // The toolbar can wrap on narrow screens; keep the sidebar below its actual height.
+  useLayoutEffect(() => {
+    const updateToolbarHeight = () => workspaceRef.current.style.setProperty(
+      '--post-search-toolbar-height', `${toolbarRef.current.getBoundingClientRect().height}px`);
+    updateToolbarHeight();
+    const observer = new ResizeObserver(updateToolbarHeight);
+    observer.observe(toolbarRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const change = event => {
+    const { name, value } = event.target;
+    setError('');
+    if (name === 'timeRange') {
+      setDraft(current => ({ ...current, timeRange: value, fromDate: '', toDate: '' }));
+      if (value !== 'CUSTOM') onApply({ ...initial, timeRange: value, fromDate: '', toDate: '' });
+    } else if (name === 'categoryId' || name === 'postType') {
+      // Apply immediate filters without submitting or discarding unfinished text/date edits.
+      onApply({ ...initial, [name]: value });
+    } else {
+      setDraft(current => ({ ...current, [name]: value }));
+    }
+  };
+  const submit = event => {
+    event.preventDefault();
+    if (values.fromDate && values.toDate && values.fromDate > values.toDate) {
+      setError('Ngày bắt đầu không được sau ngày kết thúc.');
+      return;
+    }
+    setError('');
+    onApply(values);
+  };
+  const reset = () => {
+    setDraft({ keyword: '', timeRange: '', fromDate: '', toDate: '' });
+    setError('');
+    onReset();
   };
 
-  const filteredTopMatches = TOP_MATCHES.filter(filterItem);
-  const filteredMoreResults = MORE_RESULTS.filter(filterItem);
-  const totalResults = filteredTopMatches.length + filteredMoreResults.length;
-
-  return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-      {/* ── HEADER / SEARCH BAR ── */}
-      <SearchHeaderBar
-        query={query}
-        onChangeQuery={setQuery}
-        onClearQuery={() => setQuery('')}
-        selectedCategory={selectedCategory}
-        onChangeCategory={setSelectedCategory}
-        categories={CATEGORIES}
-        onSearch={handleSearch}
-      />
-
-      <main className="container" style={{ flex: 1, padding: '40px var(--space-6)', display: 'grid', gridTemplateColumns: '280px 1fr', gap: '40px' }}>
-        {/* ── SIDEBAR FILTERS ── */}
-        <SearchFilterSidebar />
-
-        {/* ── RESULTS AREA ── */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-            <h2 className="text-heading" style={{ margin: 0 }}>
-              {activeSearch.q ? `Kết quả tìm kiếm cho "${activeSearch.q}"` : 'Tất cả kết quả tìm kiếm'}
-            </h2>
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-              {totalResults} kết quả
-            </div>
-          </div>
-
-          {totalResults > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
-              {filteredTopMatches.map((item, i) => (
-                <div key={item.id} style={{ animationDelay: `${i * 0.1}s` }}>
-                  <SearchMatchCard item={item} isTopMatch={true} />
-                </div>
-              ))}
-              {filteredMoreResults.map((item, i) => (
-                <div key={item.id} style={{ animationDelay: `${(i + 3) * 0.1}s` }}>
-                  <SearchMatchCard item={item} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <SearchEmptyState query={activeSearch.q} />
-          )}
-        </div>
-      </main>
+  return <div className="post-search-workspace" ref={workspaceRef}>
+    <SearchHeaderBar toolbarRef={toolbarRef} values={values} categories={categories} categoryError={categoryError}
+      onChange={change} onSearch={submit}
+      onClearQuery={() => setDraft(current => ({ ...current, keyword: '' }))} />
+    <div className="container post-search-layout">
+      <SearchFilterSidebar values={values} onChange={change} onApply={submit} onReset={reset} error={error} />
+      <section className="post-search-results" aria-label="Kết quả tìm kiếm bài đăng">{children}</section>
     </div>
-  );
+  </div>;
+}
+
+function PostList({ page, filters, onReload, onPageChange, onReset }) {
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const filterKey = JSON.stringify(filters);
+  const hasFilters = Object.values(filters).some(Boolean);
+  useEffect(() => {
+    let cancelled = false;
+    getVisiblePosts(page, 12, JSON.parse(filterKey)).then(data => { if (!cancelled) setResult(data); })
+      .catch(err => { if (!cancelled) setError(err.message || 'Không tải được danh sách bài đăng.'); });
+    return () => { cancelled = true; };
+  }, [page, filterKey]);
+
+  if (error) return <div className="post-list-message" role="alert"><h1>Không tải được bài đăng</h1><p>{error}</p>
+    <button className="btn btn-primary" onClick={onReload}>Thử lại</button></div>;
+  if (!result) return <p className="post-list-message" role="status">Đang tải danh sách…</p>;
+  return <>
+    <header className="post-list-results-heading">
+      <h1>{hasFilters ? 'Kết quả tìm kiếm' : 'Tất cả kết quả tìm kiếm'}</h1>
+      <p role="status">{result.totalElements} kết quả</p>
+    </header>
+    {result.content.length ? <div className="post-list-grid">
+      {result.content.map(post => <SearchMatchCard key={post.id} item={post} />)}
+    </div> : <div className="post-list-message">
+      <h2>{result.totalElements ? 'Trang này không có bài đăng' : hasFilters ? 'Không tìm thấy bài phù hợp' : 'Chưa có bài đăng hiển thị'}</h2>
+      <p>{result.totalElements ? 'Vui lòng trở về trang đầu.' : hasFilters ? 'Hãy thử từ khóa khác hoặc bớt điều kiện lọc.' : 'Bạn có thể đăng tin để cộng đồng hỗ trợ tìm kiếm.'}</p>
+      {page > 1 && <button type="button" className="btn btn-primary" onClick={() => onPageChange(1)}>Về trang đầu</button>}
+      {hasFilters && <button type="button" className="btn btn-ghost" onClick={onReset}>Xóa bộ lọc</button>}
+    </div>}
+    {result.content.length > 0 && <Pagination className="post-list-pagination" currentPage={page}
+      totalPages={result.totalPages} onPageChange={onPageChange} />}
+  </>;
 }

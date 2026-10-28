@@ -56,6 +56,10 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
         {images.length < 5 && (
           <div
             onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+            aria-label="Chọn ảnh JPG hoặc PNG"
             style={{
               border: '2px dashed var(--accent)',
               borderRadius: 'var(--radius-xl)',
@@ -92,7 +96,7 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
                 marginBottom: '8px',
               }}
             >
-              {images.length === 0 ? 'Bấm hoặc Kéo thả ảnh vào đây' : 'Thêm ảnh khác'}
+              {images.length === 0 ? 'Bấm để chọn ảnh (không bắt buộc)' : 'Thêm ảnh khác'}
             </div>
             <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
               Định dạng JPG, PNG. Tối đa 5MB.
@@ -101,7 +105,7 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
               type="file"
               ref={fileInputRef}
               onChange={onUpload}
-              accept="image/*"
+              accept="image/jpeg,image/png"
               multiple
               style={{ display: 'none' }}
             />

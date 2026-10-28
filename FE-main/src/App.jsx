@@ -9,6 +9,7 @@ import SearchPage from '@/features/search/pages/SearchPage';
 import ItemDetailPage from '@/features/items/pages/ItemDetailPage';
 import SmartMatchPage from '@/features/smart-match/pages/SmartMatchPage';
 import MyPostsPage from '@/features/profile/pages/MyPostsPage';
+import EditPostPage from '@/features/items/pages/EditPostPage';
 import ClaimItemPage from '@/features/items/pages/ClaimItemPage';
 import AdminLayout from '@/components/layouts/admin/AdminLayout';
 import MainLayout from '@/components/layouts/MainLayout';
@@ -60,9 +61,10 @@ function AppRoutes() {
 
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>
+        <Route path="/sua-tin/:id" element={<ProtectedRoute><EditPostPage /></ProtectedRoute>} />
         <Route path="/" element={<RootHomeRoute />} />
-        <Route path="/tim-kiem" element={<SearchPage />} />
-        <Route path="/chi-tiet/:id" element={<ItemDetailPage />} />
+        <Route path="/tim-kiem" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
+        <Route path="/chi-tiet/:id" element={<ProtectedRoute><ItemDetailPage /></ProtectedRoute>} />
 
         <Route
           path="/dang-tin"

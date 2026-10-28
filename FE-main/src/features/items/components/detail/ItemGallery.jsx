@@ -1,4 +1,12 @@
-import React from 'react';
+import { useState } from 'react';
+
+function GalleryImage({ src, alt, style }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !src) {
+    return <div role="img" aria-label={alt} style={{ ...style, display: 'grid', placeItems: 'center', background: 'var(--bg-canvas)', color: 'var(--text-muted)' }}>Ảnh chưa khả dụng</div>;
+  }
+  return <img src={src} alt={alt} style={style} onError={() => setFailed(true)} />;
+}
 
 export default function ItemGallery({ images, title, type, activeImage, onSelectImage }) {
   return (
@@ -11,7 +19,8 @@ export default function ItemGallery({ images, title, type, activeImage, onSelect
         aspectRatio: '4/3', borderRadius: 'var(--radius-lg)', overflow: 'hidden',
         marginBottom: '16px', position: 'relative'
       }}>
-        <img
+        <GalleryImage
+          key={images[activeImage] || 'empty'}
           src={images[activeImage]}
           alt={title}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -38,7 +47,7 @@ export default function ItemGallery({ images, title, type, activeImage, onSelect
               opacity: activeImage === i ? 1 : 0.6
             }}
           >
-            <img src={img} alt={`Thumb ${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <GalleryImage key={img} src={img} alt={`Ảnh ${i + 1} của ${title}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </button>
         ))}
       </div>

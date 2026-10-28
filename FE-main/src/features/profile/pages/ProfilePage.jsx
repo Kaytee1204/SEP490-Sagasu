@@ -8,27 +8,6 @@ import PostsTab from '../components/PostsTab';
 import ActivityTab from '../components/ActivityTab';
 import SecurityTab from '../components/SecurityTab';
 
-const MY_POSTS = [
-  {
-    id: 1, status: 'found', title: 'Ví da nam Pedro',
-    category: 'Giấy tờ & Ví', date: '18/09/2025', location: 'Toà H1, ĐHBK',
-    img: 'https://images.unsplash.com/photo-1627123424574-724758594913?w=300&q=80',
-    matched: true,
-  },
-  {
-    id: 2, status: 'lost', title: 'Điện thoại iPhone 15 Pro xanh',
-    category: 'Thiết bị điện tử', date: '15/09/2025', location: 'Tuyến 32, Hà Nội',
-    img: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=300&q=80',
-    matched: false,
-  },
-  {
-    id: 3, status: 'done', title: 'MacBook Pro M2 Space Gray',
-    category: 'Thiết bị điện tử', date: '08/09/2025', location: 'Thư viện TQB',
-    img: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=300&q=80',
-    matched: true,
-  },
-];
-
 const ACTIVITY_LOG = [
   { icon: CheckCircle, color: 'var(--status-found)', label: 'Xác minh quyền sở hữu thành công', detail: 'Ví Pedro — Chủ nhân đã nhận đồ', time: '2 ngày trước' },
   { icon: Bell, color: 'var(--accent)', label: 'AI so khớp mới', detail: 'iPhone 15 Pro có 3 kết quả khớp mới', time: '4 ngày trước' },
@@ -173,7 +152,7 @@ export default function ProfilePage() {
 
                 {/* Tab content */}
                 <div style={{ padding: '24px' }}>
-                  {activeTab === 'posts' && <PostsTab posts={MY_POSTS} />}
+                  {activeTab === 'posts' && <PostsTab />}
                   {activeTab === 'activity' && <ActivityTab activityLog={ACTIVITY_LOG} />}
                   {activeTab === 'security' && <SecurityTab />}
                 </div>
