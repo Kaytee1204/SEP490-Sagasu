@@ -42,6 +42,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({ PostService.class, PostMapper.class, SecurityConfig.class, JwtAuthenticationFilter.class,
         JwtAuthenticationEntryPoint.class })
 class PostControllerTest {
+    @Test
+    @WithMockUser(roles = "EXTERNAL_USER")
+    void removedRoleCannotCreatePosts() throws Exception {
+        mvc.perform(multipart("/api/posts/lost").file(data("2026-01-01T10:00:00+07:00")))
+                .andExpect(status().isForbidden());
+        String found = new String(data("2026-01-01T10:00:00+07:00").getBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                .replace("}", ",\"custodyMode\":\"P2P\"}");
+        mvc.perform(multipart("/api/posts/found").file(new MockMultipartFile("data", "data.json",
+                "application/json", found.getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(creation);
+    }
+
     @ParameterizedTest
     @CsvSource({"24H,24", "7D,168"})
     @WithMockUser
@@ -66,7 +79,7 @@ class PostControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "EXTERNAL_USER")
+    @WithMockUser(roles = "USER")
     void searchPassesNormalizedFiltersAndVietnamDateBoundaries() throws Exception {
         when(posts.searchVisibleIds(anyString(), any(), anyString(), anyString(), any(), any(), any()))
                 .thenReturn(Page.empty(PageRequest.of(0, 12)));

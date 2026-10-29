@@ -83,7 +83,7 @@ class PostCreationServiceTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER", "CHECKER", "EXTERNAL_USER"})
+    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER", "CHECKER"})
     void officeFoundAlwaysWaitsForReviewAndStoresProposedTime(AccountRole role) {
         Account author = new Account(); author.setId(7L); author.setRole(role); author.setStatus(AccountStatus.ACTIVE);
         when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
@@ -197,7 +197,7 @@ class PostCreationServiceTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER", "CHECKER", "EXTERNAL_USER"})
+    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER", "CHECKER"})
     void lostAndFoundUseDatabaseAccountRoleForModeration(AccountRole role) {
         Account author = new Account(); author.setId(7L); author.setRole(role); author.setStatus(AccountStatus.ACTIVE);
         when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
@@ -211,9 +211,9 @@ class PostCreationServiceTest {
 
     @Test
     void roleChangedDuringUploadUsesLatestDatabaseRole() {
-        Account external = new Account(); external.setId(7L); external.setRole(AccountRole.EXTERNAL_USER);
-        external.setStatus(AccountStatus.ACTIVE);
-        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(external));
+        Account checker = new Account(); checker.setId(7L); checker.setRole(AccountRole.CHECKER);
+        checker.setStatus(AccountStatus.ACTIVE);
+        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(checker));
         assertThat(service.createLost(request, null, user).moderationStatus()).isEqualTo("PENDING");
     }
 

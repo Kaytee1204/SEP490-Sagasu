@@ -28,7 +28,7 @@ public class CreateAccountRequest {
     private String password;
 
     @NotNull(message = "Role không được để trống")
-    @Schema(description = "Phân quyền: USER, EXTERNAL_USER, CHECKER, APPROVER, MANAGER, ADMIN", example = "USER")
+    @Schema(description = "Phân quyền: USER, CHECKER, APPROVER, MANAGER, ADMIN", example = "USER")
     private AccountRole role = AccountRole.USER;
 
     @Schema(description = "Trạng thái: PENDING_ACTIVATION, ACTIVE, SUSPENDED", example = "ACTIVE")

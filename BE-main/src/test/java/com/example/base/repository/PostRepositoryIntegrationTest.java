@@ -213,10 +213,10 @@ class PostRepositoryIntegrationTest {
     }
 
     @Test
-    void pendingExternalPostIsPersistedAndOnlyItsOwnerCanViewIt() {
+    void pendingCheckerPostIsPersistedAndOnlyItsOwnerCanViewIt() {
         var existing = posts.findById(postId).orElseThrow();
         long ownerId = existing.getAccount().getId();
-        jdbc.update("UPDATE accounts SET role='EXTERNAL_USER' WHERE id=?", ownerId);
+        jdbc.update("UPDATE accounts SET role='CHECKER' WHERE id=?", ownerId);
         entityManager.clear();
         var owner = accounts.findActiveAccountForPostCreation(ownerId).orElseThrow();
         var category = categories.findById(existing.getCategory().getCategoryId()).orElseThrow();

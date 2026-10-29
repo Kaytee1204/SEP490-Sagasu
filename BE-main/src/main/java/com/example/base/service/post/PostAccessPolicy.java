@@ -10,7 +10,7 @@ import java.util.Set;
 /** Shared account checks for posting and managing a post. Ownership is checked by repository queries. */
 final class PostAccessPolicy {
     private static final Set<AccountRole> AUTHOR_ROLES = Set.of(
-            AccountRole.USER, AccountRole.EXTERNAL_USER, AccountRole.CHECKER);
+            AccountRole.USER, AccountRole.CHECKER);
 
     private PostAccessPolicy() {}
 

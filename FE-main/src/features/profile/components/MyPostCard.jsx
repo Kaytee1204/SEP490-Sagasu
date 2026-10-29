@@ -15,7 +15,7 @@ export default function MyPostCard({ post, onDelete }) {
       <span className={`badge ${post.postType === 'LOST' ? 'badge-lost' : 'badge-found'}`}>
         {post.postType === 'LOST' ? 'Mất đồ' : 'Nhặt được'}
       </span>
-      <h2><Link to={`/chi-tiet/${post.id}`}>{post.title}</Link></h2>
+      <h2><Link className="my-post-detail-link" to={`/chi-tiet/${post.id}`}>{post.title}</Link></h2>
       <p>{post.categoryName} · {post.locationText}</p>
       <p><strong>{MODERATION[post.moderationStatus]}</strong> · {HANDLING[post.status]}</p>
       {post.handoverRequestedAt && <p>Lịch giao Approver đề xuất: {new Date(post.handoverRequestedAt).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})} (chưa xác nhận).</p>}
@@ -25,7 +25,7 @@ export default function MyPostCard({ post, onDelete }) {
     </div>
     <div className="my-post-actions">
       {post.canEdit && <Link className="btn btn-ghost" to={`/sua-tin/${post.id}`}>Sửa bài</Link>}
-      {post.canDelete && <button className="btn btn-ghost" onClick={() => onDelete(post)}>Xóa bài</button>}
+      {post.canDelete && <button type="button" className="btn btn-ghost" onClick={() => onDelete(post)}>Xóa bài</button>}
     </div>
   </article>;
 }

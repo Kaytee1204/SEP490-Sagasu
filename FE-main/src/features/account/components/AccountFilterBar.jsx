@@ -47,7 +47,6 @@ export default function AccountFilterBar({
           <option value="ADMIN">ADMIN</option>
           <option value="MANAGER">MANAGER</option>
           <option value="USER">USER</option>
-          <option value="EXTERNAL_USER">EXTERNAL_USER</option>
           <option value="CHECKER">CHECKER</option>
           <option value="APPROVER">APPROVER</option>
         </select>

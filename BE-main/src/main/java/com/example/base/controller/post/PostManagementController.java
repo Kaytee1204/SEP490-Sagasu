@@ -19,7 +19,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/posts")
-@PreAuthorize("hasAnyRole('USER','EXTERNAL_USER','CHECKER')")
+@PreAuthorize("hasAnyRole('USER','CHECKER')")
 public class PostManagementController {
     private final PostManagementService management;
 
