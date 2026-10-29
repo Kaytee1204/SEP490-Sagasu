@@ -156,10 +156,11 @@ export default function AccountCrudModal({
                   color: 'var(--text-secondary)',
                 }}
               >
-                Role (Vai trò)
+                Role (Vai trò) {!isPureAdmin && <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>(Chỉ ADMIN được đổi)</span>}
               </label>
               <select
                 value={formData.role}
+                disabled={!isPureAdmin}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 style={{
                   width: '100%',
@@ -167,7 +168,9 @@ export default function AccountCrudModal({
                   borderRadius: '6px',
                   border: '1px solid var(--border)',
                   outline: 'none',
-                  background: 'white',
+                  background: isPureAdmin ? 'white' : '#f1f5f9',
+                  color: isPureAdmin ? 'inherit' : '#64748b',
+                  cursor: isPureAdmin ? 'pointer' : 'not-allowed',
                   fontSize: '0.85rem',
                 }}
               >

@@ -1,128 +1,231 @@
 import React from 'react';
-import { Camera, CheckCircle, MapPin, Calendar, Shield, Edit3 } from 'lucide-react';
+import { Camera, CheckCircle, Shield, Edit3, Mail, Phone } from 'lucide-react';
 
 export default function ProfileHeader({ user, editMode, onToggleEdit }) {
+  const isActive = user.status === 'ACTIVE';
+
   return (
-    <section style={{
-      background: 'linear-gradient(160deg, var(--teal-900) 0%, #0f3d3d 100%)',
-      padding: '56px 0 80px',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: 'radial-gradient(circle at 80% 40%, rgba(94,196,196,0.08) 0%, transparent 60%)',
-        pointerEvents: 'none',
-      }} />
-      <div className="container" style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '28px', flexWrap: 'wrap' }}>
-          {/* Avatar block */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{
-              padding: '4px',
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.15)',
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}>
-              <img
-                src={user.avatar}
-                alt={user.name}
-                style={{ width: 96, height: 96, borderRadius: '50%', display: 'block' }}
-              />
-            </div>
-            <button
-              id="avatar-upload-btn"
-              type="button"
+    <section
+      style={{
+        background: 'linear-gradient(135deg, var(--teal-900) 0%, var(--teal-800) 100%)',
+        padding: '32px 0',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+      }}
+    >
+      <div className="container">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '28px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {/* Left: Avatar + Name & Role underneath + Contact details */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '24px',
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* Avatar Column: Avatar with Name & Role underneath */}
+            <div
               style={{
-                position: 'absolute', bottom: 4, right: 4,
-                width: 28, height: 28, borderRadius: '50%',
-                background: 'white', border: '2px solid var(--teal-900)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: 'var(--accent)',
-                transition: 'transform 200ms cubic-bezier(0.34,1.56,0.64,1)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px',
+                minWidth: '110px',
               }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-              aria-label="Thay ảnh đại diện"
             >
-              <Camera size={13} />
-            </button>
-          </div>
-
-          {/* User info */}
-          <div style={{ flex: 1, minWidth: '220px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
-              <h1 style={{
-                fontFamily: 'var(--font-display)', fontSize: 'clamp(1.5rem, 3vw, 2rem)',
-                fontWeight: 800, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1,
-              }}>
-                {user.name}
-              </h1>
-              {user.verified && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '4px',
-                  fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
-                  background: 'rgba(16,185,129,0.18)', color: '#6ee7b7',
-                  border: '1px solid rgba(110,231,183,0.25)',
-                  padding: '2px 9px', borderRadius: '4px',
-                }}>
-                  <CheckCircle size={10} />
-                  Đã xác minh
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '0.8125rem',
-                color: 'rgba(255,255,255,0.55)', letterSpacing: '0.05em',
-              }}>
-                SĐT: {user.phone}
-              </span>
-              <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>
-              <span style={{ fontSize: '0.8125rem', color: 'rgba(255,255,255,0.55)' }}>
-                {user.job}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8125rem', color: 'rgba(255,255,255,0.5)' }}>
-                <MapPin size={12} />
-                {user.address}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8125rem', color: 'rgba(255,255,255,0.5)' }}>
-                <Calendar size={12} />
-                Tham gia {user.joinDate}
-              </div>
-              {user.twoFA && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8125rem', color: 'rgba(94,196,196,0.9)', fontWeight: 600 }}>
-                  <Shield size={12} />
-                  2FA Bật
+              <div style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    padding: '3px',
+                    borderRadius: '50%',
+                    background: 'rgba(255, 255, 255, 0.14)',
+                    border: '1px solid rgba(255, 255, 255, 0.22)',
+                  }}
+                >
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: '50%',
+                      display: 'block',
+                      objectFit: 'cover',
+                    }}
+                  />
                 </div>
-              )}
+                <button
+                  id="avatar-upload-btn"
+                  type="button"
+                  style={{
+                    position: 'absolute',
+                    bottom: 2,
+                    right: 2,
+                    width: 26,
+                    height: 26,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    border: '2px solid var(--teal-900)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: 'var(--accent)',
+                  }}
+                  aria-label="Thay ảnh đại diện"
+                >
+                  <Camera size={12} />
+                </button>
+              </div>
+
+              {/* Name & Role directly below Avatar */}
+              <div style={{ textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: '0.9375rem',
+                    color: '#ffffff',
+                    lineHeight: 1.25,
+                  }}
+                >
+                  {user.name}
+                </div>
+                <div
+                  style={{
+                    marginTop: '3px',
+                    display: 'inline-block',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
+                    color: '#a7e2e2',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.16)',
+                    padding: '2px 10px',
+                    borderRadius: '6px',
+                  }}
+                >
+                  {user.role}
+                </div>
+              </div>
+            </div>
+
+            {/* Divider on desktop */}
+            <div
+              style={{
+                width: '1px',
+                height: '72px',
+                background: 'rgba(255, 255, 255, 0.12)',
+              }}
+              className="hidden sm:block"
+            />
+
+            {/* Account Summary Details */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <h1
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    margin: 0,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {user.name}
+                </h1>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    background: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.2)',
+                    color: isActive ? '#6ee7b7' : '#fde68a',
+                    border: `1px solid ${isActive ? 'rgba(110, 231, 183, 0.28)' : 'rgba(253, 230, 138, 0.3)'}`,
+                    padding: '3px 9px',
+                    borderRadius: '6px',
+                  }}
+                >
+                  <CheckCircle size={11} />
+                  {isActive ? 'Đang hoạt động' : user.status}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  flexWrap: 'wrap',
+                  fontSize: '0.84rem',
+                  color: 'rgba(255, 255, 255, 0.82)',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Mail size={14} style={{ color: '#5ec4c4' }} />
+                  {user.email}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Phone size={14} style={{ color: '#5ec4c4' }} />
+                  {user.phone}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.78rem',
+                  color: 'rgba(255, 255, 255, 0.65)',
+                }}
+              >
+                <Shield size={13} style={{ color: '#5ec4c4' }} />
+                <span>{user.securityLabel}</span>
+              </div>
             </div>
           </div>
 
-          {/* Edit button */}
+          {/* Right: Edit button */}
           <button
             id="profile-edit-btn"
             type="button"
             onClick={onToggleEdit}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '10px 20px',
-              background: editMode ? 'white' : 'rgba(255,255,255,0.12)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 'var(--radius-lg)',
-              color: editMode ? 'var(--teal-900)' : 'white',
-              fontSize: '0.875rem', fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'var(--font-body)',
-              transition: 'all 200ms cubic-bezier(0.34,1.56,0.64,1)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 18px',
+              background: editMode ? '#ffffff' : 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.22)',
+              borderRadius: '8px',
+              color: editMode ? 'var(--teal-900)' : '#ffffff',
+              fontSize: '0.84rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-body)',
+              transition: 'background 150ms ease, color 150ms ease',
               flexShrink: 0,
             }}
-            onMouseEnter={e => { if (!editMode) e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; }}
-            onMouseLeave={e => { if (!editMode) e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; }}
+            onMouseEnter={(e) => {
+              if (!editMode) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.18)';
+            }}
+            onMouseLeave={(e) => {
+              if (!editMode) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+            }}
           >
-            <Edit3 size={15} strokeWidth={1.8} />
-            {editMode ? 'Huỷ chỉnh sửa' : 'Chỉnh sửa hồ sơ'}
+            <Edit3 size={14} />
+            {editMode ? 'Đóng chỉnh sửa' : 'Chỉnh sửa hồ sơ'}
           </button>
         </div>
       </div>

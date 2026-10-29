@@ -1,6 +1,7 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '@/features/auth/api/authApi';
+import { accountApi } from '@/features/account/api/accountApi';
 
 const AuthContext = createContext(null);
 
@@ -47,7 +48,7 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const data = await authApi.login(email, password);
-      if (data && data.accessToken && data.account) {
+      if (data && !data.requiresOtp && data.accessToken && data.account) {
         setToken(data.accessToken);
         setUser(data.account);
       }
@@ -94,7 +95,25 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(STORAGE_KEY_TOKEN);
   };
 
+  const refreshProfile = async () => {
+    try {
+      const latestAccount = await accountApi.getMyProfile();
+      if (latestAccount) {
+        setUser(latestAccount);
+        return latestAccount;
+      }
+    } catch (err) {
+      console.warn('Could not refresh profile from DB:', err);
+    }
+    return user;
+  };
+
   const updateUser = async (updatedFields) => {
+    const updatedAccount = await accountApi.updateMyProfile(updatedFields);
+    if (updatedAccount) {
+      setUser((prev) => (prev ? { ...prev, ...updatedAccount } : updatedAccount));
+      return updatedAccount;
+    }
     setUser((prev) => (prev ? { ...prev, ...updatedFields } : updatedFields));
     return updatedFields;
   };
@@ -124,6 +143,7 @@ export function AuthProvider({ children }) {
     logout,
     forgotPassword,
     resetPassword,
+    refreshProfile,
     updateUser,
   };
 

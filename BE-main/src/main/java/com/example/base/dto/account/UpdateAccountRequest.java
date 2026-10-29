@@ -19,11 +19,15 @@ public class UpdateAccountRequest {
     @Schema(description = "Email mới (tùy chọn)", example = "user01@gmail.com")
     private String email;
 
+    @Size(max = 30, message = "Số điện thoại không được vượt quá 30 ký tự")
+    @Schema(description = "Số điện thoại liên hệ", example = "0912345678")
+    private String phone;
+
     @Size(min = 3, max = 100, message = "Mật khẩu mới phải từ 3 đến 100 ký tự")
     @Schema(description = "Mật khẩu mới (tùy chọn - để trống nếu không đổi)")
     private String password;
 
-    @Schema(description = "Role mới: USER, CHECKER, APPROVER, MANAGER, ADMIN", example = "CHECKER")
+    @Schema(description = "Role mới (Chỉ ADMIN mới được đổi role): USER, CHECKER, APPROVER, MANAGER, ADMIN", example = "USER")
     private AccountRole role;
 
     @Schema(description = "Trạng thái mới: PENDING_ACTIVATION, ACTIVE, SUSPENDED, DELETED", example = "ACTIVE")
@@ -52,6 +56,14 @@ public class UpdateAccountRequest {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
     }
 
     public String getPassword() {

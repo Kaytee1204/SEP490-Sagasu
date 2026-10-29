@@ -75,9 +75,14 @@ function AvatarDropdown() {
         <img
           src={avatarSrc}
           alt={displayName}
-          style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
+          style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
         />
-        <span style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1 }}>{initials || 'U'}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{displayName}</span>
+          <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase' }}>
+            {user?.role || 'USER'}
+          </span>
+        </div>
         <ChevronDown
           size={13}
           style={{

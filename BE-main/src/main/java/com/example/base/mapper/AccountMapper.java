@@ -21,6 +21,7 @@ public class AccountMapper {
             dto.setFullName(atIdx > 0 ? account.getEmail().substring(0, atIdx) : account.getEmail());
         }
         dto.setEmail(account.getEmail());
+        dto.setPhone(account.getPhone());
         dto.setRole(account.getRole());
         dto.setStatus(account.getStatus());
         dto.setMustChangePassword(account.isMustChangePassword());

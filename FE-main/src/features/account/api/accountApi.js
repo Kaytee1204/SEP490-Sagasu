@@ -2,6 +2,21 @@
 import apiClient from '@/services/apiClient';
 
 export const accountApi = {
+  async getMyProfile() {
+    const res = await apiClient.get('/accounts/me');
+    return res.data;
+  },
+
+  async getMyAuditLogs() {
+    const res = await apiClient.get('/accounts/me/audit-logs');
+    return res.data;
+  },
+
+  async updateMyProfile(payload) {
+    const res = await apiClient.put('/accounts/me', payload);
+    return res.data;
+  },
+
   async getAccountsPage({
     page = 1,
     size = 10,

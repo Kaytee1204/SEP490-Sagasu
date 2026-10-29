@@ -8,6 +8,9 @@ public class LoginResponse {
     private String refreshToken;
     private String tokenType = "Bearer";
     private AccountDto account;
+    private boolean requiresOtp = false;
+    private String email;
+    private String message;
 
     public LoginResponse() {
     }
@@ -17,6 +20,7 @@ public class LoginResponse {
         this.refreshToken = refreshToken;
         this.tokenType = "Bearer";
         this.account = account;
+        this.requiresOtp = false;
     }
 
     public String getAccessToken() {
@@ -49,5 +53,29 @@ public class LoginResponse {
 
     public void setAccount(AccountDto account) {
         this.account = account;
+    }
+
+    public boolean isRequiresOtp() {
+        return requiresOtp;
+    }
+
+    public void setRequiresOtp(boolean requiresOtp) {
+        this.requiresOtp = requiresOtp;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 }

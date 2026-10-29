@@ -24,6 +24,9 @@ public class Account {
     @Column(name = "email", length = 255, nullable = false, unique = true)
     private String email;
 
+    @Column(name = "phone", length = 30)
+    private String phone;
+
     @Column(name = "password_hash", length = 255, nullable = false)
     private String passwordHash;
 
@@ -106,6 +109,14 @@ public class Account {
 
     public void setEmail(String email) {
         this.email = email != null ? email.trim().toLowerCase() : null;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone != null ? phone.trim() : null;
     }
 
     public String getPasswordHash() {

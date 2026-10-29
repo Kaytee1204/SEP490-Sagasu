@@ -40,11 +40,11 @@ spring:
 app:
   storage:
     r2:
-      enabled: ${R2_ENABLED:false}
+      enabled: ${R2_ENABLED:true}
       endpoint: ${R2_ENDPOINT:https://903aac6785bb6371e4653ddc59df8b84.r2.cloudflarestorage.com}
       bucket: ${R2_BUCKET:sagasu}
-      access-key-id: ${R2_ACCESS_KEY_ID:}
-      secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+      access-key-id: ${R2_ACCESS_KEY_ID:b5728d513ea236ed74882bb58d752b2e}
+      secret-access-key: ${R2_SECRET_ACCESS_KEY:54f301ca8566ac822fbc51fb44b009367d51f68d5c8e41bd09f489761da2d3df}
   jwt:
     secret: sagasuSecretKeyMustBeAtLeast32BytesLongForSha256Security123456
     access-token-expiration-ms: 86400000     # 24 hours

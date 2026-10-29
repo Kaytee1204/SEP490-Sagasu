@@ -5,14 +5,17 @@ import com.example.base.dto.account.AccountDto;
 import com.example.base.dto.account.CreateAccountRequest;
 import com.example.base.dto.account.ExcelImportResponse;
 import com.example.base.dto.account.UpdateAccountRequest;
+import com.example.base.dto.account.UpdateProfileRequest;
 import com.example.base.entity.Account;
 import com.example.base.entity.AccountRole;
 import com.example.base.entity.AccountStatus;
+import com.example.base.entity.LoginAuditLog;
 import com.example.base.entity.RefreshToken;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.mapper.AccountMapper;
 import com.example.base.repository.AccountRepository;
+import com.example.base.repository.LoginAuditLogRepository;
 import com.example.base.repository.RefreshTokenRepository;
 import com.example.base.security.CustomUserDetails;
 import org.apache.poi.ss.usermodel.*;
@@ -33,11 +36,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.SecureRandom;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -53,17 +56,20 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final LoginAuditLogRepository loginAuditLogRepository;
     private final AccountMapper accountMapper;
     private final PasswordEncoder passwordEncoder;
 
     public AccountService(
             AccountRepository accountRepository,
             RefreshTokenRepository refreshTokenRepository,
+            LoginAuditLogRepository loginAuditLogRepository,
             AccountMapper accountMapper,
             PasswordEncoder passwordEncoder
     ) {
         this.accountRepository = accountRepository;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.loginAuditLogRepository = loginAuditLogRepository;
         this.accountMapper = accountMapper;
         this.passwordEncoder = passwordEncoder;
     }
@@ -117,11 +123,98 @@ public class AccountService {
         return accountMapper.toDto(account);
     }
 
+    @Transactional(readOnly = true)
+    public AccountDto getMyProfile() {
+        Account actor = getCurrentActor();
+        if (actor == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        return accountMapper.toDto(actor);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getMyAuditLogs() {
+        Account actor = getCurrentActor();
+        if (actor == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        List<LoginAuditLog> logs = loginAuditLogRepository.findByAccount_IdOrderByCreatedAtDesc(actor.getId());
+        return logs.stream().limit(30).map(log -> {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", log.getId());
+            item.put("eventType", log.getEventType());
+            item.put("success", log.isSuccess());
+            item.put("details", log.getDetails());
+            item.put("createdAt", log.getCreatedAt());
+            return item;
+        }).toList();
+    }
+
+    @Transactional
+    public AccountDto updateMyProfile(UpdateProfileRequest request) {
+        Account actor = getCurrentActor();
+        if (actor == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        // Chỉ ADMIN mới được phép đổi role
+        if (request.getRole() != null && request.getRole() != actor.getRole()) {
+            if (actor.getRole() != AccountRole.ADMIN) {
+                throw new AppException(
+                        ErrorCode.FORBIDDEN,
+                        "Chỉ có ADMIN mới được phép thay đổi Role (Vai trò)"
+                );
+            }
+            actor.setRole(request.getRole());
+        }
+
+        // Đổi số điện thoại
+        if (request.getPhone() != null) {
+            actor.setPhone(request.getPhone().trim());
+        }
+
+        // Đổi mật khẩu (nếu người dùng nhập mật khẩu mới)
+        if (StringUtils.hasText(request.getNewPassword())) {
+            if (StringUtils.hasText(request.getCurrentPassword())) {
+                if (!passwordEncoder.matches(request.getCurrentPassword(), actor.getPasswordHash())) {
+                    throw new AppException(ErrorCode.INVALID_CREDENTIALS, "Mật khẩu hiện tại không chính xác");
+                }
+            }
+            actor.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
+            actor.setMustChangePassword(false);
+        }
+
+        Account saved = accountRepository.save(actor);
+
+        LoginAuditLog auditLog = new LoginAuditLog();
+        auditLog.setAccount(saved);
+        auditLog.setEventType("PROFILE_UPDATED");
+        auditLog.setSuccess(true);
+        auditLog.setDetails(Map.of(
+                "phoneUpdated", request.getPhone() != null,
+                "passwordChanged", StringUtils.hasText(request.getNewPassword()),
+                "role", saved.getRole().name()
+        ));
+        loginAuditLogRepository.save(auditLog);
+
+        return accountMapper.toDto(saved);
+    }
+
     @Transactional
     public AccountDto createAccount(CreateAccountRequest request) {
         Account actor = getCurrentActor();
         AccountRole targetRole = request.getRole() != null ? request.getRole() : AccountRole.USER;
-        enforceRoleHierarchy(actor, targetRole);
+
+        // Chỉ ADMIN mới có quyền set role khác USER
+        if (actor != null && actor.getRole() != AccountRole.ADMIN) {
+            if (targetRole != AccountRole.USER) {
+                throw new AppException(
+                        ErrorCode.FORBIDDEN,
+                        "Chỉ có ADMIN mới được quyền thiết lập Role khác USER"
+                );
+            }
+            targetRole = AccountRole.USER;
+        }
 
         String normalizedEmail = request.getEmail().trim().toLowerCase();
         if (accountRepository.existsByEmailIgnoreCase(normalizedEmail)) {
@@ -135,6 +228,9 @@ public class AccountService {
         Account account = new Account();
         account.setFullName(request.getFullName().trim());
         account.setEmail(normalizedEmail);
+        if (request.getPhone() != null) {
+            account.setPhone(request.getPhone().trim());
+        }
         account.setPasswordHash(passwordEncoder.encode(rawPassword));
         account.setRole(targetRole);
         account.setStatus(request.getStatus() != null ? request.getStatus() : AccountStatus.ACTIVE);
@@ -160,8 +256,14 @@ public class AccountService {
 
         enforceRoleHierarchy(actor, account.getRole());
 
-        if (request.getRole() != null) {
-            enforceRoleHierarchy(actor, request.getRole());
+        // Chỉ ADMIN mới được phép thay đổi Role (Vai trò)
+        if (request.getRole() != null && request.getRole() != account.getRole()) {
+            if (actor == null || actor.getRole() != AccountRole.ADMIN) {
+                throw new AppException(
+                        ErrorCode.FORBIDDEN,
+                        "Chỉ có ADMIN mới được phép thay đổi Role (Vai trò) của tài khoản"
+                );
+            }
             account.setRole(request.getRole());
         }
 
@@ -175,6 +277,10 @@ public class AccountService {
                 throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
             }
             account.setEmail(newEmail);
+        }
+
+        if (request.getPhone() != null) {
+            account.setPhone(request.getPhone().trim());
         }
 
         if (StringUtils.hasText(request.getPassword())) {
@@ -233,7 +339,6 @@ public class AccountService {
             Sheet sheet = workbook.getSheetAt(0);
             int lastRowNum = sheet.getLastRowNum();
 
-            // Tự động nhận diện vị trí cột dựa vào dòng tiêu đề (nếu có)
             int emailCol = 0;
             int passCol = 1;
             int nameCol = 2;
@@ -245,11 +350,9 @@ public class AccountService {
                 String c0 = getCellText(firstRow, 0, formatter).toLowerCase();
                 String c1 = getCellText(firstRow, 1, formatter).toLowerCase();
                 String c2 = getCellText(firstRow, 2, formatter).toLowerCase();
-                String c3 = getCellText(firstRow, 3, formatter).toLowerCase();
 
                 if (c0.contains("email") || c0.contains("gmail") || c0.contains("tên") || c0.contains("name") || c1.contains("email")) {
                     startRow = 1;
-                    // Nếu cột 0 là tên và cột 1 là email
                     if ((c0.contains("tên") || c0.contains("name") || c0.contains("full_name")) && (c1.contains("email") || c1.contains("gmail"))) {
                         nameCol = 0;
                         emailCol = 1;
@@ -284,7 +387,6 @@ public class AccountService {
                     String rawName = getCellText(row, nameCol, formatter);
                     String rawRole = getCellText(row, roleCol, formatter);
 
-                    // Nếu người dùng truyền Role ở cột thứ 3 (nameCol) và không có cột thứ 4
                     if (isRoleName(rawName) && !StringUtils.hasText(rawRole)) {
                         rawRole = rawName;
                         rawName = "";
@@ -311,11 +413,9 @@ public class AccountService {
                         }
                     }
 
-                    if (actor != null && actor.getRole() == AccountRole.MANAGER
-                            && !MANAGER_ALLOWED_ROLES.contains(targetRole)) {
-                        throw new IllegalArgumentException(
-                                "Manager chỉ được import các role: USER, CHECKER, APPROVER (không được import " + targetRole + ")"
-                        );
+                    // Nếu không phải ADMIN thì chỉ được gán role USER
+                    if (actor != null && actor.getRole() != AccountRole.ADMIN && targetRole != AccountRole.USER) {
+                        targetRole = AccountRole.USER;
                     }
 
                     boolean passwordProvided = StringUtils.hasText(rawPassword);
@@ -379,7 +479,7 @@ public class AccountService {
             sample2.createCell(0).setCellValue("user02@gmail.com");
             sample2.createCell(1).setCellValue("123456");
             sample2.createCell(2).setCellValue("Trần Thị B");
-            sample2.createCell(3).setCellValue("CHECKER");
+            sample2.createCell(3).setCellValue("USER");
 
             for (int i = 0; i < columns.length; i++) {
                 sheet.autoSizeColumn(i);

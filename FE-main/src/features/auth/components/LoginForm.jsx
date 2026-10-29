@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 export default function LoginForm() {
   const {
     login,
+    verifyOtp,
     requestChangePasswordOtp,
     confirmChangePassword,
     forgotPassword,
@@ -13,7 +14,7 @@ export default function LoginForm() {
   } = useAuth();
   const navigate = useNavigate();
 
-  // Mode: 'credentials' | 'change_pass_req' | 'change_pass_confirm' | 'forgot_email' | 'forgot_reset'
+  // Mode: 'credentials' | 'login_otp' | 'change_pass_req' | 'change_pass_confirm' | 'forgot_email' | 'forgot_reset'
   const [mode, setMode] = useState('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,6 +52,13 @@ export default function LoginForm() {
     setLoading(true);
     try {
       const res = await login(email.trim(), password);
+      if (res?.requiresOtp) {
+        setOtp('');
+        setOtpHint(res?.message || '');
+        setSuccessMsg(res?.message || `Mã OTP 6 số đã được gửi tới email ${email.trim()}. Vui lòng nhập mã OTP để vào hệ thống.`);
+        setMode('login_otp');
+        return;
+      }
       const userRole = String(res?.account?.role || '').toUpperCase();
       if (userRole === 'ADMIN' || userRole === 'MANAGER') {
         navigate('/admin');
@@ -59,6 +67,32 @@ export default function LoginForm() {
       }
     } catch (err) {
       setError(err?.message || 'Tài khoản hoặc mật khẩu không chính xác');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 1b. Verify Login OTP (for USER role)
+  const handleVerifyLoginOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMsg('');
+    if (!otp.trim() || otp.trim().length !== 6) {
+      setError('Vui lòng nhập đúng mã OTP 6 chữ số đã gửi về email');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await verifyOtp(email.trim(), otp.trim(), 'LOGIN');
+      const userRole = String(res?.account?.role || '').toUpperCase();
+      if (userRole === 'ADMIN' || userRole === 'MANAGER') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
+    } catch (err) {
+      setError(err?.message || 'Mã OTP không chính xác hoặc đã hết hạn');
     } finally {
       setLoading(false);
     }
@@ -370,6 +404,99 @@ export default function LoginForm() {
             {loading ? 'Đang đăng nhập...' : 'Đăng nhập vào hệ thống'}
             <ArrowRight size={16} />
           </button>
+        </form>
+      )}
+
+      {/* ── MODE 1B: VERIFY LOGIN OTP (DÀNH CHO ROLE USER) ── */}
+      {mode === 'login_otp' && (
+        <form onSubmit={handleVerifyLoginOtp} className="flex flex-col gap-4">
+          <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+            <div
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: 'rgba(30, 107, 107, 0.1)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent)',
+                marginBottom: '6px',
+              }}
+            >
+              <KeyRound size={22} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 4px 0' }}>
+              Xác thực mã OTP Đăng nhập
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Mã OTP 6 chữ số đã được gửi tới email <b>{email}</b>
+            </p>
+            {otpHint && (
+              <div
+                style={{
+                  marginTop: '8px',
+                  padding: '6px 10px',
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  color: '#047857',
+                }}
+              >
+                {otpHint}
+              </div>
+            )}
+          </div>
+
+          <div className="input-group">
+            <label className="input-label" htmlFor="login-otp-input">
+              Nhập mã OTP (6 chữ số)
+            </label>
+            <input
+              id="login-otp-input"
+              type="text"
+              maxLength={6}
+              className="input"
+              style={{ letterSpacing: '6px', fontSize: '1.25rem', fontWeight: 700, textAlign: 'center' }}
+              placeholder="------"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+              autoFocus
+              required
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={loading}>
+            {loading ? 'Đang xác thực OTP...' : 'Xác nhận OTP & Vào hệ thống'}
+            <ArrowRight size={16} />
+          </button>
+
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={handleLoginSubmit}
+              disabled={loading}
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: '0.8rem', color: 'var(--accent)' }}
+            >
+              Gửi lại mã OTP
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('credentials');
+                setOtp('');
+                setError('');
+                setSuccessMsg('');
+              }}
+              className="btn btn-ghost btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+            >
+              <ArrowLeft size={14} />
+              Quay lại đăng nhập
+            </button>
+          </div>
         </form>
       )}
 

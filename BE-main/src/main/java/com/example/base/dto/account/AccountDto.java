@@ -12,6 +12,7 @@ public class AccountDto {
     private Long id;
     private String fullName;
     private String email;
+    private String phone;
     private AccountRole role;
     private AccountStatus status;
     private boolean mustChangePassword;
@@ -49,6 +50,14 @@ public class AccountDto {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
     }
 
     public AccountRole getRole() {

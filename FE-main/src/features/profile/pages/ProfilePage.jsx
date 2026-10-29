@@ -1,52 +1,81 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { CheckCircle, Bell, UploadCloud, Shield, FileText, Clock, Star } from 'lucide-react';
+import { getMyPosts } from '@/features/items/api/postApi';
+import { FileText, CheckCircle, Award } from 'lucide-react';
 import ProfileHeader from '../components/ProfileHeader';
 import ProfileStatCard from '../components/ProfileStatCard';
 import ProfileSidebarCard from '../components/ProfileSidebarCard';
 import PostsTab from '../components/PostsTab';
-import ActivityTab from '../components/ActivityTab';
 import SecurityTab from '../components/SecurityTab';
-
-const ACTIVITY_LOG = [
-  { icon: CheckCircle, color: 'var(--status-found)', label: 'Xác minh quyền sở hữu thành công', detail: 'Ví Pedro — Chủ nhân đã nhận đồ', time: '2 ngày trước' },
-  { icon: Bell, color: 'var(--accent)', label: 'AI so khớp mới', detail: 'iPhone 15 Pro có 3 kết quả khớp mới', time: '4 ngày trước' },
-  { icon: UploadCloud, color: '#6366f1', label: 'Đăng tin thất lạc', detail: 'Điện thoại iPhone 15 Pro xanh', time: '6 ngày trước' },
-  { icon: Shield, color: 'var(--accent)', label: 'Xác thực OTP kích hoạt', detail: 'Tài khoản được bảo mật 2 lớp', time: '10 ngày trước' },
-];
 
 const TABS = [
   { key: 'posts', label: 'Tin đăng của tôi' },
-  { key: 'activity', label: 'Lịch sử hoạt động' },
   { key: 'security', label: 'Bảo mật & Quyền riêng tư' },
 ];
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const { user, isPureAdmin, refreshProfile, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('posts');
   const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [postCounts, setPostCounts] = useState({ total: 0, visible: 0 });
 
-  const displayName = user?.fullName || user?.name || 'Người dùng FPT';
-  const displayEmail = user?.email || 'user@fpt.edu.vn';
-  const displayPhone = user?.phone || '0912 345 678';
-  const displayJob = user?.role ? `Quyền: ${user.role}` : 'Thành viên';
-  const displayAddress = user?.organizationName || user?.unitName || 'Đại học FPT Hà Nội';
-  const avatarUrl = user?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
+  const loadAccountDataFromDb = useCallback(async () => {
+    await refreshProfile();
+    try {
+      const [allRes, visibleRes] = await Promise.allSettled([
+        getMyPosts(1, 'ALL'),
+        getMyPosts(1, 'VISIBLE'),
+      ]);
+      const total =
+        allRes.status === 'fulfilled' && typeof allRes.value?.totalElements === 'number'
+          ? allRes.value.totalElements
+          : 0;
+      const visible =
+        visibleRes.status === 'fulfilled' && typeof visibleRes.value?.totalElements === 'number'
+          ? visibleRes.value.totalElements
+          : 0;
+      setPostCounts({ total, visible });
+    } catch {
+      setPostCounts({ total: 0, visible: 0 });
+    }
+  }, [refreshProfile]);
+
+  useEffect(() => {
+    loadAccountDataFromDb();
+  }, [loadAccountDataFromDb]);
+
+  const displayName = user?.fullName || user?.name || user?.email || 'Người dùng';
+  const displayEmail = user?.email || 'Chưa cập nhật';
+  const displayPhone = user?.phone ? user.phone : 'Chưa cập nhật';
+  const displayRole = user?.role ? String(user.role).toUpperCase() : 'USER';
+  const displayStatus = user?.status ? String(user.status).toUpperCase() : 'ACTIVE';
+  const securityLabel =
+    displayRole === 'ADMIN' || displayRole === 'MANAGER'
+      ? 'Tài khoản Quản trị hệ thống'
+      : 'Bảo mật xác thực OTP qua Email';
+
+  const avatarUrl =
+    user?.avatarUrl ||
+    `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
 
   const [formValues, setFormValues] = useState({
-    name: displayName,
     email: displayEmail,
-    phone: displayPhone,
-    job: displayJob,
+    phone: user?.phone || '',
+    role: displayRole,
+    newPassword: '',
+    confirmPassword: '',
   });
 
   useEffect(() => {
     if (user) {
       setFormValues({
-        name: user.fullName || user.name || '',
         email: user.email || '',
         phone: user.phone || '',
-        job: user.role ? `Quyền: ${user.role}` : 'Thành viên',
+        role: user.role ? String(user.role).toUpperCase() : 'USER',
+        newPassword: '',
+        confirmPassword: '',
       });
     }
   }, [user]);
@@ -55,93 +84,149 @@ export default function ProfilePage() {
     name: displayName,
     email: displayEmail,
     phone: displayPhone,
-    job: displayJob,
-    address: displayAddress,
-    joinDate: 'Tháng 9, 2023',
-    verified: true,
-    twoFA: true,
+    role: displayRole,
+    status: displayStatus,
+    securityLabel,
     avatar: avatarUrl,
     stats: [
-      { label: 'Tin đã đăng', value: '3', sub: 'tổng cộng', icon: FileText },
-      { label: 'Đã trao trả', value: '1', sub: 'thành công', icon: CheckCircle },
-      { label: 'Đang xử lý', value: '1', sub: 'chờ xác minh', icon: Clock },
-      { label: 'Điểm uy tín', value: '5.0', sub: '/ 5.0', icon: Star },
+      {
+        label: 'Số lượng bài đăng',
+        value: String(postCounts.total),
+        sub: 'Tổng số tin đã đăng của bạn',
+        icon: FileText,
+      },
+      {
+        label: 'Bài đăng đang hiển thị',
+        value: String(postCounts.visible),
+        sub: 'Đang hiển thị trên hệ thống',
+        icon: CheckCircle,
+      },
+      {
+        label: 'Vai trò (Role)',
+        value: displayRole,
+        sub: displayStatus === 'ACTIVE' ? 'Trạng thái: Đang hoạt động' : `Trạng thái: ${displayStatus}`,
+        icon: Award,
+      },
     ],
   };
 
   const handleSaveEdit = async () => {
+    setFeedback(null);
+
+    if (formValues.newPassword) {
+      if (formValues.newPassword.length < 3) {
+        setFeedback({ type: 'error', message: 'Mật khẩu mới phải từ 3 ký tự trở lên' });
+        return;
+      }
+      if (formValues.newPassword !== formValues.confirmPassword) {
+        setFeedback({ type: 'error', message: 'Mật khẩu xác nhận không khớp' });
+        return;
+      }
+    }
+
+    setSaving(true);
     try {
-      await updateUser({
-        fullName: formValues.name,
-        phone: formValues.phone,
-        preferredContact: 'IN_APP',
-      });
+      const payload = {
+        phone: formValues.phone.trim(),
+      };
+      if (formValues.newPassword) {
+        payload.newPassword = formValues.newPassword;
+      }
+      if (isPureAdmin && formValues.role) {
+        payload.role = formValues.role;
+      }
+
+      await updateUser(payload);
+      await loadAccountDataFromDb();
+      setFormValues((prev) => ({ ...prev, newPassword: '', confirmPassword: '' }));
       setEditMode(false);
+      setFeedback({ type: 'success', message: 'Đã cập nhật thông tin cá nhân thành công!' });
     } catch (e) {
-      console.warn('Update profile error:', e);
-      setEditMode(false);
+      setFeedback({
+        type: 'error',
+        message: e?.message || 'Cập nhật hồ sơ thất bại',
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--bg-canvas)' }}>
       {/* ── PAGE HERO / HEADER ── */}
       <ProfileHeader
         user={profileUser}
         editMode={editMode}
-        onToggleEdit={() => setEditMode(!editMode)}
+        onToggleEdit={() => {
+          setFeedback(null);
+          setEditMode(!editMode);
+        }}
       />
 
       {/* ── MAIN CONTENT ── */}
-      <div style={{ background: 'var(--bg-canvas)', flex: 1 }}>
-        <div className="container" style={{ paddingTop: 0 }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 320px',
-            gap: '24px',
-            marginTop: '-40px',
-            alignItems: 'flex-start',
-          }}>
-            {/* ── LEFT: Main card ── */}
-            <div>
+      <div style={{ flex: 1, padding: '24px 0 48px' }}>
+        <div className="container">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 330px',
+              gap: '24px',
+              alignItems: 'flex-start',
+            }}
+          >
+            {/* ── LEFT: Main column ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Stats grid */}
-              <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px',
-                marginBottom: '24px',
-              }}>
-                {profileUser.stats.map((s, i) => <ProfileStatCard key={i} stat={s} index={i} />)}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '16px',
+                }}
+              >
+                {profileUser.stats.map((s, i) => (
+                  <ProfileStatCard key={i} stat={s} index={i} />
+                ))}
               </div>
 
               {/* Tabs + content card */}
-              <div style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-2xl)',
-                overflow: 'hidden',
-                boxShadow: 'var(--shadow-sm)',
-              }}>
+              <div
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+                }}
+              >
                 {/* Tab bar */}
-                <div style={{
-                  display: 'flex',
-                  borderBottom: '1px solid var(--border)',
-                  background: 'var(--bg-canvas)',
-                  padding: '0 24px',
-                  gap: '4px',
-                }}>
-                  {TABS.map(tab => (
+                <div
+                  style={{
+                    display: 'flex',
+                    borderBottom: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                    padding: '0 20px',
+                    gap: '8px',
+                  }}
+                >
+                  {TABS.map((tab) => (
                     <button
                       key={tab.key}
                       id={`tab-profile-${tab.key}`}
                       type="button"
                       onClick={() => setActiveTab(tab.key)}
                       style={{
-                        padding: '14px 16px',
-                        background: 'none', border: 'none',
+                        padding: '13px 14px',
+                        background: 'none',
+                        border: 'none',
                         borderBottom: `2px solid ${activeTab === tab.key ? 'var(--accent)' : 'transparent'}`,
                         color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-secondary)',
-                        fontSize: '0.875rem', fontWeight: activeTab === tab.key ? 700 : 500,
-                        cursor: 'pointer', fontFamily: 'var(--font-body)',
-                        transition: 'all 150ms', whiteSpace: 'nowrap',
+                        fontSize: '0.85rem',
+                        fontWeight: activeTab === tab.key ? 700 : 500,
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-body)',
+                        transition: 'color 150ms ease, border-color 150ms ease',
+                        whiteSpace: 'nowrap',
                         marginBottom: '-1px',
                       }}
                     >
@@ -151,9 +236,8 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Tab content */}
-                <div style={{ padding: '24px' }}>
+                <div style={{ padding: '22px' }}>
                   {activeTab === 'posts' && <PostsTab />}
-                  {activeTab === 'activity' && <ActivityTab activityLog={ACTIVITY_LOG} />}
                   {activeTab === 'security' && <SecurityTab />}
                 </div>
               </div>
@@ -162,12 +246,21 @@ export default function ProfilePage() {
             {/* ── RIGHT: Sidebar ── */}
             <ProfileSidebarCard
               user={profileUser}
+              isPureAdmin={isPureAdmin}
               editMode={editMode}
-              onStartEdit={() => setEditMode(true)}
+              onStartEdit={() => {
+                setFeedback(null);
+                setEditMode(true);
+              }}
               formValues={formValues}
               onChangeForm={setFormValues}
               onSaveEdit={handleSaveEdit}
-              onCancelEdit={() => setEditMode(false)}
+              onCancelEdit={() => {
+                setFeedback(null);
+                setEditMode(false);
+              }}
+              saving={saving}
+              feedback={feedback}
             />
           </div>
         </div>

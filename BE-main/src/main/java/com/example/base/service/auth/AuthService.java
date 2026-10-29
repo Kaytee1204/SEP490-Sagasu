@@ -87,6 +87,23 @@ public class AuthService {
         account.setLockedUntil(null);
         accountRepository.save(account);
 
+        // Đối với các role người dùng (USER, CHECKER, APPROVER) -> bắt buộc xác thực mã OTP qua email khi đăng nhập
+        if (account.getRole() != AccountRole.ADMIN && account.getRole() != AccountRole.MANAGER) {
+            SendOtpRequest otpRequest = new SendOtpRequest();
+            otpRequest.setEmail(account.getEmail());
+            otpRequest.setPurpose(OtpPurpose.LOGIN);
+            Map<String, Object> otpResult = sendOtp(otpRequest);
+
+            LoginResponse otpResponse = new LoginResponse();
+            otpResponse.setRequiresOtp(true);
+            otpResponse.setEmail(account.getEmail());
+            otpResponse.setMessage(String.valueOf(
+                    otpResult.getOrDefault("note", "Mã OTP 6 số đã được gửi tới email " + account.getEmail())
+            ));
+            recordAuditLog(account, "LOGIN_OTP_REQUIRED", true, Map.of("role", account.getRole().name()));
+            return otpResponse;
+        }
+
         LoginResponse response = issueTokensForAccount(account);
         recordAuditLog(account, "LOGIN_PASSWORD", true, Map.of("role", account.getRole().name()));
         return response;
