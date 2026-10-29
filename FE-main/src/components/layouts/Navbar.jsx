@@ -8,7 +8,7 @@ function AvatarDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, isChecker, isApprover, logout } = useAuth();
 
   // Close on outside click
   useEffect(() => {
@@ -52,6 +52,12 @@ function AvatarDropdown() {
 
   if (isAdmin) {
     menuItems.push({ icon: LayoutDashboard, label: 'Trang quản trị & Quản lý', to: '/admin' });
+  }
+  if (isChecker) {
+    menuItems.push({ icon: LayoutDashboard, label: 'Phiếu tuần tra của tôi', to: '/checker/receipts' });
+  }
+  if (isApprover) {
+    menuItems.push({ icon: LayoutDashboard, label: 'Hàng đợi tiếp nhận', to: '/approver/receipts' });
   }
 
   return (

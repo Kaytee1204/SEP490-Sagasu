@@ -4,7 +4,7 @@ import { ArrowUpRight, LogOut, X } from 'lucide-react';
 import { ADMIN_NAV_SECTIONS } from './adminNavConfig';
 import { useAuth } from '@/context/AuthContext';
 
-export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, onClose = () => {} }) {
+export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, onClose = () => { } }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -20,7 +20,8 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
   };
 
   const displayName = user?.fullName || user?.email || 'Quản trị viên';
-  const displayRole = user?.role || 'ADMIN';
+  const receiptRole = { CHECKER: 'Nhân viên tuần tra', APPROVER: 'Người xét duyệt' }[user?.role];
+  const displayRole = receiptRole || user?.role || 'ADMIN';
   const avatarSrc = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
 
   const sidebarContent = (
@@ -35,7 +36,7 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
             <div className="font-extrabold text-base tracking-tight text-white leading-tight">Sagasu</div>
             <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-teal-300 tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-              {displayRole} Dashboard
+              {receiptRole || `${displayRole} Dashboard`}
             </div>
           </div>
         </div>
@@ -50,7 +51,7 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-6">
-        {ADMIN_NAV_SECTIONS.map((section) => (
+        {ADMIN_NAV_SECTIONS.filter((section) => section.items.some((item) => !item.roles || item.roles.includes(user?.role))).map((section) => (
           <div key={section.title} className="space-y-1">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1">
               {section.title}
@@ -64,11 +65,10 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
                   key={item.path}
                   to={item.path}
                   onClick={onClose}
-                  className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    active
+                  className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${active
                       ? 'bg-teal-500/15 text-teal-300 font-semibold border border-teal-500/30'
                       : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Icon size={17} className={active ? 'text-teal-400' : 'text-slate-400'} />

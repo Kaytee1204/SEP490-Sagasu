@@ -18,9 +18,14 @@ import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
 import CategoryManagementPage from '@/features/category/pages/CategoryManagementPage';
+import CheckerReceiptsPage from '@/features/checker/pages/CheckerReceiptsPage';
+import ReceiptFormPage from '@/features/checker/pages/ReceiptFormPage';
+import ReceiptDetailPage from '@/features/checker/pages/ReceiptDetailPage';
+import ReceiptQueuePage from '@/features/approver/pages/ReceiptQueuePage';
+import ReviewReceiptPage from '@/features/approver/pages/ReviewReceiptPage';
 
-function ProtectedRoute({ children, adminOnly = false, managerOnly = false }) {
-  const { isAuthenticated, isAdmin, isManager } = useAuth();
+function ProtectedRoute({ children, adminOnly = false, managerOnly = false, checkerOnly = false, approverOnly = false }) {
+  const { isAuthenticated, isAdmin, isManager, isChecker, isApprover } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/dang-nhap" replace />;
@@ -32,6 +37,8 @@ function ProtectedRoute({ children, adminOnly = false, managerOnly = false }) {
   }
 
   if (managerOnly && !isManager) return <Navigate to="/admin" replace />;
+  if (checkerOnly && !isChecker) return <Navigate to={isAdmin ? '/admin' : '/'} replace />;
+  if (approverOnly && !isApprover) return <Navigate to={isAdmin ? '/admin' : '/'} replace />;
 
   return children;
 }
@@ -42,8 +49,8 @@ function RootHomeRoute() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, isAdmin } = useAuth();
-  const postLoginRedirect = isAdmin ? '/admin' : '/';
+  const { isAuthenticated, isAdmin, isChecker, isApprover } = useAuth();
+  const postLoginRedirect = isChecker ? '/checker/receipts' : isApprover ? '/approver/receipts' : isAdmin ? '/admin' : '/';
 
   return (
     <Routes>
@@ -141,7 +148,19 @@ function AppRoutes() {
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>
 
-      <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
+      <Route path="/checker" element={<ProtectedRoute checkerOnly><AdminLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/checker/receipts" replace />} />
+        <Route path="receipts" element={<CheckerReceiptsPage />} />
+        <Route path="receipts/new" element={<ReceiptFormPage />} />
+        <Route path="receipts/:id" element={<ReceiptDetailPage />} />
+        <Route path="receipts/:id/edit" element={<ReceiptFormPage />} />
+      </Route>
+      <Route path="/approver" element={<ProtectedRoute approverOnly><AdminLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/approver/receipts" replace />} />
+        <Route path="receipts" element={<ReceiptQueuePage />} />
+        <Route path="receipts/:id" element={<ReviewReceiptPage />} />
+      </Route>
+      <Route path="/dashboard" element={<Navigate to={postLoginRedirect} replace />} />
       <Route path="/quan-tri" element={<Navigate to="/admin" replace />} />
 
       {/* Fallback */}

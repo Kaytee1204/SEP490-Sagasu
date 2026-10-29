@@ -62,6 +62,10 @@ export default function LoginForm() {
       const userRole = String(res?.account?.role || '').toUpperCase();
       if (userRole === 'ADMIN' || userRole === 'MANAGER') {
         navigate('/admin');
+      } else if (userRole === 'CHECKER') {
+        navigate('/checker/receipts');
+      } else if (userRole === 'APPROVER') {
+        navigate('/approver/receipts');
       } else {
         navigate('/');
       }
@@ -88,6 +92,10 @@ export default function LoginForm() {
       const userRole = String(res?.account?.role || '').toUpperCase();
       if (userRole === 'ADMIN' || userRole === 'MANAGER') {
         navigate('/admin');
+      } else if (userRole === 'CHECKER') {
+        navigate('/checker/receipts');
+      } else if (userRole === 'APPROVER') {
+        navigate('/approver/receipts');
       } else {
         navigate('/');
       }
