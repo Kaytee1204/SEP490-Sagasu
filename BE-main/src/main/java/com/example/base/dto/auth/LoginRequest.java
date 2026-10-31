@@ -13,6 +13,9 @@ public class LoginRequest {
     @Schema(description = "Mật khẩu", example = "123")
     private String password;
 
+    @Schema(description = "Nhóm đăng nhập: student (Sinh viên - role USER) hoặc staff (Cán bộ & Phòng ban - role ADMIN, MANAGER, APPROVER, CHECKER)", example = "student")
+    private String userGroup;
+
     public LoginRequest() {
     }
 
@@ -30,5 +33,13 @@ public class LoginRequest {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getUserGroup() {
+        return userGroup;
+    }
+
+    public void setUserGroup(String userGroup) {
+        this.userGroup = userGroup;
     }
 }

@@ -27,7 +27,7 @@ public class DataInitializer {
             Account admin = accountRepository.findByEmailIgnoreCase("admin").orElse(null);
             if (admin == null) {
                 admin = new Account();
-                admin.setFullName("Quản trị viên Admin");
+                admin.setFullName("Quản trị viên");
                 admin.setEmail("admin");
                 admin.setPasswordHash(passwordEncoder.encode("123"));
                 admin.setRole(AccountRole.ADMIN);
@@ -36,7 +36,7 @@ public class DataInitializer {
                 admin = accountRepository.save(admin);
             } else {
                 if (!StringUtils.hasText(admin.getFullName())) {
-                    admin.setFullName("Quản trị viên Admin");
+                    admin.setFullName("Quản trị viên");
                 }
                 admin.setPasswordHash(passwordEncoder.encode("123"));
                 admin.setRole(AccountRole.ADMIN);
@@ -52,7 +52,7 @@ public class DataInitializer {
             Account manager = accountRepository.findByEmailIgnoreCase(managerEmail).orElse(null);
             if (manager == null) {
                 manager = new Account();
-                manager.setFullName("Khánh Trịnh (Manager)");
+                manager.setFullName("Khánh Trịnh");
                 manager.setEmail(managerEmail);
                 manager.setPasswordHash(passwordEncoder.encode("123"));
                 manager.setRole(AccountRole.MANAGER);
@@ -61,8 +61,10 @@ public class DataInitializer {
                 manager.setCreatedBy(admin);
                 accountRepository.save(manager);
             } else {
-                if (!StringUtils.hasText(manager.getFullName())) {
-                    manager.setFullName("Khánh Trịnh (Manager)");
+                if (!StringUtils.hasText(manager.getFullName())
+                        || manager.getFullName().contains("(Manager)")
+                        || manager.getFullName().contains("(MANAGER)")) {
+                    manager.setFullName("Khánh Trịnh");
                 }
                 if (manager.isMustChangePassword()) {
                     manager.setPasswordHash(passwordEncoder.encode("123"));

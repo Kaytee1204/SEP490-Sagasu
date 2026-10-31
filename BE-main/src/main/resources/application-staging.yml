@@ -1,0 +1,59 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: sagasu-backend-staging
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:sagasu_staging}}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:1204}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:khanhtrinh1204@gmail.com}
+    password: ${MAIL_PASSWORD:ajgw gctb dauy pqsh}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 27MB
+
+app:
+  storage:
+    r2:
+      enabled: ${R2_ENABLED:true}
+      endpoint: ${R2_ENDPOINT:https://903aac6785bb6371e4653ddc59df8b84.r2.cloudflarestorage.com}
+      bucket: ${R2_BUCKET:sagasu}
+      access-key-id: ${R2_ACCESS_KEY_ID:b5728d513ea236ed74882bb58d752b2e}
+      secret-access-key: ${R2_SECRET_ACCESS_KEY:54f301ca8566ac822fbc51fb44b009367d51f68d5c8e41bd09f489761da2d3df}
+  jwt:
+    secret: ${JWT_SECRET:sagasuSecretKeyMustBeAtLeast32BytesLongForSha256Security123456}
+    access-token-expiration-ms: 86400000
+    refresh-token-expiration-ms: 604800000
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method

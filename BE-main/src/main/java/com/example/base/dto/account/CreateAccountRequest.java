@@ -17,10 +17,9 @@ public class CreateAccountRequest {
     @Schema(description = "Họ và tên người dùng", example = "Nguyễn Văn A")
     private String fullName;
 
-    @NotBlank(message = "Email không được để trống")
-    @Email(message = "Email không đúng định dạng (VD: user@gmail.com)")
-    @Size(max = 255, message = "Email không được vượt quá 255 ký tự")
-    @Schema(description = "Email tài khoản (tự động chuyển về chữ thường)", example = "user01@gmail.com")
+    @NotBlank(message = "Email hoặc tên tài khoản không được để trống")
+    @Size(max = 255, message = "Email/Tài khoản không được vượt quá 255 ký tự")
+    @Schema(description = "Email hoặc tên tài khoản (tự động chuyển về chữ thường)", example = "user01@gmail.com")
     private String email;
 
     @Size(max = 30, message = "Số điện thoại không được vượt quá 30 ký tự")

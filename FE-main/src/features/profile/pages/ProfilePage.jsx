@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getMyPosts } from '@/features/items/api/postApi';
 import { FileText, CheckCircle, Award } from 'lucide-react';
@@ -13,6 +13,17 @@ const TABS = [
   { key: 'security', label: 'Bảo mật & Quyền riêng tư' },
 ];
 
+async function loadPostCounts() {
+  const [allRes, visibleRes] = await Promise.allSettled([
+    getMyPosts(1, 'ALL'),
+    getMyPosts(1, 'VISIBLE'),
+  ]);
+  return {
+    total: allRes.status === 'fulfilled' ? (allRes.value?.totalElements ?? 0) : 0,
+    visible: visibleRes.status === 'fulfilled' ? (visibleRes.value?.totalElements ?? 0) : 0,
+  };
+}
+
 export default function ProfilePage() {
   const { user, isPureAdmin, refreshProfile, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('posts');
@@ -21,32 +32,23 @@ export default function ProfilePage() {
   const [feedback, setFeedback] = useState(null);
   const [postCounts, setPostCounts] = useState({ total: 0, visible: 0 });
 
-  const loadAccountDataFromDb = useCallback(async () => {
+  // Read the latest context callback without reloading when its reference changes.
+  const loadAccountDataOnOpen = useEffectEvent(async () => {
     await refreshProfile();
-    try {
-      const [allRes, visibleRes] = await Promise.allSettled([
-        getMyPosts(1, 'ALL'),
-        getMyPosts(1, 'VISIBLE'),
-      ]);
-      const total =
-        allRes.status === 'fulfilled' && typeof allRes.value?.totalElements === 'number'
-          ? allRes.value.totalElements
-          : 0;
-      const visible =
-        visibleRes.status === 'fulfilled' && typeof visibleRes.value?.totalElements === 'number'
-          ? visibleRes.value.totalElements
-          : 0;
-      setPostCounts({ total, visible });
-    } catch {
-      setPostCounts({ total: 0, visible: 0 });
-    }
-  }, [refreshProfile]);
+    return loadPostCounts();
+  });
 
   useEffect(() => {
-    loadAccountDataFromDb();
-  }, [loadAccountDataFromDb]);
+    let cancelled = false;
+    loadAccountDataOnOpen().then((counts) => {
+      if (!cancelled) setPostCounts(counts);
+    }).catch(() => {
+      if (!cancelled) setPostCounts({ total: 0, visible: 0 });
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
-  const displayName = user?.fullName || user?.name || user?.email || 'Người dùng';
+  const displayName = String(user?.fullName || user?.name || user?.email || 'Người dùng').replace(/\s*\((Manager|Admin)\)/gi, '');
   const displayEmail = user?.email || 'Chưa cập nhật';
   const displayPhone = user?.phone ? user.phone : 'Chưa cập nhật';
   const displayRole = user?.role ? String(user.role).toUpperCase() : 'USER';
@@ -137,7 +139,8 @@ export default function ProfilePage() {
       }
 
       await updateUser(payload);
-      await loadAccountDataFromDb();
+      await refreshProfile();
+      setPostCounts(await loadPostCounts());
       setFormValues((prev) => ({ ...prev, newPassword: '', confirmPassword: '' }));
       setEditMode(false);
       setFeedback({ type: 'success', message: 'Đã cập nhật thông tin cá nhân thành công!' });

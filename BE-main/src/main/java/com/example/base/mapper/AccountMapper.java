@@ -15,7 +15,10 @@ public class AccountMapper {
         AccountDto dto = new AccountDto();
         dto.setId(account.getId());
         if (StringUtils.hasText(account.getFullName())) {
-            dto.setFullName(account.getFullName());
+            String cleanedName = account.getFullName()
+                    .replaceAll("(?i)\\s*\\((manager|admin|user|checker|approver)\\)\\s*$", "")
+                    .trim();
+            dto.setFullName(cleanedName);
         } else if (StringUtils.hasText(account.getEmail())) {
             int atIdx = account.getEmail().indexOf('@');
             dto.setFullName(atIdx > 0 ? account.getEmail().substring(0, atIdx) : account.getEmail());

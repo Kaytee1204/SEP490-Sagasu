@@ -23,7 +23,8 @@ function AvatarDropdown() {
     navigate('/dang-nhap');
   };
 
-  const displayName = user?.fullName || user?.name || user?.email || 'Người dùng';
+  const rawName = user?.fullName || user?.name || user?.email || 'Người dùng';
+  const displayName = String(rawName).replace(/\s*\((manager|admin|user|checker|approver)\)\s*$/i, '').trim();
   const displayEmail = user?.email || '';
   const displayOrg = user?.organizationName || user?.unitName || 'Trường Đại học FPT';
 

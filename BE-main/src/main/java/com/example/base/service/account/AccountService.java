@@ -92,7 +92,6 @@ public class AccountService {
                 normalizedKeyword,
                 role,
                 status,
-                includeDeleted,
                 pageable
         );
 

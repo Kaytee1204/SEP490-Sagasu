@@ -15,6 +15,7 @@ export default function AccountCrudModal({
   if (!crudModal.isOpen) return null;
 
   const isCreate = crudModal.mode === 'create';
+  const isStudentRole = formData.role === 'USER';
 
   return (
     <div
@@ -85,7 +86,7 @@ export default function AccountCrudModal({
             />
           </div>
 
-          {/* Email / Gmail */}
+          {/* Email / Account */}
           <div>
             <label
               style={{
@@ -96,12 +97,12 @@ export default function AccountCrudModal({
                 color: 'var(--text-secondary)',
               }}
             >
-              Mail (Email / Gmail) <span style={{ color: '#ef4444' }}>*</span>
+              {isStudentRole ? 'Email sinh viên (Gmail)' : 'Tài khoản (Account) hoặc Email'} <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
-              type="email"
+              type={isStudentRole ? 'email' : 'text'}
               required
-              placeholder="VD: user01@gmail.com"
+              placeholder={isStudentRole ? 'VD: user01@gmail.com' : 'VD: canbo01 hoặc email@gmail.com'}
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               style={{
@@ -174,9 +175,9 @@ export default function AccountCrudModal({
                   fontSize: '0.85rem',
                 }}
               >
-                <option value="USER">USER (Sinh viên / Giảng viên nội bộ)</option>
-                <option value="CHECKER">CHECKER (Kiểm duyệt)</option>
-                <option value="APPROVER">APPROVER (Phê duyệt)</option>
+                <option value="USER">USER (Sinh viên)</option>
+                <option value="CHECKER">CHECKER (Cán bộ kiểm duyệt)</option>
+                <option value="APPROVER">APPROVER (Phòng ban phê duyệt)</option>
                 {isPureAdmin && <option value="MANAGER">MANAGER (Quản lý)</option>}
                 {isPureAdmin && <option value="ADMIN">ADMIN (Quản trị viên)</option>}
               </select>

@@ -32,6 +32,23 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok("Đăng nhập thành công", authService.login(request)));
     }
 
+    @PostMapping("/google-login")
+    @Operation(
+            summary = "Đăng nhập bằng tài khoản Google đã được hệ thống cung cấp",
+            description = "Kiểm tra email Google có tồn tại và đang hoạt động trong hệ thống hay không, sau đó cấp JWT Token."
+    )
+    public ResponseEntity<ApiResponse<LoginResponse>> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Đăng nhập Google thành công", authService.loginWithGoogle(request)));
+    }
+
+    @GetMapping("/google-accounts")
+    @Operation(
+            summary = "Danh sách các tài khoản Google đã được hệ thống cung cấp (để chọn nhanh khi Đăng nhập với Google)"
+    )
+    public ResponseEntity<ApiResponse<java.util.List<Map<String, Object>>>> getAvailableGoogleAccounts() {
+        return ResponseEntity.ok(ApiResponse.ok(authService.getAvailableGoogleAccounts()));
+    }
+
     @PostMapping("/change-password/request-otp")
     @Operation(
             summary = "Bước 1 Đổi mật khẩu: Nhập mật khẩu hiện tại (123) để nhận mã OTP qua Gmail",

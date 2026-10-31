@@ -13,9 +13,15 @@ import com.example.base.repository.RefreshTokenRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.security.JwtTokenProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -87,6 +93,23 @@ public class AuthService {
         account.setLockedUntil(null);
         accountRepository.save(account);
 
+        // Kiểm tra đúng phân nhóm đăng nhập: Sinh viên (USER) vs Cán bộ & Phòng ban (ADMIN, MANAGER, APPROVER, CHECKER)
+        if (StringUtils.hasText(request.getUserGroup())) {
+            String group = request.getUserGroup().trim().toLowerCase();
+            if ("student".equals(group) && account.getRole() != AccountRole.USER) {
+                throw new AppException(
+                        ErrorCode.FORBIDDEN,
+                        "Tài khoản này thuộc nhóm Cán bộ & Phòng ban (" + account.getRole().name() + "). Vui lòng chọn mục 'Cán bộ & Phòng ban' để đăng nhập!"
+                );
+            }
+            if ("staff".equals(group) && account.getRole() == AccountRole.USER) {
+                throw new AppException(
+                        ErrorCode.FORBIDDEN,
+                        "Tài khoản này là tài khoản Sinh viên. Vui lòng chọn mục 'Sinh viên' để đăng nhập!"
+                );
+            }
+        }
+
         // Đối với các role người dùng (USER, CHECKER, APPROVER) -> bắt buộc xác thực mã OTP qua email khi đăng nhập
         if (account.getRole() != AccountRole.ADMIN && account.getRole() != AccountRole.MANAGER) {
             SendOtpRequest otpRequest = new SendOtpRequest();
@@ -107,6 +130,78 @@ public class AuthService {
         LoginResponse response = issueTokensForAccount(account);
         recordAuditLog(account, "LOGIN_PASSWORD", true, Map.of("role", account.getRole().name()));
         return response;
+    }
+
+    @Transactional(noRollbackFor = AppException.class)
+    @SuppressWarnings("unchecked")
+    public LoginResponse loginWithGoogle(GoogleLoginRequest request) {
+        String resolvedEmail = request.getEmail();
+
+        // Nếu FE truyền Google OAuth2 accessToken thật thì xác thực với Google UserInfo API
+        if (StringUtils.hasText(request.getAccessToken())) {
+            try {
+                RestTemplate restTemplate = new RestTemplate();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setBearerAuth(request.getAccessToken().trim());
+                HttpEntity<Void> entity = new HttpEntity<>(headers);
+                ResponseEntity<Map> googleRes = restTemplate.exchange(
+                        "https://www.googleapis.com/oauth2/v3/userinfo",
+                        HttpMethod.GET,
+                        entity,
+                        Map.class
+                );
+                Map<String, Object> body = googleRes.getBody();
+                if (body != null && body.get("email") != null) {
+                    resolvedEmail = String.valueOf(body.get("email"));
+                }
+            } catch (Exception ex) {
+                throw new AppException(ErrorCode.UNAUTHORIZED, "Không thể xác thực phiên Google OAuth: " + ex.getMessage());
+            }
+        }
+
+        if (!StringUtils.hasText(resolvedEmail)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng chọn hoặc nhập email tài khoản Google");
+        }
+
+        String normalizedEmail = resolvedEmail.trim().toLowerCase();
+        Account account = accountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.ACCOUNT_NOT_FOUND,
+                        "Tài khoản Google (" + normalizedEmail + ") chưa được hệ thống cung cấp. Vui lòng liên hệ Quản trị viên!"
+                ));
+
+        validateAccountCanAuthenticate(account);
+
+        if (account.getRole() != AccountRole.USER) {
+            throw new AppException(
+                    ErrorCode.FORBIDDEN,
+                    "Tài khoản này thuộc nhóm Cán bộ & Phòng ban (" + account.getRole().name() + "). Vui lòng chọn mục 'Cán bộ & Phòng ban' để đăng nhập!"
+            );
+        }
+
+        account.setFailedLoginCount(0);
+        account.setLockedUntil(null);
+        accountRepository.save(account);
+
+        LoginResponse response = issueTokensForAccount(account);
+        recordAuditLog(account, "LOGIN_GOOGLE", true, Map.of("email", account.getEmail(), "role", account.getRole().name()));
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAvailableGoogleAccounts() {
+        return accountRepository.findAll().stream()
+                .filter(acc -> acc.getStatus() == AccountStatus.ACTIVE
+                        && acc.getRole() == AccountRole.USER
+                        && StringUtils.hasText(acc.getEmail())
+                        && acc.getEmail().contains("@"))
+                .map(acc -> Map.<String, Object>of(
+                        "id", acc.getId(),
+                        "email", acc.getEmail(),
+                        "fullName", StringUtils.hasText(acc.getFullName()) ? acc.getFullName() : acc.getEmail(),
+                        "role", acc.getRole().name()
+                ))
+                .toList();
     }
 
     @Transactional(noRollbackFor = AppException.class)

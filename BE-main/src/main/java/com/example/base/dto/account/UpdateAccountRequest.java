@@ -14,9 +14,8 @@ public class UpdateAccountRequest {
     @Schema(description = "Họ và tên người dùng", example = "Nguyễn Văn A")
     private String fullName;
 
-    @Email(message = "Email không đúng định dạng (VD: user@gmail.com)")
-    @Size(max = 255, message = "Email không được vượt quá 255 ký tự")
-    @Schema(description = "Email mới (tùy chọn)", example = "user01@gmail.com")
+    @Size(max = 255, message = "Email/Tài khoản không được vượt quá 255 ký tự")
+    @Schema(description = "Email hoặc tên tài khoản mới (tùy chọn)", example = "user01@gmail.com")
     private String email;
 
     @Size(max = 30, message = "Số điện thoại không được vượt quá 30 ký tự")

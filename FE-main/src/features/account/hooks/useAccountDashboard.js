@@ -21,7 +21,7 @@ export function useAccountDashboard() {
   const [keyword, setKeyword] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [includeDeleted, setIncludeDeleted] = useState(false);
+  const [includeDeleted, setIncludeDeleted] = useState(true);
 
   // CRUD Modal state
   const [crudModal, setCrudModal] = useState({
@@ -60,7 +60,7 @@ export function useAccountDashboard() {
         keyword,
         role: roleFilter,
         status: statusFilter,
-        includeDeleted: includeDeleted || statusFilter === 'DELETED',
+        includeDeleted: true,
       });
       setAccounts(pageData?.content || []);
       setTotalElements(pageData?.totalElements || 0);

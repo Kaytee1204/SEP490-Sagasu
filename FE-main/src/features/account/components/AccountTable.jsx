@@ -61,7 +61,7 @@ export default function AccountTable({
           {accounts.map((acc) => {
             const roleStyle = ROLE_STYLES[acc.role] || ROLE_STYLES.USER;
             const statusStyle = STATUS_STYLES[acc.status] || STATUS_STYLES.ACTIVE;
-            const displayName = acc.fullName || acc.email;
+            const displayName = String(acc.fullName || acc.email).replace(/\s*\((Manager|Admin)\)/gi, '');
 
             return (
               <tr
