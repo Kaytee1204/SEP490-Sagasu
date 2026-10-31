@@ -39,21 +39,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     @Query("""
             SELECT a FROM Account a
-            WHERE (:includeDeleted = true OR a.status <> com.example.base.entity.AccountStatus.DELETED)
-              AND (:role IS NULL OR a.role = :role)
+            WHERE (:role IS NULL OR a.role = :role)
               AND (:status IS NULL OR a.status = :status)
               AND (
-                  :keyword IS NULL OR :keyword = ''
-                  OR LOWER(a.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR LOWER(COALESCE(a.fullName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                  OR CAST(a.id AS string) LIKE CONCAT('%', :keyword, '%')
+                   :keyword IS NULL OR :keyword = ''
+                   OR LOWER(a.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(COALESCE(a.fullName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             """)
     Page<Account> searchAccounts(
             @Param("keyword") String keyword,
             @Param("role") AccountRole role,
             @Param("status") AccountStatus status,
-            @Param("includeDeleted") boolean includeDeleted,
             Pageable pageable
     );
 }

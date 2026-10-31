@@ -19,7 +19,7 @@ export default function AuthLeftPanel() {
         </div>
       </div>
 
-      {/* Hero text */}
+      {/* Hero text (chạy chữ động) */}
       <div className="relative z-10 mb-auto">
         <div className="text-[0.75rem] font-bold uppercase tracking-[0.1em] text-[#5ec4c4e6] mb-4">
           Nền tảng vì cộng đồng

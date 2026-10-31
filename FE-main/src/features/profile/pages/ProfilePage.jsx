@@ -48,7 +48,7 @@ export default function ProfilePage() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  const displayName = user?.fullName || user?.name || user?.email || 'Người dùng';
+  const displayName = String(user?.fullName || user?.name || user?.email || 'Người dùng').replace(/\s*\((Manager|Admin)\)/gi, '');
   const displayEmail = user?.email || 'Chưa cập nhật';
   const displayPhone = user?.phone ? user.phone : 'Chưa cập nhật';
   const displayRole = user?.role ? String(user.role).toUpperCase() : 'USER';

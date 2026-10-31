@@ -8,11 +8,31 @@ const AuthContext = createContext(null);
 const STORAGE_KEY_USER = 'timdo_auth_user';
 const STORAGE_KEY_TOKEN = 'timdo_auth_token';
 
+function enforceGroupRoleConstraint(account, userGroup) {
+  if (!account || !account.role || !userGroup) return;
+  const role = String(account.role).toUpperCase();
+  if (userGroup === 'student' && role !== 'USER') {
+    throw new Error(
+      `Tài khoản này thuộc nhóm Cán bộ & Phòng ban (${role}). Vui lòng chọn mục 'Cán bộ & Phòng ban' để đăng nhập!`
+    );
+  }
+  if (userGroup === 'staff' && role === 'USER') {
+    throw new Error(
+      "Tài khoản này là tài khoản Sinh viên. Vui lòng chọn mục 'Sinh viên' để đăng nhập!"
+    );
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem(STORAGE_KEY_USER);
-      return savedUser ? JSON.parse(savedUser) : null;
+      if (!savedUser) return null;
+      const parsed = JSON.parse(savedUser);
+      if (parsed && parsed.fullName) {
+        parsed.fullName = String(parsed.fullName).replace(/\s*\((Manager|Admin)\)/gi, '');
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -44,10 +64,13 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, userGroup) => {
     setLoading(true);
     try {
-      const data = await authApi.login(email, password);
+      const data = await authApi.login(email, password, userGroup);
+      if (data && data.account) {
+        enforceGroupRoleConstraint(data.account, userGroup);
+      }
       if (data && !data.requiresOtp && data.accessToken && data.account) {
         setToken(data.accessToken);
         setUser(data.account);
@@ -58,10 +81,30 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const verifyOtp = async (email, otp, purpose = 'LOGIN') => {
+  const loginWithGoogle = async (payload, userGroup = 'student') => {
+    setLoading(true);
+    try {
+      const data = await authApi.loginWithGoogle(payload);
+      if (data && data.account) {
+        enforceGroupRoleConstraint(data.account, userGroup);
+      }
+      if (data && !data.requiresOtp && data.accessToken && data.account) {
+        setToken(data.accessToken);
+        setUser(data.account);
+      }
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOtp = async (email, otp, purpose = 'LOGIN', userGroup) => {
     setLoading(true);
     try {
       const data = await authApi.verifyOtp(email, otp, purpose);
+      if (data && data.account) {
+        enforceGroupRoleConstraint(data.account, userGroup);
+      }
       if (data && data.accessToken && data.account) {
         setToken(data.accessToken);
         setUser(data.account);
@@ -137,6 +180,7 @@ export function AuthProvider({ children }) {
     isChecker,
     isApprover,
     login,
+    loginWithGoogle,
     verifyOtp,
     requestChangePasswordOtp,
     confirmChangePassword,

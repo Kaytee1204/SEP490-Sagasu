@@ -68,7 +68,7 @@ public class AccountController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) AccountRole role,
             @RequestParam(required = false) AccountStatus status,
-            @RequestParam(defaultValue = "false") boolean includeDeleted
+            @RequestParam(defaultValue = "true") boolean includeDeleted
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
                 accountService.getAccountsPage(page, size, keyword, role, status, includeDeleted)

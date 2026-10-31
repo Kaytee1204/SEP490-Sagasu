@@ -23,7 +23,7 @@ export const accountApi = {
     keyword = '',
     role = '',
     status = '',
-    includeDeleted = false,
+    includeDeleted = true,
   } = {}) {
     const params = new URLSearchParams();
     params.set('page', String(page));

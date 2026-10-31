@@ -19,7 +19,7 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
     navigate('/dang-nhap');
   };
 
-  const displayName = user?.fullName || user?.email || 'Quản trị viên';
+  const displayName = String(user?.fullName || user?.email || 'Quản trị viên').replace(/\s*\((Manager|Admin)\)/gi, '');
   const displayRole = user?.role || 'ADMIN';
   const avatarSrc = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
 

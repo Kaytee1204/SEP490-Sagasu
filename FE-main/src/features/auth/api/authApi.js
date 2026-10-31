@@ -2,8 +2,24 @@
 import apiClient from '@/services/apiClient';
 
 export const authApi = {
-  async login(email, password) {
-    const res = await apiClient.post('/auth/login', { email, password });
+  async login(email, password, userGroup) {
+    const res = await apiClient.post('/auth/login', { email, password, userGroup });
+    return res.data;
+  },
+
+  async loginWithGoogle(payload) {
+    const body = typeof payload === 'string' ? { email: payload } : payload;
+    const res = await apiClient.post('/auth/google-login', body);
+    return res.data;
+  },
+
+  async getAvailableGoogleAccounts() {
+    const res = await apiClient.get('/auth/google-accounts');
+    return res.data;
+  },
+
+  async getGoogleAccounts() {
+    const res = await apiClient.get('/auth/google-accounts');
     return res.data;
   },
 
