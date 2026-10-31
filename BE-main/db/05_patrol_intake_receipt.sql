@@ -221,3 +221,10 @@ FROM information_schema.columns
 WHERE table_schema = current_schema()
   AND table_name IN ('storage_location', 'item_receipt', 'item_receipt_image')
 ORDER BY table_name, ordinal_position;
+
+INSERT INTO storage_location (code, name)
+VALUES
+    ('LF-ALPHA', 'Văn Phòng Lost&Found Toà Alpha'),
+    ('LF-BETA',  'Văn Phòng Lost&Found Toà Beta'),
+    ('LF-DELTA', 'Văn Phòng Lost&Found Toà Delta')
+ON CONFLICT (code) DO NOTHING;
