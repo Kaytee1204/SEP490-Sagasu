@@ -43,14 +43,10 @@ export default function LoginForm() {
       return;
     }
 
-    const role = String(result?.account?.role || '').toUpperCase();
+    const role = result?.account?.role;
     setGoogleModalOpen(false);
     if (role === 'ADMIN' || role === 'MANAGER') {
       navigate('/admin', { replace: true });
-    } else if (role === 'CHECKER') {
-      navigate('/checker/receipts', { replace: true });
-    } else if (role === 'APPROVER') {
-      navigate('/approver/receipts', { replace: true });
     } else {
       navigate('/', { replace: true });
     }
@@ -102,13 +98,9 @@ export default function LoginForm() {
     setLoading(true);
     try {
       const result = await verifyOtp(pendingEmail, otpCode.trim(), 'LOGIN', userGroup);
-      const role = String(result?.account?.role || '').toUpperCase();
+      const role = result?.account?.role;
       if (role === 'ADMIN' || role === 'MANAGER') {
         navigate('/admin', { replace: true });
-      } else if (role === 'CHECKER') {
-        navigate('/checker/receipts', { replace: true });
-      } else if (role === 'APPROVER') {
-        navigate('/approver/receipts', { replace: true });
       } else {
         navigate('/', { replace: true });
       }
