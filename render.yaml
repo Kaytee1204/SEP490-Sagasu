@@ -1,0 +1,46 @@
+# Render Blueprint — Tự động khởi tạo môi trường Staging (PostgreSQL + Backend + Frontend)
+databases:
+  - name: sagasu-postgres-staging
+    databaseName: sagasu_staging
+    user: sagasu_user
+    plan: free
+
+services:
+  # 1. Backend Spring Boot (Docker)
+  - type: web
+    name: sagasu-backend-staging
+    runtime: docker
+    rootDir: BE-main
+    branch: staging
+    plan: free
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: staging
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: sagasu-postgres-staging
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: sagasu-postgres-staging
+          property: password
+
+  # 2. Frontend React + Vite (Static Site)
+  - type: web
+    name: sagasu-frontend-staging
+    runtime: static
+    rootDir: FE-main
+    branch: staging
+    buildCommand: npm install && npm run build:staging
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_APP_ENV
+        value: staging
+      - key: VITE_API_URL
+        value: https://sagasu-backend-staging.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

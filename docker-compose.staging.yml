@@ -1,0 +1,46 @@
+services:
+  postgres-staging:
+    image: postgres:16-alpine
+    container_name: sagasu-postgres-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sagasu_staging
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1204}
+    ports:
+      - "5433:5432"
+    volumes:
+      - sagasu_staging_pgdata:/var/lib/postgresql/data
+      - ./BE-main/db:/docker-entrypoint-initdb.d:ro
+
+  backend-staging:
+    build:
+      context: ./BE-main
+      dockerfile: Dockerfile
+    container_name: sagasu-backend-staging
+    restart: unless-stopped
+    depends_on:
+      - postgres-staging
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-staging:5432/sagasu_staging
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-1204}
+    ports:
+      - "8080:8080"
+
+  frontend-staging:
+    build:
+      context: ./FE-main
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api}
+    container_name: sagasu-frontend-staging
+    restart: unless-stopped
+    depends_on:
+      - backend-staging
+    ports:
+      - "3000:80"
+
+volumes:
+  sagasu_staging_pgdata:
