@@ -16,8 +16,18 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: staging
-      - key: SPRING_DATASOURCE_URL
-        sync: false
+      - key: DB_HOST
+        fromDatabase:
+          name: sagasu-postgres-staging
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: sagasu-postgres-staging
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: sagasu-postgres-staging
+          property: database
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
           name: sagasu-postgres-staging
