@@ -5,12 +5,14 @@ import com.example.base.dto.post.PostDetailDto;
 import com.example.base.dto.post.PostPageDto;
 import com.example.base.dto.post.PostSummaryDto;
 import com.example.base.dto.post.PostSearchFilter;
+import com.example.base.dto.post.OfficeReceiptDto;
 import com.example.base.entity.Post;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.mapper.PostMapper;
 import com.example.base.repository.CategoryRepository;
 import com.example.base.repository.PostRepository;
+import com.example.base.repository.ItemReceiptRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class PostService {
     private final PostRepository posts;
     private final PostMapper mapper;
     private final CategoryRepository categories;
+    private final ItemReceiptRepository receipts;
 
     @Transactional(readOnly = true)
     public List<CategoryDto> getActiveCategories() {
@@ -62,8 +65,14 @@ public class PostService {
         }
 
         List<PostSummaryDto> content = new ArrayList<>();
+        Map<Long, OfficeReceiptDto> officeReceipts = new HashMap<>();
+        if (!pageOfIds.isEmpty()) {
+            for (var receipt : receipts.findPublicIntakes(pageOfIds.getContent())) {
+                officeReceipts.put(receipt.getPostId(), OfficeReceiptDto.from(receipt));
+            }
+        }
         for (Long postId : pageOfIds.getContent()) {
-            content.add(mapper.toSummary(postsById.get(postId)));
+            content.add(mapper.toSummary(postsById.get(postId), officeReceipts.get(postId)));
         }
         return new PostPageDto(content, page, size, pageOfIds.getTotalElements(),
                 pageOfIds.getTotalPages(), pageOfIds.isFirst(), pageOfIds.isLast());
@@ -78,6 +87,8 @@ public class PostService {
             result = posts.findOwnDetail(postId, viewerId);
         }
         Post post = result.orElseThrow(() -> new AppException(ErrorCode.POST_NOT_VISIBLE));
-        return mapper.toDetail(post, viewerId);
+        var officeReceipt = receipts.findPublicIntakes(List.of(postId)).stream().findFirst()
+                .map(OfficeReceiptDto::from).orElse(null);
+        return mapper.toDetail(post, viewerId, officeReceipt);
     }
 }

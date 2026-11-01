@@ -2,10 +2,12 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu, RefreshCw, Bell, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AdminHeader({ onMenuClick, pendingReportsCount = 0 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isChecker, isApprover } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
 
@@ -17,6 +19,12 @@ export default function AdminHeader({ onMenuClick, pendingReportsCount = 0 }) {
   };
 
   const getBreadcrumb = () => {
+    if (location.pathname.startsWith('/approver/receipts/')) return 'Xem & xét duyệt phiếu';
+    if (location.pathname.startsWith('/approver')) return 'Hàng đợi tiếp nhận';
+    if (location.pathname === '/checker/receipts/new') return 'Lập phiếu mới';
+    if (location.pathname.startsWith('/checker/receipts/') && location.pathname.endsWith('/edit')) return 'Chỉnh sửa hồ sơ';
+    if (location.pathname.startsWith('/checker/receipts/')) return 'Chi tiết phiếu';
+    if (location.pathname.startsWith('/checker')) return 'Phiếu tuần tra';
     if (location.pathname.startsWith('/admin/categories')) return 'Quản lý danh mục';
     if (location.pathname.startsWith('/admin/items')) return 'Tin đăng đồ thất lạc';
     if (location.pathname.startsWith('/admin/reports')) return 'Báo cáo & Vi phạm';
@@ -32,12 +40,12 @@ export default function AdminHeader({ onMenuClick, pendingReportsCount = 0 }) {
           <Menu size={20} />
         </button>
         <div className="flex items-center gap-2 text-[13px]">
-          <span className="text-zinc-400 font-medium">Portal</span>
+          <span className="text-zinc-600 font-medium">Quản lý</span>
           <span className="text-zinc-300">/</span>
           <span className="font-semibold text-zinc-900">{getBreadcrumb()}</span>
         </div>
       </div>
-      <div className="flex items-center gap-2.5">
+      {isChecker || isApprover ? <span className="hidden shrink-0 rounded-md bg-teal-50 px-2.5 py-1 text-sm font-semibold text-teal-800 sm:inline">{isChecker ? 'Nhân viên tuần tra' : 'Người xét duyệt'}</span> : <div className="flex items-center gap-2.5">
         {toastMsg && (
           <div className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
             <CheckCircle2 size={13} /> {toastMsg}
@@ -51,7 +59,7 @@ export default function AdminHeader({ onMenuClick, pendingReportsCount = 0 }) {
           <Bell size={15} />
           {pendingReportsCount > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500" />}
         </button>
-      </div>
+      </div>}
     </header>
   );
 }

@@ -42,6 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({ PostService.class, PostMapper.class, SecurityConfig.class, JwtAuthenticationFilter.class,
         JwtAuthenticationEntryPoint.class })
 class PostControllerTest {
+    @MockBean com.example.base.repository.ItemReceiptRepository receipts;
     @Test
     @WithMockUser(roles = "EXTERNAL_USER")
     void removedRoleCannotCreatePosts() throws Exception {
@@ -223,6 +224,10 @@ class PostControllerTest {
     void listPreservesPageOrderAndExcludesSecrets() throws Exception {
         var first = mock(Post.class);
         var second = mock(Post.class);
+        var author = new com.example.base.entity.Account();
+        author.setFullName("Test author");
+        when(first.getCreatedBy()).thenReturn(author);
+        when(second.getCreatedBy()).thenReturn(author);
         var category = mock(Category.class);
         when(first.getId()).thenReturn(1L);
         when(second.getId()).thenReturn(2L);
@@ -233,6 +238,7 @@ class PostControllerTest {
         when(posts.findVisibleByIds(List.of(2L, 1L))).thenReturn(List.of(first, second));
         mvc.perform(get("/api/posts")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].id").value(2))
+                .andExpect(jsonPath("$.data.content[0].authorName").value("Test author"))
                 .andExpect(jsonPath("$.data.content[1].id").value(1))
                 .andExpect(jsonPath("$.data.totalElements").value(2))
                 .andExpect(jsonPath("$.data.content[1].privateIdentifiers").doesNotExist())
@@ -299,11 +305,11 @@ class PostControllerTest {
 
     @Test
     @WithMockUser(roles = "CHECKER")
-    void checkerCreatesPendingLostPost() throws Exception {
+    void retiredCheckerCannotCreatePost() throws Exception {
         when(creation.createLost(any(), any(), any())).thenReturn(new CreatedPostDto(99L, "LOST", "OPEN", "PENDING"));
         mvc.perform(multipart("/api/posts/lost").file(data("2026-01-01T10:00:00+07:00")))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.moderationStatus").value("PENDING"));
-
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(creation);
     }
 
     @Test
@@ -316,6 +322,9 @@ class PostControllerTest {
     @WithMockUser(roles = "USER")
     void returnsPublicFieldsOnlyAndPreventsCaching() throws Exception {
         var post = mock(Post.class);
+        var author = new com.example.base.entity.Account();
+        author.setFullName("Test author");
+        when(post.getCreatedBy()).thenReturn(author);
         var category = mock(Category.class);
         when(post.getId()).thenReturn(1L);
         when(post.getTitle()).thenReturn("Ví thất lạc");
@@ -329,6 +338,7 @@ class PostControllerTest {
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.data.title").value("Ví thất lạc"))
                 .andExpect(jsonPath("$.data.images").isArray())
+                .andExpect(jsonPath("$.data.authorName").value("Test author"))
                 .andExpect(jsonPath("$.data.privateIdentifiers").doesNotExist())
                 .andExpect(jsonPath("$.data.private_identifiers").doesNotExist())
                 .andExpect(jsonPath("$.data.moderationNote").doesNotExist());

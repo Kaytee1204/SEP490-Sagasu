@@ -213,12 +213,12 @@ class PostRepositoryIntegrationTest {
     }
 
     @Test
-    void pendingCheckerPostIsPersistedAndOnlyItsOwnerCanViewIt() {
+    void historicalInternalPostIsPersistedAndOnlyItsOwnerCanViewIt() {
         var existing = posts.findById(postId).orElseThrow();
         long ownerId = existing.getAccount().getId();
-        jdbc.update("UPDATE accounts SET role='CHECKER' WHERE id=?", ownerId);
+        jdbc.update("UPDATE accounts SET role='APPROVER' WHERE id=?", ownerId);
         entityManager.clear();
-        var owner = accounts.findActiveAccountForPostCreation(ownerId).orElseThrow();
+        var owner = accounts.findById(ownerId).orElseThrow();
         var category = categories.findById(existing.getCategory().getCategoryId()).orElseThrow();
         for (String type : List.of("LOST", "FOUND")) {
             var post = type.equals("LOST") ? Post.lost(owner, category, "Lost", "Public", "Hall A", OffsetDateTime.now())

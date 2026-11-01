@@ -83,7 +83,7 @@ class PostCreationServiceTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER", "CHECKER"})
+    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER"})
     void officeFoundAlwaysWaitsForReviewAndStoresProposedTime(AccountRole role) {
         Account author = new Account(); author.setId(7L); author.setRole(role); author.setStatus(AccountStatus.ACTIVE);
         when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
@@ -197,7 +197,7 @@ class PostCreationServiceTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER", "CHECKER"})
+    @org.junit.jupiter.params.provider.EnumSource(value = AccountRole.class, names = {"USER"})
     void lostAndFoundUseDatabaseAccountRoleForModeration(AccountRole role) {
         Account author = new Account(); author.setId(7L); author.setRole(role); author.setStatus(AccountStatus.ACTIVE);
         when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
@@ -213,8 +213,8 @@ class PostCreationServiceTest {
     void roleChangedDuringUploadUsesLatestDatabaseRole() {
         Account checker = new Account(); checker.setId(7L); checker.setRole(AccountRole.CHECKER);
         checker.setStatus(AccountStatus.ACTIVE);
-        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(checker));
-        assertThat(service.createLost(request, null, user).moderationStatus()).isEqualTo("PENDING");
+        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.createLost(request, null, user)).isInstanceOf(AppException.class);
     }
 
     @Test

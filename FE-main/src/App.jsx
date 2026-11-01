@@ -18,9 +18,12 @@ import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
 import CategoryManagementPage from '@/features/category/pages/CategoryManagementPage';
+import ReceiptQueuePage from '@/features/approver/pages/ReceiptQueuePage';
+import IntakeFormPage from '@/features/approver/pages/IntakeFormPage';
+import IntakeDetailPage from '@/features/approver/pages/IntakeDetailPage';
 
-function ProtectedRoute({ children, adminOnly = false, managerOnly = false }) {
-  const { isAuthenticated, isAdmin, isManager } = useAuth();
+function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
+  const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/dang-nhap" replace />;
@@ -32,6 +35,7 @@ function ProtectedRoute({ children, adminOnly = false, managerOnly = false }) {
   }
 
   if (managerOnly && !isManager) return <Navigate to="/admin" replace />;
+  if (approverOnly && !isApprover) return <Navigate to={isAdmin ? '/admin' : '/'} replace />;
 
   return children;
 }
@@ -42,8 +46,8 @@ function RootHomeRoute() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, isAdmin } = useAuth();
-  const postLoginRedirect = isAdmin ? '/admin' : '/';
+  const { isAuthenticated, isAdmin, isApprover } = useAuth();
+  const postLoginRedirect = isApprover ? '/approver/receipts' : isAdmin ? '/admin' : '/';
 
   return (
     <Routes>
@@ -141,7 +145,15 @@ function AppRoutes() {
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>
 
-      <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
+      
+      <Route path="/approver" element={<ProtectedRoute approverOnly><AdminLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/approver/receipts" replace />} />
+        <Route path="receipts" element={<ReceiptQueuePage />} />
+        <Route path="receipts/new" element={<IntakeFormPage />} />
+        <Route path="receipts/:id/edit" element={<IntakeFormPage />} />
+        <Route path="receipts/:id" element={<IntakeDetailPage />} />
+      </Route>
+      <Route path="/dashboard" element={<Navigate to={postLoginRedirect} replace />} />
       <Route path="/quan-tri" element={<Navigate to="/admin" replace />} />
 
       {/* Fallback */}
