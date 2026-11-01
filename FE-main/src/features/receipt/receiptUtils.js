@@ -8,7 +8,7 @@ export function receiptState(receipt) {
   if (receipt.reviewStatus === 'REJECTED' || receipt.status === 'REJECTED') return { label: 'Từ chối', tone: 'bg-rose-50 text-rose-700 ring-rose-200', dot: 'bg-rose-500' };
   if (receipt.reviewStatus === 'NEEDS_INFO') return { label: 'Yêu cầu bổ sung', tone: 'bg-orange-50 text-orange-800 ring-orange-200', dot: 'bg-orange-500' };
   if (receipt.status === 'RETURNED') return { label: 'Đã trả đồ', tone: 'bg-sky-50 text-sky-700 ring-sky-200', dot: 'bg-sky-500' };
-  if (receipt.status === 'IN_STORAGE') return { label: 'Đã vào kho', tone: 'bg-teal-50 text-teal-700 ring-teal-200', dot: 'bg-teal-500' };
+  if (receipt.status === 'IN_STORAGE') return { label: 'Đã tiếp nhận', tone: 'bg-teal-50 text-teal-700 ring-teal-200', dot: 'bg-teal-500' };
   if (receipt.reviewStatus === 'ACCEPTED') return { label: 'Đã duyệt', tone: 'bg-teal-50 text-teal-700 ring-teal-200', dot: 'bg-teal-500' };
   return { label: 'Chờ duyệt', tone: 'bg-amber-50 text-amber-800 ring-amber-200', dot: 'bg-amber-500' };
 }

@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Checker intake fields mapped to the existing script 05 schema. */
+/** Intake record mapped to the existing script 05 schema. */
 @Entity
 @Table(name = "item_receipt")
 @Getter
@@ -17,7 +17,7 @@ public class ItemReceipt {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "item_receipt_id") private Long id;
     @Column(name = "receipt_code", nullable = false, length = 40) private String receiptCode;
-    @Column(nullable = false, length = 16) private String source = "CHECKER";
+    @Column(nullable = false, length = 16) private String source = "WALK_IN";
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id") private Category category;
     @Column(nullable = false, length = 200) private String title;
@@ -38,21 +38,48 @@ public class ItemReceipt {
     @Column(name = "reviewed_at") private OffsetDateTime reviewedAt;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reviewed_by") private Account reviewedBy;
-    @Column(name = "post_id", insertable = false, updatable = false) private Long postId;
+    @Column(name = "post_id", unique = true) private Long postId;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "storage_location_id") private StorageLocation storageLocation;
-    @Column(name = "received_at", insertable = false, updatable = false) private OffsetDateTime receivedAt;
+    @Column(name = "received_at") private OffsetDateTime receivedAt;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "received_by") private Account receivedBy;
     @Column(name = "finder_name", insertable = false, updatable = false) private String finderName;
     @Column(name = "finder_contact", insertable = false, updatable = false) private String finderContact;
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC, id ASC") private List<ItemReceiptImage> images = new ArrayList<>();
 
-    public static ItemReceipt draft(String code, Account checker) {
+    public static ItemReceipt draft(String code, Account officer) {
         ItemReceipt receipt = new ItemReceipt();
         receipt.receiptCode = code;
-        receipt.recordedBy = checker;
+        receipt.recordedBy = officer;
         receipt.recordedAt = OffsetDateTime.now();
         return receipt;
+    }
+
+    public static ItemReceipt walkInDraft(String code, Account officer) {
+        ItemReceipt receipt = draft(code, officer);
+        receipt.source = "WALK_IN";
+        return receipt;
+    }
+
+    public void receiveAndPublish(Account officer, Long publishedPostId) {
+        if (!java.util.Set.of("DRAFT", "SUBMITTED").contains(status) || "REJECTED".equals(reviewStatus) || postId != null || receivedAt != null
+                || storageLocation == null || publishedPostId == null) {
+            throw new IllegalStateException("Receipt cannot be received");
+        }
+        status = "IN_STORAGE";
+        reviewStatus = "ACCEPTED";
+        receivedBy = officer;
+        reviewedBy = officer;
+        receivedAt = reviewedAt = submittedAt = updatedAt = OffsetDateTime.now();
+        postId = publishedPostId;
+    }
+
+    public boolean canProcess() {
+        return java.util.Set.of("WALK_IN", "EXISTING_POST").contains(source)
+                && java.util.Set.of("DRAFT", "SUBMITTED").contains(status)
+                && !"REJECTED".equals(reviewStatus) && postId == null && receivedAt == null;
     }
 
     public void edit(Category category, String title, String description, String condition,

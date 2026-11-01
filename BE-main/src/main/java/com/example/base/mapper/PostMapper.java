@@ -2,6 +2,7 @@ package com.example.base.mapper;
 
 import com.example.base.dto.post.PostDetailDto;
 import com.example.base.dto.post.PostSummaryDto;
+import com.example.base.dto.post.OfficeReceiptDto;
 import com.example.base.entity.Post;
 import com.example.base.storage.ImageStorage;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,10 @@ public class PostMapper {
     private final ImageStorage storage;
 
     public PostSummaryDto toSummary(Post post) {
+        return toSummary(post, null);
+    }
+
+    public PostSummaryDto toSummary(Post post, OfficeReceiptDto officeReceipt) {
         var category = post.getCategory();
         String thumbnail = null;
         if (!post.getImages().isEmpty()) {
@@ -21,7 +26,7 @@ public class PostMapper {
         }
         return new PostSummaryDto(post.getId(), post.getPostType(), post.getTitle(), category.getCategoryId(),
                 category.getName(), post.getLocationText(), post.getEventAt(), post.getStatus(),
-                post.getCreatedAt(), thumbnail);
+                post.getCreatedAt(), thumbnail, post.getCreatedBy().getFullName(), officeReceipt);
     }
 
     public PostDetailDto toDetail(Post post) {
@@ -29,6 +34,10 @@ public class PostMapper {
     }
 
     public PostDetailDto toDetail(Post post, Long viewerId) {
+        return toDetail(post, viewerId, null);
+    }
+
+    public PostDetailDto toDetail(Post post, Long viewerId, OfficeReceiptDto officeReceipt) {
         var category = post.getCategory();
         var images = post.getImages().stream().map(image -> new PostDetailDto.ImageDto(image.getId(),
                 storage.readUrl(image.getStorageKey(), image.getImageUrl()), image.getSortOrder())).toList();
@@ -37,6 +46,7 @@ public class PostMapper {
                 category.getCategoryId(), category.getName(), post.getLocationText(), post.getLatitude(),
                 post.getLongitude(),
                 post.getEventAt(), post.getStatus(), post.getCustodyMode(), post.getCreatedAt(), images,
-                isOwner, post.getModerationStatus(), isOwner ? post.getHandoverRequestedAt() : null);
+                isOwner && officeReceipt == null, post.getModerationStatus(), isOwner ? post.getHandoverRequestedAt() : null,
+                post.getCreatedBy().getFullName(), officeReceipt);
     }
 }

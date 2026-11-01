@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, UserRound, MapPin } from 'lucide-react';
+import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
 import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
@@ -86,10 +87,15 @@ function PostDetail({ id, onRetry }) {
           activeImage={activeImage} onSelectImage={setActiveImage} />
         <section className="post-detail-info" aria-label="Thông tin bài đăng">
           <ItemInfoSection item={item} />
+          <div className="flex flex-wrap items-center gap-3"><p className="flex items-center gap-2 text-sm text-slate-600"><UserRound size={17} aria-hidden="true" />Người đăng: <strong className="text-slate-800">{post.authorName || 'Chưa cập nhật tên'}</strong></p><OfficeReceiptBadge receipt={post.officeReceipt} /></div>
+          {post.officeReceipt && <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-label="Thông tin nhà trường tiếp nhận">
+            <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được nhà trường lưu giữ'}</h2>
+            <dl className="space-y-3 text-sm leading-6"><div><dt className="text-slate-600">{post.officeReceipt.status === 'RETURNED' ? 'Nơi lưu trữ trước khi trao trả' : 'Nơi lưu trữ'}</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.storageLocationName || 'Liên hệ văn phòng tiếp nhận'}</dd></div><div><dt className="text-slate-600">Cán bộ tiếp nhận</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.receivedBy || 'Chưa cập nhật tên'}</dd></div><div><dt className="text-slate-600">Thời điểm tiếp nhận</dt><dd className="font-semibold text-slate-900">{new Date(post.officeReceipt.receivedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</dd></div></dl>
+          </section>}
           {post.canEditOwnPost && <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng của tôi</Link>}
           {post.moderationStatus === 'PENDING' && <p role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
           <div><strong>Trạng thái: </strong>{STATUS_LABELS[post.status] || post.status}</div>
-          {post.postType === 'FOUND' && <div>
+          {post.postType === 'FOUND' && !post.officeReceipt && <div>
             <strong>Hình thức trao trả: </strong>
             {post.custodyMode === 'OFFICE'
               ? 'Đề nghị giao đồ cho Approver; chờ xét duyệt và thống nhất lịch giao đồ.'

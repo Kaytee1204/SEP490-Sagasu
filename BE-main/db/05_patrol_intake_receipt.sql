@@ -1,10 +1,10 @@
 -- =========================================================
--- SAGASU - SCRIPT 05: PATROL INTAKE & STORAGE MANAGEMENT
+-- SAGASU - SCRIPT 05: OFFICE INTAKE & STORAGE MANAGEMENT
 -- =========================================================
 -- Chay SAU script 04_remove_external_user.sql trong cung database/schema.
 -- Tinh nang:
 --   1. storage_location: Quan ly vi tri kho luu tru (Toa nha, phong, ke, ngan tu).
---   2. item_receipt: Bien ban tiep nhan do nhat duoc khi di tuan tra (Checker).
+--   2. item_receipt: Bien ban tiep nhan do nhat duoc tai van phong (Can bo tiep nhan).
 --   3. item_receipt_image: Anh vat chung & hien truong tiep nhan (luu tru R2).
 -- =========================================================
 
@@ -53,11 +53,11 @@ CREATE TABLE IF NOT EXISTS item_receipt (
     item_receipt_id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     receipt_code         VARCHAR(40)  NOT NULL UNIQUE,
 
-    -- Lien ket voi Post sau khi Approver duyet va he thong tu dong dang bai.
+    -- Lien ket voi Post sau khi can bo tiep nhan xac nhan va he thong tu dong dang bai.
     -- NULL khi bien ban dang o trang thai DRAFT / SUBMITTED.
     post_id              BIGINT UNIQUE,
 
-    source               VARCHAR(16)  NOT NULL DEFAULT 'CHECKER',
+    source               VARCHAR(16)  NOT NULL DEFAULT 'WALK_IN',
 
     category_id          BIGINT       NOT NULL,
     title                VARCHAR(200) NOT NULL,
@@ -68,12 +68,12 @@ CREATE TABLE IF NOT EXISTS item_receipt (
     found_location       TEXT         NOT NULL,
     temporary_location   TEXT,
 
-    -- Nguoi lap bien ban (Checker) -> Tham chieu accounts(id)
+    -- Nguoi lap bien ban (Can bo tiep nhan) -> Tham chieu accounts(id)
     recorded_by          BIGINT       NOT NULL,
     recorded_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     submitted_at         TIMESTAMPTZ,
 
-    -- Thong tin xet duyet (Approver) -> Tham chieu accounts(id)
+    -- Thong tin tiep nhan/phe duyet -> Tham chieu accounts(id)
     review_status        VARCHAR(12)  NOT NULL DEFAULT 'PENDING',
     reviewed_by          BIGINT,
     reviewed_at          TIMESTAMPTZ,
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS item_receipt (
         ON DELETE SET NULL,
 
     CONSTRAINT item_receipt_source_check
-        CHECK (source IN ('CHECKER', 'WALK_IN', 'EXISTING_POST')),
+        CHECK (source IN ('WALK_IN', 'EXISTING_POST')),
 
     CONSTRAINT item_receipt_status_check
         CHECK (status IN ('DRAFT', 'SUBMITTED', 'IN_STORAGE', 'RETURNED', 'REJECTED')),

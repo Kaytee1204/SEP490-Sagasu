@@ -8,7 +8,7 @@ function AvatarDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
-  const { user, isAdmin, isChecker, isApprover, logout } = useAuth();
+  const { user, isAdmin, isApprover, logout } = useAuth();
 
   // Close on outside click
   useEffect(() => {
@@ -24,7 +24,7 @@ function AvatarDropdown() {
   };
 
   const rawName = user?.fullName || user?.name || user?.email || 'Người dùng';
-  const displayName = String(rawName).replace(/\s*\((manager|admin|user|checker|approver)\)\s*$/i, '').trim();
+  const displayName = String(rawName).replace(/\s*\((manager|admin|user|approver)\)\s*$/i, '').trim();
   const displayEmail = user?.email || '';
   const displayOrg = user?.organizationName || user?.unitName || 'Trường Đại học FPT';
 
@@ -32,7 +32,6 @@ function AvatarDropdown() {
     ADMIN: 'Quản trị viên',
     MANAGER: 'Quản lý tổ chức',
     OFFICER: 'Cán bộ tiếp nhận',
-    CHECKER: 'Cán bộ kiểm duyệt',
     USER: 'Thành viên',
   };
   const roleName = user?.role ? (roleLabels[String(user.role).toUpperCase()] || user.role) : 'Thành viên';
@@ -54,11 +53,8 @@ function AvatarDropdown() {
   if (isAdmin) {
     menuItems.push({ icon: LayoutDashboard, label: 'Trang quản trị & Quản lý', to: '/admin' });
   }
-  if (isChecker) {
-    menuItems.push({ icon: LayoutDashboard, label: 'Phiếu tuần tra của tôi', to: '/checker/receipts' });
-  }
   if (isApprover) {
-    menuItems.push({ icon: LayoutDashboard, label: 'Hàng đợi tiếp nhận', to: '/approver/receipts' });
+    menuItems.push({ icon: LayoutDashboard, label: 'Phiếu tiếp nhận', to: '/approver/receipts' });
   }
 
   return (

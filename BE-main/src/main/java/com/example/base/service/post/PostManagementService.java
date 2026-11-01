@@ -14,6 +14,7 @@ import com.example.base.exception.ErrorCode;
 import com.example.base.repository.AccountRepository;
 import com.example.base.repository.CategoryRepository;
 import com.example.base.repository.PostRepository;
+import com.example.base.repository.ItemReceiptRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.storage.ImageStorage;
 import com.example.base.storage.ImageValidator;
@@ -53,6 +54,7 @@ public class PostManagementService {
     private final ImageValidator validator;
     private final PlatformTransactionManager transactionManager;
     private final EntityManager entityManager;
+    private final ItemReceiptRepository receipts;
 
     /** UC18: page IDs first, then load images/category without collection-fetch pagination. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -127,6 +129,7 @@ public class PostManagementService {
     @Transactional
     public void delete(long postId, DeletePostRequest request, CustomUserDetails user) {
         Post post = lockOwnedPost(postId, PostAccessPolicy.requireAuthor(user));
+        requireNoReceipt(post);
         post.softDelete(request.reason());
         posts.flush();
     }
@@ -185,9 +188,16 @@ public class PostManagementService {
 
     // TODO: Add claim/dispute checks when those use cases and their data model are implemented.
     private void requireEditable(Post post) {
+        requireNoReceipt(post);
         if (post.getDeletedAt() != null || !"OPEN".equals(post.getStatus())
                 || "HIDDEN".equals(post.getModerationStatus())) {
             throw new AppException(ErrorCode.POST_NOT_EDITABLE);
+        }
+    }
+
+    private void requireNoReceipt(Post post) {
+        if (receipts.existsByPostId(post.getId())) {
+            throw new AppException(ErrorCode.POST_NOT_EDITABLE, "Bài đăng thuộc hồ sơ tiếp nhận của nhà trường.");
         }
     }
 

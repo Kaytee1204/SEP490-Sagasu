@@ -98,6 +98,16 @@ public class Post {
         images.add(image);
     }
 
+    /** Only called by the office intake publication service after validating physical receipt. */
+    public static Post receivedByOffice(Account officer, Category category, String title, String description,
+            String locationText, OffsetDateTime eventAt) {
+        Post post = found(officer, category, title, description, locationText, eventAt, "OFFICE", null);
+        post.moderationStatus = "VISIBLE";
+        post.moderatedBy = officer;
+        post.moderatedAt = OffsetDateTime.now();
+        return post;
+    }
+
     public static Post found(Account owner, Category category, String title, String description,
             String locationText, OffsetDateTime eventAt, String custodyMode, OffsetDateTime handoverRequestedAt) {
         Post post = lost(owner, category, title, description, locationText, eventAt);

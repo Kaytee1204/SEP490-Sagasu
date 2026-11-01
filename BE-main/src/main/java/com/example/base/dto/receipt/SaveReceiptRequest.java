@@ -1,4 +1,4 @@
-package com.example.base.dto.checker;
+package com.example.base.dto.receipt;
 
 import jakarta.validation.constraints.*;
 import java.time.OffsetDateTime;
@@ -18,3 +18,4 @@ public record SaveReceiptRequest(
         OffsetDateTime expectedUpdatedAt,
         @Positive Long storageLocationId
 ) {}
+

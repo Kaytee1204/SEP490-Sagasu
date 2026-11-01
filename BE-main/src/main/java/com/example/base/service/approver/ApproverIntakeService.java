@@ -1,7 +1,7 @@
-package com.example.base.service.checker;
+package com.example.base.service.approver;
 
 import com.example.base.dto.PageResponse;
-import com.example.base.dto.checker.*;
+import com.example.base.dto.receipt.*;
 import com.example.base.entity.*;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
@@ -9,6 +9,7 @@ import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.mapper.ReceiptMapper;
 import com.example.base.service.receipt.ReceiptLocationService;
+import com.example.base.service.post.ReceiptPostPublisher;
 import com.example.base.storage.ImageStorage;
 import com.example.base.storage.ImageValidator;
 import com.example.base.storage.ImageValidator.ValidatedImage;
@@ -30,36 +31,36 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class CheckerReceiptService {
+public class ApproverIntakeService {
     private final ItemReceiptRepository receipts;
     private final CategoryRepository categories;
-    private final AccountRepository accounts;
     private final ImageStorage storage;
     private final ImageValidator validator;
     private final PlatformTransactionManager transactionManager;
     private final EntityManager entityManager;
     private final ReceiptLocationService locations;
     private final ReceiptMapper mapper;
+    private final ReceiptPostPublisher publisher;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PageResponse<ReceiptSummaryDto> list(int page, int size, String keyword, String filter, CustomUserDetails user) {
-        long owner = checkerId(user);
+        long owner = approverId(user);
         String kw = keyword == null ? "" : keyword.strip();
-        if (page < 1 || size < 1 || size > 100 || kw.length() > 200 || !Set.of("ALL", "DRAFT", "SUBMITTED", "NEEDS_INFO", "ACCEPTED", "REJECTED").contains(filter)) {
+        if (page < 1 || size < 1 || size > 100 || kw.length() > 200 || !Set.of("ALL", "DRAFT", "SUBMITTED", "IN_STORAGE", "RETURNED", "REJECTED").contains(filter)) {
             throw new AppException(ErrorCode.BAD_REQUEST, "Bộ lọc hoặc phân trang không hợp lệ");
         }
-        var ids = receipts.findMyIds(owner, kw, filter, PageRequest.of(page - 1, size));
-        var byId = ids.isEmpty() ? Map.<Long, ItemReceipt>of() : receipts.findMyDetails(ids.getContent(), owner).stream()
+        var ids = receipts.findIntakeIds(kw, filter, PageRequest.of(page - 1, size));
+        var byId = ids.isEmpty() ? Map.<Long, ItemReceipt>of() : receipts.findQueueDetails(ids.getContent()).stream()
                 .collect(Collectors.toMap(ItemReceipt::getId, r -> r));
         var items = ids.stream().map(id -> summary(byId.get(id))).toList();
         return new PageResponse<>(items, page, size, ids.getTotalElements(), ids.getTotalPages(), ids.isFirst(), ids.isLast());
     }
 
     @Transactional(readOnly = true)
-    public ReceiptDto detail(long id, CustomUserDetails user) { return dto(owned(id, checkerId(user))); }
+    public ReceiptDto detail(long id, CustomUserDetails user) { return dto(owned(id, approverId(user))); }
 
     public ReceiptDto create(SaveReceiptRequest request, List<MultipartFile> files, CustomUserDetails user) {
-        long owner = checkerId(user);
+        long owner = approverId(user);
         if (!request.keptImageIds().isEmpty()) throw invalidImages();
         validateInput(request);
         List<ValidatedImage> images = validator.validate(files);
@@ -68,8 +69,8 @@ public class CheckerReceiptService {
         try {
             upload(owner, images, keys);
             return new TransactionTemplate(transactionManager).execute(tx -> {
-                Account account = activeChecker(owner);
-                ItemReceipt receipt = ItemReceipt.draft("REC-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT), account);
+                Account account = activeApprover(owner);
+                ItemReceipt receipt = ItemReceipt.walkInDraft("REC-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT), account);
                 editFields(receipt, request);
                 attach(receipt, images, keys, 0);
                 receipts.saveAndFlush(receipt);
@@ -80,7 +81,7 @@ public class CheckerReceiptService {
     }
 
     public ReceiptDto update(long id, SaveReceiptRequest request, List<MultipartFile> files, CustomUserDetails user) {
-        long owner = checkerId(user);
+        long owner = approverId(user);
         validateInput(request);
         List<ValidatedImage> images = validator.validate(files);
         requireImageCount(request.keptImageIds().size() + images.size());
@@ -96,7 +97,7 @@ public class CheckerReceiptService {
         try {
             upload(owner, images, keys);
             saved = new TransactionTemplate(transactionManager).execute(tx -> {
-                activeChecker(owner);
+                activeApprover(owner);
                 ItemReceipt receipt = lock(id, owner);
                 requireDraft(receipt);
                 requireCurrent(receipt, request.expectedUpdatedAt());
@@ -120,36 +121,45 @@ public class CheckerReceiptService {
 
     @Transactional
     public ReceiptDto submit(long id, SubmitReceiptRequest request, CustomUserDetails user) {
-        long owner = checkerId(user);
-        activeChecker(owner);
+        long owner = approverId(user);
+        Account officer = activeApprover(owner);
         ItemReceipt receipt = lock(id, owner);
-        if ("SUBMITTED".equals(receipt.getStatus()) && "PENDING".equals(receipt.getReviewStatus())) return dto(receipt);
+        if (receipt.getPostId() != null && receipt.getReceivedAt() != null) return dto(receipt);
         requireDraft(receipt);
         requireCurrent(receipt, request.expectedUpdatedAt());
         activeCategory(receipt.getCategory().getCategoryId());
         if (receipt.getTitle().isBlank() || receipt.getDescription().isBlank() || receipt.getFoundLocation().isBlank()
                 || receipt.getConditionAtReceipt() == null || receipt.getConditionAtReceipt().isBlank()
                 || receipt.getFoundAt().isAfter(OffsetDateTime.now())) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng hoàn thiện thông tin và tình trạng đồ vật trước khi gửi");
+            throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng hoàn thiện thông tin và tình trạng đồ vật trước khi tiếp nhận");
         }
         requireImageCount(receipt.getImages().size());
-        receipt.submit();
+        if (receipt.getStorageLocation() == null) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Chọn nơi lưu trữ trước khi xác nhận tiếp nhận.");
+        }
+        locations.resolve(receipt.getStorageLocation().getId(), null);
+        if (receipt.getImages().stream().noneMatch(image -> !image.isSensitive())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Cần ít nhất một ảnh công khai để đăng bài.");
+        }
+        Post post = publisher.publishFromReceipt(receipt, officer);
+        receipt.receiveAndPublish(officer, post.getId());
         receipts.flush();
         entityManager.refresh(receipt);
         return dto(receipt);
     }
 
-    private long checkerId(CustomUserDetails user) {
+    private long approverId(CustomUserDetails user) {
         if (user == null) throw new AppException(ErrorCode.UNAUTHORIZED);
-        if (user.getRole() != AccountRole.CHECKER || user.getStatus() != AccountStatus.ACTIVE
+        if (user.getRole() != AccountRole.APPROVER || user.getStatus() != AccountStatus.ACTIVE
                 || !user.isAccountNonExpired() || !user.isAccountNonLocked()) throw new AppException(ErrorCode.FORBIDDEN);
         return user.getId();
     }
 
-    private Account activeChecker(long id) {
-        Account account = accounts.findActiveAccountForPostCreation(id).orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN));
+    private Account activeApprover(long id) {
+        Account account = entityManager.find(Account.class, id, LockModeType.PESSIMISTIC_READ);
+        if (account == null) throw new AppException(ErrorCode.FORBIDDEN);
         entityManager.refresh(account, LockModeType.PESSIMISTIC_READ);
-        checkerId(new CustomUserDetails(account));
+        approverId(new CustomUserDetails(account));
         return account;
     }
 
@@ -162,22 +172,20 @@ public class CheckerReceiptService {
 
     private ItemReceipt owned(long id, long owner) {
         if (id < 1) throw new AppException(ErrorCode.BAD_REQUEST, "Mã phiếu không hợp lệ");
-        return receipts.findOwned(id, owner).orElseThrow(() -> new AppException(ErrorCode.RECEIPT_NOT_FOUND));
+        return receipts.findIntake(id).orElseThrow(() -> new AppException(ErrorCode.RECEIPT_NOT_FOUND));
     }
 
     private ItemReceipt lock(long id, long owner) {
-        ItemReceipt receipt = receipts.lockOwned(id, owner).orElseThrow(() -> new AppException(ErrorCode.RECEIPT_NOT_FOUND));
+        ItemReceipt receipt = receipts.lockIntake(id).orElseThrow(() -> new AppException(ErrorCode.RECEIPT_NOT_FOUND));
         // OSIV may still contain the pre-upload entity, even after acquiring a lock.
         entityManager.refresh(receipt, LockModeType.PESSIMISTIC_WRITE);
-        if (!Objects.equals(receipt.getRecordedBy().getId(), owner) || !"CHECKER".equals(receipt.getSource())) {
-            throw new AppException(ErrorCode.RECEIPT_NOT_FOUND);
-        }
         return receipt;
     }
 
     private void requireDraft(ItemReceipt receipt) {
-        if (!("DRAFT".equals(receipt.getStatus()) && "PENDING".equals(receipt.getReviewStatus()))
-                && !("SUBMITTED".equals(receipt.getStatus()) && "NEEDS_INFO".equals(receipt.getReviewStatus()))) {
+        if (!Set.of("WALK_IN", "EXISTING_POST").contains(receipt.getSource())
+                || !Set.of("DRAFT", "SUBMITTED").contains(receipt.getStatus())
+                || "REJECTED".equals(receipt.getReviewStatus()) || receipt.getPostId() != null || receipt.getReceivedAt() != null) {
             throw new AppException(ErrorCode.RECEIPT_NOT_EDITABLE);
         }
     }
@@ -219,25 +227,11 @@ public class CheckerReceiptService {
         return new ReceiptSummaryDto(r.getId(), r.getReceiptCode(), r.getTitle(), r.getCategory().getName(),
                 r.getFoundLocation(), r.getFoundAt(), r.getRecordedAt(), r.getStatus(), r.getReviewStatus(),
                 r.getImages().isEmpty() ? null : imageUrl(r.getImages().getFirst()),
-                r.getStorageLocation() == null ? null : r.getStorageLocation().getName());
+                r.getStorageLocation() == null ? null : r.getStorageLocation().getName(),
+                r.getSource(), r.getRecordedBy().getFullName(), r.canProcess());
     }
     private ReceiptDto dto(ItemReceipt r) {
         return mapper.detail(r);
-    }
-    @Transactional
-    public ReceiptDto updateLocation(long id, UpdateReceiptLocationRequest request, CustomUserDetails user) {
-        long owner = checkerId(user);
-        activeChecker(owner);
-        ItemReceipt receipt = lock(id, owner);
-        if (receipt.getReceivedAt() != null || !(Set.of("DRAFT", "SUBMITTED").contains(receipt.getStatus())
-                && Set.of("PENDING", "NEEDS_INFO", "ACCEPTED").contains(receipt.getReviewStatus()))) {
-            throw new AppException(ErrorCode.RECEIPT_NOT_EDITABLE, "Phiếu đã bị từ chối hoặc bàn giao; không thể đổi vị trí.");
-        }
-        requireCurrent(receipt, request.expectedUpdatedAt());
-        receipt.assignLocation(locations.resolve(request.storageLocationId(), receipt.getStorageLocation()));
-        receipts.flush();
-        entityManager.refresh(receipt);
-        return dto(receipt);
     }
     private record Saved(ReceiptDto receipt, List<String> removedKeys) {}
 }

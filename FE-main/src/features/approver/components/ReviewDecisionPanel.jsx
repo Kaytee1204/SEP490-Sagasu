@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, MessageSquare, XCircle } from 'lucide-react';
 import Modal from '@/components/common/Modal';
-import { ReceiptError } from '@/features/checker/components/ReceiptFeedback';
+import { ReceiptError } from '@/features/receipt/components/ReceiptFeedback';
 import { approverApi } from '../api/approverApi';
 
 const decisions = [

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import useDebounce from '@/hooks/useDebounce';
-import { checkerApi } from '../api/checkerApi';
+import { approverApi } from '@/features/approver/api/approverApi';
 import { receiptApi } from '@/features/receipt/api/receiptApi';
 
-export function useCheckerReceipts(api = checkerApi, initialFilter = 'ALL') {
+export function useIntakeReceipts(api = approverApi, initialFilter = 'ALL') {
   const [filters, setFilters] = useState({ page: 1, keyword: '', filter: initialFilter, source: 'ALL' });
   const keyword = useDebounce(filters.keyword, 300);
   const [revision, setRevision] = useState(0);
@@ -28,13 +28,13 @@ export function useCheckerReceipts(api = checkerApi, initialFilter = 'ALL') {
   };
 }
 
-export function useReceipt(id, withCategories = false, api = checkerApi) {
+export function useReceipt(id, withCategories = false, api = approverApi) {
   const [revision, setRevision] = useState(0);
   const key = `${id || 'new'}:${withCategories}:${revision}`;
   const [snapshot, setSnapshot] = useState({ key: null, receipt: null, categories: [], error: '' });
   useEffect(() => {
     let cancelled = false;
-    Promise.all([id ? api.detail(id) : null, withCategories ? checkerApi.categories() : [], withCategories ? receiptApi.locations() : []])
+    Promise.all([id ? api.detail(id) : null, withCategories ? receiptApi.categories() : [], withCategories ? receiptApi.locations() : []])
       .then(([receipt, categories, locations]) => { if (!cancelled) setSnapshot({ key, receipt, categories, locations, error: '' }); })
       .catch((error) => { if (!cancelled) setSnapshot({ key, receipt: null, categories: [], error: error.message }); });
     return () => { cancelled = true; };

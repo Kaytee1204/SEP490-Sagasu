@@ -11,7 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/storage-locations")
-@PreAuthorize("hasAnyRole('CHECKER', 'APPROVER')")
+@PreAuthorize("hasRole('APPROVER')")
 @RequiredArgsConstructor
 public class ReceiptLocationController {
     private final ReceiptLocationService service;

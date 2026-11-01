@@ -4,4 +4,5 @@ import java.time.OffsetDateTime;
 
 public record PostSummaryDto(Long id, String postType, String title, Long categoryId,
                              String categoryName, String locationText, OffsetDateTime eventAt,
-                             String status, OffsetDateTime createdAt, String thumbnailUrl) {}
+                             String status, OffsetDateTime createdAt, String thumbnailUrl,
+                             String authorName, OfficeReceiptDto officeReceipt) {}

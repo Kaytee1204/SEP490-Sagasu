@@ -41,14 +41,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     Page<Long> findMyIds(@Param("authorId") long authorId, @Param("filter") String filter, Pageable pageable);
 
-    @Query("select distinct p from Post p join fetch p.category left join fetch p.images where p.id in :ids and p.createdBy.id=:authorId and p.deletedAt is null")
+    @Query("select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images where p.id in :ids and p.createdBy.id=:authorId and p.deletedAt is null")
     List<Post> findMyByIds(@Param("ids") List<Long> ids, @Param("authorId") long authorId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Post p where p.id=:id and p.account.id=:ownerId and p.deletedAt is null")
     Optional<Post> findManagedForUpdate(@Param("id") long id, @Param("ownerId") long ownerId);
 
-    @Query("select distinct p from Post p join fetch p.category left join fetch p.images where p.id=:id and p.account.id=:ownerId and p.deletedAt is null")
+    @Query("select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images where p.id=:id and p.account.id=:ownerId and p.deletedAt is null")
     Optional<Post> findManagedDetail(@Param("id") long id, @Param("ownerId") long ownerId);
 
     Optional<Post> findByIdAndAccount_IdAndDeletedAtIsNull(long id, long accountId);
@@ -67,19 +67,19 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     Page<Long> findVisibleIds(Pageable pageable);
 
     @Query("""
-            select distinct p from Post p join fetch p.category left join fetch p.images
+            select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images
             where p.id in :ids and p.moderationStatus='VISIBLE' and p.deletedAt is null
             """)
     List<Post> findVisibleByIds(@Param("ids") List<Long> ids);
 
     @Query("""
-            select distinct p from Post p join fetch p.category left join fetch p.images
+            select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images
             where p.id=:id and p.moderationStatus='VISIBLE' and p.deletedAt is null
             """)
     Optional<Post> findVisibleDetail(@Param("id") long id);
 
     @Query("""
-            select distinct p from Post p join fetch p.category left join fetch p.images
+            select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images
             where p.id=:id and p.account.id=:ownerId and p.deletedAt is null
             """)
     Optional<Post> findOwnDetail(@Param("id") long id, @Param("ownerId") long ownerId);

@@ -1,6 +1,6 @@
 package com.example.base.mapper;
 
-import com.example.base.dto.checker.ReceiptDto;
+import com.example.base.dto.receipt.ReceiptDto;
 import com.example.base.entity.ItemReceipt;
 import com.example.base.storage.ImageStorage;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +20,7 @@ public class ReceiptMapper {
                 r.getImages().stream().map(i -> new ReceiptDto.ImageDto(i.getId(), storage.readUrl(i.getStorageKey(), i.getImageUrl()), i.isSensitive())).toList(),
                 r.getSource(), r.getRecordedBy().getFullName(), location == null ? null : location.getId(),
                 location == null ? null : location.getName(), location != null && location.isActive(),
-                r.getReceivedAt(), r.getFinderName(), r.getFinderContact());
+                r.getReceivedAt(), r.getFinderName(), r.getFinderContact(), r.getPostId(),
+                r.getReceivedBy() == null ? null : r.getReceivedBy().getFullName(), r.canProcess());
     }
 }

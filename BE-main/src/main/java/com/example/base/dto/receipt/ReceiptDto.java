@@ -1,4 +1,4 @@
-package com.example.base.dto.checker;
+package com.example.base.dto.receipt;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -10,6 +10,7 @@ public record ReceiptDto(Long id, String receiptCode, String status, String revi
         OffsetDateTime submittedAt, String reviewedBy, OffsetDateTime reviewedAt, String reviewNote,
         List<ImageDto> images, String source, String recordedBy,
         Long storageLocationId, String storageLocationName, boolean storageLocationActive,
-        OffsetDateTime receivedAt, String finderName, String finderContact) {
+        OffsetDateTime receivedAt, String finderName, String finderContact, Long postId, String receivedBy, boolean canProcess) {
     public record ImageDto(Long id, String url, boolean sensitive) {}
 }
+

@@ -55,6 +55,18 @@ public class PostImage {
         this.post = post;
     }
 
+    /** The published receipt is immutable; both records retain the same image object. */
+    public static PostImage fromReceipt(ItemReceiptImage image, int order) {
+        if (image.isSensitive()) throw new IllegalArgumentException("Internal images cannot be published");
+        PostImage result = new PostImage();
+        result.storageKey = image.getStorageKey();
+        result.imageUrl = image.getImageUrl();
+        result.sortOrder = order;
+        result.mimeType = image.getMimeType();
+        result.sizeBytes = image.getSizeBytes();
+        return result;
+    }
+
     @PrePersist
     void onCreate() {
         createdAt = OffsetDateTime.now();

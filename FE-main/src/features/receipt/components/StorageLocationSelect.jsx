@@ -1,4 +1,4 @@
-export default function StorageLocationSelect({ id = 'storageLocationId', value, onChange, options, current, disabled }) {
+export default function StorageLocationSelect({ id = 'storageLocationId', value, onChange, options, current, disabled, intake = false }) {
   const historical = current?.storageLocationId && !options.some((option) => option.id === current.storageLocationId);
   return <div>
     <label htmlFor={id} className="mb-2 block text-base font-semibold text-slate-700">Vị trí lưu giữ</label>
@@ -8,6 +8,8 @@ export default function StorageLocationSelect({ id = 'storageLocationId', value,
       {historical && <option value={current.storageLocationId} disabled>{current.storageLocationName} — ngừng sử dụng</option>}
       {options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
     </select>
-    <p className="mt-2 text-sm leading-5 text-slate-600">{options.length ? 'Chọn nơi đồ đang được tập kết. Có thể để trống và bổ sung trước khi bàn giao kho.' : 'Chưa có vị trí đang hoạt động để chọn. Bạn vẫn có thể lưu và gửi phiếu.'}</p>
+    <p className="mt-2 text-sm leading-5 text-slate-600">{intake
+      ? options.length ? 'Bắt buộc khi xác nhận tiếp nhận. Có thể để trống khi lưu nháp.' : 'Chưa có nơi lưu trữ đang hoạt động. Bạn có thể lưu nháp và liên hệ người quản lý để bổ sung.'
+      : options.length ? 'Chọn nơi đồ đang được tập kết. Có thể để trống và bổ sung trước khi bàn giao kho.' : 'Chưa có vị trí đang hoạt động để chọn. Bạn vẫn có thể lưu và gửi phiếu.'}</p>
   </div>;
 }
