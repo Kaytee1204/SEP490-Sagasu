@@ -40,7 +40,7 @@ public class UpdateAccountRequest {
     @Schema(description = "Mật khẩu mới từ 8-16 ký tự, có ký tự đặc biệt (tùy chọn - để trống nếu không đổi)", example = "Abc@1234")
     private String password;
 
-    @Schema(description = "Role mới (Chỉ ADMIN mới được đổi role): USER, CHECKER, APPROVER, MANAGER, ADMIN", example = "USER")
+    @Schema(description = "Role mới (Chỉ ADMIN mới được đổi role): USER, APPROVER, MANAGER, ADMIN", example = "USER")
     private AccountRole role;
 
     @Schema(description = "Trạng thái mới: PENDING_ACTIVATION, ACTIVE, SUSPENDED, DELETED", example = "ACTIVE")

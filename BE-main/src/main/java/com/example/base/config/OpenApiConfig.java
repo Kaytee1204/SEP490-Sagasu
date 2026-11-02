@@ -34,7 +34,7 @@ public class OpenApiConfig {
                         .description(
                                 "### Tài liệu API Backend Sagasu (Hệ thống Quản lý và Tìm kiếm Đồ thất lạc)\n\n"
                                 + "#### 🔑 Hướng dẫn Xác thực & Đăng nhập:\n"
-                                + "- **Đăng nhập trực tiếp (Email/Password)**: Không bắt buộc mã OTP cho mọi role khi đăng nhập thường qua `/api/auth/login`.\n"
+                                + "- **Đăng nhập trực tiếp (Email/Password)**: Không bắt buộc mã OTP cho mọi role (`ADMIN`, `MANAGER`, `APPROVER`, `USER`) khi đăng nhập thường qua `/api/auth/login`.\n"
                                 + "- **Tài khoản test có sẵn**:\n"
                                 + "  - `ADMIN`: `admin` / `123`\n"
                                 + "  - `MANAGER`: `khanhtrinh1204@gmail.com` / `123`\n"
@@ -48,7 +48,8 @@ public class OpenApiConfig {
                                 + "4. **4. My Posts & Post Management**: Quản lý bài đăng cá nhân của người dùng (Xem danh sách, Sửa bài, Xóa mềm, Dấu hiệu bí mật).\n"
                                 + "5. **5. Approver Intake Receipts**: Biên bản tiếp nhận tài sản dành cho Cán bộ tiếp nhận (APPROVER) - Lưu nháp, Chỉnh sửa, Đăng bài.\n"
                                 + "6. **6. Receipt Storage Locations**: Danh mục kho / vị trí lưu trữ tài sản tiếp nhận.\n"
-                                + "7. **7. Category Management**: Quản lý danh mục đồ thất lạc (MANAGER)."
+                                + "7. **7. Category Management**: Quản lý danh mục đồ thất lạc (MANAGER).\n"
+                                + "8. **8. Claims P2P**: Hồ sơ nhận đồ riêng tư giữa người yêu cầu (Claimer) và người nhặt (Finder)."
                         )
                         .version("1.0.0")
                         .contact(new Contact().name("Sagasu Development Team")))
@@ -59,7 +60,8 @@ public class OpenApiConfig {
                         new Tag().name("4. My Posts & Post Management").description("Quản lý bài viết của tôi (Danh sách bài của tôi, Lấy form sửa, Cập nhật bài, Xóa mềm bài)"),
                         new Tag().name("5. Approver Intake Receipts").description("Quản lý biên bản tiếp nhận tài sản thất lạc dành cho Cán bộ tiếp nhận (APPROVER)"),
                         new Tag().name("6. Receipt Storage Locations").description("Danh mục kho và vị trí lưu trữ tài sản tiếp nhận"),
-                        new Tag().name("7. Category Management").description("Quản lý danh mục đồ thất lạc (Chỉ dành cho role MANAGER)")
+                        new Tag().name("7. Category Management").description("Quản lý danh mục đồ thất lạc (Chỉ dành cho role MANAGER)"),
+                        new Tag().name("8. Claims P2P").description("UC40-45: Hồ sơ nhận đồ riêng tư giữa người claim và Finder")
                 ))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()

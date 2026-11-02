@@ -3,6 +3,15 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    CLAIM_NOT_FOUND(HttpStatus.NOT_FOUND, "CLAIM_404", "Không tìm thấy hồ sơ claim được phép truy cập"),
+    CLAIM_POST_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_POST", "Chỉ có thể claim bài Found tự giữ đang hiển thị và còn mở"),
+    CLAIM_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "CLAIM_400_SELF", "Không thể claim bài đăng của chính mình"),
+    CLAIM_DUPLICATE(HttpStatus.CONFLICT, "CLAIM_409_DUPLICATE", "Bạn đã có claim đang xử lý cho bài này. Chỉ được gửi hồ sơ mới sau khi bị từ chối hoặc đã hủy"),
+    CLAIM_STATE_INVALID(HttpStatus.CONFLICT, "CLAIM_409_STATE", "Claim hoặc bài đăng đã đổi trạng thái. Vui lòng tải lại"),
+    CLAIM_STALE(HttpStatus.CONFLICT, "CLAIM_409_STALE", "Hồ sơ đã được xử lý ở phiên khác. Vui lòng tải lại"),
+    CLAIM_INPUT_INVALID(HttpStatus.BAD_REQUEST, "CLAIM_400_INPUT", "Nội dung, lý do, trạng thái lọc hoặc phiên bản claim không hợp lệ"),
+    CLAIM_POST_EDIT_BLOCKED(HttpStatus.CONFLICT, "CLAIM_409_EDIT", "Bài đã có claim nên không thể chỉnh sửa nội dung"),
+    CLAIM_POST_DELETE_BLOCKED(HttpStatus.CONFLICT, "CLAIM_409_DELETE", "Không thể xóa bài khi còn claim đang chờ hoặc đã được chấp thuận"),
     RECEIPT_NOT_FOUND(HttpStatus.NOT_FOUND, "RECEIPT_404", "Không tìm thấy phiếu của bạn"),
     RECEIPT_NOT_EDITABLE(HttpStatus.CONFLICT, "RECEIPT_409_STATE", "Chỉ phiếu nháp mới được chỉnh sửa hoặc gửi duyệt. Vui lòng tải lại phiếu."),
     RECEIPT_STALE(HttpStatus.CONFLICT, "RECEIPT_409_STALE", "Phiếu đã thay đổi ở phiên khác. Vui lòng tải lại trước khi tiếp tục."),

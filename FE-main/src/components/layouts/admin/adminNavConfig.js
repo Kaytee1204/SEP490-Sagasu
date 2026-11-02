@@ -7,10 +7,6 @@ export const ADMIN_NAV_SECTIONS = [
     items: [{ label: 'Hàng đợi tiếp nhận', path: '/approver/receipts', icon: ClipboardList, roles: ['APPROVER'] }],
   },
   {
-    title: 'Tuần tra & ghi nhận',
-    items: [{ label: 'Phiếu của tôi', path: '/checker/receipts', icon: ClipboardList, roles: ['CHECKER'] }],
-  },
-  {
     title: 'Tổng quan',
     items: [
       {

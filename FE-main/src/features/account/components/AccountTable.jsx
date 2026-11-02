@@ -5,7 +5,6 @@ import { Shield, User, Edit2, Ban, UserCheck, Trash2, Mail } from 'lucide-react'
 const ROLE_STYLES = {
   ADMIN: { bg: '#f3e8ff', color: '#7e22ce', label: 'ADMIN' },
   MANAGER: { bg: '#e0f2fe', color: '#0369a1', label: 'MANAGER' },
-  CHECKER: { bg: '#fef3c7', color: '#b45309', label: 'CHECKER' },
   APPROVER: { bg: '#fce7f3', color: '#be185d', label: 'APPROVER' },
   USER: { bg: '#f1f5f9', color: '#334155', label: 'USER' },
 };

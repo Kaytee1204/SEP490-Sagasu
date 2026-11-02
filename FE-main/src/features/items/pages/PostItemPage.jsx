@@ -114,8 +114,8 @@ export default function PostItemPage() {
     }
   }
 
-  if (!['USER'].includes(user?.role)) return <main className="container" style={{ paddingBlock: 60 }}>
-    <h1>{isFound ? 'Đăng tin nhặt được' : 'Đăng tin mất đồ'}</h1><p>Chức năng dành cho tài khoản Người dùng.</p>
+  if (!['USER', 'APPROVER', 'MANAGER', 'ADMIN'].includes(user?.role)) return <main className="container" style={{ paddingBlock: 60 }}>
+    <h1>{isFound ? 'Đăng tin nhặt được' : 'Đăng tin mất đồ'}</h1><p>Vui lòng đăng nhập bằng tài khoản hợp lệ để đăng bài.</p>
   </main>;
   if (created) return <main className="container-sm" style={{ paddingBlock: 60 }}>
     <h1 className="text-display-md">Đăng bài thành công #{created.id}</h1>
@@ -147,7 +147,7 @@ export default function PostItemPage() {
           {step === 1 && <form ref={detailsRef} onSubmit={e => { e.preventDefault(); next(); }}>
             <StepDetailsForm formData={formData} postType={isFound ? 'found' : 'lost'} onChange={setFormData} categories={categories || []} />
           </form>}
-          {step === 2 && <StepReview formData={review} postType={isFound ? 'found' : 'lost'} requiresReview={user?.role !== 'USER'} />}
+          {step === 2 && <StepReview formData={review} postType={isFound ? 'found' : 'lost'} />}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', marginTop: 32 }}>
             {step > 0 ? <button type="button" className="btn btn-ghost" onClick={() => { setStep(s => s - 1); setError(''); }}>Quay lại</button> : <span />}
             {step < 2 ? <button type="button" className="btn btn-primary" disabled={!categories?.length || Boolean(categoryError)} onClick={next}>Tiếp tục</button>

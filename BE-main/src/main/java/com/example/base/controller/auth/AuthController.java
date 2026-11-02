@@ -29,7 +29,7 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(
             summary = "Đăng nhập bằng Email/Username & Mật khẩu (ADMIN: admin/123 | MANAGER: khanhtrinh1204@gmail.com/123 | USER: user/123)",
-            description = "Đăng nhập trực tiếp không cần mã OTP cho tất cả các Role (ADMIN, MANAGER, CHECKER, APPROVER, USER). Trả về Access Token (JWT), Refresh Token và thông tin tài khoản."
+            description = "Đăng nhập trực tiếp không cần mã OTP cho tất cả các Role (ADMIN, MANAGER, APPROVER, USER). Trả về Access Token (JWT), Refresh Token và thông tin tài khoản."
     )
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Đăng nhập thành công", authService.login(request)));
