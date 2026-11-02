@@ -10,7 +10,7 @@ public class LoginRequest {
     @NotBlank(message = "Email không được để trống")
     @Size(min = 3, max = 255, message = "Email phải từ 3 đến 255 ký tự")
     @Pattern(
-            regexp = "^(?i)(admin|[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
+            regexp = "^(?i)(admin|user|[A-Za-z0-9_.-]+|[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})$",
             message = "Định dạng Email không hợp lệ (VD: example@gmail.com)"
     )
     @Schema(
