@@ -41,6 +41,11 @@ public class SmartMatchService {
 
     @Transactional(readOnly = true)
     public List<SmartMatchItemDto> findSmartMatches(long postId, Long viewerId) {
+        return findSmartMatches(postId, viewerId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SmartMatchItemDto> findSmartMatches(long postId, Long viewerId, com.example.base.entity.AccountRole viewerRole) {
         PostAccessPolicy.requireValidPostId(postId);
 
         Optional<Post> targetOpt = postRepository.findVisibleDetail(postId);
@@ -48,6 +53,14 @@ public class SmartMatchService {
             targetOpt = postRepository.findOwnDetail(postId, viewerId);
         }
         Post source = targetOpt.orElseThrow(() -> new AppException(ErrorCode.POST_NOT_VISIBLE));
+
+        // Phân quyền: Chỉ chủ bài đăng (author), Manager hoặc Admin mới được phép sử dụng tính năng AI đối sánh
+        boolean isOwner = viewerId != null && source.getCreatedBy() != null && viewerId.equals(source.getCreatedBy().getId());
+        boolean isPrivileged = viewerRole == com.example.base.entity.AccountRole.ADMIN || viewerRole == com.example.base.entity.AccountRole.MANAGER;
+
+        if (!isOwner && !isPrivileged) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Chỉ chủ bài đăng, Quản trị viên (Admin) hoặc Quản lý (Manager) mới có thể sử dụng tính năng đối sánh AI cho bài đăng này.");
+        }
 
         String oppositeType = "LOST".equalsIgnoreCase(source.getPostType()) ? "FOUND" : "LOST";
         List<Post> candidates = postRepository.findActiveCandidatesForMatching(

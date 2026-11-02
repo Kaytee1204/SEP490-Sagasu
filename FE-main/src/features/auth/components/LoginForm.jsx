@@ -80,7 +80,7 @@ export default function LoginForm({ initialMode = 'login' }) {
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedInput.toLowerCase() !== 'admin' && !emailRegex.test(trimmedInput)) {
+    if (trimmedInput.toLowerCase() !== 'admin' && trimmedInput.toLowerCase() !== 'user' && !emailRegex.test(trimmedInput)) {
       setError('Vui lòng nhập địa chỉ Email hợp lệ (VD: example@gmail.com)');
       return;
     }

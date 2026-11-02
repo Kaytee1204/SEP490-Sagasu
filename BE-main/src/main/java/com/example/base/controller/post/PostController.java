@@ -139,6 +139,6 @@ public class PostController {
             @AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(ApiResponse.ok("Đã đối sánh thành công",
-                        smartMatchService.findSmartMatches(id, user == null ? null : user.getId())));
+                        smartMatchService.findSmartMatches(id, user == null ? null : user.getId(), user == null ? null : user.getRole())));
     }
 }

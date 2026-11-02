@@ -76,10 +76,33 @@ public class DataInitializer {
                 accountRepository.save(manager);
             }
 
+            // 3. Seed tài khoản USER: user / 123
+            Account testUser = accountRepository.findByEmailIgnoreCase("user").orElse(null);
+            if (testUser == null) {
+                testUser = new Account();
+                testUser.setFullName("Người dùng Test (User)");
+                testUser.setEmail("user");
+                testUser.setPasswordHash(passwordEncoder.encode("123"));
+                testUser.setRole(AccountRole.USER);
+                testUser.setStatus(AccountStatus.ACTIVE);
+                testUser.setMustChangePassword(false);
+                testUser.setCreatedBy(admin);
+                accountRepository.save(testUser);
+            } else {
+                testUser.setPasswordHash(passwordEncoder.encode("123"));
+                testUser.setRole(AccountRole.USER);
+                testUser.setStatus(AccountStatus.ACTIVE);
+                testUser.setMustChangePassword(false);
+                testUser.setFailedLoginCount(0);
+                testUser.setLockedUntil(null);
+                accountRepository.save(testUser);
+            }
+
             log.info("==================================================================");
             log.info("[SEED DATA - KhanhTB]");
             log.info("1. ADMIN   -> email: admin | password: 123");
             log.info("2. MANAGER -> email: {} | password: 123", managerEmail);
+            log.info("3. USER    -> email: user  | password: 123");
             log.info("Swagger UI : http://localhost:8080/swagger-ui.html");
             log.info("==================================================================");
         };

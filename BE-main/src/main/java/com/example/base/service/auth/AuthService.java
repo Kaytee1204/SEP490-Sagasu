@@ -77,6 +77,9 @@ public class AuthService {
                 .or(() -> "admin".equalsIgnoreCase(normalizedEmail)
                         ? accountRepository.findByRole(AccountRole.ADMIN).stream().findFirst()
                         : java.util.Optional.empty())
+                .or(() -> "user".equalsIgnoreCase(normalizedEmail)
+                        ? accountRepository.findByEmailIgnoreCase("user")
+                        : java.util.Optional.empty())
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_CREDENTIALS));
 
         validateAccountCanAuthenticate(account);

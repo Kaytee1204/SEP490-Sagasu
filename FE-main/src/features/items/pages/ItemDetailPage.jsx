@@ -8,6 +8,7 @@ import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
 import PrivateIdentifiersEditor from '../components/detail/PrivateIdentifiersEditor';
 import SmartMatchModal from '../components/detail/SmartMatchModal';
+import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
 
 const STATUS_LABELS = {
@@ -33,6 +34,7 @@ export default function ItemDetailPage() {
 }
 
 function PostDetail({ id, onRetry }) {
+  const { user, isAdmin, isManager } = useAuth();
   const [result, setResult] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showSmartMatch, setShowSmartMatch] = useState(false);
@@ -98,6 +100,7 @@ function PostDetail({ id, onRetry }) {
 
           {/* Action & Smart Match Buttons */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '14px', marginBottom: '14px' }}>
+            {(post.canEditOwnPost || isAdmin || isManager) && (
             <button
               type="button"
               onClick={() => setShowSmartMatch(true)}
@@ -122,6 +125,7 @@ function PostDetail({ id, onRetry }) {
               <SearchCheck size={18} />
               <span>Tìm đồ vật trùng khớp</span>
             </button>
+            )}
 
             {post.postType === 'FOUND' && !post.canEditOwnPost && (
               <Link
