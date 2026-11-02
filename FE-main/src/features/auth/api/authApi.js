@@ -2,8 +2,8 @@
 import apiClient from '@/services/apiClient';
 
 export const authApi = {
-  async login(email, password, userGroup) {
-    const res = await apiClient.post('/auth/login', { email, password, userGroup });
+  async login(email, password) {
+    const res = await apiClient.post('/auth/login', { email, password });
     return res.data;
   },
 

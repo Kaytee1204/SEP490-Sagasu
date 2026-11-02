@@ -7,15 +7,16 @@ import LoginForm from '../components/LoginForm';
 export default function AuthPage() {
   return (
     <div className="auth-page" style={{ gridTemplateColumns: '1.45fr 1fr', minHeight: '100dvh' }}>
-      {/* ── LEFT PANEL ── */}
+      {/* ── LEFT PANEL (Giữ nguyên) ── */}
       <AuthLeftPanel />
 
       {/* ── RIGHT PANEL ── */}
       <div
         className="auth-panel-right"
         style={{
-          background: '#fcfdfd',
+          background: '#f8fafc',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           padding: '32px 28px',

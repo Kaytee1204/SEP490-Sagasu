@@ -105,17 +105,44 @@ export function useAccountDashboard() {
 
   const submitCrud = async (e) => {
     e.preventDefault();
+
+    const trimmedName = (formData.fullName || '').trim();
+    const trimmedEmail = (formData.email || '').trim();
+    const trimmedPass = (formData.password || '').trim();
+
+    if (trimmedName.length < 2 || trimmedName.length > 150) {
+      showToast('Tên người dùng phải từ 2 đến 150 ký tự', 'error');
+      return;
+    }
+
+    if (!trimmedEmail || /\s/.test(trimmedEmail)) {
+      showToast('Email không được để trống hoặc chứa khoảng trắng', 'error');
+      return;
+    }
+
+    if (trimmedEmail.toLowerCase() !== 'admin' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      showToast('Vui lòng nhập địa chỉ Email hợp lệ (VD: user01@gmail.com)', 'error');
+      return;
+    }
+
+    if (trimmedPass) {
+      if (trimmedPass.length < 8 || trimmedPass.length > 16 || /\s/.test(trimmedPass) || !/[^a-zA-Z0-9\s]/.test(trimmedPass)) {
+        showToast('Mật khẩu phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không có khoảng trắng', 'error');
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       if (crudModal.mode === 'create') {
         const payload = {
-          fullName: formData.fullName.trim(),
-          email: formData.email.trim(),
+          fullName: trimmedName,
+          email: trimmedEmail,
           role: formData.role,
           status: formData.status,
         };
-        if (formData.password && formData.password.trim()) {
-          payload.password = formData.password.trim();
+        if (trimmedPass) {
+          payload.password = trimmedPass;
         }
         const created = await accountApi.createAccount(payload);
         showToast(
@@ -125,13 +152,13 @@ export function useAccountDashboard() {
         );
       } else {
         const payload = {
-          fullName: formData.fullName.trim(),
-          email: formData.email.trim(),
+          fullName: trimmedName,
+          email: trimmedEmail,
           role: formData.role,
           status: formData.status,
         };
-        if (formData.password && formData.password.trim()) {
-          payload.password = formData.password.trim();
+        if (trimmedPass) {
+          payload.password = trimmedPass;
         }
         const updated = await accountApi.updateAccount(crudModal.data.id, payload);
         showToast(`Đã cập nhật tài khoản #${updated.id} (${updated.email})`);

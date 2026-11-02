@@ -3,9 +3,9 @@ package com.example.base.dto.account;
 import com.example.base.entity.AccountRole;
 import com.example.base.entity.AccountStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.OffsetDateTime;
@@ -14,20 +14,34 @@ public class CreateAccountRequest {
 
     @NotBlank(message = "Tên người dùng không được để trống")
     @Size(min = 2, max = 150, message = "Tên người dùng phải từ 2 đến 150 ký tự")
+    @Pattern(
+            regexp = "^[\\p{L}0-9 .,'()_-]{2,150}$",
+            message = "Tên người dùng chỉ được chứa chữ cái, chữ số và khoảng trắng (2-150 ký tự)"
+    )
     @Schema(description = "Họ và tên người dùng", example = "Nguyễn Văn A")
     private String fullName;
 
-    @NotBlank(message = "Email hoặc tên tài khoản không được để trống")
-    @Size(max = 255, message = "Email/Tài khoản không được vượt quá 255 ký tự")
-    @Schema(description = "Email hoặc tên tài khoản (tự động chuyển về chữ thường)", example = "user01@gmail.com")
+    @NotBlank(message = "Email không được để trống")
+    @Size(min = 5, max = 255, message = "Email phải từ 5 đến 255 ký tự")
+    @Pattern(
+            regexp = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+            message = "Định dạng Email không hợp lệ (VD: user01@gmail.com)"
+    )
+    @Schema(description = "Địa chỉ Email của tài khoản", example = "user01@gmail.com")
     private String email;
 
-    @Size(max = 30, message = "Số điện thoại không được vượt quá 30 ký tự")
-    @Schema(description = "Số điện thoại liên hệ", example = "0912345678")
+    @Pattern(
+            regexp = "^$|^(0|\\+84)[0-9]{9,10}$",
+            message = "Số điện thoại không hợp lệ (phải gồm 10-11 chữ số, bắt đầu bằng 0 hoặc +84)"
+    )
+    @Schema(description = "Số điện thoại liên hệ (10-11 số)", example = "0912345678")
     private String phone;
 
-    @Size(min = 3, max = 100, message = "Mật khẩu phải từ 3 đến 100 ký tự")
-    @Schema(description = "Mật khẩu (nếu để trống hệ thống sẽ tự sinh ngẫu nhiên)", example = "123456")
+    @Pattern(
+            regexp = "^$|^(?=.*[^a-zA-Z0-9\\s])\\S{8,16}$",
+            message = "Mật khẩu phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không có khoảng trắng"
+    )
+    @Schema(description = "Mật khẩu từ 8-16 ký tự, có ít nhất 1 ký tự đặc biệt (nếu để trống hệ thống tự sinh ngẫu nhiên)", example = "Abc@1234")
     private String password;
 
     @NotNull(message = "Role không được để trống")

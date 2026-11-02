@@ -115,9 +115,22 @@ export default function ProfilePage() {
   const handleSaveEdit = async () => {
     setFeedback(null);
 
+    const trimmedPhone = (formValues.phone || '').trim();
+    if (trimmedPhone && !/^(0|\+84)[0-9]{9,10}$/.test(trimmedPhone)) {
+      setFeedback({
+        type: 'error',
+        message: 'Số điện thoại không hợp lệ (phải gồm 10-11 chữ số, bắt đầu bằng 0 hoặc +84)',
+      });
+      return;
+    }
+
     if (formValues.newPassword) {
-      if (formValues.newPassword.length < 3) {
-        setFeedback({ type: 'error', message: 'Mật khẩu mới phải từ 3 ký tự trở lên' });
+      const pass = formValues.newPassword.trim();
+      if (pass.length < 8 || pass.length > 16 || /\s/.test(pass) || !/[^a-zA-Z0-9\s]/.test(pass)) {
+        setFeedback({
+          type: 'error',
+          message: 'Mật khẩu mới phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không có khoảng trắng',
+        });
         return;
       }
       if (formValues.newPassword !== formValues.confirmPassword) {
@@ -129,10 +142,10 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       const payload = {
-        phone: formValues.phone.trim(),
+        phone: trimmedPhone,
       };
       if (formValues.newPassword) {
-        payload.newPassword = formValues.newPassword;
+        payload.newPassword = formValues.newPassword.trim();
       }
       if (isPureAdmin && formValues.role) {
         payload.role = formValues.role;

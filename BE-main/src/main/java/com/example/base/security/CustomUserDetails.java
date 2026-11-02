@@ -49,7 +49,11 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        // Cấp cả ROLE_<ROLE> (cho hasRole/hasAnyRole) và <ROLE> (cho hasAuthority/hasAnyAuthority)
+        return List.of(
+                new SimpleGrantedAuthority("ROLE_" + role.name()),
+                new SimpleGrantedAuthority(role.name())
+        );
     }
 
     @Override

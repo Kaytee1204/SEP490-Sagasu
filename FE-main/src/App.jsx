@@ -56,12 +56,9 @@ function AppRoutes() {
         path="/dang-nhap"
         element={isAuthenticated ? <Navigate to={postLoginRedirect} replace /> : <AuthPage />}
       />
-      <Route
-        path="/dang-ky"
-        element={isAuthenticated ? <Navigate to={postLoginRedirect} replace /> : <AuthPage />}
-      />
       <Route path="/login" element={<Navigate to="/dang-nhap" replace />} />
-      <Route path="/register" element={<Navigate to="/dang-ky" replace />} />
+      <Route path="/dang-ky" element={<Navigate to="/dang-nhap" replace />} />
+      <Route path="/register" element={<Navigate to="/dang-nhap" replace />} />
 
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>

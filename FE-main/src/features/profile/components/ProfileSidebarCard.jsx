@@ -210,7 +210,7 @@ export default function ProfileSidebarCard({
                 <label className="input-label" htmlFor="edit-new-password">
                   Mật khẩu mới{' '}
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                    (Để trống nếu giữ nguyên)
+                    (8-16 ký tự, có ký tự đặc biệt)
                   </span>
                 </label>
                 <div className="input-icon-wrap">
@@ -221,7 +221,9 @@ export default function ProfileSidebarCard({
                     id="edit-new-password"
                     type="password"
                     className="input"
-                    placeholder="Nhập mật khẩu mới"
+                    minLength={8}
+                    maxLength={16}
+                    placeholder="8-16 ký tự, có ký tự đặc biệt (VD: Abc@1234)"
                     value={formValues.newPassword || ''}
                     onChange={(e) => onChangeForm({ ...formValues, newPassword: e.target.value })}
                   />

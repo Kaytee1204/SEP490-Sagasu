@@ -1,15 +1,29 @@
 package com.example.base.dto.auth;
 
 import com.example.base.dto.account.AccountDto;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public class LoginResponse {
 
+    @Schema(description = "JWT Access Token (dán vào nút Authorize trên Swagger, chỉ có khi không cần OTP hoặc đã xác thực OTP)")
     private String accessToken;
+
+    @Schema(description = "Refresh Token")
     private String refreshToken;
+
+    @Schema(description = "Loại token", example = "Bearer")
     private String tokenType = "Bearer";
+
+    @Schema(description = "Thông tin tài khoản đăng nhập")
     private AccountDto account;
+
+    @Schema(description = "True nếu tài khoản thuộc role USER và cần nhập mã OTP 6 chữ số tại /api/auth/verify-otp để vào hệ thống", example = "false")
     private boolean requiresOtp = false;
+
+    @Schema(description = "Địa chỉ email nhận mã OTP (khi requiresOtp = true)", example = "user01@gmail.com")
     private String email;
+
+    @Schema(description = "Thông báo hướng dẫn xác thực OTP (kèm mã OTP test nếu chưa cấu hình SMTP)", example = "Mã OTP 6 số đã được gửi tới email user01@gmail.com")
     private String message;
 
     public LoginResponse() {

@@ -46,7 +46,11 @@ import java.util.Set;
 @Service
 public class AccountService {
 
-    private static final String RANDOM_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%";
+    private static final String RANDOM_ALPHANUM = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    private static final String SPECIAL_CHARS = "@#$%!&*";
+    private static final String PASSWORD_REGEX = "^(?=.*[^a-zA-Z0-9\\s])\\S{8,16}$";
+    private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
+    private static final String PHONE_REGEX = "^(0|\\+84)[0-9]{9,10}$";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Set<AccountRole> MANAGER_ALLOWED_ROLES = EnumSet.of(
             AccountRole.USER,
@@ -169,17 +173,23 @@ public class AccountService {
 
         // Đổi số điện thoại
         if (request.getPhone() != null) {
-            actor.setPhone(request.getPhone().trim());
+            String trimmedPhone = request.getPhone().trim();
+            if (StringUtils.hasText(trimmedPhone) && !trimmedPhone.matches(PHONE_REGEX)) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Số điện thoại không hợp lệ (phải gồm 10-11 chữ số, bắt đầu bằng 0 hoặc +84)");
+            }
+            actor.setPhone(trimmedPhone);
         }
 
         // Đổi mật khẩu (nếu người dùng nhập mật khẩu mới)
         if (StringUtils.hasText(request.getNewPassword())) {
+            String trimmedPass = request.getNewPassword().trim();
+            validatePasswordFormat(trimmedPass);
             if (StringUtils.hasText(request.getCurrentPassword())) {
                 if (!passwordEncoder.matches(request.getCurrentPassword(), actor.getPasswordHash())) {
                     throw new AppException(ErrorCode.INVALID_CREDENTIALS, "Mật khẩu hiện tại không chính xác");
                 }
             }
-            actor.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
+            actor.setPasswordHash(passwordEncoder.encode(trimmedPass));
             actor.setMustChangePassword(false);
         }
 
@@ -216,13 +226,20 @@ public class AccountService {
         }
 
         String normalizedEmail = request.getEmail().trim().toLowerCase();
+        if (!normalizedEmail.matches(EMAIL_REGEX)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng nhập địa chỉ Email hợp lệ (VD: user@gmail.com)");
+        }
         if (accountRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
-        String rawPassword = StringUtils.hasText(request.getPassword())
-                ? request.getPassword().trim()
-                : generateRandomPassword(10);
+        String rawPassword;
+        if (StringUtils.hasText(request.getPassword())) {
+            rawPassword = request.getPassword().trim();
+            validatePasswordFormat(rawPassword);
+        } else {
+            rawPassword = generateRandomPassword(10);
+        }
 
         Account account = new Account();
         account.setFullName(request.getFullName().trim());
@@ -272,6 +289,9 @@ public class AccountService {
 
         if (StringUtils.hasText(request.getEmail())) {
             String newEmail = request.getEmail().trim().toLowerCase();
+            if (!"admin".equalsIgnoreCase(newEmail) && !newEmail.matches(EMAIL_REGEX)) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng nhập địa chỉ Email hợp lệ (VD: user@gmail.com)");
+            }
             if (!newEmail.equalsIgnoreCase(account.getEmail()) && accountRepository.existsByEmailIgnoreCase(newEmail)) {
                 throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
             }
@@ -279,11 +299,17 @@ public class AccountService {
         }
 
         if (request.getPhone() != null) {
-            account.setPhone(request.getPhone().trim());
+            String trimmedPhone = request.getPhone().trim();
+            if (StringUtils.hasText(trimmedPhone) && !trimmedPhone.matches(PHONE_REGEX)) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Số điện thoại không hợp lệ (phải gồm 10-11 chữ số, bắt đầu bằng 0 hoặc +84)");
+            }
+            account.setPhone(trimmedPhone);
         }
 
         if (StringUtils.hasText(request.getPassword())) {
-            account.setPasswordHash(passwordEncoder.encode(request.getPassword().trim()));
+            String trimmedPass = request.getPassword().trim();
+            validatePasswordFormat(trimmedPass);
+            account.setPasswordHash(passwordEncoder.encode(trimmedPass));
         }
 
         if (request.getStatus() != null) {
@@ -418,7 +444,15 @@ public class AccountService {
                     }
 
                     boolean passwordProvided = StringUtils.hasText(rawPassword);
-                    String plainPassword = passwordProvided ? rawPassword.trim() : generateRandomPassword(10);
+                    String plainPassword;
+                    if (passwordProvided) {
+                        plainPassword = rawPassword.trim();
+                        if (!plainPassword.matches(PASSWORD_REGEX)) {
+                            throw new IllegalArgumentException("Mật khẩu phải dài từ 8 đến 16 ký tự và chứa ít nhất 1 ký tự đặc biệt");
+                        }
+                    } else {
+                        plainPassword = generateRandomPassword(10);
+                    }
 
                     String fullName = StringUtils.hasText(rawName)
                             ? rawName.trim()
@@ -470,13 +504,13 @@ public class AccountService {
 
             Row sample1 = sheet.createRow(1);
             sample1.createCell(0).setCellValue("user01@gmail.com");
-            sample1.createCell(1).setCellValue("123456");
+            sample1.createCell(1).setCellValue("Abc@1234");
             sample1.createCell(2).setCellValue("Nguyễn Văn A");
             sample1.createCell(3).setCellValue("USER");
 
             Row sample2 = sheet.createRow(2);
             sample2.createCell(0).setCellValue("user02@gmail.com");
-            sample2.createCell(1).setCellValue("123456");
+            sample2.createCell(1).setCellValue("Abc@1234");
             sample2.createCell(2).setCellValue("Trần Thị B");
             sample2.createCell(3).setCellValue("USER");
 
@@ -488,6 +522,15 @@ public class AccountService {
             return out.toByteArray();
         } catch (IOException ex) {
             throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không thể tạo file Excel mẫu");
+        }
+    }
+
+    private void validatePasswordFormat(String password) {
+        if (!StringUtils.hasText(password) || !password.matches(PASSWORD_REGEX)) {
+            throw new AppException(
+                    ErrorCode.BAD_REQUEST,
+                    "Mật khẩu phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không chứa khoảng trắng"
+            );
         }
     }
 
@@ -504,10 +547,13 @@ public class AccountService {
     }
 
     public static String generateRandomPassword(int length) {
-        StringBuilder sb = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            sb.append(RANDOM_CHARS.charAt(SECURE_RANDOM.nextInt(RANDOM_CHARS.length())));
+        int safeLen = Math.min(Math.max(length, 8), 16);
+        StringBuilder sb = new StringBuilder(safeLen);
+        for (int i = 0; i < safeLen - 2; i++) {
+            sb.append(RANDOM_ALPHANUM.charAt(SECURE_RANDOM.nextInt(RANDOM_ALPHANUM.length())));
         }
+        sb.append(SPECIAL_CHARS.charAt(SECURE_RANDOM.nextInt(SPECIAL_CHARS.length())));
+        sb.append(RANDOM_ALPHANUM.charAt(SECURE_RANDOM.nextInt(RANDOM_ALPHANUM.length())));
         return sb.toString();
     }
 

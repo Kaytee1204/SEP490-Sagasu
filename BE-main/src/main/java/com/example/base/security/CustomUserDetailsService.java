@@ -18,8 +18,14 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        Account account = accountRepository.findByEmailIgnoreCase(email)
+        Account account = accountRepository.findByEmailIgnoreCase(email != null ? email.trim() : "")
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản với email: " + email));
+        return new CustomUserDetails(account);
+    }
+
+    public UserDetails loadUserById(Long accountId) throws UsernameNotFoundException {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản với ID: " + accountId));
         return new CustomUserDetails(account);
     }
 }

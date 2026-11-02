@@ -86,7 +86,7 @@ export default function AccountCrudModal({
             />
           </div>
 
-          {/* Email / Account */}
+          {/* Email */}
           <div>
             <label
               style={{
@@ -97,12 +97,12 @@ export default function AccountCrudModal({
                 color: 'var(--text-secondary)',
               }}
             >
-              {isStudentRole ? 'Email sinh viên (Gmail)' : 'Tài khoản (Account) hoặc Email'} <span style={{ color: '#ef4444' }}>*</span>
+              Địa chỉ Email <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
-              type={isStudentRole ? 'email' : 'text'}
+              type="text"
               required
-              placeholder={isStudentRole ? 'VD: user01@gmail.com' : 'VD: canbo01 hoặc email@gmail.com'}
+              placeholder="VD: user01@gmail.com"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               style={{
@@ -127,11 +127,15 @@ export default function AccountCrudModal({
                 color: 'var(--text-secondary)',
               }}
             >
-              {isCreate ? 'Mật khẩu (Để trống hệ thống tự sinh ngẫu nhiên)' : 'Mật khẩu mới (Để trống nếu giữ nguyên)'}
+              {isCreate
+                ? 'Mật khẩu (8-16 ký tự, có ký tự đặc biệt; để trống tự sinh)'
+                : 'Mật khẩu mới (8-16 ký tự, có ký tự đặc biệt; để trống giữ nguyên)'}
             </label>
             <input
               type="text"
-              placeholder={isCreate ? 'VD: 123456' : 'Nhập mật khẩu mới nếu muốn đổi'}
+              minLength={8}
+              maxLength={16}
+              placeholder={isCreate ? 'VD: Abc@1234' : 'Nhập mật khẩu mới (8-16 ký tự, có ký tự đặc biệt)'}
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               style={{
