@@ -1,5 +1,6 @@
 import io
 import logging
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 import requests
 from PIL import Image
@@ -21,7 +22,20 @@ class SmartMatcher:
         self.gating = VisualGatingLayer()
 
     def _fetch_image(self, url: Optional[str]) -> Optional[Image.Image]:
-        if not url or not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        if not url or not isinstance(url, str):
+            return None
+
+        # Check if local file path
+        clean_path = url.replace("file:///", "").replace("file://", "")
+        p = Path(clean_path)
+        if p.exists() and p.is_file():
+            try:
+                return Image.open(p).convert("RGB")
+            except Exception as e:
+                logger.debug(f"Failed to open local image {p}: {e}")
+                return None
+
+        if not url.startswith(("http://", "https://")):
             return None
         try:
             resp = requests.get(url, timeout=8.0)
@@ -32,7 +46,12 @@ class SmartMatcher:
             logger.debug(f"Failed to fetch image: {e}")
         return None
 
-    def match(self, source_item: Dict[str, Any], candidate_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def match(
+        self,
+        source_item: Dict[str, Any],
+        candidate_items: List[Dict[str, Any]],
+        include_rejected: bool = False
+    ) -> List[Dict[str, Any]]:
         if not candidate_items:
             return []
 
@@ -108,31 +127,37 @@ class SmartMatcher:
                 spatio_temporal_sim=st_sim
             )
 
-            # 5. Nếu bị loại bởi Hard Cutoff (ví dụ ảnh dưới 55%) -> Bỏ qua không gợi ý
-            if gated.get("isRejected", False):
+            is_rejected = gated.get("isRejected", False)
+
+            # 5. Nếu bị loại bởi Hard Cutoff (ảnh dưới 55%) và không yêu cầu include_rejected -> Bỏ qua
+            if is_rejected and not include_rejected:
                 continue
 
             # 6. Formulate human-readable reason
             reasons = []
-            if gated["breakdown"]["visual"] >= 75 and src_has_img and cand_has_img:
-                reasons.append("Đặc điểm hình ảnh rất tương đồng")
-            if gated["breakdown"]["color"] >= 75 and src_has_img and cand_has_img:
-                reasons.append("Trùng khớp màu sắc")
-            if gated["breakdown"]["spatioTemporal"] >= 70:
-                reasons.append("Thời gian & địa điểm gần nhau")
-            if gated["breakdown"]["text"] >= 70:
-                reasons.append("Mô tả khớp")
+            if is_rejected:
+                reasons.append(f"Bị loại: {gated.get('rejectReason', 'Visual < 55%')}")
+            else:
+                if gated["breakdown"]["visual"] >= 75 and src_has_img and cand_has_img:
+                    reasons.append("Đặc điểm hình ảnh rất tương đồng")
+                if gated["breakdown"]["color"] >= 75 and src_has_img and cand_has_img:
+                    reasons.append("Trùng khớp màu sắc")
+                if gated["breakdown"]["spatioTemporal"] >= 70:
+                    reasons.append("Thời gian & địa điểm gần nhau")
+                if gated["breakdown"]["text"] >= 70:
+                    reasons.append("Mô tả khớp")
 
             reason_str = " • ".join(reasons) if reasons else "Có một số đặc điểm tương đồng"
 
             results.append({
                 **cand,
+                "isRejected": is_rejected,
                 "matchScore": gated["matchScore"],
                 "matchBreakdown": gated["breakdown"],
                 "matchWeights": gated["weights"],
                 "matchReason": reason_str
             })
 
-        # Sort descending by matchScore
-        results.sort(key=lambda x: x["matchScore"], reverse=True)
+        # Sort descending by matchScore (unrejected first)
+        results.sort(key=lambda x: (not x.get("isRejected", False), x["matchScore"]), reverse=True)
         return results

@@ -1,0 +1,52 @@
+[
+  {
+    "id": "Q1",
+    "title": "Tìm ví da nam màu đen Pedro",
+    "categoryName": "Ví / Bóp",
+    "description": "Em để quên chiếc ví Pedro màu đen gập đôi ở bàn ăn căng tin",
+    "locationText": "Căn tin Tòa Alpha",
+    "eventAt": "2026-11-02T10:30:00+07:00",
+    "imageFile": "vi_da_pedro_den_query.jpg",
+    "expectedMatchId": 1
+  },
+  {
+    "id": "Q2",
+    "title": "Rơi balo FPT màu đen",
+    "categoryName": "Balo / Cặp sách",
+    "description": "Balo đựng máy tính laptop FPT màu đen viền cam, để quên ở bàn đọc sách",
+    "locationText": "Thư viện Tòa Alpha",
+    "eventAt": "2026-11-01T16:30:00+07:00",
+    "imageFile": "balo_fpt_den_query.jpg",
+    "expectedMatchId": 3
+  },
+  {
+    "id": "Q3",
+    "title": "Tìm bình nước Lock&Lock xanh",
+    "categoryName": "Đồ dùng cá nhân",
+    "description": "Bình giữ nhiệt nước uống màu xanh lam thể thao",
+    "locationText": "Sân cỏ bóng đá",
+    "eventAt": "2026-11-02T09:00:00+07:00",
+    "imageFile": "binh_nuoc_xanh_query.jpg",
+    "expectedMatchId": 4
+  },
+  {
+    "id": "Q4_TEXT_ONLY",
+    "title": "Mất ví tối màu",
+    "categoryName": "Ví / Bóp",
+    "description": "Em đánh rơi chiếc bóp da tối màu hiệu Pedro lúc ăn sáng ở canteen Alpha",
+    "locationText": "Tòa Alpha canteen",
+    "eventAt": "2026-11-02T10:00:00+07:00",
+    "imageFile": null,
+    "expectedMatchId": 1
+  },
+  {
+    "id": "Q5_TEXT_ONLY",
+    "title": "Rơi chìa khóa xe máy",
+    "categoryName": "Chìa khóa",
+    "description": "Chìa khóa thông minh Smartkey Honda có móc khóa bông nhỏ ở bãi giữ xe",
+    "locationText": "Nhà xe hầm Gamma",
+    "eventAt": "2026-11-02T12:00:00+07:00",
+    "imageFile": null,
+    "expectedMatchId": 5
+  }
+]
