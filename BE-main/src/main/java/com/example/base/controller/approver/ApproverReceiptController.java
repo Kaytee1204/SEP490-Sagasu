@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,10 +21,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/approver/receipts")
 @PreAuthorize("hasRole('APPROVER')")
-@RequiredArgsConstructor
 @Tag(name = "5. Approver Intake Receipts", description = "Quản lý biên bản tiếp nhận tài sản thất lạc dành cho Cán bộ tiếp nhận (APPROVER)")
 public class ApproverReceiptController {
     private final ApproverIntakeService service;
+
+    public ApproverReceiptController(ApproverIntakeService service) {
+        this.service = service;
+    }
 
     @GetMapping
     @Operation(summary = "Danh sách biên bản tiếp nhận tài sản (có phân trang, tìm kiếm, lọc)",

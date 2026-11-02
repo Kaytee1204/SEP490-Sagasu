@@ -20,7 +20,7 @@ public class OpenApiConfig {
 
     static {
         // Automatically hide @AuthenticationPrincipal and CustomUserDetails from Swagger UI schemas & parameter lists
-        SpringDocUtils.getValue()
+        SpringDocUtils.getConfig()
                 .addAnnotationsToIgnore(AuthenticationPrincipal.class)
                 .addRequestWrapperToIgnore(CustomUserDetails.class);
     }
