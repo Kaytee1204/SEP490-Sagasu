@@ -22,18 +22,14 @@ class SmartMatcher:
 
     def _fetch_image(self, url: Optional[str]) -> Optional[Image.Image]:
         if not url or not isinstance(url, str) or not url.startswith(("http://", "https://")):
-            logger.info(f"Image URL is empty or invalid: {url}")
             return None
         try:
             resp = requests.get(url, timeout=8.0)
             if resp.status_code == 200:
                 img = Image.open(io.BytesIO(resp.content)).convert("RGB")
-                logger.info(f"Successfully downloaded image: {img.size} from {url[:60]}...")
                 return img
-            else:
-                logger.warning(f"HTTP {resp.status_code} fetching image from {url[:80]}...")
         except Exception as e:
-            logger.warning(f"Error fetching image: {e} from {url[:80]}...")
+            logger.debug(f"Failed to fetch image: {e}")
         return None
 
     def match(self, source_item: Dict[str, Any], candidate_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -45,6 +41,7 @@ class SmartMatcher:
         src_img_raw = self._fetch_image(src_img_url)
         src_has_img = src_img_raw is not None
         src_crop = self.cropper.crop_salient_object(src_img_raw) if src_has_img else None
+        src_is_blurry = self.gating.check_image_blur(src_crop) if src_crop else False
         src_vis_vec = self.clip.encode_image(src_crop) if src_crop else None
         src_hsv_hist = self.hsv.extract_histogram(src_crop) if src_crop else None
 
@@ -58,6 +55,7 @@ class SmartMatcher:
             cand_img_raw = self._fetch_image(cand_img_url)
             cand_has_img = cand_img_raw is not None
             cand_crop = self.cropper.crop_salient_object(cand_img_raw) if cand_has_img else None
+            cand_is_blurry = self.gating.check_image_blur(cand_crop) if cand_crop else False
             cand_vis_vec = self.clip.encode_image(cand_crop) if cand_crop else None
             cand_hsv_hist = self.hsv.extract_histogram(cand_crop) if cand_crop else None
 
@@ -68,15 +66,14 @@ class SmartMatcher:
             # Visual similarity
             if src_vis_vec is not None and cand_vis_vec is not None:
                 vis_sim = self.clip.cosine_similarity(src_vis_vec, cand_vis_vec)
-                logger.info(f"Matched Visual CLIP similarity: {vis_sim:.3f}")
             elif src_vis_vec is not None and cand_text_vec is not None:
                 vis_sim = self.clip.cosine_similarity(src_vis_vec, cand_text_vec)
             elif src_text_vec is not None and cand_vis_vec is not None:
                 vis_sim = self.clip.cosine_similarity(src_text_vec, cand_vis_vec)
             else:
-                vis_sim = 0.4
+                vis_sim = 0.40
 
-            # Text similarity
+            # Text similarity (CLIP Multilingual semantic embedding)
             if src_text_vec is not None and cand_text_vec is not None:
                 text_sim = self.clip.cosine_similarity(src_text_vec, cand_text_vec)
             else:
@@ -88,9 +85,8 @@ class SmartMatcher:
             # Color similarity (HSV)
             if src_has_img and cand_has_img:
                 color_sim = self.hsv.compare_histograms(src_hsv_hist, cand_hsv_hist)
-                logger.info(f"Matched HSV Color similarity: {color_sim:.3f}")
             else:
-                color_sim = 0.5
+                color_sim = 0.50
 
             # Spatio-temporal similarity
             st_sim = self.spatio_temporal.compute(
@@ -104,22 +100,28 @@ class SmartMatcher:
             gated = self.gating.gate_and_fuse(
                 has_source_img=src_has_img,
                 has_cand_img=cand_has_img,
+                is_source_blurry=src_is_blurry,
+                is_cand_blurry=cand_is_blurry,
                 visual_sim=vis_sim,
                 text_sim=text_sim,
                 color_sim=color_sim,
                 spatio_temporal_sim=st_sim
             )
 
-            # 5. Formulate human-readable reason
+            # 5. Nếu bị loại bởi Hard Cutoff (ví dụ ảnh dưới 55%) -> Bỏ qua không gợi ý
+            if gated.get("isRejected", False):
+                continue
+
+            # 6. Formulate human-readable reason
             reasons = []
-            if gated["breakdown"]["visual"] >= 80 and src_has_img and cand_has_img:
+            if gated["breakdown"]["visual"] >= 75 and src_has_img and cand_has_img:
                 reasons.append("Đặc điểm hình ảnh rất tương đồng")
-            if gated["breakdown"]["color"] >= 80 and src_has_img and cand_has_img:
-                reasons.append("Trùng khớp màu sắc chủ đạo")
-            if gated["breakdown"]["spatioTemporal"] >= 75:
+            if gated["breakdown"]["color"] >= 75 and src_has_img and cand_has_img:
+                reasons.append("Trùng khớp màu sắc")
+            if gated["breakdown"]["spatioTemporal"] >= 70:
                 reasons.append("Thời gian & địa điểm gần nhau")
-            if gated["breakdown"]["text"] >= 75:
-                reasons.append("Mô tả chi tiết khớp")
+            if gated["breakdown"]["text"] >= 70:
+                reasons.append("Mô tả khớp")
 
             reason_str = " • ".join(reasons) if reasons else "Có một số đặc điểm tương đồng"
 

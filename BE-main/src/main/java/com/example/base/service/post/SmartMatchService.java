@@ -184,20 +184,32 @@ public class SmartMatchService {
 
             // 3. Visual & Color estimation
             boolean bothHaveImages = srcImg != null && candImg != null;
-            double visSim = bothHaveImages ? Math.min(0.95, textSim + 0.15) : 0.40;
-            double colorSim = bothHaveImages ? Math.min(0.95, 0.65 + textSim * 0.25) : 0.50;
+            double visSim = bothHaveImages ? Math.min(0.98, textSim + 0.15) : 0.40;
+            double colorSim = bothHaveImages ? Math.min(0.98, 0.65 + textSim * 0.25) : 0.50;
+
+            // Hard Cutoff Rule: khi có ảnh rõ mà dưới 55% -> loại luôn!
+            if (bothHaveImages && visSim < 0.55) {
+                continue;
+            }
 
             double finalScore = bothHaveImages
-                    ? (0.35 * visSim + 0.20 * colorSim + 0.30 * textSim + 0.15 * stSim) * 100.0
+                    ? (0.55 * visSim + 0.15 * colorSim + 0.15 * textSim + 0.15 * stSim) * 100.0
+                    : (srcImg != null || candImg != null)
+                    ? (0.30 * 0.50 + 0.45 * textSim + 0.25 * stSim) * 100.0
                     : (0.60 * textSim + 0.40 * stSim) * 100.0;
 
             finalScore = Math.round(Math.min(97.5, Math.max(25.0, finalScore)) * 10.0) / 10.0;
 
+            // Ngưỡng tối thiểu để hiển thị
+            if (finalScore < 45.0) {
+                continue;
+            }
+
             List<String> reasons = new ArrayList<>();
             if (sameCat) reasons.add("Cùng danh mục " + candCat);
-            if (bothHaveImages && visSim >= 0.7) reasons.add("Hình ảnh có nét tương đồng");
-            if (stSim >= 0.7) reasons.add("Thời gian & địa điểm gần nhau");
-            if (textSim >= 0.6) reasons.add("Mô tả chi tiết khớp");
+            if (bothHaveImages && visSim >= 0.75) reasons.add("Hình ảnh rất tương đồng");
+            if (stSim >= 0.70) reasons.add("Thời gian & địa điểm gần nhau");
+            if (textSim >= 0.65) reasons.add("Mô tả khớp");
             String reasonStr = reasons.isEmpty() ? "Có đặc điểm trùng khớp" : String.join(" • ", reasons);
 
             Map<String, Object> breakdown = Map.of(
