@@ -5,6 +5,7 @@ import com.example.base.dto.post.CategoryDto;
 import com.example.base.dto.post.CreateLostPostRequest;
 import com.example.base.dto.post.CreateFoundPostRequest;
 import com.example.base.dto.post.PrivateIdentifiersDto;
+import com.example.base.dto.post.SmartMatchItemDto;
 import com.example.base.service.post.PostPrivateIdentifiersService;
 import com.example.base.dto.post.CreatedPostDto;
 import com.example.base.dto.post.PostDetailDto;
@@ -13,11 +14,11 @@ import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.service.post.PostService;
 import com.example.base.service.post.PostCreationService;
+import com.example.base.service.post.SmartMatchService;
 import com.example.base.security.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,13 +30,23 @@ import java.util.List;
 import com.example.base.dto.post.PostSearchFilter;
 
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/posts")
 @Tag(name = "3. Posts", description = "Bài đăng đồ thất lạc")
 public class PostController {
     private final PostService posts;
     private final PostCreationService creation;
     private final PostPrivateIdentifiersService privateIdentifiers;
+    private final SmartMatchService smartMatchService;
+
+    public PostController(PostService posts,
+                          PostCreationService creation,
+                          PostPrivateIdentifiersService privateIdentifiers,
+                          SmartMatchService smartMatchService) {
+        this.posts = posts;
+        this.creation = creation;
+        this.privateIdentifiers = privateIdentifiers;
+        this.smartMatchService = smartMatchService;
+    }
 
     @GetMapping
     @Operation(summary = "UC13/21: Xem và tìm bài LOST/FOUND đang VISIBLE", description = "Lọc theo keyword, categoryId, postType (LOST/FOUND), location; timeRange=24H/7D cho thời gian gần đây hoặc CUSTOM với fromDate/toDate (yyyy-MM-dd, ngày mất/nhặt theo giờ Việt Nam). Trang bắt đầu từ 1; không trả bài PENDING, bị ẩn hay đã xóa.")
@@ -118,5 +129,16 @@ public class PostController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(ApiResponse.ok(
                         posts.getDetailForViewer(postId, user == null ? null : user.getId())));
+    }
+
+    @GetMapping("/{id}/smart-matches")
+    @Operation(summary = "Đối sánh thông minh bằng AI giữa bài LOST và bài FOUND",
+            description = "Sử dụng pipeline Multimodal AI (YOLOv8 crop + ViT/CLIP text tiếng Việt + HSV màu sắc + Không/Thời gian + Visual Gating). Tự động so sánh bài Lost với các bài Found (hoặc ngược lại).")
+    public ResponseEntity<ApiResponse<List<SmartMatchItemDto>>> getSmartMatches(
+            @PathVariable long id,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok("Đã đối sánh thành công",
+                        smartMatchService.findSmartMatches(id, user == null ? null : user.getId())));
     }
 }

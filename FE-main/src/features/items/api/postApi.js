@@ -14,6 +14,11 @@ export async function getPostDetail(id) {
   return response.data;
 }
 
+export async function getSmartMatches(id) {
+  const response = await apiClient.get(`/posts/${encodeURIComponent(id)}/smart-matches`);
+  return response.data;
+}
+
 export async function getPostCategories() {
   const response = await apiClient.get('/posts/categories');
   return response.data;

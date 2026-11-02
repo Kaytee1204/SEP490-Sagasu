@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, UserRound, MapPin } from 'lucide-react';
+import { ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
 import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
 import PrivateIdentifiersEditor from '../components/detail/PrivateIdentifiersEditor';
+import SmartMatchModal from '../components/detail/SmartMatchModal';
 import './ItemDetailPage.css';
 
 const STATUS_LABELS = {
@@ -34,6 +35,7 @@ export default function ItemDetailPage() {
 function PostDetail({ id, onRetry }) {
   const [result, setResult] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
+  const [showSmartMatch, setShowSmartMatch] = useState(false);
   const validId = /^[1-9]\d*$/.test(id);
 
   useEffect(() => {
@@ -87,7 +89,64 @@ function PostDetail({ id, onRetry }) {
           activeImage={activeImage} onSelectImage={setActiveImage} />
         <section className="post-detail-info" aria-label="Thông tin bài đăng">
           <ItemInfoSection item={item} />
-          <div className="flex flex-wrap items-center gap-3"><p className="flex items-center gap-2 text-sm text-slate-600"><UserRound size={17} aria-hidden="true" />Người đăng: <strong className="text-slate-800">{post.authorName || 'Chưa cập nhật tên'}</strong></p><OfficeReceiptBadge receipt={post.officeReceipt} /></div>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="flex items-center gap-2 text-sm text-slate-600">
+              <UserRound size={17} aria-hidden="true" />Người đăng: <strong className="text-slate-800">{post.authorName || 'Chưa cập nhật tên'}</strong>
+            </p>
+            <OfficeReceiptBadge receipt={post.officeReceipt} />
+          </div>
+
+          {/* Action & Smart Match Buttons */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '14px', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => setShowSmartMatch(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9.5px 18px',
+                borderRadius: '8px',
+                border: '1px solid #0d9488',
+                background: '#f0fdfa',
+                color: '#0f766e',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                transition: 'background 150ms',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#e6fffa')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#f0fdfa')}
+            >
+              <SearchCheck size={18} />
+              <span>Tìm đồ vật trùng khớp</span>
+            </button>
+
+            {post.postType === 'FOUND' && !post.canEditOwnPost && (
+              <Link
+                to={`/xac-minh/${post.id}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9.5px 18px',
+                  borderRadius: '8px',
+                  border: '1px solid #2563eb',
+                  background: '#2563eb',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textDecoration: 'none',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                }}
+              >
+                <span>Xác minh nhận đồ (Claim)</span>
+                <ArrowRight size={15} />
+              </Link>
+            )}
+          </div>
+
           {post.officeReceipt && <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-label="Thông tin nhà trường tiếp nhận">
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được nhà trường lưu giữ'}</h2>
             <dl className="space-y-3 text-sm leading-6"><div><dt className="text-slate-600">{post.officeReceipt.status === 'RETURNED' ? 'Nơi lưu trữ trước khi trao trả' : 'Nơi lưu trữ'}</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.storageLocationName || 'Liên hệ văn phòng tiếp nhận'}</dd></div><div><dt className="text-slate-600">Cán bộ tiếp nhận</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.receivedBy || 'Chưa cập nhật tên'}</dd></div><div><dt className="text-slate-600">Thời điểm tiếp nhận</dt><dd className="font-semibold text-slate-900">{new Date(post.officeReceipt.receivedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</dd></div></dl>
@@ -107,6 +166,13 @@ function PostDetail({ id, onRetry }) {
           {post.canEditOwnPost && <PrivateIdentifiersEditor key={post.id} postId={post.id} />}
         </section>
       </div>
+
+      {/* Smart Match Modal */}
+      <SmartMatchModal
+        isOpen={showSmartMatch}
+        onClose={() => setShowSmartMatch(false)}
+        post={post}
+      />
     </main>
   );
 }
