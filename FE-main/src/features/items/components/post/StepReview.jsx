@@ -1,7 +1,7 @@
 import React from 'react';
 import { ShieldCheck, MapPin, Clock } from 'lucide-react';
 
-export default function StepReview({ formData, postType, requiresReview = false }) {
+export default function StepReview({ formData, postType }) {
   const officeHandover = postType === 'found' && formData.custodyMode === 'OFFICE';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -52,7 +52,7 @@ export default function StepReview({ formData, postType, requiresReview = false 
       {officeHandover && <p>Lịch giao đồ bạn đề xuất: <strong>{formData.handoverDate} {formData.handoverTime}</strong> (giờ Việt Nam).
         Lịch này đang chờ Approver xem xét, chưa phải lịch hẹn được xác nhận.</p>}
       <p>Dấu hiệu riêng tư: {formData.privateIdentifiers?.trim() ? 'Đã nhập, sẽ lưu riêng và không công khai.' : 'Chưa nhập; có thể bổ sung sau khi đăng.'}</p>
-      <p>{requiresReview || officeHandover ? <>Bài đăng sẽ <strong>chờ Approver duyệt</strong> trước khi hiển thị công khai.</>
+      <p>{officeHandover ? <>Bài đăng sẽ <strong>chờ Approver duyệt</strong> trước khi hiển thị công khai.</>
         : <>Bài đăng sẽ <strong>hiển thị ngay</strong> sau khi đăng thành công.</>}</p>
     </div>
   );

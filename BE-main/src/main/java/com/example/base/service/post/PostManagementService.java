@@ -55,6 +55,7 @@ public class PostManagementService {
     private final PlatformTransactionManager transactionManager;
     private final EntityManager entityManager;
     private final ItemReceiptRepository receipts;
+    private final com.example.base.repository.ClaimRepository claims;
 
     /** UC18: page IDs first, then load images/category without collection-fetch pagination. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -130,13 +131,16 @@ public class PostManagementService {
     public void delete(long postId, DeletePostRequest request, CustomUserDetails user) {
         Post post = lockOwnedPost(postId, PostAccessPolicy.requireAuthor(user));
         requireNoReceipt(post);
+        if (claims.existsByPost_IdAndStatusIn(postId, Set.of("PENDING", "APPROVED"))) {
+            throw new AppException(ErrorCode.CLAIM_POST_DELETE_BLOCKED);
+        }
         post.softDelete(request.reason());
         posts.flush();
     }
 
     private UpdateResult saveUpdate(long postId, long ownerId, UpdatePostRequest request,
                                     List<ValidatedImage> newImages, List<String> uploadedKeys) {
-        var author = accounts.findActiveAccountForPostCreation(ownerId)
+        accounts.findActiveAccountForPostCreation(ownerId)
                 .orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN));
         Post post = lockOwnedPost(postId, ownerId);
         requireEditable(post);
@@ -146,7 +150,7 @@ public class PostManagementService {
 
         List<String> removedKeys = findRemovedImageKeys(post, request.keptImageIds());
         post.edit(category, request.title(), request.description(), request.locationText(),
-                request.eventAt(), request.custodyMode(), request.handoverRequestedAt(), author.getRole());
+                request.eventAt(), request.custodyMode(), request.handoverRequestedAt());
         int finalImageCount = request.keptImageIds().size() + newImages.size();
         moveImagesToTemporaryPositions(post, finalImageCount);
         post.retainImages(request.keptImageIds());
@@ -186,9 +190,9 @@ public class PostManagementService {
         }
     }
 
-    // TODO: Add claim/dispute checks when those use cases and their data model are implemented.
     private void requireEditable(Post post) {
         requireNoReceipt(post);
+        if (claims.existsByPost_Id(post.getId())) throw new AppException(ErrorCode.CLAIM_POST_EDIT_BLOCKED);
         if (post.getDeletedAt() != null || !"OPEN".equals(post.getStatus())
                 || "HIDDEN".equals(post.getModerationStatus())) {
             throw new AppException(ErrorCode.POST_NOT_EDITABLE);
@@ -274,6 +278,7 @@ public class PostManagementService {
 
     private String getEditBlockedReason(Post post, long viewerId) {
         if (!Objects.equals(post.getAccount().getId(), viewerId)) return "Bài được đăng hộ tài khoản khác";
+        if (claims.existsByPost_Id(post.getId())) return "Bài đã có hồ sơ claim";
         if (!"OPEN".equals(post.getStatus())) return "Bài không còn ở trạng thái mở";
         if ("HIDDEN".equals(post.getModerationStatus())) return "Bài đã bị ẩn bởi kiểm duyệt";
         return null;
@@ -281,6 +286,7 @@ public class PostManagementService {
 
     private String getDeleteBlockedReason(Post post, long viewerId) {
         if (!Objects.equals(post.getAccount().getId(), viewerId)) return "Bài được đăng hộ tài khoản khác";
+        if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("PENDING", "APPROVED"))) return "Bài còn claim đang chờ hoặc đã được chấp thuận";
         return null;
     }
 

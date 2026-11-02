@@ -93,7 +93,7 @@ public class AccountController {
     @PutMapping("/{id}")
     @Operation(
             summary = "Update thông tin tài khoản (fullName, email, phone, password, role, status...)",
-            description = "Chỉ ADMIN mới được phép thay đổi Role. MANAGER được sửa các thông tin khác của tài khoản thuộc role USER, CHECKER, APPROVER."
+            description = "Chỉ ADMIN mới được phép thay đổi Role. MANAGER được sửa các thông tin khác của tài khoản thuộc role USER, APPROVER."
     )
     public ResponseEntity<ApiResponse<AccountDto>> updateAccount(
             @PathVariable Long id,

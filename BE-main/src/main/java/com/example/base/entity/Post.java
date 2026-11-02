@@ -89,7 +89,7 @@ public class Post {
         post.description = description;
         post.locationText = locationText;
         post.eventAt = eventAt;
-        post.moderationStatus = owner.getRole() == AccountRole.USER ? "VISIBLE" : "PENDING";
+        post.moderationStatus = "VISIBLE";
         return post;
     }
 
@@ -125,8 +125,7 @@ public class Post {
     }
 
     public void edit(Category category, String title, String description, String locationText,
-                     OffsetDateTime eventAt, String custodyMode, OffsetDateTime handoverRequestedAt,
-                     AccountRole authorRole) {
+                     OffsetDateTime eventAt, String custodyMode, OffsetDateTime handoverRequestedAt) {
         this.category = category;
         this.title = title.strip();
         this.description = description.strip();
@@ -135,9 +134,9 @@ public class Post {
         this.custodyMode = custodyMode;
         this.handoverRequestedAt = handoverRequestedAt;
         this.updatedAt = OffsetDateTime.now();
-        // Rejected content must be resubmitted even if the author is internal.
+        // Rejected content must still be reviewed when resubmitted.
         boolean officeHandover = "FOUND".equals(postType) && "OFFICE".equals(custodyMode);
-        boolean needsReview = officeHandover || authorRole != AccountRole.USER || "REJECTED".equals(moderationStatus);
+        boolean needsReview = officeHandover || "REJECTED".equals(moderationStatus);
         moderationStatus = needsReview ? "PENDING" : "VISIBLE";
         moderatedBy = null;
         moderatedAt = null;
@@ -156,6 +155,9 @@ public class Post {
         deletedAt = OffsetDateTime.now();
         deletionReason = reason.strip();
     }
+
+    public void reserveForClaim() { status = "RESERVED"; }
+    public void reopenAfterClaimCancellation() { status = "OPEN"; }
 
     @PrePersist
     void onCreate() {

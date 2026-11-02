@@ -77,8 +77,8 @@ public class PostController {
     }
 
     @PostMapping(value = "/lost", consumes = "multipart/form-data")
-    @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "UC15: Đăng bài Lost; USER hiển thị ngay", description = "Phần data là JSON; images là 0–5 ảnh JPG/PNG, tối đa 5 MB/ảnh. Người đăng lấy từ JWT.")
+    @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
+    @Operation(summary = "UC15: Mọi vai trò được đăng Lost và hiển thị ngay", description = "Phần data là JSON; images là 0–5 ảnh JPG/PNG, tối đa 5 MB/ảnh. Người đăng lấy từ JWT.")
     public ResponseEntity<ApiResponse<CreatedPostDto>> createLost(
             @Valid @RequestPart("data") CreateLostPostRequest request,
             @RequestPart(value = "images", required = false) List<MultipartFile> images,
@@ -88,7 +88,7 @@ public class PostController {
     }
 
     @PostMapping(value = "/found", consumes = "multipart/form-data")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
     @Operation(summary = "UC16: Đăng Found; giao Approver luôn PENDING và phải đề xuất lịch giao đồ")
     public ResponseEntity<ApiResponse<CreatedPostDto>> createFound(
             @Valid @RequestPart("data") CreateFoundPostRequest request,

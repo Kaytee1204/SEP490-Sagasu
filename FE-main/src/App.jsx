@@ -11,6 +11,8 @@ import SmartMatchPage from '@/features/smart-match/pages/SmartMatchPage';
 import MyPostsPage from '@/features/profile/pages/MyPostsPage';
 import EditPostPage from '@/features/items/pages/EditPostPage';
 import ClaimItemPage from '@/features/items/pages/ClaimItemPage';
+import MyClaimsPage, { PostClaimsPage } from '@/features/claims/pages/MyClaimsPage';
+import ClaimDetailPage, { LegacyClaimRedirect } from '@/features/claims/pages/ClaimDetailPage';
 import AdminLayout from '@/components/layouts/admin/AdminLayout';
 import MainLayout from '@/components/layouts/MainLayout';
 import AdminItemsPage from '@/features/admin/pages/AdminItemsPage';
@@ -67,6 +69,10 @@ function AppRoutes() {
 
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>
+        <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
+        <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />
+        <Route path="/bai-dang/:postId/claims/:claimId" element={<ProtectedRoute><ClaimDetailPage /></ProtectedRoute>} />
+        <Route path="/bai-dang/:id/claims" element={<ProtectedRoute><PostClaimsPage /></ProtectedRoute>} />
         <Route path="/sua-tin/:id" element={<ProtectedRoute><EditPostPage /></ProtectedRoute>} />
         <Route path="/" element={<RootHomeRoute />} />
         <Route path="/tim-kiem" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />

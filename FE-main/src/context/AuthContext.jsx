@@ -142,7 +142,6 @@ export function AuthProvider({ children }) {
   const isAdmin = role === 'ADMIN' || role === 'MANAGER';
   const isPureAdmin = role === 'ADMIN';
   const isManager = role === 'MANAGER';
-  const isChecker = role === 'CHECKER';
   const isApprover = role === 'APPROVER';
 
   const value = {
@@ -153,7 +152,6 @@ export function AuthProvider({ children }) {
     isAdmin,
     isPureAdmin,
     isManager,
-    isChecker,
     isApprover,
     login,
     loginWithGoogle,

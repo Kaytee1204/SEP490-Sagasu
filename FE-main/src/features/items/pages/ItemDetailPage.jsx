@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
+import { getLatestClaimOnPost } from '@/features/claims/api/claimApi';
+import { claimDetailPath } from '@/features/claims/claimUtils';
 import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
@@ -28,13 +30,14 @@ function imageUrl(value) {
 }
 
 export default function ItemDetailPage() {
+  const { user } = useAuth();
   const { id } = useParams();
   const [attempt, setAttempt] = useState(0);
-  return <PostDetail key={`${id}:${attempt}`} id={id} onRetry={() => setAttempt(value => value + 1)} />;
+  return <PostDetail key={`${user?.id}:${id}:${attempt}`} id={id} onRetry={() => setAttempt(value => value + 1)} />;
 }
 
 function PostDetail({ id, onRetry }) {
-  const { user, isAdmin, isManager } = useAuth();
+  const { isAdmin, isManager } = useAuth();
   const [result, setResult] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showSmartMatch, setShowSmartMatch] = useState(false);
@@ -44,8 +47,10 @@ function PostDetail({ id, onRetry }) {
     let cancelled = false;
     if (!validId) return;
     getPostDetail(id)
-      .then(post => {
-        if (!cancelled) setResult({ id, post });
+      .then(async post => {
+        const myClaim = post.postType === 'FOUND' && !post.canEditOwnPost
+          ? await getLatestClaimOnPost(id).catch(() => null) : null;
+        if (!cancelled) setResult({ id, post, myClaim });
       })
       .catch(error => {
         if (!cancelled) setResult({ id, error: error.message || 'Không tải được bài đăng.' });
@@ -127,9 +132,10 @@ function PostDetail({ id, onRetry }) {
             </button>
             )}
 
-            {post.postType === 'FOUND' && !post.canEditOwnPost && (
+            {!post.canEditOwnPost && (current.myClaim || (post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
+              && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN')) && (
               <Link
-                to={`/xac-minh/${post.id}`}
+                to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -145,11 +151,13 @@ function PostDetail({ id, onRetry }) {
                   boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                 }}
               >
-                <span>Xác minh nhận đồ (Claim)</span>
+                <span>{current.myClaim ? 'Xem claim đã gửi' : 'Xác minh nhận đồ (Claim)'}</span>
                 <ArrowRight size={15} />
               </Link>
             )}
           </div>
+
+          {post.postType === 'FOUND' && post.canEditOwnPost && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
 
           {post.officeReceipt && <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-label="Thông tin nhà trường tiếp nhận">
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được nhà trường lưu giữ'}</h2>

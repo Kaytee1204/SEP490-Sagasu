@@ -7,9 +7,11 @@ import ProfileStatCard from '../components/ProfileStatCard';
 import ProfileSidebarCard from '../components/ProfileSidebarCard';
 import PostsTab from '../components/PostsTab';
 import SecurityTab from '../components/SecurityTab';
+import MyClaimsPage from '@/features/claims/pages/MyClaimsPage';
 
 const TABS = [
   { key: 'posts', label: 'Tin đăng của tôi' },
+  { key: 'claims', label: 'Claim của tôi' },
   { key: 'security', label: 'Bảo mật & Quyền riêng tư' },
 ];
 
@@ -245,6 +247,7 @@ export default function ProfilePage() {
                 {/* Tab content */}
                 <div style={{ padding: '22px' }}>
                   {activeTab === 'posts' && <PostsTab />}
+                  {activeTab === 'claims' && <MyClaimsPage embedded />}
                   {activeTab === 'security' && <SecurityTab />}
                 </div>
               </div>

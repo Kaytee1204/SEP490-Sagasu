@@ -13,6 +13,10 @@ import java.util.Optional;
 import java.time.OffsetDateTime;
 
 public interface PostRepository extends JpaRepository<Post, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Post p where p.id=:id")
+    Optional<Post> findForClaimUpdate(@Param("id") long id);
+
     // Reuse the generated public-text tsvector and its GIN index. Private clues are excluded.
     String VISIBLE_SEARCH = """
             from post p where p.moderation_status='VISIBLE' and p.deleted_at is null

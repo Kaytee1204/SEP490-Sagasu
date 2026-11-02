@@ -24,6 +24,7 @@ export default function MyPostCard({ post, onDelete }) {
       {post.deleteBlockedReason && <p className="my-post-note">Không thể xóa: {post.deleteBlockedReason}.</p>}
     </div>
     <div className="my-post-actions">
+      {post.postType === 'FOUND' && <Link className="btn btn-ghost" to={`/bai-dang/${post.id}/claims`}>Claim nhận đồ</Link>}
       {post.canEdit && <Link className="btn btn-ghost" to={`/sua-tin/${post.id}`}>Sửa bài</Link>}
       {post.canDelete && <button type="button" className="btn btn-ghost" onClick={() => onDelete(post)}>Xóa bài</button>}
     </div>

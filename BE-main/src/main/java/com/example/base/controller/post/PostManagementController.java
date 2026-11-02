@@ -18,7 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/posts")
-@PreAuthorize("hasRole('USER')")
+@PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
 @Tag(name = "3. Posts", description = "Bài đăng đồ thất lạc")
 public class PostManagementController {
     private final PostManagementService management;
