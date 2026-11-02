@@ -6,6 +6,7 @@ import com.example.base.entity.PostImage;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.repository.PostRepository;
+import com.example.base.storage.ImageStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,12 +29,14 @@ public class SmartMatchService {
     private static final Logger log = LoggerFactory.getLogger(SmartMatchService.class);
 
     private final PostRepository postRepository;
+    private final ImageStorage imageStorage;
 
     @Value("${app.ai.service-url:http://localhost:8000}")
     private String aiServiceUrl;
 
-    public SmartMatchService(PostRepository postRepository) {
+    public SmartMatchService(PostRepository postRepository, ImageStorage imageStorage) {
         this.postRepository = postRepository;
+        this.imageStorage = imageStorage;
     }
 
     @Transactional(readOnly = true)
@@ -75,8 +78,8 @@ public class SmartMatchService {
     @SuppressWarnings("unchecked")
     private List<SmartMatchItemDto> callPythonAiService(Post source, List<Post> candidates) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(2500);
-        factory.setReadTimeout(5000);
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(12000);
         RestTemplate restTemplate = new RestTemplate(factory);
 
         Map<String, Object> sourceItemMap = toItemMap(source);
@@ -242,7 +245,9 @@ public class SmartMatchService {
     private String extractFirstImageUrl(Post post) {
         if (post.getImages() != null && !post.getImages().isEmpty()) {
             PostImage first = post.getImages().get(0);
-            return first != null ? first.getImageUrl() : null;
+            if (first != null && imageStorage != null) {
+                return imageStorage.readUrl(first.getStorageKey(), first.getImageUrl());
+            }
         }
         return null;
     }

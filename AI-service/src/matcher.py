@@ -21,15 +21,19 @@ class SmartMatcher:
         self.gating = VisualGatingLayer()
 
     def _fetch_image(self, url: Optional[str]) -> Optional[Image.Image]:
-        if not url or not url.startswith(("http://", "https://")):
+        if not url or not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            logger.info(f"Image URL is empty or invalid: {url}")
             return None
         try:
-            resp = requests.get(url, timeout=3.0)
+            resp = requests.get(url, timeout=8.0)
             if resp.status_code == 200:
                 img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+                logger.info(f"Successfully downloaded image: {img.size} from {url[:60]}...")
                 return img
+            else:
+                logger.warning(f"HTTP {resp.status_code} fetching image from {url[:80]}...")
         except Exception as e:
-            logger.debug(f"Failed to fetch image from {url}: {e}")
+            logger.warning(f"Error fetching image: {e} from {url[:80]}...")
         return None
 
     def match(self, source_item: Dict[str, Any], candidate_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -37,7 +41,8 @@ class SmartMatcher:
             return []
 
         # 1. Process Source Item
-        src_img_raw = self._fetch_image(source_item.get("imageUrl"))
+        src_img_url = source_item.get("imageUrl")
+        src_img_raw = self._fetch_image(src_img_url)
         src_has_img = src_img_raw is not None
         src_crop = self.cropper.crop_salient_object(src_img_raw) if src_has_img else None
         src_vis_vec = self.clip.encode_image(src_crop) if src_crop else None
@@ -49,7 +54,8 @@ class SmartMatcher:
         results = []
         for cand in candidate_items:
             # 2. Process Candidate Item
-            cand_img_raw = self._fetch_image(cand.get("imageUrl"))
+            cand_img_url = cand.get("imageUrl")
+            cand_img_raw = self._fetch_image(cand_img_url)
             cand_has_img = cand_img_raw is not None
             cand_crop = self.cropper.crop_salient_object(cand_img_raw) if cand_has_img else None
             cand_vis_vec = self.clip.encode_image(cand_crop) if cand_crop else None
@@ -62,6 +68,7 @@ class SmartMatcher:
             # Visual similarity
             if src_vis_vec is not None and cand_vis_vec is not None:
                 vis_sim = self.clip.cosine_similarity(src_vis_vec, cand_vis_vec)
+                logger.info(f"Matched Visual CLIP similarity: {vis_sim:.3f}")
             elif src_vis_vec is not None and cand_text_vec is not None:
                 vis_sim = self.clip.cosine_similarity(src_vis_vec, cand_text_vec)
             elif src_text_vec is not None and cand_vis_vec is not None:
@@ -73,7 +80,6 @@ class SmartMatcher:
             if src_text_vec is not None and cand_text_vec is not None:
                 text_sim = self.clip.cosine_similarity(src_text_vec, cand_text_vec)
             else:
-                # Lexical overlap fallback
                 w1 = set(src_text.lower().split())
                 w2 = set(cand_text.lower().split())
                 overlap = len(w1.intersection(w2))
@@ -82,8 +88,9 @@ class SmartMatcher:
             # Color similarity (HSV)
             if src_has_img and cand_has_img:
                 color_sim = self.hsv.compare_histograms(src_hsv_hist, cand_hsv_hist)
+                logger.info(f"Matched HSV Color similarity: {color_sim:.3f}")
             else:
-                color_sim = 0.5  # Neutral fallback
+                color_sim = 0.5
 
             # Spatio-temporal similarity
             st_sim = self.spatio_temporal.compute(
@@ -105,7 +112,7 @@ class SmartMatcher:
 
             # 5. Formulate human-readable reason
             reasons = []
-            if gated["breakdown"]["visual"] >= 80:
+            if gated["breakdown"]["visual"] >= 80 and src_has_img and cand_has_img:
                 reasons.append("Đặc điểm hình ảnh rất tương đồng")
             if gated["breakdown"]["color"] >= 80 and src_has_img and cand_has_img:
                 reasons.append("Trùng khớp màu sắc chủ đạo")
