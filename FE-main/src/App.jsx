@@ -54,9 +54,14 @@ function AppRoutes() {
       {/* ── AUTH ROUTES (Dành cho tất cả các Role) ── */}
       <Route
         path="/dang-nhap"
-        element={isAuthenticated ? <Navigate to={postLoginRedirect} replace /> : <AuthPage />}
+        element={isAuthenticated ? <Navigate to={postLoginRedirect} replace /> : <AuthPage defaultMode="login" />}
       />
       <Route path="/login" element={<Navigate to="/dang-nhap" replace />} />
+      <Route
+        path="/quen-mat-khau"
+        element={isAuthenticated ? <Navigate to={postLoginRedirect} replace /> : <AuthPage defaultMode="forgot_email" />}
+      />
+      <Route path="/forgot-password" element={<Navigate to="/quen-mat-khau" replace />} />
       <Route path="/dang-ky" element={<Navigate to="/dang-nhap" replace />} />
       <Route path="/register" element={<Navigate to="/dang-nhap" replace />} />
 

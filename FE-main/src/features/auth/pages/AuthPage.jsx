@@ -4,7 +4,7 @@ import SagasuLogoColor from '@/assets/Sagasu_logo_color.svg';
 import AuthLeftPanel from '../components/AuthLeftPanel';
 import LoginForm from '../components/LoginForm';
 
-export default function AuthPage() {
+export default function AuthPage({ defaultMode = 'login' }) {
   return (
     <div className="auth-page" style={{ gridTemplateColumns: '1.45fr 1fr', minHeight: '100dvh' }}>
       {/* ── LEFT PANEL (Giữ nguyên) ── */}
@@ -30,7 +30,7 @@ export default function AuthPage() {
         </div>
 
         <div style={{ width: '100%', maxWidth: '410px' }}>
-          <LoginForm />
+          <LoginForm initialMode={defaultMode} />
         </div>
       </div>
     </div>
