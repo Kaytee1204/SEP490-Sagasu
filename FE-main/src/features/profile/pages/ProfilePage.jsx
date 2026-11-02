@@ -183,22 +183,13 @@ export default function ProfilePage() {
       <div style={{ flex: 1, padding: '24px 0 48px' }}>
         <div className="container">
           <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 330px',
-              gap: '24px',
-              alignItems: 'flex-start',
-            }}
+            className="grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-6 items-start"
           >
             {/* ── LEFT: Main column ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Stats grid */}
               <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '16px',
-                }}
+                className="grid grid-cols-1 sm:grid-cols-3 gap-4"
               >
                 {profileUser.stats.map((s, i) => (
                   <ProfileStatCard key={i} stat={s} index={i} />

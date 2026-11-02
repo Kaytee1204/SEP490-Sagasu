@@ -1477,7 +1477,25 @@ body {
   font-size: 0.8125rem;
 }
 
-/* === RESPONSIVE === */
+/* === RESPONSIVE BREAKPOINTS (Desktop baseline preserved 100%) === */
+
+/* Prevent horizontal page dragging across all viewports */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+img, video, iframe {
+  max-width: 100%;
+}
+
+/* 1. Laptop & Small Desktop (1024px - 1199px) */
+@media (max-width: 1199px) {
+  .container {
+    padding-inline: var(--space-5);
+  }
+}
+
 @media (max-width: 1024px) {
   .items-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -1493,6 +1511,7 @@ body {
   }
 }
 
+/* 2. Tablet (768px - 1023px) */
 @media (max-width: 768px) {
   .auth-page {
     grid-template-columns: 1fr;
@@ -1503,7 +1522,7 @@ body {
   }
 
   .auth-panel-right {
-    padding: var(--space-8) var(--space-6);
+    padding: var(--space-8) var(--space-5);
     min-height: 100dvh;
   }
 
@@ -1531,6 +1550,13 @@ body {
 
   .footer-grid {
     grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: var(--space-4);
+    text-align: center;
   }
 
   .nav-links {
@@ -1540,11 +1566,84 @@ body {
   .container {
     padding-inline: var(--space-4);
   }
+
+  .navbar-inner {
+    gap: var(--space-3);
+  }
 }
 
+/* 3. Phablet & Large Mobile (640px) */
+@media (max-width: 640px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-row {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-row-item {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-row-item:last-child {
+    border-bottom: none;
+  }
+}
+
+/* 4. Mobile (375px - 767px) */
 @media (max-width: 480px) {
   .items-grid {
     grid-template-columns: 1fr;
+  }
+
+  .container {
+    padding-inline: var(--space-3);
+  }
+
+  .container-sm {
+    padding-inline: var(--space-3);
+  }
+
+  .auth-panel-right {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .card-body {
+    padding: var(--space-4);
+  }
+
+  .btn {
+    font-size: 0.875rem;
+  }
+}
+
+/* 5. Small Mobile (< 375px) */
+@media (max-width: 374px) {
+  .container {
+    padding-inline: 10px;
+  }
+
+  .container-sm {
+    padding-inline: 10px;
+  }
+
+  .btn {
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.8125rem;
+  }
+
+  .text-display-xl {
+    font-size: 1.75rem;
+  }
+
+  .text-display-lg {
+    font-size: 1.5rem;
+  }
+
+  .text-display-md {
+    font-size: 1.2rem;
   }
 }
 

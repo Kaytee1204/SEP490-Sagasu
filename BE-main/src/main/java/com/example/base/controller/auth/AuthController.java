@@ -16,7 +16,7 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 @Tag(
         name = "1. Auth & OTP",
-        description = "Đăng nhập (Role USER cần xác thực OTP, các role khác không cần OTP), Đổi mật khẩu và Khôi phục mật khẩu"
+        description = "Đăng nhập trực tiếp cho mọi role không cần OTP, Đổi mật khẩu và Khôi phục mật khẩu qua mã OTP"
 )
 public class AuthController {
 
@@ -29,7 +29,7 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(
             summary = "Đăng nhập bằng Email & Mật khẩu (ADMIN: admin/123 | MANAGER: khanhtrinh1204@gmail.com/123)",
-            description = "Đăng nhập chỉ cần email và mật khẩu. Đối với role USER sẽ gửi mã OTP 6 chữ số về email (trả về requiresOtp = true), sau đó gọi /api/auth/verify-otp để nhận JWT Token. Đối với các role còn lại (ADMIN, MANAGER, CHECKER, APPROVER) sẽ trả thẳng JWT accessToken mà không cần mã OTP."
+            description = "Đăng nhập chỉ cần email và mật khẩu, trả thẳng JWT accessToken và thông tin tài khoản cho mọi role."
     )
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Đăng nhập thành công", authService.login(request)));

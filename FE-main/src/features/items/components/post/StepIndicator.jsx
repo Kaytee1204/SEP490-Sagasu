@@ -9,7 +9,7 @@ export default function StepIndicator({ currentStep, steps }) {
           {/* Node */}
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-            position: 'relative', width: '80px'
+            position: 'relative', width: 'clamp(64px, 22vw, 80px)'
           }}>
             <div style={{
               width: '32px', height: '32px', borderRadius: '50%',
@@ -33,7 +33,7 @@ export default function StepIndicator({ currentStep, steps }) {
           {/* Connector */}
           {index < steps.length - 1 && (
             <div style={{
-              width: '64px', height: '2px',
+              width: 'clamp(28px, 9vw, 64px)', height: '2px',
               background: index < currentStep ? 'var(--accent)' : 'var(--border-strong)',
               margin: '0 -20px 24px -20px', zIndex: 1,
               transition: 'all 300ms ease'

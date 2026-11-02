@@ -84,7 +84,7 @@ export default function DynamicSagasuBanner() {
               </div>
 
               {/* CARD 1: Tin báo mất đồ */}
-              <div className={`absolute top-1 left-0 sm:left-2 w-60 p-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-rose-500/30 shadow-xl transition-all duration-500 ${isScanning ? 'scale-95 opacity-70' : 'scale-100'}`}>
+              <div className={`absolute top-1 left-0 sm:left-2 w-[190px] xs:w-[215px] sm:w-60 p-2.5 sm:p-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-rose-500/30 shadow-xl transition-all duration-500 ${isScanning ? 'scale-95 opacity-70' : 'scale-100'}`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
                     BÁO MẤT
@@ -99,7 +99,7 @@ export default function DynamicSagasuBanner() {
               </div>
 
               {/* CARD 2: Tin báo nhặt được */}
-              <div className={`absolute bottom-1 right-0 sm:right-2 w-60 p-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-emerald-500/30 shadow-xl transition-all duration-500 ${isScanning ? 'scale-95 opacity-70' : 'scale-100'}`}>
+              <div className={`absolute bottom-1 right-0 sm:right-2 w-[190px] xs:w-[215px] sm:w-60 p-2.5 sm:p-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-emerald-500/30 shadow-xl transition-all duration-500 ${isScanning ? 'scale-95 opacity-70' : 'scale-100'}`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                     NHẶT ĐƯỢC

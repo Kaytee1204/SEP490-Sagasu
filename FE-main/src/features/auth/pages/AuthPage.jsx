@@ -6,8 +6,8 @@ import LoginForm from '../components/LoginForm';
 
 export default function AuthPage({ defaultMode = 'login' }) {
   return (
-    <div className="auth-page" style={{ gridTemplateColumns: '1.45fr 1fr', minHeight: '100dvh' }}>
-      {/* ── LEFT PANEL (Giữ nguyên) ── */}
+    <div className="auth-page">
+      {/* ── LEFT PANEL (Giữ nguyên 100% Desktop) ── */}
       <AuthLeftPanel />
 
       {/* ── RIGHT PANEL ── */}
@@ -19,7 +19,6 @@ export default function AuthPage({ defaultMode = 'login' }) {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '32px 28px',
         }}
       >
         {/* Mobile top bar */}

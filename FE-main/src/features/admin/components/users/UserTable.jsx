@@ -6,6 +6,7 @@ export default function UserTable({ filteredUsers, openCrudModal, setActionModal
   const navigate = useNavigate();
 
   return (
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
       <thead>
         <tr style={{ background: '#f8fafc', borderBottom: '1px solid rgba(0,0,0,0.06)', color: 'var(--text-secondary)' }}>
@@ -179,5 +180,6 @@ export default function UserTable({ filteredUsers, openCrudModal, setActionModal
         )}
       </tbody>
     </table>
+    </div>
   );
 }

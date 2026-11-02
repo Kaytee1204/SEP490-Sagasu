@@ -27,10 +27,9 @@ export default function ProcessSection() {
             return (
               <div
                 key={i}
-                className="animate-fadeInUp group relative z-10 px-6 py-7 bg-[var(--bg-surface)] border border-[var(--border)] transition-all duration-250 hover:bg-[var(--teal-50)] hover:-translate-y-1 hover:z-20 hover:shadow-md hover:border-[#1e6b6b4d] hover:rounded-xl md:border-r-0 md:last:border-r"
+                className="animate-fadeInUp group relative z-10 px-6 py-7 bg-[var(--bg-surface)] border border-[var(--border)] transition-all duration-250 hover:bg-[var(--teal-50)] hover:-translate-y-1 hover:z-20 hover:shadow-md hover:border-[#1e6b6b4d] hover:rounded-xl border-b-0 last:border-b md:border-b md:border-r-0 md:last:border-r rounded-none first:rounded-t-2xl last:rounded-b-2xl md:first:rounded-t-none md:first:rounded-l-2xl md:last:rounded-b-none md:last:rounded-r-2xl"
                 style={{
                   animationDelay: `${i * 0.09}s`,
-                  borderRadius: i === 0 ? 'var(--radius-xl) 0 0 var(--radius-xl)' : i === 3 ? '0 var(--radius-xl) var(--radius-xl) 0' : '0',
                 }}
               >
                 {/* Step icon circle */}

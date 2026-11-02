@@ -96,10 +96,7 @@ public class AuthService {
         account.setLockedUntil(null);
         accountRepository.save(account);
 
-        // Chỉ bắt buộc xác thực mã OTP qua email đối với role USER, các role còn lại không cần OTP
-        if (account.getRole() == AccountRole.USER) {
-            return createOtpLoginResponse(account, "LOGIN_OTP_REQUIRED");
-        }
+        // Đăng nhập trực tiếp không cần mã OTP cho tất cả role (chỉ dùng OTP khi Đổi/Quên mật khẩu)
 
         LoginResponse response = issueTokensForAccount(account);
         recordAuditLog(account, "LOGIN_PASSWORD", true, Map.of("role", account.getRole().name()));
@@ -166,9 +163,7 @@ public class AuthService {
         account.setLockedUntil(null);
         accountRepository.save(account);
 
-        if (account.getRole() == AccountRole.USER) {
-            return createOtpLoginResponse(account, "GOOGLE_LOGIN_OTP_REQUIRED");
-        }
+        // Đăng nhập Google trực tiếp không cần mã OTP cho tất cả role
 
         LoginResponse response = issueTokensForAccount(account);
         recordAuditLog(account, "LOGIN_GOOGLE", true, Map.of("email", account.getEmail(), "role", account.getRole().name()));

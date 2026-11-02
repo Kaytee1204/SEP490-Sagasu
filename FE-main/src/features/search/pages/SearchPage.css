@@ -75,6 +75,15 @@
 }
 @media (max-width: 480px) {
   .post-list-grid { grid-template-columns: minmax(0, 1fr); }
-  .post-search-filter-panel { padding: 18px; gap: 18px; }
+  .post-search-filter-panel { grid-template-columns: 1fr; padding: 16px; gap: 16px; }
+  .post-search-apply.btn { width: 100%; min-width: 0; }
+  .post-search-filter-actions { flex-direction: column; align-items: stretch; }
   .post-list-results-heading h1 { font-size: 1.125rem; }
+}
+
+@media (max-width: 375px) {
+  .post-search-bar.search-bar .search-input { flex-basis: 100%; }
+  .post-search-bar.search-bar .search-category { width: 100%; }
+  .post-search-bar.search-bar .search-btn { width: 100%; justify-content: center; }
+  .post-list-card-body { padding: 14px; }
 }
