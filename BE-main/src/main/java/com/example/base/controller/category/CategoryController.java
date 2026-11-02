@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/categories")
 @PreAuthorize("hasRole('MANAGER')")
-@Tag(name = "4. Category Management (MANAGER)", description = "Quản lý danh mục đồ thất lạc (Chỉ dành cho role MANAGER)")
+@Tag(name = "7. Category Management", description = "Quản lý danh mục đồ thất lạc (Chỉ dành cho role MANAGER)")
 public class CategoryController {
     private final CategoryService service;
     public CategoryController(CategoryService service) { this.service = service; }
