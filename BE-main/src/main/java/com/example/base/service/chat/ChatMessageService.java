@@ -26,6 +26,18 @@ public class ChatMessageService {
     private final ChatEvents events;
     private final ChatAttachmentRepository attachments;
     private final com.example.base.storage.ImageStorage storage;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    public ChatMessageDto.Receipts receipts(long id, long after, long through, int limit, CustomUserDetails user) {
+        long actor = policy.actor(user).getId(); chats.requireMember(id, actor);
+        if (after < 0 || through < after || limit < 1 || limit > 100) throw invalid();
+        var rows = jdbc.query("""
+            SELECT sequence_no,read_at FROM chat_message WHERE conversation_id=? AND sender_id=?
+              AND sequence_no>? AND sequence_no<=? AND read_at IS NOT NULL ORDER BY sequence_no LIMIT ?
+            """, (rs,n) -> new ChatMessageDto.Receipt(rs.getLong("sequence_no"), rs.getObject("read_at", java.time.OffsetDateTime.class)),
+                id, actor, after, through, limit + 1);
+        return new ChatMessageDto.Receipts(rows.stream().limit(limit).toList(), rows.size() > limit);
+    }
 
     public ChatMessageDto.Page history(long id, Long before, Long after, int size, CustomUserDetails user) {
         long actor = policy.actor(user).getId(); chats.requireMember(id, actor);
@@ -88,7 +100,7 @@ public class ChatMessageService {
     private ChatMessageDto dto(ChatMessage message, List<ChatAttachment> files) {
         return new ChatMessageDto(message.getId(), message.getSequenceNo(), message.getSenderId(), message.getBody(), message.getCreatedAt(),
                 files.stream().map(file -> new ChatMessageDto.Attachment(file.getId(), file.getOriginalName(), file.getMimeType(), file.getSizeBytes(),
-                    file.getMimeType().startsWith("image/") ? storage.readUrl(file.getStorageKey(), null) : null)).toList());
+                    file.getMimeType().startsWith("image/") ? storage.readUrl(file.getStorageKey(), null) : null)).toList(), message.getReadAt());
     }
     private AppException invalid() { return new AppException(ErrorCode.CHAT_INPUT_INVALID); }
 }

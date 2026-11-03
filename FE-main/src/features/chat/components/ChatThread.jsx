@@ -1,10 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '../ChatProvider';
-import { getMessages, sendMessage, sendAttachments, markChatRead } from '../api/chatApi';
+import { getMessages, sendMessage, sendAttachments, markChatRead, getReadReceipts } from '../api/chatApi';
 import ChatAttachments from './ChatAttachments';
 
-const merge = (old, incoming) => [...new Map([...old, ...incoming].map(row => [row.id, row])).values()].sort((a, b) => a.sequence - b.sequence);
+const merge = (old, incoming) => {
+  const indexed = new Map(old.map(row => [row.id, row]));
+  incoming.forEach(row => indexed.set(row.id, { ...row, readAt: row.readAt || indexed.get(row.id)?.readAt }));
+  return [...indexed.values()].sort((a, b) => a.sequence - b.sequence);
+};
+const receiptTime = value => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export default function ChatThread({ chat }) {
   const { user } = useAuth();
@@ -52,6 +57,25 @@ export default function ChatThread({ chat }) {
     return () => { disposed = true; synchronizer.current = null; };
   }, [chat.id]);
   useEffect(() => { synchronizer.current?.(); }, [revision]);
+  useEffect(() => {
+    let disposed = false;
+    const own = rows.filter(row => String(row.senderId) === String(user.id));
+    if (!own.length) return;
+    const through = Math.max(...own.map(row => row.sequence));
+    async function syncReceipts() {
+      let after = Math.min(...own.map(row => row.sequence)) - 1, more;
+      do {
+        const page = await getReadReceipts(chat.id, after, through);
+        if (disposed) return;
+        const receipts = new Map(page.items.map(item => [item.sequence, item.readAt]));
+        if (receipts.size) setRows(old => old.map(row => receipts.has(row.sequence) ? { ...row, readAt: receipts.get(row.sequence) } : row));
+        more = page.hasMore && page.items.length > 0;
+        if (more) after = page.items[page.items.length - 1].sequence;
+      } while (more && !disposed);
+    }
+    syncReceipts().catch(() => {});
+    return () => { disposed = true; };
+  }, [chat.id, revision, rows.length, user.id]);
   useEffect(() => {
     requestedRead.current = Math.max(requestedRead.current, chat.lastReadSequence);
     const element = viewport.current;
@@ -138,7 +162,8 @@ export default function ChatThread({ chat }) {
         {row.body && <p>{row.body}</p>}
         {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
         <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
-        {String(row.senderId) === String(user.id) && row.sequence <= chat.otherReadSequence && <small>Đã xem</small>}
+        {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
+          && <small>{row.readAt ? `Đã xem lúc ${receiptTime(row.readAt)}` : 'Đã xem'}</small>}
       </article>)}
     </div>
     {error && <p role="alert" className="chat-error">{error}</p>}

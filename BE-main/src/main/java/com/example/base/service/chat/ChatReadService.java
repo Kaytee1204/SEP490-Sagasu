@@ -20,12 +20,17 @@ public class ChatReadService {
         long actor = policy.actor(user).getId(); chats.requireMember(id, actor);
         if (sequence < 0 || (sequence > 0 && !messages.existsByConversationIdAndSequenceNo(id, sequence)))
             throw new AppException(ErrorCode.CHAT_INPUT_INVALID);
-        int updated = jdbc.update("""
-            UPDATE chat_participant SET last_read_sequence=?,last_read_at=now()
-            WHERE conversation_id=? AND account_id=? AND last_read_sequence<?
-            """, sequence, id, actor, sequence);
-        if (updated > 0) events.changed(id, "READ_UPDATED");
-        return jdbc.queryForObject("SELECT last_read_sequence FROM chat_participant WHERE conversation_id=? AND account_id=?",
+        long previous = jdbc.queryForObject("SELECT last_read_sequence FROM chat_participant WHERE conversation_id=? AND account_id=? FOR UPDATE",
                 Long.class, id, actor);
+        if (sequence <= previous) return previous;
+        var at = java.sql.Timestamp.from(java.time.Instant.now());
+        jdbc.update("""
+            UPDATE chat_message SET read_at=greatest(created_at,?::timestamptz)
+            WHERE conversation_id=? AND sender_id<>? AND sequence_no>? AND sequence_no<=? AND read_at IS NULL
+            """, at, id, actor, previous, sequence);
+        jdbc.update("UPDATE chat_participant SET last_read_sequence=?,last_read_at=? WHERE conversation_id=? AND account_id=?",
+                sequence, at, id, actor);
+        events.changed(id, "READ_UPDATED");
+        return sequence;
     }
 }

@@ -8,6 +8,7 @@ export const sendMessage = async (id, request) => (await apiClient.post(`/chats/
 export const getUnreadCount = async () => (await apiClient.get('/chats/unread-count')).data;
 export const markChatRead = async (id, sequence) => (await apiClient.post(`/chats/${encodeURIComponent(id)}/read`, { lastReadSequence: sequence })).data;
 export const getChatLimits = async () => (await apiClient.get('/chats/limits')).data;
+export const getReadReceipts = async (id, after, through) => (await apiClient.get(`/chats/${encodeURIComponent(id)}/read-receipts?${new URLSearchParams({ afterSequence: String(after), throughSequence: String(through) })}`)).data;
 export async function sendAttachments(id, request, files) {
   const form = new FormData();
   form.append('data', new Blob([JSON.stringify(request)], { type: 'application/json' }));

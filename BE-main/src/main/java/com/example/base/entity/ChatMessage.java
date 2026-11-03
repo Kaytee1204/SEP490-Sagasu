@@ -19,6 +19,7 @@ public class ChatMessage {
     @Column(name = "message_type") private String messageType;
     @Column(columnDefinition = "text") private String body;
     @Column(name = "created_at", nullable = false, updatable = false) private OffsetDateTime createdAt;
+    @Column(name = "read_at") private OffsetDateTime readAt;
     public ChatMessage(long conversationId, long senderId, long sequence, UUID clientId, String type, String body) {
         this.conversationId = conversationId; this.senderId = senderId; sequenceNo = sequence;
         clientMessageId = clientId; messageType = type; this.body = body;

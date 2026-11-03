@@ -25,6 +25,12 @@ public class ChatController {
     private final ChatReadService reads;
     private final ChatQueryRepository queries;
     private final ChatAccessPolicy policy;
+    @GetMapping("/chats/{id}/read-receipts")
+    public ResponseEntity<ApiResponse<ChatMessageDto.Receipts>> receipts(@PathVariable long id,
+            @RequestParam(defaultValue = "0") long afterSequence, @RequestParam long throughSequence,
+            @RequestParam(defaultValue = "100") int limit, @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(messages.receipts(id, afterSequence, throughSequence, limit, user)));
+    }
     @GetMapping("/chats/unread-count")
     public ResponseEntity<ApiResponse<Long>> unread(@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(queries.unread(policy.actor(user).getId())));
