@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.*;
 public class ChatConversationService {
     private final ChatConversationRepository conversations;
     private final ChatParticipantRepository participants;
+    private final ChatEvents events;
 
     /** Caller already holds the post/claim locks in the approval/open transaction. */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -24,6 +25,12 @@ public class ChatConversationService {
         } else if (!conversation.getLatestClaim().getId().equals(claim.getId())) {
             conversation.useClaim(claim);
         }
+        events.changed(conversation.getId(), "CONVERSATION_UPDATED");
         return conversation;
+    }
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void notifyChanged(Claim claim) {
+        conversations.findByPost_IdAndClaimant_Id(claim.getPost().getId(), claim.getClaimant().getId())
+                .ifPresent(c -> events.changed(c.getId(), "CONVERSATION_UPDATED"));
     }
 }

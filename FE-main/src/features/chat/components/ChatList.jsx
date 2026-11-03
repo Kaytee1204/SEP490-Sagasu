@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getChats } from '../api/chatApi';
+import { useChat } from '../ChatProvider';
 
 export default function ChatList({ activeId }) {
+  const { revision } = useChat();
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [error, setError] = useState('');
@@ -13,7 +15,7 @@ export default function ChatList({ activeId }) {
       .catch(err => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setBusy(false); });
     return () => { cancelled = true; };
-  }, [activeId]);
+  }, [activeId, revision]);
   async function more() {
     if (busy || !cursor) return;
     setBusy(true); setError('');

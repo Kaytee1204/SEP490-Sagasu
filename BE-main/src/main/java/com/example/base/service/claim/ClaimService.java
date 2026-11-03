@@ -209,6 +209,7 @@ public class ClaimService {
         if (!cancellable(claim)) throw stateChanged();
         String previous = claim.getStatus();
         claim.cancel();
+        chatConversations.notifyChanged(claim);
         activities.save(new ClaimActivity(claim, actor, "CANCEL", previous, request.reason()));
         claims.flush();
         if ("APPROVED".equals(previous) && "RESERVED".equals(post.getStatus())

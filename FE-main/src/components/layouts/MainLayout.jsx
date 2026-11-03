@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import ChatProvider from '@/features/chat/ChatProvider';
 
 export default function MainLayout() {
   const { isAuthenticated } = useAuth();
@@ -14,12 +15,12 @@ export default function MainLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+    <ChatProvider><div className="min-h-screen flex flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)]">
       <Navbar />
       <main className="flex-1 flex flex-col">
         <Outlet />
       </main>
       <Footer />
-    </div>
+    </div></ChatProvider>
   );
 }
