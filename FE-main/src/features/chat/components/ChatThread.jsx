@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Camera, MapPin, Paperclip } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '../ChatProvider';
 import { getMessages, sendMessage, sendAttachments, markChatRead, getReadReceipts } from '../api/chatApi';
 import ChatAttachments from './ChatAttachments';
 import LocationPicker from './LocationPicker';
 import ChatLocation from './ChatLocation';
+import CameraCapture from './CameraCapture';
 
 const merge = (old, incoming) => {
   const indexed = new Map(old.map(row => [row.id, row]));
@@ -25,6 +27,8 @@ export default function ChatThread({ chat }) {
   const [loaded, setLoaded] = useState(false);
   const [files, setFiles] = useState([]);
   const [locationOpen, setLocationOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const fileInput = useRef(null);
   const viewport = useRef(null);
   const pinBottom = useRef(true);
   const anchor = useRef(null);
@@ -155,6 +159,19 @@ export default function ChatThread({ chat }) {
     } catch (err) { setError(err.message); refresh(); }
     finally { setBusy(false); }
   }
+  function attachFiles(picked) {
+    const next = [...files, ...picked];
+    const valid = next.length <= limits.attachmentMaxCount && next.every(file => {
+      const name = file.name.toLowerCase();
+      return file.size > 0 && (/\.(jpe?g|png)$/.test(name) ? file.size <= limits.imageMaxBytes : name.endsWith('.pdf') && file.size <= limits.pdfMaxBytes);
+    }) && next.reduce((sum, file) => sum + file.size, 0) <= limits.totalMaxBytes;
+    if (!valid) {
+      setError(`Tối đa ${limits.attachmentMaxCount} tệp; ảnh ${limits.imageMaxBytes / 1048576} MB, PDF ${limits.pdfMaxBytes / 1048576} MB, tổng ${limits.totalMaxBytes / 1048576} MB.`);
+      return false;
+    }
+    setFiles(next); retry.current = null; setError('');
+    return true;
+  }
   return <>
     <div className="chat-messages" ref={viewport} onScroll={() => {
       const element = viewport.current; pinBottom.current = element.scrollHeight - element.clientHeight - element.scrollTop < 60;
@@ -174,25 +191,24 @@ export default function ChatThread({ chat }) {
     {chat.canSend ? <><div className="chat-selected-files">{files.map((file, index) => <span key={`${file.name}:${index}`}>{file.name}
       <button type="button" disabled={busy} aria-label={`Bỏ tệp ${file.name}`} onClick={() => { setFiles(old => old.filter((_, n) => n !== index)); retry.current = null; }}>×</button></span>)}</div>
     <form className="chat-composer" onSubmit={send}>
-      <button type="button" className="chat-location-button" disabled={busy} onClick={() => setLocationOpen(true)}>Vị trí</button>
+      <div className="chat-composer-tools">
+        <button type="button" className="chat-tool-button" aria-label="Đính kèm ảnh hoặc PDF" title="Đính kèm ảnh hoặc PDF" disabled={busy} onClick={() => fileInput.current?.click()}><Paperclip size={21} /></button>
+        <button type="button" className="chat-tool-button" aria-label="Chụp ảnh" title="Chụp ảnh" disabled={busy} onClick={() => setCameraOpen(true)}><Camera size={21} /></button>
+        <button type="button" className="chat-tool-button" aria-label="Chia sẻ vị trí" title="Chia sẻ vị trí" disabled={busy} onClick={() => setLocationOpen(true)}><MapPin size={21} /></button>
+      </div>
       <label className="sr-only" htmlFor="chat-message">Nội dung tin nhắn</label>
-      <label className="chat-attach-button" title={`Tối đa ${limits.attachmentMaxCount} tệp JPG/PNG/PDF`}>
-        <span>Đính kèm</span><input type="file" multiple accept=".jpg,.jpeg,.png,.pdf" disabled={busy} onChange={event => {
+      <input ref={fileInput} className="chat-file-input" type="file" multiple accept=".jpg,.jpeg,.png,.pdf" disabled={busy} aria-label="Chọn ảnh hoặc PDF đính kèm" onChange={event => {
           const picked = [...event.target.files]; event.target.value = '';
-          const next = [...files, ...picked];
-          const valid = next.length <= limits.attachmentMaxCount && next.every(file => {
-            const name = file.name.toLowerCase();
-            return file.size > 0 && (/\.(jpe?g|png)$/.test(name) ? file.size <= limits.imageMaxBytes : name.endsWith('.pdf') && file.size <= limits.pdfMaxBytes);
-          }) && next.reduce((sum, file) => sum + file.size, 0) <= limits.totalMaxBytes;
-          if (!valid) { setError(`Tối đa ${limits.attachmentMaxCount} tệp; ảnh ${limits.imageMaxBytes / 1048576} MB, PDF ${limits.pdfMaxBytes / 1048576} MB, tổng ${limits.totalMaxBytes / 1048576} MB.`); return; }
-          setFiles(next); retry.current = null; setError('');
+          attachFiles(picked);
         }} />
-      </label>
       <textarea id="chat-message" maxLength={limits.messageMaxLength} disabled={busy} placeholder="Nhập tin nhắn…" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
       }} />
       <button className="btn btn-accent" type="submit" disabled={busy || (!body.trim() && !files.length)}>{busy ? 'Đang gửi…' : 'Gửi'}</button>
-    </form>{locationOpen && <LocationPicker chatId={chat.id} onClose={() => setLocationOpen(false)} onSent={message => {
+    </form>{cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onAttach={file => {
+      if (attachFiles([file])) { setCameraOpen(false); return true; }
+      return false;
+    }} />}{locationOpen && <LocationPicker chatId={chat.id} onClose={() => setLocationOpen(false)} onSent={message => {
       pinBottom.current = true; setRows(old => merge(old, [message])); setLocationOpen(false); refresh();
     }} />}</> : <p role="status" className="chat-readonly">{chat.readOnlyReason}</p>}
   </>;

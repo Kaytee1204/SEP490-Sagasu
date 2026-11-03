@@ -8,12 +8,16 @@ export function createChatMap(container, { onPick, onReady, onError }) {
   const map = new Map({
     container, style: import.meta.env.VITE_CHAT_MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty',
     center: [105.85, 21.03], zoom: 12, maxZoom: 19,
+    dragPan: true, touchZoomRotate: true, cooperativeGestures: false,
     dragRotate: false, pitchWithRotate: false,
     attributionControl: { compact: false },
   });
   map.addControl(new NavigationControl({ showCompass: false }), 'top-left');
-  let marker;
   const pick = coordinates => onPick({ latitude: coordinates.lat, longitude: coordinates.lng });
+  const marker = new Marker({ color: '#1c7070', draggable: true })
+    .setLngLat(map.getCenter()).addTo(map);
+  marker.getElement().setAttribute('aria-label', 'Kéo ghim để chọn vị trí');
+  marker.on('dragend', () => pick(marker.getLngLat().wrap()));
   map.on('click', event => pick(event.lngLat.wrap()));
   map.on('load', () => { onReady(); onError(''); });
   map.on('idle', () => { if (map.areTilesLoaded()) onError(''); });
@@ -25,13 +29,7 @@ export function createChatMap(container, { onPick, onReady, onError }) {
   const resize = new ResizeObserver(() => { if (!removed) map.resize(); }); resize.observe(container);
   return {
     setPoint(point) {
-      if (!point) { marker?.remove(); marker = null; return; }
-      if (!marker) {
-        marker = new Marker({ color: '#ed3f5b', draggable: true }).setLngLat([point.longitude, point.latitude]).addTo(map);
-        marker.getElement().setAttribute('aria-label', 'Ghim vị trí đã chọn');
-        marker.on('dragend', () => pick(marker.getLngLat().wrap()));
-      } else marker.setLngLat([point.longitude, point.latitude]);
-      map.easeTo({ center: [point.longitude, point.latitude], duration: 180 });
+      if (point) marker.setLngLat([point.longitude, point.latitude]);
     },
     focus(point) { map.jumpTo({ center: [point.longitude, point.latitude], zoom: 16 }); },
     getCenter() { const center = map.getCenter().wrap(); return { latitude: center.lat, longitude: center.lng }; },
