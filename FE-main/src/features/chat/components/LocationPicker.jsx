@@ -45,7 +45,8 @@ export default function LocationPicker({ chatId, onClose, onSent }) {
       });
       map.current = instance;
       if (selected.current) { instance.setPoint(selected.current); instance.focus(selected.current); }
-    }).catch(() => {
+    }).catch(problem => {
+      console.error('Unable to initialize chat map', problem);
       if (!cancelled) { setReady(true); setMapError('Chưa tải được bản đồ. Hãy thử lại hoặc dùng nút Vị trí của tôi.'); }
     });
     return () => { cancelled = true; instance?.remove(); if (map.current === instance) map.current = null; };

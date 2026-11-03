@@ -9,7 +9,7 @@ export function createChatMap(container, { onPick, onReady, onError }) {
     container, style: import.meta.env.VITE_CHAT_MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty',
     center: [105.85, 21.03], zoom: 12, maxZoom: 19,
     dragRotate: false, pitchWithRotate: false,
-    attributionControl: { compact: false, customAttribution: '<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>' },
+    attributionControl: { compact: false },
   });
   map.addControl(new NavigationControl({ showCompass: false }), 'top-left');
   let marker;
@@ -17,7 +17,10 @@ export function createChatMap(container, { onPick, onReady, onError }) {
   map.on('click', event => pick(event.lngLat.wrap()));
   map.on('load', () => { onReady(); onError(''); });
   map.on('idle', () => { if (map.areTilesLoaded()) onError(''); });
-  map.on('error', () => { onReady(); onError('Chưa tải được bản đồ. Bạn có thể thử lại hoặc lấy vị trí hiện tại.'); });
+  map.on('error', event => {
+    console.error('Unable to load chat map resources', event.error);
+    onReady(); onError('Chưa tải được bản đồ. Bạn có thể thử lại hoặc lấy vị trí hiện tại.');
+  });
   let removed = false;
   const resize = new ResizeObserver(() => { if (!removed) map.resize(); }); resize.observe(container);
   return {
