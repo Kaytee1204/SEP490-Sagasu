@@ -9,6 +9,7 @@ import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
 import PrivateIdentifiersEditor from '../components/detail/PrivateIdentifiersEditor';
+import OfficeHandoverAction from '../components/detail/OfficeHandoverAction';
 import SmartMatchModal from '../components/detail/SmartMatchModal';
 import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
@@ -158,6 +159,7 @@ function PostDetail({ id, onRetry }) {
           </div>
 
           {post.postType === 'FOUND' && post.canEditOwnPost && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
+          <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
 
           {post.officeReceipt && <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-label="Thông tin nhà trường tiếp nhận">
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được nhà trường lưu giữ'}</h2>
@@ -169,11 +171,9 @@ function PostDetail({ id, onRetry }) {
           {post.postType === 'FOUND' && !post.officeReceipt && <div>
             <strong>Hình thức trao trả: </strong>
             {post.custodyMode === 'OFFICE'
-              ? 'Đề nghị giao đồ cho Approver; chờ xét duyệt và thống nhất lịch giao đồ.'
+              ? 'Đã gửi yêu cầu giao cho bên tiếp nhận; chưa xác nhận đã bàn giao đồ.'
               : 'Người nhặt chọn tự giữ để trao trả.'}
           </div>}
-          {post.handoverRequestedAt && <p>Lịch giao đồ đề xuất: {new Date(post.handoverRequestedAt).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})}.
-            Đây chưa phải lịch hẹn được xác nhận.</p>}
           <ItemCharacteristics description={post.description} />
           {post.canEditOwnPost && <PrivateIdentifiersEditor key={post.id} postId={post.id} />}
         </section>

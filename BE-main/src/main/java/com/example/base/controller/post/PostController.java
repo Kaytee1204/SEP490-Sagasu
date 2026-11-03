@@ -89,7 +89,7 @@ public class PostController {
 
     @PostMapping(value = "/found", consumes = "multipart/form-data")
     @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-    @Operation(summary = "UC16: Đăng Found; giao Approver luôn PENDING và phải đề xuất lịch giao đồ")
+    @Operation(summary = "UC16: Đăng Found P2P và hiển thị ngay; yêu cầu giao bên tiếp nhận ở thao tác riêng sau khi đăng")
     public ResponseEntity<ApiResponse<CreatedPostDto>> createFound(
             @Valid @RequestPart("data") CreateFoundPostRequest request,
             @RequestPart(value = "images", required = false) List<MultipartFile> images,

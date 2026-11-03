@@ -18,7 +18,6 @@ export default function MyPostCard({ post, onDelete }) {
       <h2><Link className="my-post-detail-link" to={`/chi-tiet/${post.id}`}>{post.title}</Link></h2>
       <p>{post.categoryName} · {post.locationText}</p>
       <p><strong>{MODERATION[post.moderationStatus]}</strong> · {HANDLING[post.status]}</p>
-      {post.handoverRequestedAt && <p>Lịch giao Approver đề xuất: {new Date(post.handoverRequestedAt).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})} (chưa xác nhận).</p>}
       <p>Đăng ngày {new Date(post.createdAt).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})}</p>
       {post.editBlockedReason && <p className="my-post-note">Không thể sửa: {post.editBlockedReason}.</p>}
       {post.deleteBlockedReason && <p className="my-post-note">Không thể xóa: {post.deleteBlockedReason}.</p>}

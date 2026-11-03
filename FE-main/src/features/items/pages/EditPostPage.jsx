@@ -33,10 +33,8 @@ function Editor({ id, onReload }) {
     Promise.all([getPostForEdit(id),getPostCategories()]).then(([post,categories])=>{
       if(cancelled)return;
       const eventInputs=toVietnamInputs(post.eventAt);
-      const handoverInputs=toVietnamInputs(post.handoverRequestedAt);
       setForm({itemName:post.title,description:post.description,categoryId:String(post.categoryId),
-        location:post.locationText,date:eventInputs.date,time:eventInputs.time,custodyMode:post.custodyMode,
-        handoverDate:handoverInputs.date,handoverTime:handoverInputs.time});
+        location:post.locationText,date:eventInputs.date,time:eventInputs.time});
       setKept(post.images);
       setLoaded({post,categories});
     }).catch(err=>{if(!cancelled)setError(err.message);});
@@ -67,17 +65,11 @@ function Editor({ id, onReload }) {
     if(!Number.isFinite(new Date(eventAt).getTime())||new Date(eventAt).getTime()>Date.now()){
       setError('Thời gian xảy ra phải hợp lệ và không ở tương lai (giờ Việt Nam).');return;
     }
-    const officeHandover=loaded.post.postType==='FOUND'&&form.custodyMode==='OFFICE';
-    const handoverRequestedAt=officeHandover?`${form.handoverDate}T${form.handoverTime}:00+07:00`:null;
-    if(officeHandover&&(!form.handoverDate||!form.handoverTime||!Number.isFinite(new Date(handoverRequestedAt).getTime())
-      ||new Date(handoverRequestedAt).getTime()<=Date.now())){
-      setError('Vui lòng đề xuất ngày/giờ giao đồ trong tương lai (giờ Việt Nam).');return;
-    }
     inFlight.current=true;setSaving(true);setError('');
     try{
       const result=await updatePost(id,{title:form.itemName.trim(),description:form.description.trim(),
-        categoryId:Number(form.categoryId),locationText:form.location.trim(),eventAt,custodyMode:form.custodyMode,
-        expectedUpdatedAt:loaded.post.updatedAt,keptImageIds:kept.map(image=>image.id),handoverRequestedAt},files.map(item=>item.file));
+        categoryId:Number(form.categoryId),locationText:form.location.trim(),eventAt,
+        expectedUpdatedAt:loaded.post.updatedAt,keptImageIds:kept.map(image=>image.id)},files.map(item=>item.file));
       setSaved(result);
     }catch(err){setError(err.message);}
     finally{setSaving(false);inFlight.current=false;}

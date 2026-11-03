@@ -51,6 +51,13 @@ public class PostManagementController {
         return noStore(management.update(id, request, images, user));
     }
 
+    @PostMapping("/{id}/office-handover")
+    @Operation(summary = "Chủ bài gửi yêu cầu giao đồ cho bên tiếp nhận sau khi đăng Found P2P; không đặt lịch")
+    public ResponseEntity<ApiResponse<CreatedPostDto>> requestOfficeHandover(@PathVariable long id,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return noStore(management.requestOfficeHandover(id, user));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "UC20: Xóa mềm bài, giữ lịch sử và lý do")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable long id, @Valid @RequestBody DeletePostRequest request,
