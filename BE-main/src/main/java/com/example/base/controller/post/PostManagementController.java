@@ -6,9 +6,11 @@ import com.example.base.exception.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.post.PostManagementService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,7 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/posts")
 @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-@Tag(name = "3. Posts", description = "Bài đăng đồ thất lạc")
+@Tag(name = "4. My Posts & Post Management", description = "Quản lý bài viết của tôi (Danh sách bài của tôi, Lấy form sửa, Cập nhật bài, Xóa mềm bài)")
 public class PostManagementController {
     private final PostManagementService management;
 
@@ -28,26 +30,32 @@ public class PostManagementController {
     }
 
     @GetMapping("/mine")
-    @Operation(summary = "UC18: Bài do tài khoản hiện tại đăng, kèm trạng thái và quyền thao tác")
-    public ResponseEntity<ApiResponse<MyPostPageDto>> mine(@RequestParam(defaultValue="1") String page,
-            @RequestParam(defaultValue="12") String size, @RequestParam(defaultValue="ALL") String filter,
-            @AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(summary = "UC18: Bài do tài khoản hiện tại đăng, kèm trạng thái và quyền thao tác",
+            description = "Trả về danh sách bài đăng của chính tài khoản hiện tại, có phân trang và lọc (ALL, LOST, FOUND, PENDING, REJECTED...).")
+    public ResponseEntity<ApiResponse<MyPostPageDto>> mine(
+            @RequestParam(defaultValue="1") String page,
+            @RequestParam(defaultValue="12") String size,
+            @RequestParam(defaultValue="ALL") String filter,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         try { return noStore(management.listMine(Integer.parseInt(page), Integer.parseInt(size), filter, user)); }
         catch (NumberFormatException ex) { throw new AppException(ErrorCode.POST_PAGINATION_FORMAT_INVALID); }
     }
 
     @GetMapping("/{id}/edit")
     @Operation(summary = "UC19: Lấy dữ liệu cho form sửa bài của chính mình")
-    public ResponseEntity<ApiResponse<EditPostDto>> edit(@PathVariable long id, @AuthenticationPrincipal CustomUserDetails user) {
+    public ResponseEntity<ApiResponse<EditPostDto>> edit(
+            @PathVariable long id,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return noStore(management.getForEdit(id, user));
     }
 
-    @PutMapping(value="/{id}", consumes="multipart/form-data")
+    @PutMapping(value="/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "UC19: Sửa bài của chính mình; kiểm tra lại sau khi khóa bản ghi")
-    public ResponseEntity<ApiResponse<CreatedPostDto>> update(@PathVariable long id,
-            @Valid @RequestPart("data") UpdatePostRequest request,
-            @RequestPart(value="images", required=false) List<MultipartFile> images,
-            @AuthenticationPrincipal CustomUserDetails user) {
+    public ResponseEntity<ApiResponse<CreatedPostDto>> update(
+            @PathVariable long id,
+            @Parameter(description = "Dữ liệu cập nhật bài đăng dạng JSON") @Valid @RequestPart("data") UpdatePostRequest request,
+            @Parameter(description = "Danh sách ảnh mới (tùy chọn)") @RequestPart(value="images", required=false) List<MultipartFile> images,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return noStore(management.update(id, request, images, user));
     }
 
@@ -60,8 +68,10 @@ public class PostManagementController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "UC20: Xóa mềm bài, giữ lịch sử và lý do")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable long id, @Valid @RequestBody DeletePostRequest request,
-            @AuthenticationPrincipal CustomUserDetails user) {
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @PathVariable long id,
+            @Valid @RequestBody DeletePostRequest request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         management.delete(id, request, user);
         return noStore(null);
     }

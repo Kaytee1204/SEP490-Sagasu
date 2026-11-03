@@ -3,9 +3,11 @@ name: Staging CI/CD Pipeline
 on:
   push:
     branches:
+      - main
       - staging
   pull_request:
     branches:
+      - main
       - staging
 
 jobs:
@@ -58,13 +60,25 @@ jobs:
   trigger-cloud-deploy:
     name: Trigger Staging Cloud Deploy Hooks
     needs: [backend-build, frontend-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Backend Deploy Hook (Render / Railway)
-        if: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK != '' }}
-        run: curl -fsSL -X POST "${{ secrets.STAGING_BACKEND_DEPLOY_HOOK }}"
+        env:
+          DEPLOY_HOOK: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$DEPLOY_HOOK" ]; then
+            curl -fsSL -X POST "$DEPLOY_HOOK"
+          else
+            echo "STAGING_BACKEND_DEPLOY_HOOK is not configured, skipping."
+          fi
 
       - name: Trigger Frontend Deploy Hook (Vercel / Netlify / Render)
-        if: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK != '' }}
-        run: curl -fsSL -X POST "${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK }}"
+        env:
+          DEPLOY_HOOK: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$DEPLOY_HOOK" ]; then
+            curl -fsSL -X POST "$DEPLOY_HOOK"
+          else
+            echo "STAGING_FRONTEND_DEPLOY_HOOK is not configured, skipping."
+          fi

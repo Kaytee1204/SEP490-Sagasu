@@ -5,16 +5,19 @@ import com.example.base.exception.*;
 import com.example.base.repository.StorageLocationRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class ReceiptLocationService {
     private final StorageLocationRepository locations;
     private final EntityManager entityManager;
+
+    public ReceiptLocationService(StorageLocationRepository locations, EntityManager entityManager) {
+        this.locations = locations;
+        this.entityManager = entityManager;
+    }
 
     public record Option(Long id, String code, String name) {}
 

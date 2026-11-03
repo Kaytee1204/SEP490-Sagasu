@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/accounts")
 @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-@Tag(name = "2. Account Manager (ADMIN & MANAGER)", description = "Phân trang, CRUD tài khoản (Tạo tay, Update, Xóa mềm), Hồ sơ cá nhân và Import Excel")
+@Tag(name = "2. Account Management", description = "Quản lý tài khoản (CRUD, Xóa mềm, Import/Export Excel), Lịch sử đăng nhập & Hồ sơ cá nhân (ADMIN & MANAGER)")
 public class AccountController {
 
     private final AccountService accountService;

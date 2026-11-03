@@ -16,7 +16,7 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 @Tag(
         name = "1. Auth & OTP",
-        description = "Đăng nhập trực tiếp cho mọi role không cần OTP, Đổi mật khẩu và Khôi phục mật khẩu qua mã OTP"
+        description = "Xác thực, Đăng nhập trực tiếp (Email/Password), Đổi mật khẩu và Quên mật khẩu qua mã OTP"
 )
 public class AuthController {
 
@@ -28,8 +28,8 @@ public class AuthController {
 
     @PostMapping("/login")
     @Operation(
-            summary = "Đăng nhập bằng Email & Mật khẩu (ADMIN: admin/123 | MANAGER: khanhtrinh1204@gmail.com/123)",
-            description = "Đăng nhập chỉ cần email và mật khẩu, trả thẳng JWT accessToken và thông tin tài khoản cho mọi role."
+            summary = "Đăng nhập bằng Email/Username & Mật khẩu (ADMIN: admin/123 | MANAGER: khanhtrinh1204@gmail.com/123 | USER: user/123)",
+            description = "Đăng nhập trực tiếp không cần mã OTP cho tất cả các Role (ADMIN, MANAGER, APPROVER, USER). Trả về Access Token (JWT), Refresh Token và thông tin tài khoản."
     )
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Đăng nhập thành công", authService.login(request)));
@@ -37,8 +37,8 @@ public class AuthController {
 
     @PostMapping("/verify-otp")
     @Operation(
-            summary = "Xác thực mã OTP 6 chữ số (dành cho role USER khi Đăng nhập) và nhận JWT Token",
-            description = "Nhập email, mã OTP 6 số đã nhận qua email (hoặc xem trên Console nếu chưa cấu hình SMTP) và purpose = LOGIN để hoàn tất đăng nhập cho role USER và nhận JWT Access Token & Refresh Token."
+            summary = "Xác thực mã OTP 6 chữ số thủ công nếu cần",
+            description = "Nhập email, mã OTP 6 số đã nhận qua email và purpose để xác thực mã OTP khi cần thiết."
     )
     public ResponseEntity<ApiResponse<LoginResponse>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Xác thực OTP thành công", authService.verifyOtp(request)));
@@ -46,8 +46,8 @@ public class AuthController {
 
     @PostMapping("/send-otp")
     @Operation(
-            summary = "Yêu cầu gửi / gửi lại mã OTP 6 số về Email (LOGIN / CHANGE_PASSWORD / FORGOT_PASSWORD)",
-            description = "Tạo mã OTP 6 chữ số mới (hiệu lực 5 phút) và gửi về email."
+            summary = "Yêu cầu gửi / gửi lại mã OTP 6 số về Email (CHANGE_PASSWORD / FORGOT_PASSWORD)",
+            description = "Tạo mã OTP 6 chữ số mới (hiệu lực 5 phút) và gửi về email đã đăng ký."
     )
     public ResponseEntity<ApiResponse<Map<String, Object>>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Đã xử lý yêu cầu gửi OTP", authService.sendOtp(request)));

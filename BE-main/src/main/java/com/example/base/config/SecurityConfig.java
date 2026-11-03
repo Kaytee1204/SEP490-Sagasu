@@ -75,6 +75,7 @@ public class SecurityConfig {
                                 "/api/accounts/import/template",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
+                                "/v3/api-docs",
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers("/api/accounts/me", "/api/accounts/me/**").authenticated()
