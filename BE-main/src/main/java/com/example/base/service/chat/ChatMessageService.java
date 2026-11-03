@@ -24,6 +24,8 @@ public class ChatMessageService {
     private final EntityManager entityManager;
     private final ChatProperties limits;
     private final ChatEvents events;
+    private final ChatAttachmentRepository attachments;
+    private final com.example.base.storage.ImageStorage storage;
 
     public ChatMessageDto.Page history(long id, Long before, Long after, int size, CustomUserDetails user) {
         long actor = policy.actor(user).getId(); chats.requireMember(id, actor);
@@ -35,7 +37,10 @@ public class ChatMessageService {
         boolean more = rows.size() > size;
         var selected = new ArrayList<>(rows.stream().limit(size).toList());
         if (after == null) Collections.reverse(selected);
-        return new ChatMessageDto.Page(selected.stream().map(this::dto).toList(), more,
+        var images = selected.isEmpty() ? Map.<Long, List<ChatAttachment>>of()
+                : attachments.findByMessageIdInOrderByMessageIdAscSortOrderAsc(selected.stream().map(ChatMessage::getId).toList())
+                    .stream().collect(java.util.stream.Collectors.groupingBy(ChatAttachment::getMessageId));
+        return new ChatMessageDto.Page(selected.stream().map(m -> dto(m, images.getOrDefault(m.getId(), List.of()))).toList(), more,
                 after == null && more && !selected.isEmpty() ? selected.get(0).getSequenceNo() : null);
     }
 
@@ -78,7 +83,12 @@ public class ChatMessageService {
         return result;
     }
     public ChatMessageDto dto(ChatMessage message) {
-        return new ChatMessageDto(message.getId(), message.getSequenceNo(), message.getSenderId(), message.getBody(), message.getCreatedAt(), List.of());
+        return dto(message, attachments.findByMessageIdOrderBySortOrderAsc(message.getId()));
+    }
+    private ChatMessageDto dto(ChatMessage message, List<ChatAttachment> files) {
+        return new ChatMessageDto(message.getId(), message.getSequenceNo(), message.getSenderId(), message.getBody(), message.getCreatedAt(),
+                files.stream().map(file -> new ChatMessageDto.Attachment(file.getId(), file.getOriginalName(), file.getMimeType(), file.getSizeBytes(),
+                    file.getMimeType().startsWith("image/") ? storage.readUrl(file.getStorageKey(), null) : null)).toList());
     }
     private AppException invalid() { return new AppException(ErrorCode.CHAT_INPUT_INVALID); }
 }

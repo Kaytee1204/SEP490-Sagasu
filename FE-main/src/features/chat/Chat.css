@@ -15,6 +15,15 @@
 .chat-error { color: #a52c2c; padding: 10px 18px; }
 .chat-readonly { padding: 14px 18px; background: #fff7dc; color: #755300; }
 .chat-back { display: none; }
+.chat-selected-files { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px; }
+.chat-selected-files:has(span) { padding-top:10px; }
+.chat-selected-files span { display:flex; gap:10px; align-items:center; background:#eef8f7; border-radius:8px; padding:4px 8px; font-size:.8rem; overflow-wrap:anywhere; }
+.chat-selected-files button { font-size:1.2rem; }
+.chat-attach-button { cursor:pointer; color:#1c7070; font-size:.8rem; padding:10px 0; }
+.chat-attach-button input { display:block; width:1px; height:1px; overflow:hidden; opacity:0; }
+.chat-files { display:flex; flex-wrap:wrap; gap:8px; }
+.chat-file { display:flex; flex-direction:column; max-width:180px; padding:6px; border:1px solid #b9cfd2; border-radius:8px; text-align:left; overflow-wrap:anywhere; }
+.chat-file img { width:160px; height:120px; object-fit:contain; border-radius:5px; background:white; }
 .chat-messages { flex: 1; overflow-y: auto; min-height: 0; padding: 18px; background: #f5f9fa; display: flex; flex-direction: column; gap: 10px; }
 .chat-bubble { align-self: flex-start; max-width: 82%; padding: 10px 14px; border-radius: 14px 14px 14px 3px; background: #fff; border: 1px solid #dbe7e9; overflow-wrap: anywhere; }
 .chat-bubble.mine { align-self: flex-end; background: #dbf2ed; border-radius: 14px 14px 3px 14px; }

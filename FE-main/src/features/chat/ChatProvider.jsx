@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/services/apiClient';
-import { getUnreadCount } from './api/chatApi';
+import { getUnreadCount, getChatLimits } from './api/chatApi';
 
 const ChatContext = createContext({ revision: 0, online: false, unread: 0, refresh: () => {} });
 export const useChat = () => useContext(ChatContext);
@@ -12,6 +12,12 @@ export default function ChatProvider({ children }) {
   const [revision, setRevision] = useState(0);
   const [online, setOnline] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [limits, setLimits] = useState({ messageMaxLength: 4000, attachmentMaxCount: 5, imageMaxBytes: 5242880, pdfMaxBytes: 10485760, totalMaxBytes: 26214400 });
+  useEffect(() => {
+    let disposed = false;
+    if (user && token) getChatLimits().then(value => { if (!disposed) setLimits(value); }).catch(() => {});
+    return () => { disposed = true; };
+  }, [user?.id, token]);
   function refresh() { setRevision(value => value + 1); }
   useEffect(() => {
     let disposed = false;
@@ -50,5 +56,5 @@ export default function ChatProvider({ children }) {
       setOnline(false); client.deactivate();
     };
   }, [user?.id, token]);
-  return <ChatContext.Provider value={{ revision, online, unread, refresh }}>{children}</ChatContext.Provider>;
+  return <ChatContext.Provider value={{ revision, online, unread, limits, refresh }}>{children}</ChatContext.Provider>;
 }

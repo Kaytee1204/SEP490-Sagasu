@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '../ChatProvider';
-import { getMessages, sendMessage, markChatRead } from '../api/chatApi';
+import { getMessages, sendMessage, sendAttachments, markChatRead } from '../api/chatApi';
+import ChatAttachments from './ChatAttachments';
 
 const merge = (old, incoming) => [...new Map([...old, ...incoming].map(row => [row.id, row])).values()].sort((a, b) => a.sequence - b.sequence);
 
 export default function ChatThread({ chat }) {
   const { user } = useAuth();
-  const { revision, refresh } = useChat();
+  const { revision, refresh, limits } = useChat();
   const [rows, setRows] = useState([]);
   const [before, setBefore] = useState(null);
   const [body, setBody] = useState('');
@@ -15,6 +16,7 @@ export default function ChatThread({ chat }) {
   const [busy, setBusy] = useState(false);
   const [olderBusy, setOlderBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [files, setFiles] = useState([]);
   const viewport = useRef(null);
   const pinBottom = useRef(true);
   const anchor = useRef(null);
@@ -58,7 +60,7 @@ export default function ChatThread({ chat }) {
     function scheduleRead() {
       clearTimeout(timer);
       timer = setTimeout(async () => {
-        if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+        if (document.visibilityState !== 'visible' || !document.hasFocus() || document.querySelector('dialog[open]')) return;
         const bounds = element.getBoundingClientRect();
         if (!bounds.height) return;
         let visible = requestedRead.current;
@@ -74,17 +76,19 @@ export default function ChatThread({ chat }) {
           const saved = await markChatRead(chat.id, visible);
           if (!disposed) { requestedRead.current = Math.max(requestedRead.current, saved); refresh(); }
         } catch {
-          if (!disposed && requestedRead.current === visible) requestedRead.current = chat.lastReadSequence;
+          if (requestedRead.current === visible) requestedRead.current = chat.lastReadSequence;
         }
       }, 300);
     }
     element.addEventListener('scroll', scheduleRead);
     document.addEventListener('visibilitychange', scheduleRead);
+    document.addEventListener('focusin', scheduleRead);
     window.addEventListener('focus', scheduleRead);
     scheduleRead();
     return () => {
       disposed = true; clearTimeout(timer); element.removeEventListener('scroll', scheduleRead);
-      document.removeEventListener('visibilitychange', scheduleRead); window.removeEventListener('focus', scheduleRead);
+      document.removeEventListener('visibilitychange', scheduleRead); document.removeEventListener('focusin', scheduleRead);
+      window.removeEventListener('focus', scheduleRead);
     };
   }, [rows, chat.id, chat.lastReadSequence, user.id]);
   useLayoutEffect(() => {
@@ -106,13 +110,15 @@ export default function ChatThread({ chat }) {
   async function send(event) {
     event?.preventDefault();
     const text = body.trim();
-    if (busy || !text || !chat.canSend) return;
-    const request = retry.current?.body === text ? retry.current : { clientMessageId: crypto.randomUUID(), body: text };
+    if (busy || (!text && !files.length) || !chat.canSend) return;
+    const request = retry.current?.body === (text || null) && retry.current?.files === files ? retry.current
+      : { clientMessageId: crypto.randomUUID(), body: text || null, files };
     retry.current = request; setBusy(true); setError('');
     try {
-      const message = await sendMessage(chat.id, request);
+      const payload = { body: request.body, clientMessageId: request.clientMessageId };
+      const message = files.length ? await sendAttachments(chat.id, payload, files) : await sendMessage(chat.id, payload);
       pinBottom.current = true; setRows(old => merge(old, [message]));
-      setBody(''); retry.current = null; refresh();
+      setBody(''); setFiles([]); retry.current = null; refresh();
     } catch (err) { setError(err.message); refresh(); }
     finally { setBusy(false); }
   }
@@ -124,17 +130,32 @@ export default function ChatThread({ chat }) {
       {!rows.length && <p className="chat-empty">{loaded ? 'Chưa có tin nhắn.' : 'Đang tải tin nhắn…'}</p>}
       {rows.map(row => <article key={row.id} data-sequence={row.sequence} data-sender={row.senderId} className={`chat-bubble ${String(row.senderId) === String(user.id) ? 'mine' : ''}`}>
         {row.body && <p>{row.body}</p>}
+        {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
         <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
         {String(row.senderId) === String(user.id) && row.sequence <= chat.otherReadSequence && <small>Đã xem</small>}
       </article>)}
     </div>
     {error && <p role="alert" className="chat-error">{error}</p>}
-    {chat.canSend ? <form className="chat-composer" onSubmit={send}>
+    {chat.canSend ? <><div className="chat-selected-files">{files.map((file, index) => <span key={`${file.name}:${index}`}>{file.name}
+      <button type="button" disabled={busy} aria-label={`Bỏ tệp ${file.name}`} onClick={() => { setFiles(old => old.filter((_, n) => n !== index)); retry.current = null; }}>×</button></span>)}</div>
+    <form className="chat-composer" onSubmit={send}>
       <label className="sr-only" htmlFor="chat-message">Nội dung tin nhắn</label>
-      <textarea id="chat-message" maxLength={4000} disabled={busy} placeholder="Nhập tin nhắn…" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => {
+      <label className="chat-attach-button" title={`Tối đa ${limits.attachmentMaxCount} tệp JPG/PNG/PDF`}>
+        <span>Đính kèm</span><input type="file" multiple accept=".jpg,.jpeg,.png,.pdf" disabled={busy} onChange={event => {
+          const picked = [...event.target.files]; event.target.value = '';
+          const next = [...files, ...picked];
+          const valid = next.length <= limits.attachmentMaxCount && next.every(file => {
+            const name = file.name.toLowerCase();
+            return file.size > 0 && (/\.(jpe?g|png)$/.test(name) ? file.size <= limits.imageMaxBytes : name.endsWith('.pdf') && file.size <= limits.pdfMaxBytes);
+          }) && next.reduce((sum, file) => sum + file.size, 0) <= limits.totalMaxBytes;
+          if (!valid) { setError(`Tối đa ${limits.attachmentMaxCount} tệp; ảnh ${limits.imageMaxBytes / 1048576} MB, PDF ${limits.pdfMaxBytes / 1048576} MB, tổng ${limits.totalMaxBytes / 1048576} MB.`); return; }
+          setFiles(next); retry.current = null; setError('');
+        }} />
+      </label>
+      <textarea id="chat-message" maxLength={limits.messageMaxLength} disabled={busy} placeholder="Nhập tin nhắn…" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
       }} />
-      <button className="btn btn-accent" type="submit" disabled={busy || !body.trim()}>{busy ? 'Đang gửi…' : 'Gửi'}</button>
-    </form> : <p role="status" className="chat-readonly">{chat.readOnlyReason}</p>}
+      <button className="btn btn-accent" type="submit" disabled={busy || (!body.trim() && !files.length)}>{busy ? 'Đang gửi…' : 'Gửi'}</button>
+    </form></> : <p role="status" className="chat-readonly">{chat.readOnlyReason}</p>}
   </>;
 }

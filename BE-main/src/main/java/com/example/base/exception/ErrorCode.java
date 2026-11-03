@@ -3,6 +3,7 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    CHAT_ATTACHMENT_INVALID(HttpStatus.BAD_REQUEST, "CHAT_400_FILE", "Tệp phải là JPG, PNG hoặc PDF hợp lệ và nằm trong giới hạn chat"),
     CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT_404", "Không tìm thấy cuộc trò chuyện được phép truy cập"),
     CHAT_UNAVAILABLE(HttpStatus.CONFLICT, "CHAT_409_STATE", "Chỉ được nhắn tin sau khi claim P2P được chấp thuận và bài đang chờ trao trả"),
     CHAT_INPUT_INVALID(HttpStatus.BAD_REQUEST, "CHAT_400", "Nội dung hoặc con trỏ tin nhắn không hợp lệ"),
