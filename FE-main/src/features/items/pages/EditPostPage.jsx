@@ -87,7 +87,7 @@ function Editor({ id, onReload }) {
         <p>Bài phải còn mở và chưa bị ẩn để chỉnh sửa. Bài Found giao văn phòng trường và bài bị từ chối sẽ cần duyệt lại.</p>
         <div className="card" style={{padding:24,marginBlock:20}}>
           <StepDetailsForm formData={form} onChange={setForm} postType={loaded.post.postType.toLowerCase()}
-            categories={loaded.categories} showPrivate={false} />
+            categories={loaded.categories} />
           {!loaded.categories.some(category=>String(category.id)===form.categoryId)&&
             <p role="alert">Danh mục cũ đã ngừng hoạt động. Vui lòng chọn danh mục khác.</p>}
         </div>
@@ -102,7 +102,7 @@ function Editor({ id, onReload }) {
           <label className="input-label" htmlFor="edit-post-files">Thêm ảnh mới</label>
           <input id="edit-post-files" type="file" accept="image/jpeg,image/png" multiple onChange={upload}/>
         </section>
-        <p>Dấu hiệu nhận dạng riêng tư được quản lý riêng tại <Link to={`/chi-tiet/${id}`}>trang chi tiết của bạn</Link>.</p>
+        <p>Ghi chú xác minh riêng tư (không bắt buộc) được quản lý tại <Link to={`/chi-tiet/${id}`}>trang chi tiết của bạn</Link>.</p>
         <div className="my-post-actions"><button className="btn btn-primary" disabled={saving}>{saving?'Đang lưu…':'Lưu thay đổi'}</button>
           {!saving&&<Link className="btn btn-ghost" to="/tin-dang-cua-toi">Hủy</Link>}</div>
       </fieldset>

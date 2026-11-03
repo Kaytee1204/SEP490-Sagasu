@@ -27,7 +27,7 @@ export default function PostItemPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(null);
-  const [formData, setFormData] = useState({ itemName: '', description: '', categoryId: '', date: '', time: '', location: '', privateIdentifiers: '' });
+  const [formData, setFormData] = useState({ itemName: '', description: '', categoryId: '', date: '', time: '', location: '' });
   const isFound = params.get('type') === 'found' || location.state?.type === 'found' || location.pathname === '/dang-tin-nhat-duoc';
 
   useEffect(() => {
@@ -91,7 +91,6 @@ export default function PostItemPage() {
       const post = await (isFound ? createFoundPost : createLostPost)({
         title: formData.itemName.trim(), description: formData.description.trim(),
         categoryId: Number(formData.categoryId), locationText: formData.location.trim(),
-        privateIdentifiers: formData.privateIdentifiers.trim(),
         eventAt: `${formData.date}T${formData.time}:00+07:00`,
       }, images.map(image => image.file));
       setCreated(post);

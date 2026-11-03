@@ -47,7 +47,6 @@ export default function StepReview({ formData, postType }) {
       </div>
       <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{formData.description}</p>
       {postType === 'found' && <p>Bạn tự giữ đồ để trao trả (P2P). Sau khi đăng thành công, có thể chọn giao cho bên tiếp nhận tại chi tiết bài đăng.</p>}
-      <p>Dấu hiệu riêng tư: {formData.privateIdentifiers?.trim() ? 'Đã nhập, sẽ lưu riêng và không công khai.' : 'Chưa nhập; có thể bổ sung sau khi đăng.'}</p>
       <p>Bài đăng sẽ <strong>hiển thị ngay</strong> sau khi đăng thành công.</p>
     </div>
   );

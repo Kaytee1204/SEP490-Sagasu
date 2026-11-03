@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, Clock, MapPin } from 'lucide-react';
 
-export default function StepDetailsForm({ formData, postType, onChange, categories = [], showPrivate = true }) {
+export default function StepDetailsForm({ formData, postType, onChange, categories = [] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div className="input-group">
@@ -89,13 +89,6 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
           style={{ resize: 'vertical' }}
         />
       </div>
-      {showPrivate && <div className="input-group">
-        <label className="input-label" htmlFor="privateIdentifiers">Dấu hiệu nhận dạng riêng tư (không bắt buộc)</label>
-        <textarea id="privateIdentifiers" className="input" rows={4} maxLength={5000}
-          value={formData.privateIdentifiers} onChange={e => onChange({ ...formData, privateIdentifiers: e.target.value })}
-          placeholder="Số seri, dấu vết riêng, chi tiết bên trong…" />
-        <p>Chỉ bạn đọc và sửa được; không xuất hiện trong bài công khai. Tối đa 5.000 ký tự.</p>
-      </div>}
     </div>
   );
 }
