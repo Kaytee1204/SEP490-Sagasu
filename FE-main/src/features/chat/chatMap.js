@@ -1,6 +1,7 @@
 import { Map, Marker, NavigationControl, setWorkerUrl } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { bindMapGestures } from './chatMapGestures';
 
 setWorkerUrl(workerUrl);
 
@@ -8,17 +9,16 @@ export function createChatMap(container, { onPick, onReady, onError }) {
   const map = new Map({
     container, style: import.meta.env.VITE_CHAT_MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty',
     center: [105.85, 21.03], zoom: 12, maxZoom: 19,
-    dragPan: true, touchZoomRotate: true, cooperativeGestures: false,
+    dragPan: false, touchZoomRotate: true, cooperativeGestures: false,
     dragRotate: false, pitchWithRotate: false,
     attributionControl: { compact: false },
   });
   map.addControl(new NavigationControl({ showCompass: false }), 'top-left');
   const pick = coordinates => onPick({ latitude: coordinates.lat, longitude: coordinates.lng });
-  const marker = new Marker({ color: '#1c7070', draggable: true })
+  const marker = new Marker({ color: '#1c7070' })
     .setLngLat(map.getCenter()).addTo(map);
   marker.getElement().setAttribute('aria-label', 'Kéo ghim để chọn vị trí');
-  marker.on('dragend', () => pick(marker.getLngLat().wrap()));
-  map.on('click', event => pick(event.lngLat.wrap()));
+  const removeGestures = bindMapGestures(map, marker, pick);
   map.on('load', () => { onReady(); onError(''); });
   map.on('idle', () => { if (map.areTilesLoaded()) onError(''); });
   map.on('error', event => {
@@ -33,6 +33,6 @@ export function createChatMap(container, { onPick, onReady, onError }) {
     },
     focus(point) { map.jumpTo({ center: [point.longitude, point.latitude], zoom: 16 }); },
     getCenter() { const center = map.getCenter().wrap(); return { latitude: center.lat, longitude: center.lng }; },
-    remove() { removed = true; resize.disconnect(); map.remove(); },
+    remove() { removed = true; resize.disconnect(); removeGestures(); map.remove(); },
   };
 }

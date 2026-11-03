@@ -39,7 +39,9 @@
 .chat-location-hint svg { flex-shrink:0; margin-top:3px; color:#1c7070; }
 .chat-map-wrap { position:relative; overflow:hidden; border-radius:12px; }
 .chat-location-map { height:380px; width:100%; background:#eaf0f1; color:#111827; }
-.chat-location-map .maplibregl-canvas,.chat-location-map .maplibregl-marker { touch-action:none; user-select:none; }
+.chat-location-map .maplibregl-canvas-container,.chat-location-map .maplibregl-canvas,.chat-location-map .maplibregl-marker { touch-action:none; user-select:none; -webkit-user-select:none; }
+.chat-location-map .maplibregl-canvas,.chat-location-map .maplibregl-marker { cursor:grab; }
+.chat-location-map .chat-map-dragging { cursor:grabbing; }
 .chat-map-gps,.chat-map-center { position:absolute; z-index:2; display:flex; align-items:center; gap:6px; border:1px solid #d6dce5; border-radius:22px; padding:8px 12px; background:#fff; color:#172033; box-shadow:0 2px 8px #0002; font-size:.8rem; font-weight:600; }
 .chat-map-gps { top:12px; right:12px; }
 .chat-map-center { top:56px; right:12px; }

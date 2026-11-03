@@ -98,7 +98,7 @@ export default function LocationPicker({ chatId, onClose, onSent }) {
   }
   function close() { if (!busyRef.current) onClose(); }
   return <dialog ref={dialog} aria-labelledby={titleId} className={`chat-location-dialog ${busy ? 'is-busy' : ''}`}
-    onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) close(); }}>
+    onCancel={event => { event.preventDefault(); close(); }}>
     <header><h2 id={titleId}><MapPin size={23} /> Chọn vị trí trên bản đồ</h2><button type="button" disabled={busy} aria-label="Đóng bản đồ" onClick={close}><X size={23} /></button></header>
     <div className="chat-location-content">
       <div className="chat-map-wrap"><div ref={canvas} className="chat-location-map" aria-label="Bản đồ chọn vị trí" />
@@ -113,7 +113,7 @@ export default function LocationPicker({ chatId, onClose, onSent }) {
         {accuracy !== null && <small>Độ chính xác vị trí hiện tại khoảng {accuracy} m.</small>}
       </div></section>
       {addressError && <div className="chat-location-warning" role="status">{addressError} <button type="button" disabled={busy || addressLoading} onClick={() => setAddressAttempt(value => value + 1)}>Lấy lại địa chỉ</button></div>}
-      <p className="chat-location-hint"><Info size={15} /> Chạm hoặc nhấp vào bản đồ, kéo ghim, hoặc lấy vị trí hiện tại để chọn điểm muốn gửi.</p>
+      <p className="chat-location-hint"><Info size={15} /> Kéo bản đồ để chọn vị trí ở giữa, kéo thả ghim đến điểm muốn gửi, hoặc bấm chọn trực tiếp trên bản đồ.</p>
       {error && <p className="chat-location-warning" role="alert">{error}</p>}
     </div>
     <form onSubmit={submit}><footer><button type="button" className="chat-location-cancel" disabled={busy} onClick={close}>Hủy bỏ</button>
