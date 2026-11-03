@@ -3,6 +3,9 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    CLAIM_QUESTIONNAIRE_INVALID(HttpStatus.BAD_REQUEST, "CLAIM_400_ANSWERS", "Câu trả lời claim chưa hợp lệ"),
+    CLAIM_QUESTIONNAIRE_STALE(HttpStatus.CONFLICT, "CLAIM_409_QUESTIONS", "Bộ câu hỏi đã thay đổi. Vui lòng mở lại form claim"),
+    CLAIM_QUESTIONNAIRE_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_NO_QUESTIONS", "Chưa có bộ câu hỏi khả dụng cho claim"),
     CLAIM_NOT_FOUND(HttpStatus.NOT_FOUND, "CLAIM_404", "Không tìm thấy hồ sơ claim được phép truy cập"),
     CLAIM_POST_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_POST", "Chỉ có thể claim bài Found tự giữ đang hiển thị và còn mở"),
     CLAIM_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "CLAIM_400_SELF", "Không thể claim bài đăng của chính mình"),

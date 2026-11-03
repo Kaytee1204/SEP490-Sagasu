@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { getPostDetail } from '@/features/items/api/postApi';
-import { getClaimOnPost, getLatestClaimOnPost, submitClaim } from '../api/claimApi';
+import { getClaimOnPost, getLatestClaimOnPost, getClaimQuestionnaire, submitClaim } from '../api/claimApi';
 import { validClaimId, claimDetailPath } from '../claimUtils';
+import { serializeQuestionnaireAnswers } from '../questionnaireUtils';
+import ClaimQuestionnaireFields from '../components/ClaimQuestionnaireFields';
 import '../Claims.css';
 
 export default function SubmitClaimPage() {
@@ -19,6 +21,7 @@ function ClaimForm({ postId, retryId }) {
   const [loaded, setLoaded] = useState(null);
   const [description, setDescription] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
+  const [answers, setAnswers] = useState({});
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,15 +35,15 @@ function ClaimForm({ postId, retryId }) {
         if (cancelled) return;
         if (previous) { navigate(claimDetailPath(postId, previous.id), { replace: true }); return; }
       }
-      return Promise.all([getPostDetail(postId), retryId ? getClaimOnPost(postId, retryId) : Promise.resolve(null)])
-      .then(([post, old]) => {
+      return Promise.all([getPostDetail(postId), retryId ? getClaimOnPost(postId, retryId) : Promise.resolve(null), getClaimQuestionnaire(postId)])
+      .then(([post, old, questionnaire]) => {
         if (cancelled) return;
         const unavailable = post.postType !== 'FOUND' || post.custodyMode !== 'P2P' || post.officeReceipt
           || post.status !== 'OPEN' || post.moderationStatus !== 'VISIBLE';
         let problem = unavailable ? 'Chỉ có thể gửi claim cho bài nhặt được tự giữ, đang hiển thị và còn mở.' : '';
         if (post.canEditOwnPost) problem = 'Bạn không thể claim bài đăng của chính mình.';
         if (old && (String(old.postId) !== postId || !old.canRetry)) problem = 'Hồ sơ này chưa được phép gửi lại, hoặc bài không còn nhận claim.';
-        setLoaded({ post, old, problem });
+        setLoaded({ post, old, questionnaire, problem });
       });
     }
     load().catch(err => { if (!cancelled) setError(err.message); });
@@ -66,11 +69,21 @@ function ClaimForm({ postId, retryId }) {
     if (!description.trim()) { setError('Vui lòng mô tả căn cứ nhận đồ.'); return; }
     inFlight.current = true; setBusy(true); setError('');
     try {
-      const result = await submitClaim(postId, { description: description.trim(), evidenceNote: evidenceNote.trim() || null }, files.map(entry => entry.file), retryId);
+      const result = await submitClaim(postId, { description: description.trim(), evidenceNote: evidenceNote.trim() || null,
+        questionnaireVersion: loaded.questionnaire.version, answers: serializeQuestionnaireAnswers(loaded.questionnaire, answers) },
+      files.map(entry => entry.file), retryId);
       navigate(claimDetailPath(result.postId, result.id), { replace: true, state: { submitted: true } });
     } catch (err) { setError(err.message); }
     finally { inFlight.current = false; setBusy(false); }
   }
+  const evidenceField = <>
+    <label>Ảnh bằng chứng<input type="file" multiple accept="image/jpeg,image/png" disabled={busy} onChange={upload} /></label>
+    <p className="claims-muted">Tối đa 5 ảnh JPG/PNG, mỗi ảnh tối đa 5 MB. Có thể gửi căn cứ bằng chữ mà không đính kèm ảnh.</p>
+    <div className="claim-evidence">{files.map(entry => <div key={entry.id}><img src={entry.url} alt={entry.file.name} /><small>{entry.file.name}</small>
+      <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => remove(entry)} aria-label={`Xóa ảnh ${entry.file.name}`}>Xóa ảnh</button></div>)}</div>
+    <label>Ghi chú bằng chứng (không bắt buộc)<textarea maxLength={5000} value={evidenceNote} disabled={busy}
+      onChange={event => setEvidenceNote(event.target.value)} placeholder="Ghi chú về ảnh cũ, hóa đơn hoặc tài liệu đính kèm…" /></label>
+  </>;
   return <main className="container claims-page">
     <header className="claims-heading"><h1>{retryId ? 'Gửi claim mới' : 'Xác minh quyền sở hữu'}</h1><Link className="btn btn-ghost" to={`/chi-tiet/${postId}`}>Về bài đăng</Link></header>
     {error && <div className="claim-alert" role="alert">{error}</div>}
@@ -81,14 +94,9 @@ function ClaimForm({ postId, retryId }) {
         {loaded.old && <div className="claim-notice">Hồ sơ #{loaded.old.id} {loaded.old.status === 'CANCELLED' ? 'đã hủy' : 'đã bị từ chối'}. Lần gửi này tạo hồ sơ mới; nội dung, bằng chứng và lịch sử cũ vẫn được giữ lại.
           <Link to={claimDetailPath(loaded.old.postId, loaded.old.id)}> Xem hồ sơ cũ</Link></div>}
         <form className="claim-panel claim-form" onSubmit={send}>
-          <label>Mô tả căn cứ nhận đồ *<textarea required maxLength={5000} value={description} disabled={busy}
-            onChange={event => setDescription(event.target.value)} placeholder="Đặc điểm riêng, thời điểm làm mất hoặc thông tin giúp xác minh bạn là chủ đồ vật…" /></label>
-          <label>Ghi chú bằng chứng<textarea maxLength={5000} value={evidenceNote} disabled={busy}
-            onChange={event => setEvidenceNote(event.target.value)} placeholder="Ví dụ: hóa đơn mua hàng, chi tiết chỉ chủ sở hữu biết…" /></label>
-          <label>Ảnh bằng chứng<input type="file" multiple accept="image/jpeg,image/png" disabled={busy} onChange={upload} /></label>
-          <p className="claims-muted">Tối đa 5 ảnh JPG/PNG, mỗi ảnh tối đa 5 MB. Có thể gửi căn cứ bằng chữ mà không đính kèm ảnh.</p>
-          <div className="claim-evidence">{files.map(entry => <div key={entry.id}><img src={entry.url} alt={entry.file.name} /><small>{entry.file.name}</small>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => remove(entry)} aria-label={`Xóa ảnh ${entry.file.name}`}>Xóa ảnh</button></div>)}</div>
+          <ClaimQuestionnaireFields questionnaire={loaded.questionnaire} answers={answers}
+            onAnswer={(code, value) => setAnswers(current => ({ ...current, [code]: value }))}
+            description={description} onDescription={setDescription} evidenceField={evidenceField} disabled={busy} />
           <button className="btn btn-accent" disabled={busy} type="submit">{busy ? 'Đang gửi…' : 'Gửi claim'}</button>
         </form>
       </>}

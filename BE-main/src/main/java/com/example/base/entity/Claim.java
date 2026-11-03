@@ -30,6 +30,9 @@ public class Claim {
     @OneToMany(mappedBy = "claim", cascade = CascadeType.PERSIST)
     @OrderBy("sortOrder ASC, id ASC") @Getter(AccessLevel.NONE)
     private List<ClaimEvidence> evidence = new ArrayList<>();
+    @OneToMany(mappedBy = "claim", cascade = CascadeType.PERSIST)
+    @OrderBy("sortOrder ASC, id ASC") @Getter(AccessLevel.NONE)
+    private List<ClaimAnswer> answers = new ArrayList<>();
 
     public static Claim submit(Post post, Account claimant, String description, String evidenceNote) {
         Claim claim = new Claim();
@@ -42,6 +45,8 @@ public class Claim {
 
     public void addEvidence(ClaimEvidence image) { image.attachTo(this); evidence.add(image); }
     public List<ClaimEvidence> getEvidence() { return Collections.unmodifiableList(evidence); }
+    public void addAnswer(ClaimAnswer answer) { answer.attachTo(this); answers.add(answer); }
+    public List<ClaimAnswer> getAnswers() { return Collections.unmodifiableList(answers); }
     public void review(String decision) { status = decision; }
     public void cancel() { status = "CANCELLED"; cancelledAt = OffsetDateTime.now(); }
     @PrePersist void onCreate() { createdAt = OffsetDateTime.now(); updatedAt = createdAt; }

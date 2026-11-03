@@ -18,6 +18,21 @@
 .claim-form label { display: flex; flex-direction: column; gap: 7px; font-weight: 600; }
 .claim-form textarea, .claim-form select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-primary); font: inherit; font-weight: 400; }
 .claim-form textarea { resize: vertical; min-height: 110px; }
+.claim-form input[type="date"], .claim-form input[type="time"] { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface); color: var(--text-primary); font: inherit; }
+.claim-questionnaire { display: flex; flex-direction: column; gap: 28px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.claim-question-group { display: flex; flex-direction: column; gap: 20px; }
+.claim-question-group + .claim-question-group { padding-top: 24px; border-top: 1px solid var(--border); }
+.claim-question-group h2 { margin: 0; }
+.claim-question { display: flex; flex-direction: column; gap: 12px; min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+.claim-question legend { max-width: 100%; padding-inline: 6px; font-weight: 600; overflow-wrap: anywhere; }
+.claim-question-date { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.claim-question-evidence { display: flex; flex-direction: column; gap: 12px; }
+.claim-question-evidence h3 { margin: 0; }
+.claim-answer-group + .claim-answer-group { margin-top: 22px; padding-top: 10px; border-top: 1px solid var(--border); }
+.claim-answer-list { margin: 0; }
+.claim-answer-list > div { padding-block: 10px; }
+.claim-answer-list dt { font-weight: 600; }
+.claim-answer-list dd { margin-left: 0; margin-bottom: 0; color: var(--text-secondary); }
 .claim-form :focus-visible, .claim-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .claim-alert { padding: 14px 16px; border-radius: 10px; background: #fff1f2; color: #9f1239; margin-bottom: 16px; }
 .claim-notice { padding: 14px 16px; border-radius: 10px; background: #f0fdfa; color: #115e59; margin-block: 16px; }

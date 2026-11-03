@@ -4,7 +4,7 @@ Ngày khảo sát và cập nhật: **03/11/2026**.
 
 **Đã chốt theo yêu cầu:** dùng câu hỏi chung **C1, C2, C3, C4**; giữ toàn bộ câu hỏi riêng ở mục 5 của bản trước; thêm các category còn thiếu, ngoại trừ **Hokie P** và **Default**.
 
-**Trạng thái hiện tại:** đã thêm 6 category vào PostgreSQL Docker, tổng cộng 16 category đang hoạt động. Bộ câu hỏi trong file vẫn là tài liệu để duyệt; chưa triển khai form động hoặc bảng lưu câu trả lời.
+**Trạng thái hiện tại:** các phần còn lại đã được người dùng duyệt. Đã triển khai C1–C4, 16 bộ câu hỏi theo category và phần đọc câu trả lời trong hồ sơ claim; migration 10 tạo ba bảng phục vụ chức năng này. Ngày triển khai: **04/11/2026**. Chỉ kiểm tra build, không viết hoặc chạy test theo yêu cầu.
 
 Nguồn: [Pixit — Virginia Tech SECL, Browse Items](https://campuslife.app.pixithq.com/public/#/squires/items).
 
@@ -17,7 +17,7 @@ Nguồn: [Pixit — Virginia Tech SECL, Browse Items](https://campuslife.app.pix
 - Phần câu hỏi Pixit bên dưới được **diễn giải ngắn bằng tiếng Việt**. Phần đề xuất Sagasu là cách điều chỉnh cho nghiệp vụ và category hiện có, không phải bản sao nguyên văn của Pixit.
 - Chỉ khảo sát một mẫu cho mỗi category, không khẳng định đã kiểm tra mọi món đồ hoặc mọi cấu hình của toàn bộ nền tảng Pixit.
 - Lượt khảo sát đầu đọc 10 category từ PostgreSQL Docker. Trong bản duyệt 2, đã thêm 6 category theo yêu cầu; không đổi tên/ID các category cũ và không chuyển category của bài đăng hiện có.
-- Chỉ cập nhật dữ liệu danh mục và tài liệu này. Chưa sửa code, schema claim hoặc luồng xét duyệt.
+- Lượt khảo sát ban đầu chỉ cập nhật dữ liệu danh mục và tài liệu. Sau khi người dùng duyệt, phần triển khai đã bổ sung form, lưu câu trả lời và ba bảng ở mục 9; giữ nguyên luồng xét duyệt claim và không làm luồng Approver.
 
 ## 2. Những điểm quan sát được trên Pixit
 
@@ -107,8 +107,8 @@ Hiện có **16 category đang hoạt động**: 10 category cũ và 6 category 
 
 - Thêm đúng 6 dòng mới vào bảng `category`, đều có `is_active = true`.
 - Không sửa hoặc xóa 10 dòng cũ.
-- Không tạo bảng, cột, migration hoặc câu trả lời claim.
-- Chưa lưu mẫu câu hỏi vào DB; nội dung câu hỏi vẫn nằm trong file để bạn duyệt trước.
+- Bước thêm category không đổi schema. Bước triển khai sau khi duyệt bổ sung ba bảng riêng qua migration 10, mô tả tại mục 9.
+- Mẫu câu hỏi đã được lưu vào DB; không tự tạo câu trả lời hoặc thay đổi dữ liệu claim hiện có.
 
 ## 4. Bộ câu hỏi chung đề xuất cho Sagasu
 
@@ -375,11 +375,11 @@ Không tự chấp thuận claim chỉ vì trả lời đủ câu hỏi hoặc t
 - [x] Giữ nguyên toàn bộ **59 câu hỏi** ở mục 5.1–5.10 của bản trước.
 - [x] Thêm 6 category còn thiếu vào DB; không thêm Hokie P và Default.
 - [x] Giữ nguyên tên, ID và bài đăng của các category cũ.
-- [ ] Duyệt nội dung **36 câu hỏi bổ sung** cho 6 category mới ở mục 5.11–5.16.
-- [ ] Duyệt cách ưu tiên category cụ thể khi đăng bài mới theo mục 3.1.
-- [ ] Duyệt mức bắt buộc và điều kiện hiển thị của từng câu hỏi.
-- [ ] Duyệt cách xử lý các câu hỏi theo nhánh, tránh hỏi những thông tin không áp dụng cho món đồ.
-- [ ] Chốt số ký tự cuối được yêu cầu tùy chọn cho serial/thẻ; không thu mật khẩu, PIN, OTP hoặc CVV.
+- [x] Duyệt nội dung **36 câu hỏi bổ sung** cho 6 category mới ở mục 5.11–5.16.
+- [x] Duyệt cách ưu tiên category cụ thể khi đăng bài mới theo mục 3.1.
+- [x] Duyệt mức bắt buộc và điều kiện hiển thị của từng câu hỏi.
+- [x] Duyệt cách xử lý các câu hỏi theo nhánh, tránh hỏi những thông tin không áp dụng cho món đồ.
+- [x] Serial/phần mã thẻ là tùy chọn, không ép số ký tự cố định; không hỏi mật khẩu, PIN, OTP hoặc CVV.
 
 Việc chọn tất cả câu hỏi không có nghĩa hiện mọi nhánh trên mọi hồ sơ: mỗi claim dùng C1–C4 và bộ riêng theo category, rồi chỉ hiện những nhánh phù hợp.
 
@@ -389,7 +389,7 @@ Việc chọn tất cả câu hỏi không có nghĩa hiện mọi nhánh trên 
 - DB Sagasu hiện có **16 category đang hoạt động**, gồm 10 category cũ và 6 dòng mới có ID **67–72**.
 - Bộ câu hỏi chung còn đúng **4 câu C1–C4**.
 - Mục 5 có **16 bộ câu hỏi riêng**: giữ 59 câu cũ và bổ sung 36 câu cho category mới, tổng 95 dòng câu hỏi theo category. Người dùng chỉ trả lời bộ và nhánh áp dụng cho món đồ của mình.
-- Đã cập nhật dữ liệu category và file này. **Chưa triển khai câu hỏi động, chưa lưu mẫu câu hỏi/câu trả lời vào DB, chưa sửa code hoặc luồng xét duyệt.**
+- Phần category và tài liệu được commit trước bằng **38e6bad**. Sau khi duyệt, bộ câu hỏi động đã được triển khai như mục 9; luồng xét duyệt claim giữ nguyên.
 
 ### 8.1. SQL bổ sung category để tham khảo khi đồng bộ máy khác
 
@@ -413,3 +413,31 @@ COMMIT;
 ```
 
 SQL chỉ thêm những tên chưa có theo ràng buộc unique tên category hiện tại; không đổi tên, không chuyển bài đăng và không kích hoạt lại category đã tồn tại nhưng bị tắt.
+
+## 9. Phần đã triển khai sau khi duyệt
+
+### 9.1. Migration và ba bảng mới
+
+- `BE-main/db/09_add_claim_categories.sql`: bổ sung 6 category, đã commit cùng bản tài liệu được duyệt.
+- `BE-main/db/10_claim_questionnaires.sql`: tạo ba bảng bên dưới và seed **17 mẫu, 99 câu hỏi**; đã áp dụng vào Docker hiện tại.
+- Repo đang dùng các script SQL theo thứ tự trong `BE-main/db`; cần chạy 09 rồi 10 trên máy khác sau các script claim 07–08. Không gán cứng category ID 67–72: migration gắn mẫu vào category theo tên lúc seed, sau đó lưu khóa ngoại theo ID.
+
+| Bảng | Vai trò |
+| --- | --- |
+| `claim_question_template` | Mẫu chung và mẫu theo category, có phiên bản, trạng thái hoạt động và khóa ngoại tới category. |
+| `claim_question` | Nội dung câu hỏi, kiểu nhập, lựa chọn, mức bắt buộc, thứ tự và điều kiện hiển thị. |
+| `claim_answer` | Câu trả lời theo claim, kèm bản chụp nhãn câu hỏi, tên bộ và phiên bản lúc gửi. |
+
+C3 vẫn dùng `claim.description`; C4 dùng `claim_evidence` và ghi chú bằng chứng hiện có. Không nhân đôi nội dung C3 hoặc file ảnh sang bảng câu trả lời.
+
+### 9.2. Backend và frontend
+
+- `GET /api/posts/{postId}/claims/questions`: lấy mẫu câu hỏi phù hợp khi người dùng được phép gửi claim cho bài đó.
+- Gửi claim/gửi lại claim mang thêm phiên bản mẫu và danh sách câu trả lời; backend kiểm tra lại category, câu bắt buộc, lựa chọn, ngày mất và nhánh đang hiển thị trước khi tải ảnh, rồi kiểm tra lại khi lưu.
+- C1 hỗ trợ ngày chính xác, gần đúng hoặc không nhớ rõ; giờ mất không bắt buộc và dùng giờ Việt Nam.
+- Các trường nhánh chỉ hiện khi phù hợp; câu trả lời của nhánh đang ẩn không được gửi hoặc chấp nhận ở backend.
+- C5/C6 không nằm trong form. Không hiển thị hay điền sẵn `privateIdentifiers` của người nhặt vào câu trả lời.
+- Chi tiết claim hiển thị câu trả lời được lưu lúc gửi; chỉ người claim và người nhặt được xem, theo quyền của hồ sơ hiện có.
+- Claim cũ không có câu trả lời dạng mới vẫn đọc được căn cứ, bằng chứng và lịch sử. Gửi lại sau khi hủy/từ chối tạo claim mới với mẫu hiện hành, giữ nguyên hồ sơ cũ.
+- Nếu thêm category mới chưa gắn mẫu, dùng mẫu Đồ dùng khác làm dự phòng; không sửa service/controller CRUD category.
+- Không bổ sung tự động duyệt, lịch hẹn giao đồ hoặc module Approver.

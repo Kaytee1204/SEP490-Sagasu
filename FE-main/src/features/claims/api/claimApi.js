@@ -8,6 +8,7 @@ export const getClaimsOnPost = (postId, page = 1, status = 'ALL') => data(apiCli
 export const getClaim = id => data(apiClient.get(`/claims/${encodeURIComponent(id)}`));
 export const getClaimOnPost = (postId, id) => data(apiClient.get(`/posts/${encodeURIComponent(postId)}/claims/${encodeURIComponent(id)}`));
 export const getLatestClaimOnPost = postId => data(apiClient.get(`/posts/${encodeURIComponent(postId)}/claims/mine`));
+export const getClaimQuestionnaire = postId => data(apiClient.get(`/posts/${encodeURIComponent(postId)}/claims/questions`));
 export const reviewClaim = (id, request) => data(apiClient.post(`/claims/${encodeURIComponent(id)}/review`, request));
 export const cancelClaim = (id, request) => data(apiClient.post(`/claims/${encodeURIComponent(id)}/cancel`, request));
 export async function submitClaim(postId, request, images, retryId) {

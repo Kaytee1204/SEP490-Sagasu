@@ -36,6 +36,7 @@ public class ClaimService {
     private final ImageValidator validator;
     private final PlatformTransactionManager transactionManager;
     private final EntityManager entityManager;
+    private final ClaimQuestionnaireService questionnaires;
 
     public ClaimResultDto submit(long postId, SubmitClaimRequest request, List<MultipartFile> files, CustomUserDetails user) {
         return create(postId, null, request, files, user);
@@ -59,7 +60,9 @@ public class ClaimService {
         // Fail before uploading, then recheck under the post lock after network I/O.
         long actorId = transaction.execute(tx -> {
             Account actor = activeActor(user);
-            validateNewClaim(post(postId), actor.getId(), previousId);
+            Post post = post(postId);
+            validateNewClaim(post, actor.getId(), previousId);
+            questionnaires.validateAndSnapshot(post, request);
             return actor.getId();
         });
         var images = validator.validate(files);
@@ -75,6 +78,7 @@ public class ClaimService {
                 Account actor = activeActor(user);
                 validateNewClaim(post, actor.getId(), previousId);
                 Claim claim = Claim.submit(post, actor, request.description(), request.evidenceNote());
+                questionnaires.validateAndSnapshot(post, request).forEach(claim::addAnswer);
                 for (int i = 0; i < images.size(); i++) {
                     var image = images.get(i);
                     claim.addEvidence(new ClaimEvidence(uploaded.get(i), safeName(files.get(i).getOriginalFilename()),
@@ -92,6 +96,14 @@ public class ClaimService {
             if (failure instanceof DataIntegrityViolationException) throw new AppException(ErrorCode.CLAIM_DUPLICATE);
             throw failure;
         }
+    }
+
+    @Transactional(readOnly = true)
+    public ClaimQuestionnaireDto questionnaire(long postId, CustomUserDetails user) {
+        Account actor = activeActor(user);
+        Post post = post(postId);
+        validateNewClaim(post, actor.getId(), null);
+        return questionnaires.forCategory(post.getCategory());
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +165,10 @@ public class ClaimService {
         return new ClaimDetailDto(claim.getId(), post.getId(), post.getTitle(), post.getStatus(),
                 claim.getClaimant().getId(), name(claim.getClaimant()), name(post.getAccount()), claim.getStatus(),
                 claim.getDescription(), claim.getEvidenceNote(), claim.getCreatedAt(), claim.getUpdatedAt(), claim.getVersion(),
-                finder && open && "PENDING".equals(claim.getStatus()), claimant && cancellable(claim), retry, evidence, timeline);
+                finder && open && "PENDING".equals(claim.getStatus()), claimant && cancellable(claim), retry, evidence, timeline,
+                claim.getAnswers().stream().map(answer -> new ClaimDetailDto.AnswerDto(answer.getQuestionCode(),
+                        answer.getQuestionLabel(), answer.getAnswerText(), answer.getSectionTitle(),
+                        answer.getTemplateCode(), answer.getTemplateVersion())).toList());
     }
 
     @Transactional
