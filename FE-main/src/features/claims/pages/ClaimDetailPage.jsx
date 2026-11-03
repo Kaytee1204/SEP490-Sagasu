@@ -94,7 +94,7 @@ function ClaimDetail({ postId, id }) {
             <small>{image.originalName || 'Ảnh bằng chứng'}</small></div>;
         })}</div>{!claim.evidence.length && <p className="claims-muted">Hồ sơ không đính kèm ảnh.</p>}
       </section>
-      {claim.status === 'APPROVED' && <OpenChatButton postId={claim.postId} />}
+      {claim.canOpenChat && <OpenChatButton postId={claim.postId} />}
       <ClaimAnswerSummary answers={claim.answers} />
       {claim.canReview && <form className="claim-panel claim-form" onSubmit={event => { event.preventDefault(); act('review'); }}>
         <h2>Xét duyệt hồ sơ</h2><label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>

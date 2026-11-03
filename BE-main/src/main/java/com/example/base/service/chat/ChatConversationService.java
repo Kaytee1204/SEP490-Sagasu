@@ -2,6 +2,8 @@ package com.example.base.service.chat;
 
 import com.example.base.entity.*;
 import com.example.base.repository.*;
+import com.example.base.exception.AppException;
+import com.example.base.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
@@ -11,10 +13,14 @@ public class ChatConversationService {
     private final ChatConversationRepository conversations;
     private final ChatParticipantRepository participants;
     private final ChatEvents events;
+    private final ChatAccessPolicy policy;
+
+    public boolean canOpen(Claim claim) { return policy.eligible(claim); }
 
     /** Caller already holds the post/claim locks in the approval/open transaction. */
     @Transactional(propagation = Propagation.MANDATORY)
     public ChatConversation forApprovedClaim(Claim claim) {
+        if (!canOpen(claim)) throw new AppException(ErrorCode.CHAT_UNAVAILABLE);
         ChatConversation conversation = conversations.findByPost_IdAndClaimant_Id(
                 claim.getPost().getId(), claim.getClaimant().getId()).orElse(null);
         if (conversation == null) {

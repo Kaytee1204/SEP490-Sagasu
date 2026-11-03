@@ -169,7 +169,7 @@ public class ClaimService {
                 finder && open && "PENDING".equals(claim.getStatus()), claimant && cancellable(claim), retry, evidence, timeline,
                 claim.getAnswers().stream().map(answer -> new ClaimDetailDto.AnswerDto(answer.getQuestionCode(),
                         answer.getQuestionLabel(), answer.getAnswerText(), answer.getSectionTitle(),
-                        answer.getTemplateCode(), answer.getTemplateVersion())).toList());
+                        answer.getTemplateCode(), answer.getTemplateVersion())).toList(), chatConversations.canOpen(claim));
     }
 
     @Transactional

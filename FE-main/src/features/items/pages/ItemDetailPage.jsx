@@ -162,6 +162,7 @@ function PostDetail({ id, onRetry }) {
           {post.postType === 'FOUND' && post.canEditOwnPost && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
           {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
+            && post.moderationStatus === 'VISIBLE'
             && post.status === 'RESERVED' && (post.canEditOwnPost || current.myClaim?.status === 'APPROVED')
             && <OpenChatButton postId={post.id} />}
 
