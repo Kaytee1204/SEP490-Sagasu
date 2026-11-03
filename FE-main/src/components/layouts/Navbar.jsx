@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Plus, LogOut, User, LayoutDashboard, ChevronDown, Menu, X, Home, Search, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SagasuLogo from '@/assets/Sagasu_logo_color.svg';
+import ChatBadgeLink from '@/features/chat/components/ChatBadgeLink';
 
 function AvatarDropdown() {
   const [open, setOpen] = useState(false);
@@ -238,6 +239,7 @@ export default function Navbar() {
             {isAuthenticated ? (
               <>
                 {/* Notifications */}
+                <ChatBadgeLink />
                 <button className="nav-icon-btn hidden sm:flex" id="nav-notifications" aria-label="Thông báo">
                   <Bell size={18} />
                   <span className="nav-badge">1</span>

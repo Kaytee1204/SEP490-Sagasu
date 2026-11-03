@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '../ChatProvider';
-import { getMessages, sendMessage } from '../api/chatApi';
+import { getMessages, sendMessage, markChatRead } from '../api/chatApi';
 
 const merge = (old, incoming) => [...new Map([...old, ...incoming].map(row => [row.id, row])).values()].sort((a, b) => a.sequence - b.sequence);
 
@@ -20,6 +20,8 @@ export default function ChatThread({ chat }) {
   const anchor = useRef(null);
   const retry = useRef(null);
   const synchronizer = useRef(null);
+  const syncedThrough = useRef(0);
+  const requestedRead = useRef(chat.lastReadSequence);
   useEffect(() => {
     let disposed = false, running = false, pending = false, initialized = false, sequence = 0;
     async function sync() {
@@ -35,6 +37,7 @@ export default function ChatThread({ chat }) {
             if (disposed) return;
             setRows(old => merge(old, page.items));
             sequence = Math.max(sequence, ...page.items.map(row => row.sequence));
+            syncedThrough.current = sequence;
             more = initialized && page.hasMore;
             if (!initialized) { setBefore(page.nextBefore); initialized = true; }
             setLoaded(true);
@@ -47,6 +50,43 @@ export default function ChatThread({ chat }) {
     return () => { disposed = true; synchronizer.current = null; };
   }, [chat.id]);
   useEffect(() => { synchronizer.current?.(); }, [revision]);
+  useEffect(() => {
+    requestedRead.current = Math.max(requestedRead.current, chat.lastReadSequence);
+    const element = viewport.current;
+    if (!element) return;
+    let timer, disposed = false;
+    function scheduleRead() {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+        const bounds = element.getBoundingClientRect();
+        if (!bounds.height) return;
+        let visible = requestedRead.current;
+        for (const bubble of element.querySelectorAll('[data-sequence]')) {
+          const box = bubble.getBoundingClientRect();
+          const sequence = Number(bubble.dataset.sequence);
+          if (bubble.dataset.sender !== String(user.id) && box.bottom <= bounds.bottom && box.bottom > bounds.top
+              && sequence <= syncedThrough.current) visible = Math.max(visible, sequence);
+        }
+        if (visible <= requestedRead.current) return;
+        requestedRead.current = visible;
+        try {
+          const saved = await markChatRead(chat.id, visible);
+          if (!disposed) { requestedRead.current = Math.max(requestedRead.current, saved); refresh(); }
+        } catch {
+          if (!disposed && requestedRead.current === visible) requestedRead.current = chat.lastReadSequence;
+        }
+      }, 300);
+    }
+    element.addEventListener('scroll', scheduleRead);
+    document.addEventListener('visibilitychange', scheduleRead);
+    window.addEventListener('focus', scheduleRead);
+    scheduleRead();
+    return () => {
+      disposed = true; clearTimeout(timer); element.removeEventListener('scroll', scheduleRead);
+      document.removeEventListener('visibilitychange', scheduleRead); window.removeEventListener('focus', scheduleRead);
+    };
+  }, [rows, chat.id, chat.lastReadSequence, user.id]);
   useLayoutEffect(() => {
     const element = viewport.current;
     if (!element) return;
@@ -82,9 +122,10 @@ export default function ChatThread({ chat }) {
     }} aria-label="Tin nhắn trong cuộc trò chuyện">
       {before && <button type="button" className="chat-older" onClick={older} disabled={olderBusy}>{olderBusy ? 'Đang tải…' : 'Xem tin cũ hơn'}</button>}
       {!rows.length && <p className="chat-empty">{loaded ? 'Chưa có tin nhắn.' : 'Đang tải tin nhắn…'}</p>}
-      {rows.map(row => <article key={row.id} data-sequence={row.sequence} className={`chat-bubble ${String(row.senderId) === String(user.id) ? 'mine' : ''}`}>
+      {rows.map(row => <article key={row.id} data-sequence={row.sequence} data-sender={row.senderId} className={`chat-bubble ${String(row.senderId) === String(user.id) ? 'mine' : ''}`}>
         {row.body && <p>{row.body}</p>}
         <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
+        {String(row.senderId) === String(user.id) && row.sequence <= chat.otherReadSequence && <small>Đã xem</small>}
       </article>)}
     </div>
     {error && <p role="alert" className="chat-error">{error}</p>}

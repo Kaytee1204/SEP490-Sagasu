@@ -5,6 +5,10 @@ import com.example.base.dto.chat.ChatDto;
 import com.example.base.dto.chat.ChatPageDto;
 import com.example.base.dto.chat.ChatMessageDto;
 import com.example.base.dto.chat.SendChatRequest;
+import com.example.base.dto.chat.ReadChatRequest;
+import com.example.base.service.chat.ChatReadService;
+import com.example.base.repository.ChatQueryRepository;
+import com.example.base.service.chat.ChatAccessPolicy;
 import com.example.base.service.chat.ChatMessageService;
 import jakarta.validation.Valid;
 import com.example.base.security.CustomUserDetails;
@@ -18,6 +22,18 @@ import org.springframework.web.bind.annotation.*;
 public class ChatController {
     private final ChatService service;
     private final ChatMessageService messages;
+    private final ChatReadService reads;
+    private final ChatQueryRepository queries;
+    private final ChatAccessPolicy policy;
+    @GetMapping("/chats/unread-count")
+    public ResponseEntity<ApiResponse<Long>> unread(@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(queries.unread(policy.actor(user).getId())));
+    }
+    @PostMapping("/chats/{id}/read")
+    public ResponseEntity<ApiResponse<Long>> read(@PathVariable long id, @Valid @RequestBody ReadChatRequest request,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(reads.read(id, request.lastReadSequence(), user)));
+    }
     @GetMapping("/chats/{id}/messages")
     public ResponseEntity<ApiResponse<ChatMessageDto.Page>> history(@PathVariable long id,
             @RequestParam(required = false) Long beforeSequence, @RequestParam(required = false) Long afterSequence,

@@ -2,15 +2,23 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/services/apiClient';
+import { getUnreadCount } from './api/chatApi';
 
-const ChatContext = createContext({ revision: 0, online: false, refresh: () => {} });
+const ChatContext = createContext({ revision: 0, online: false, unread: 0, refresh: () => {} });
 export const useChat = () => useContext(ChatContext);
 
 export default function ChatProvider({ children }) {
   const { user, token } = useAuth();
   const [revision, setRevision] = useState(0);
   const [online, setOnline] = useState(false);
+  const [unread, setUnread] = useState(0);
   function refresh() { setRevision(value => value + 1); }
+  useEffect(() => {
+    let disposed = false;
+    if (!user || !token) { setUnread(0); return; }
+    getUnreadCount().then(value => { if (!disposed) setUnread(value); }).catch(() => {});
+    return () => { disposed = true; };
+  }, [user?.id, token, revision]);
   useEffect(() => {
     if (!user || !token) return;
     let expiration;
@@ -42,5 +50,5 @@ export default function ChatProvider({ children }) {
       setOnline(false); client.deactivate();
     };
   }, [user?.id, token]);
-  return <ChatContext.Provider value={{ revision, online, refresh }}>{children}</ChatContext.Provider>;
+  return <ChatContext.Provider value={{ revision, online, unread, refresh }}>{children}</ChatContext.Provider>;
 }
