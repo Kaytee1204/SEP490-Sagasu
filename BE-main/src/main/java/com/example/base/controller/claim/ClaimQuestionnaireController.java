@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-@Tag(name = "Claims P2P", description = "Bộ câu hỏi xác minh nhận đồ theo danh mục")
+@Tag(name = "Claims", description = "Bộ câu hỏi xác minh nhận đồ theo danh mục")
 public class ClaimQuestionnaireController {
     private final ClaimService service;
 

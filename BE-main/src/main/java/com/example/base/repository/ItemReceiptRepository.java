@@ -36,6 +36,7 @@ public interface ItemReceiptRepository extends JpaRepository<ItemReceipt, Long> 
     List<ItemReceipt> findPublicIntakes(@Param("postIds") List<Long> postIds);
 
     boolean existsByPostId(Long postId);
+    Optional<ItemReceipt> findByPostId(Long postId);
 
     @Query("select distinct r from ItemReceipt r join fetch r.category join fetch r.recordedBy left join fetch r.storageLocation left join fetch r.images where r.id in :ids")
     List<ItemReceipt> findQueueDetails(@Param("ids") List<Long> ids);

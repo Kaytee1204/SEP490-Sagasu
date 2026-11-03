@@ -13,7 +13,7 @@ public enum ErrorCode {
     CLAIM_QUESTIONNAIRE_STALE(HttpStatus.CONFLICT, "CLAIM_409_QUESTIONS", "Bộ câu hỏi đã thay đổi. Vui lòng mở lại form claim"),
     CLAIM_QUESTIONNAIRE_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_NO_QUESTIONS", "Chưa có bộ câu hỏi khả dụng cho claim"),
     CLAIM_NOT_FOUND(HttpStatus.NOT_FOUND, "CLAIM_404", "Không tìm thấy hồ sơ claim được phép truy cập"),
-    CLAIM_POST_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_POST", "Chỉ có thể claim bài Found tự giữ đang hiển thị và còn mở"),
+    CLAIM_POST_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_POST", "Chỉ có thể claim bài Found đang hiển thị, còn mở và thuộc P2P hoặc đã được phòng ban xác nhận tiếp nhận"),
     CLAIM_SELF_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "CLAIM_400_SELF", "Không thể claim bài đăng của chính mình"),
     CLAIM_DUPLICATE(HttpStatus.CONFLICT, "CLAIM_409_DUPLICATE", "Bạn đã có claim đang xử lý cho bài này. Chỉ được gửi hồ sơ mới sau khi bị từ chối hoặc đã hủy"),
     CLAIM_STATE_INVALID(HttpStatus.CONFLICT, "CLAIM_409_STATE", "Claim hoặc bài đăng đã đổi trạng thái. Vui lòng tải lại"),

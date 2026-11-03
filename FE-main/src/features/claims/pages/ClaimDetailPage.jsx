@@ -73,7 +73,7 @@ function ClaimDetail({ postId, id }) {
   }
   return <main className="container claims-page">
     <header className="claims-heading"><h1>Hồ sơ claim #{id}</h1><div className="claim-actions">
-      <Link className="btn btn-ghost" to={claim && String(user?.id) === String(claim.claimantId) ? '/claim-cua-toi?view=sent' : '/claim-cua-toi'}>Claim của tôi</Link>
+      <Link className="btn btn-ghost" to={claim && String(user?.id) === String(claim.claimantId) ? '/claim-cua-toi?view=sent' : claim?.claimType === 'OFFICE' ? '/claim-cua-toi?view=office' : '/claim-cua-toi'}>Claim của tôi</Link>
       <Link className="btn btn-ghost" to={`/chi-tiet/${postId}`}>Xem bài đăng</Link></div></header>
     {error && <div role="alert" className="claim-alert">{error}</div>}
     {notice && <div role="status" className="claim-notice">{notice}</div>}
@@ -81,9 +81,10 @@ function ClaimDetail({ postId, id }) {
       <section className="claim-panel"><span className={`claim-status claim-status-${claim.status}`}>{CLAIM_STATUS[claim.status]}</span>
         {String(user?.id) !== String(claim.claimantId) && <p><Link to={`/bai-dang/${claim.postId}/claims`}>← Các claim trên bài này</Link></p>}
         <h2 className="claim-prose"><Link to={`/chi-tiet/${claim.postId}`}>{claim.postTitle}</Link></h2>
-        <p>Người claim: <strong>{claim.claimantName}</strong> · Người nhặt: <strong>{claim.finderName}</strong></p>
+        <p>Người claim: <strong>{claim.claimantName}</strong> · {claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : <>Người nhặt: <strong>{claim.finderName}</strong></>}</p>
+        {claim.claimType === 'OFFICE' && <p className="claim-notice">Đồ đã được phòng ban tiếp nhận, xác minh. {claim.storageLocationName && <>Nơi lưu trữ: {claim.storageLocationName}. </>}Hồ sơ do cán bộ tiếp nhận xét duyệt; không có chat P2P.</p>}
         <p className="claims-muted">Gửi lúc {claimDate(claim.createdAt)}</p>
-        {claim.status === 'APPROVED' && <p className="claim-notice">Người nhặt đã chấp thuận yêu cầu nhận đồ. Đây chưa phải xác nhận đã bàn giao hoặc đã nhận đồ.</p>}
+        {claim.status === 'APPROVED' && <p className="claim-notice">{claim.claimType === 'OFFICE' ? 'Phòng ban' : 'Người nhặt'} đã chấp thuận yêu cầu nhận đồ. Đây chưa phải xác nhận đã bàn giao hoặc đã nhận đồ.</p>}
         <h3>Căn cứ nhận đồ</h3><p className="claim-prose">{claim.description}</p>
         {claim.evidenceNote && <><h3>Ghi chú bằng chứng</h3><p className="claim-prose">{claim.evidenceNote}</p></>}
         <h3>Ảnh bằng chứng</h3><div className="claim-evidence">{claim.evidence.map(image => {

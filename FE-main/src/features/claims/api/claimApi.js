@@ -4,6 +4,7 @@ const data = async response => (await response).data;
 const query = (page, status) => new URLSearchParams({ page: String(page), size: '12', status });
 export const getMyClaims = (page = 1, status = 'ALL') => data(apiClient.get(`/claims/mine?${query(page, status)}`));
 export const getReceivedClaims = (page = 1, status = 'ALL') => data(apiClient.get(`/claims/received?${query(page, status)}`));
+export const getOfficeClaims = (page = 1, status = 'ALL') => data(apiClient.get(`/claims/office?${query(page, status)}`));
 export const getClaimsOnPost = (postId, page = 1, status = 'ALL') => data(apiClient.get(`/posts/${encodeURIComponent(postId)}/claims?${query(page, status)}`));
 export const getClaim = id => data(apiClient.get(`/claims/${encodeURIComponent(id)}`));
 export const getClaimOnPost = (postId, id) => data(apiClient.get(`/posts/${encodeURIComponent(postId)}/claims/${encodeURIComponent(id)}`));

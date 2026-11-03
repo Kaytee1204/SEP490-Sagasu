@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext';
 import { getPostDetail } from '@/features/items/api/postApi';
 import { getClaimOnPost, getLatestClaimOnPost, getClaimQuestionnaire, submitClaim } from '../api/claimApi';
-import { validClaimId, claimDetailPath } from '../claimUtils';
+import { validClaimId, claimDetailPath, canSubmitPostClaim, postClaimType } from '../claimUtils';
 import { serializeQuestionnaireAnswers } from '../questionnaireUtils';
 import ClaimQuestionnaireFields from '../components/ClaimQuestionnaireFields';
 import '../Claims.css';
@@ -38,9 +38,7 @@ function ClaimForm({ postId, retryId }) {
       return Promise.all([getPostDetail(postId), retryId ? getClaimOnPost(postId, retryId) : Promise.resolve(null), getClaimQuestionnaire(postId)])
       .then(([post, old, questionnaire]) => {
         if (cancelled) return;
-        const unavailable = post.postType !== 'FOUND' || post.custodyMode !== 'P2P' || post.officeReceipt
-          || post.status !== 'OPEN' || post.moderationStatus !== 'VISIBLE';
-        let problem = unavailable ? 'Chỉ có thể gửi claim cho bài nhặt được tự giữ, đang hiển thị và còn mở.' : '';
+        let problem = !canSubmitPostClaim(post) ? 'Bài chưa nhận claim: cần là bài P2P hoặc đồ đã được phòng ban xác nhận tiếp nhận, đang hiển thị và còn mở.' : '';
         if (post.canEditOwnPost) problem = 'Bạn không thể claim bài đăng của chính mình.';
         if (old && (String(old.postId) !== postId || !old.canRetry)) problem = 'Hồ sơ này chưa được phép gửi lại, hoặc bài không còn nhận claim.';
         setLoaded({ post, old, questionnaire, problem });
@@ -90,14 +88,16 @@ function ClaimForm({ postId, retryId }) {
     {!loaded ? <p role="status">{error ? 'Không tải được thông tin bài đăng. Vui lòng mở lại trang.' : 'Đang tải bài đăng…'}</p>
       : loaded.problem ? <div className="claim-panel" role="alert">{loaded.problem}</div> : <>
         <section className="claim-panel"><h2>{loaded.post.title}</h2><p>{loaded.post.locationText}</p>
-          <p className="claims-muted">Căn cứ và ảnh bằng chứng chỉ dành cho bạn và người nhặt xem xét, không hiển thị trên bài đăng.</p></section>
+          <p className="claims-muted">{postClaimType(loaded.post) === 'OFFICE'
+            ? 'Yêu cầu được gửi cho phòng ban tiếp nhận. Bằng chứng chỉ dành cho bạn và cán bộ xét duyệt; luồng này không có chat P2P.'
+            : 'Căn cứ và ảnh bằng chứng chỉ dành cho bạn và người nhặt xem xét, không hiển thị trên bài đăng.'}</p></section>
         {loaded.old && <div className="claim-notice">Hồ sơ #{loaded.old.id} {loaded.old.status === 'CANCELLED' ? 'đã hủy' : 'đã bị từ chối'}. Lần gửi này tạo hồ sơ mới; nội dung, bằng chứng và lịch sử cũ vẫn được giữ lại.
           <Link to={claimDetailPath(loaded.old.postId, loaded.old.id)}> Xem hồ sơ cũ</Link></div>}
         <form className="claim-panel claim-form" onSubmit={send}>
           <ClaimQuestionnaireFields questionnaire={loaded.questionnaire} answers={answers}
             onAnswer={(code, value) => setAnswers(current => ({ ...current, [code]: value }))}
             description={description} onDescription={setDescription} evidenceField={evidenceField} disabled={busy} />
-          <button className="btn btn-accent" disabled={busy} type="submit">{busy ? 'Đang gửi…' : 'Gửi claim'}</button>
+          <button className="btn btn-accent" disabled={busy} type="submit">{busy ? 'Đang gửi…' : postClaimType(loaded.post) === 'OFFICE' ? 'Gửi claim cho phòng ban' : 'Gửi claim'}</button>
         </form>
       </>}
   </main>;

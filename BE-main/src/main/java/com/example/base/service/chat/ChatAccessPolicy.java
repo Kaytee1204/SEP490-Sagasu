@@ -26,7 +26,7 @@ public class ChatAccessPolicy {
     }
     public boolean eligible(Claim claim) {
         Post post = claim.getPost();
-        return "APPROVED".equals(claim.getStatus()) && "FOUND".equals(post.getPostType())
+        return !claim.isOffice() && "APPROVED".equals(claim.getStatus()) && "FOUND".equals(post.getPostType())
                 && "P2P".equals(post.getCustodyMode()) && "VISIBLE".equals(post.getModerationStatus())
                 && "RESERVED".equals(post.getStatus()) && post.getDeletedAt() == null
                 && !Objects.equals(post.getAccount().getId(), claim.getClaimant().getId())

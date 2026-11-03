@@ -20,6 +20,9 @@ public class Claim {
     @JoinColumn(name = "post_id", nullable = false) private Post post;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "claimant_id", nullable = false) private Account claimant;
+    @Column(name = "claim_type", nullable = false, updatable = false, length = 10) private String claimType = "P2P";
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "item_receipt_id", updatable = false) private ItemReceipt receipt;
     @Column(nullable = false, columnDefinition = "text") private String description;
     @Column(name = "evidence_note", columnDefinition = "text") private String evidenceNote;
     @Column(nullable = false, length = 16) private String status = "PENDING";
@@ -34,16 +37,19 @@ public class Claim {
     @OrderBy("sortOrder ASC, id ASC") @Getter(AccessLevel.NONE)
     private List<ClaimAnswer> answers = new ArrayList<>();
 
-    public static Claim submit(Post post, Account claimant, String description, String evidenceNote) {
+    public static Claim submit(Post post, Account claimant, String description, String evidenceNote, ItemReceipt receipt) {
         Claim claim = new Claim();
         claim.post = post;
         claim.claimant = claimant;
+        claim.receipt = receipt;
+        claim.claimType = receipt == null ? "P2P" : "OFFICE";
         claim.description = description.strip();
         claim.evidenceNote = evidenceNote == null || evidenceNote.isBlank() ? null : evidenceNote.strip();
         return claim;
     }
 
     public void addEvidence(ClaimEvidence image) { image.attachTo(this); evidence.add(image); }
+    public boolean isOffice() { return "OFFICE".equals(claimType); }
     public List<ClaimEvidence> getEvidence() { return Collections.unmodifiableList(evidence); }
     public void addAnswer(ClaimAnswer answer) { answer.attachTo(this); answers.add(answer); }
     public List<ClaimAnswer> getAnswers() { return Collections.unmodifiableList(answers); }

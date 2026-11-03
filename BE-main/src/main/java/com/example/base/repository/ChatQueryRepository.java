@@ -19,7 +19,7 @@ public class ChatQueryRepository {
                    c.last_activity_at,
                    (SELECT count(*) FROM chat_message u WHERE u.conversation_id=c.conversation_id
                       AND u.sender_id<>? AND u.sequence_no>mine.last_read_sequence) AS unread,
-                   (cl.status='APPROVED' AND cl.post_id=c.post_id AND cl.claimant_id=c.claimant_id
+                     (cl.claim_type='P2P' AND cl.status='APPROVED' AND cl.post_id=c.post_id AND cl.claimant_id=c.claimant_id
                      AND p.post_type='FOUND' AND p.custody_mode='P2P' AND p.moderation_status='VISIBLE'
                      AND p.status='RESERVED' AND p.deleted_at IS NULL AND a.status='ACTIVE'
                      AND (a.locked_until IS NULL OR a.locked_until<now())

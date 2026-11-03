@@ -31,7 +31,7 @@ public class ClaimService {
     private final ClaimActivityRepository activities;
     private final PostRepository posts;
     private final AccountRepository accounts;
-    private final ItemReceiptRepository receipts;
+    private final ClaimRoutingPolicy routing;
     private final ImageStorage storage;
     private final ImageValidator validator;
     private final PlatformTransactionManager transactionManager;
@@ -77,8 +77,9 @@ public class ClaimService {
             return transaction.execute(tx -> {
                 Post post = lockPost(postId);
                 Account actor = activeActor(user);
+                ItemReceipt receipt = routing.lockReceipt(post);
                 validateNewClaim(post, actor.getId(), previousId);
-                Claim claim = Claim.submit(post, actor, request.description(), request.evidenceNote());
+                Claim claim = Claim.submit(post, actor, request.description(), request.evidenceNote(), receipt);
                 questionnaires.validateAndSnapshot(post, request).forEach(claim::addAnswer);
                 for (int i = 0; i < images.size(); i++) {
                     var image = images.get(i);
@@ -111,7 +112,8 @@ public class ClaimService {
     public ClaimResultDto latestOnPost(long postId, CustomUserDetails user) {
         Account actor = activeActor(user);
         if (postId <= 0) throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
-        return claims.findFirstByPost_IdAndClaimant_IdOrderByCreatedAtDescIdDesc(postId, actor.getId())
+        Post post = post(postId);
+        return claims.findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(postId, actor.getId(), post.getCustodyMode())
                 .map(this::result).orElse(null);
     }
 
@@ -128,11 +130,19 @@ public class ClaimService {
     }
 
     @Transactional(readOnly = true)
+    public ClaimPageDto office(int page, int size, String status, CustomUserDetails user) {
+        Account actor = activeActor(user);
+        if (actor.getRole() != AccountRole.APPROVER) throw new AppException(ErrorCode.FORBIDDEN);
+        return page(claims.findOffice(filter(status), pageable(page, size)), page, size);
+    }
+
+    @Transactional(readOnly = true)
     public ClaimPageDto onPost(long postId, int page, int size, String status, CustomUserDetails user) {
         Account actor = activeActor(user);
         Post post = post(postId);
-        if (!Objects.equals(post.getAccount().getId(), actor.getId())) throw missing();
-        return page(claims.findOnPost(postId, filter(status), pageable(page, size)), page, size);
+        boolean approver = actor.getRole() == AccountRole.APPROVER;
+        if (!Objects.equals(post.getAccount().getId(), actor.getId()) && !approver) throw missing();
+        return page(claims.findOnPost(postId, actor.getId(), approver, filter(status), pageable(page, size)), page, size);
     }
 
     @Transactional(readOnly = true)
@@ -151,8 +161,8 @@ public class ClaimService {
         Post post = claim.getPost();
         if (expectedPostId != null && !Objects.equals(post.getId(), expectedPostId)) throw missing();
         boolean claimant = Objects.equals(claim.getClaimant().getId(), actor.getId());
-        boolean finder = Objects.equals(post.getAccount().getId(), actor.getId());
-        if (!claimant && !finder) throw missing();
+        boolean reviewer = routing.reviewer(claim, actor);
+        if (!claimant && !reviewer) throw missing();
         // Never generate evidence URLs until participation has been checked.
         var evidence = claim.getEvidence().stream().map(image -> new ClaimDetailDto.EvidenceDto(
                 image.getId(), storage.readUrl(image.getStorageKey(), null), image.getOriginalName(),
@@ -160,36 +170,39 @@ public class ClaimService {
         var timeline = activities.findByClaim_IdOrderByCreatedAtAscIdAsc(id).stream()
                 .map(event -> new ClaimDetailDto.ActivityDto(event.getId(), event.getAction(), name(event.getActor()),
                         event.getFromStatus(), event.getToStatus(), event.getReason(), event.getCreatedAt())).toList();
-        boolean open = eligiblePost(post);
+        boolean open = routing.matches(claim, Set.of("OPEN"));
         boolean retry = claimant && RETRYABLE_STATUSES.contains(claim.getStatus()) && open
                 && !claims.existsByPost_IdAndClaimant_IdAndStatusIn(post.getId(), actor.getId(), ACTIVE_STATUSES);
         return new ClaimDetailDto(claim.getId(), post.getId(), post.getTitle(), post.getStatus(),
                 claim.getClaimant().getId(), name(claim.getClaimant()), name(post.getAccount()), claim.getStatus(),
                 claim.getDescription(), claim.getEvidenceNote(), claim.getCreatedAt(), claim.getUpdatedAt(), claim.getVersion(),
-                finder && open && "PENDING".equals(claim.getStatus()), claimant && cancellable(claim), retry, evidence, timeline,
+                reviewer && open && "PENDING".equals(claim.getStatus()), claimant && cancellable(claim), retry, evidence, timeline,
                 claim.getAnswers().stream().map(answer -> new ClaimDetailDto.AnswerDto(answer.getQuestionCode(),
                         answer.getQuestionLabel(), answer.getAnswerText(), answer.getSectionTitle(),
-                        answer.getTemplateCode(), answer.getTemplateVersion())).toList(), chatConversations.canOpen(claim));
+                        answer.getTemplateCode(), answer.getTemplateVersion())).toList(), chatConversations.canOpen(claim),
+                claim.getClaimType(), claim.getReceipt() == null || claim.getReceipt().getStorageLocation() == null
+                        ? null : claim.getReceipt().getStorageLocation().getName());
     }
 
     @Transactional
     public ClaimResultDto review(long id, ReviewClaimRequest request, CustomUserDetails user) {
         Account actor = activeActor(user);
         Post post = lockPost(claimPostId(id));
+        routing.lockReceipt(post);
         Claim claim = lockClaim(id);
-        if (!Objects.equals(post.getAccount().getId(), actor.getId())) throw missing();
+        if (!routing.reviewer(claim, actor)) throw missing();
         if (request == null || !Set.of("APPROVED", "REJECTED").contains(Objects.toString(request.decision(), ""))
                 || request.reason() == null || request.reason().isBlank() || request.reason().length() > 2000) {
             throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
         }
         requireVersion(claim, request.expectedVersion());
-        if (!eligiblePost(post) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
+        if (!routing.matches(claim, Set.of("OPEN")) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
         if ("APPROVED".equals(request.decision())) {
             if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) throw stateChanged();
             post.reserveForClaim();
         }
         claim.review(request.decision());
-        if ("APPROVED".equals(request.decision())) chatConversations.forApprovedClaim(claim);
+        if ("APPROVED".equals(request.decision()) && !claim.isOffice()) chatConversations.forApprovedClaim(claim);
         activities.save(new ClaimActivity(claim, actor,
                 "APPROVED".equals(request.decision()) ? "APPROVE" : "REJECT", "PENDING", request.reason()));
         claims.flush();
@@ -200,6 +213,7 @@ public class ClaimService {
     public ClaimResultDto cancel(long id, CancelClaimRequest request, CustomUserDetails user) {
         Account actor = activeActor(user);
         Post post = lockPost(claimPostId(id));
+        routing.lockReceipt(post);
         Claim claim = lockClaim(id);
         if (!Objects.equals(claim.getClaimant().getId(), actor.getId())) throw missing();
         if (request == null || (request.reason() != null && request.reason().length() > 2000)) {
@@ -221,11 +235,12 @@ public class ClaimService {
 
     private void validateNewClaim(Post post, long actorId, Long previousId) {
         if (Objects.equals(post.getAccount().getId(), actorId)) throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
-        if (!eligiblePost(post)) throw new AppException(ErrorCode.CLAIM_POST_UNAVAILABLE);
+        if (!routing.canSubmit(post)) throw new AppException(ErrorCode.CLAIM_POST_UNAVAILABLE);
         if (previousId != null) {
             Claim old = claim(previousId);
             requireRetryOwner(old, actorId);
             if (!Objects.equals(old.getPost().getId(), post.getId())) throw missing();
+            if (!Objects.equals(old.getClaimType(), post.getCustodyMode())) throw stateChanged();
         }
         if (claims.existsByPost_IdAndClaimant_IdAndStatusIn(post.getId(), actorId, ACTIVE_STATUSES)) {
             throw new AppException(ErrorCode.CLAIM_DUPLICATE);
@@ -237,16 +252,9 @@ public class ClaimService {
         if (!RETRYABLE_STATUSES.contains(old.getStatus())) throw stateChanged();
     }
 
-    private boolean eligiblePost(Post post) {
-        return post.getDeletedAt() == null && "FOUND".equals(post.getPostType()) && "P2P".equals(post.getCustodyMode())
-                && "VISIBLE".equals(post.getModerationStatus()) && "OPEN".equals(post.getStatus())
-                && !receipts.existsByPostId(post.getId());
-    }
-
     private boolean cancellable(Claim claim) {
         return Set.of("PENDING", "APPROVED").contains(claim.getStatus())
-                && Set.of("OPEN", "RESERVED").contains(claim.getPost().getStatus())
-                && !receipts.existsByPostId(claim.getPost().getId());
+                && routing.matches(claim, Set.of("OPEN", "RESERVED"));
     }
 
     private Account activeActor(CustomUserDetails user) {
@@ -296,7 +304,7 @@ public class ClaimService {
     private ClaimPageDto page(Page<Claim> result, int page, int size) {
         return new ClaimPageDto(result.getContent().stream().map(c -> new ClaimSummaryDto(c.getId(), c.getPost().getId(),
                 c.getPost().getTitle(), name(c.getClaimant()), name(c.getPost().getAccount()), c.getStatus(),
-                c.getCreatedAt(), c.getUpdatedAt())).toList(), page, size, result.getTotalElements(), result.getTotalPages());
+                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType())).toList(), page, size, result.getTotalElements(), result.getTotalPages());
     }
     private String name(Account account) { return account.getFullName() == null || account.getFullName().isBlank() ? "Thành viên" : account.getFullName(); }
     private ClaimResultDto result(Claim claim) { return new ClaimResultDto(claim.getId(), claim.getPost().getId(), claim.getStatus(), claim.getVersion()); }

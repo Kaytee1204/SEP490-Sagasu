@@ -4,7 +4,7 @@ import { ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
 import { getLatestClaimOnPost } from '@/features/claims/api/claimApi';
-import { claimDetailPath } from '@/features/claims/claimUtils';
+import { claimDetailPath, canSubmitPostClaim, postClaimType } from '@/features/claims/claimUtils';
 import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
@@ -39,7 +39,7 @@ export default function ItemDetailPage() {
 }
 
 function PostDetail({ id, onRetry }) {
-  const { isAdmin, isManager } = useAuth();
+  const { isAdmin, isManager, isApprover } = useAuth();
   const [result, setResult] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showSmartMatch, setShowSmartMatch] = useState(false);
@@ -134,8 +134,7 @@ function PostDetail({ id, onRetry }) {
             </button>
             )}
 
-            {!post.canEditOwnPost && (current.myClaim || (post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
-              && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN')) && (
+            {!post.canEditOwnPost && (current.myClaim || canSubmitPostClaim(post)) && (
               <Link
                 to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
                 style={{
@@ -153,13 +152,13 @@ function PostDetail({ id, onRetry }) {
                   boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                 }}
               >
-                <span>{current.myClaim ? 'Xem claim đã gửi' : 'Xác minh nhận đồ (Claim)'}</span>
+                <span>{current.myClaim ? 'Xem claim đã gửi' : postClaimType(post) === 'OFFICE' ? 'Gửi yêu cầu nhận đồ cho phòng ban' : 'Xác minh nhận đồ (Claim)'}</span>
                 <ArrowRight size={15} />
               </Link>
             )}
           </div>
 
-          {post.postType === 'FOUND' && post.canEditOwnPost && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
+          {post.postType === 'FOUND' && (post.canEditOwnPost || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
           {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
             && post.moderationStatus === 'VISIBLE'
