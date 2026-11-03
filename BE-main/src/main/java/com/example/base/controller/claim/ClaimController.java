@@ -35,12 +35,6 @@ public class ClaimController {
             @AuthenticationPrincipal CustomUserDetails user) {
         return response(201, service.retry(id, request, images, user));
     }
-    @GetMapping("/posts/{postId}/claims/questions")
-    public ResponseEntity<ApiResponse<ClaimQuestionnaireDto>> questions(@PathVariable long postId,
-            @AuthenticationPrincipal CustomUserDetails user) {
-        return response(200, service.questionnaire(postId, user));
-    }
-
     @GetMapping("/claims/mine")
     public ResponseEntity<ApiResponse<ClaimPageDto>> mine(@RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "12") int size, @RequestParam(defaultValue = "ALL") String status,
