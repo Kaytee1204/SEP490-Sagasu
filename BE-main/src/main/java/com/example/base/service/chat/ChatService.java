@@ -1,6 +1,8 @@
 package com.example.base.service.chat;
 
 import com.example.base.dto.chat.ChatDto;
+import com.example.base.dto.chat.ChatPageDto;
+import java.time.OffsetDateTime;
 import com.example.base.entity.*;
 import com.example.base.exception.*;
 import com.example.base.repository.*;
@@ -21,6 +23,27 @@ public class ChatService {
     private final ChatAccessPolicy policy;
     private final ChatConversationService conversationService;
     private final EntityManager entityManager;
+    private final ChatQueryRepository queries;
+
+    public ChatPageDto list(String cursor, int size, CustomUserDetails user) {
+        Account actor = policy.actor(user);
+        if (size < 1 || size > 50) throw new AppException(ErrorCode.CHAT_INPUT_INVALID);
+        OffsetDateTime before = null;
+        long beforeId = 0;
+        if (cursor != null) {
+            try {
+                int separator = cursor.lastIndexOf('|');
+                before = OffsetDateTime.parse(cursor.substring(0, separator));
+                beforeId = Long.parseLong(cursor.substring(separator + 1));
+                if (beforeId <= 0) throw new IllegalArgumentException();
+            } catch (RuntimeException ex) { throw new AppException(ErrorCode.CHAT_INPUT_INVALID); }
+        }
+        var rows = queries.list(actor.getId(), before, beforeId, size + 1);
+        boolean more = rows.size() > size;
+        var items = rows.stream().limit(size).toList();
+        var last = items.isEmpty() ? null : items.get(items.size() - 1);
+        return new ChatPageDto(items, more && last != null ? last.lastActivityAt() + "|" + last.id() : null);
+    }
 
     public ChatDto detail(long id, CustomUserDetails user) {
         Account actor = policy.actor(user);

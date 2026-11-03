@@ -70,6 +70,7 @@ function AppRoutes() {
 
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>
+        <Route path="/tin-nhan" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/tin-nhan/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
         <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />

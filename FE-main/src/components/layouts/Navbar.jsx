@@ -42,6 +42,7 @@ function AvatarDropdown() {
     { icon: User, label: 'Hồ sơ cá nhân', to: '/ho-so' },
     { icon: Bell, label: 'Bài đăng của tôi', to: '/bai-dang-cua-toi' },
     { icon: ShieldCheck, label: 'Claim của tôi', to: '/claim-cua-toi' },
+    { icon: Bell, label: 'Tin nhắn', to: '/tin-nhan' },
   ];
 
   if (isAdmin) {
