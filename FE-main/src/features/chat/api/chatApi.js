@@ -9,6 +9,7 @@ export const getUnreadCount = async () => (await apiClient.get('/chats/unread-co
 export const markChatRead = async (id, sequence) => (await apiClient.post(`/chats/${encodeURIComponent(id)}/read`, { lastReadSequence: sequence })).data;
 export const getChatLimits = async () => (await apiClient.get('/chats/limits')).data;
 export const sendLocation = async (id, request) => (await apiClient.post(`/chats/${encodeURIComponent(id)}/locations`, request)).data;
+export const getLocationAddress = async (id, point) => (await apiClient.get(`/chats/${encodeURIComponent(id)}/locations/address?${new URLSearchParams({ latitude: String(point.latitude), longitude: String(point.longitude) })}`)).data;
 export const getReadReceipts = async (id, after, through) => (await apiClient.get(`/chats/${encodeURIComponent(id)}/read-receipts?${new URLSearchParams({ afterSequence: String(after), throughSequence: String(through) })}`)).data;
 export async function sendAttachments(id, request, files) {
   const form = new FormData();

@@ -9,3 +9,7 @@ export function googleMapsUrl(point) {
   const valid = point && locationPoint(point.latitude, point.longitude);
   return valid ? `https://www.google.com/maps/search/?${new URLSearchParams({ api: '1', query: `${valid.latitude},${valid.longitude}` })}` : null;
 }
+export function googleMapsDirectionsUrl(point) {
+  const valid = point && locationPoint(point.latitude, point.longitude);
+  return valid ? `https://www.google.com/maps/dir/?${new URLSearchParams({ api: '1', destination: `${valid.latitude},${valid.longitude}` })}` : null;
+}
