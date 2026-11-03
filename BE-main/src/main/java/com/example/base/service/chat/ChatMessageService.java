@@ -57,6 +57,32 @@ public class ChatMessageService {
     }
 
     @Transactional
+    public ChatMessageDto sendLocation(long id, ChatLocationRequest request, CustomUserDetails user) {
+        long actor = policy.actor(user).getId();
+        if (request == null || request.clientMessageId() == null || request.latitude() == null || request.longitude() == null
+                || !Double.isFinite(request.latitude()) || !Double.isFinite(request.longitude())
+                || Math.abs(request.latitude()) > 90 || Math.abs(request.longitude()) > 180) throw invalid();
+        String label = request.label() == null || request.label().isBlank() ? null : request.label().strip();
+        if (label != null && label.length() > 200) throw invalid();
+        double latitude = Math.round(request.latitude() * 1_000_000d) / 1_000_000d;
+        double longitude = Math.round(request.longitude() * 1_000_000d) / 1_000_000d;
+        var conversation = lock(id, actor);
+        var previous = messages.findByConversationIdAndSenderIdAndClientMessageId(id, actor, request.clientMessageId());
+        if (previous.isPresent()) {
+            var old = previous.get();
+            if (!"LOCATION".equals(old.getMessageType()) || !Objects.equals(old.getLatitude(), latitude)
+                    || !Objects.equals(old.getLongitude(), longitude) || !Objects.equals(old.getLocationLabel(), label))
+                throw new AppException(ErrorCode.CHAT_DUPLICATE_PAYLOAD);
+            return dto(old);
+        }
+        requireWritable(conversation);
+        var message = messages.saveAndFlush(ChatMessage.location(id, actor, conversation.nextMessageSequence(),
+                request.clientMessageId(), latitude, longitude, label));
+        events.changed(id, "MESSAGE_CREATED");
+        return dto(message);
+    }
+
+    @Transactional
     public ChatMessageDto send(long id, SendChatRequest request, CustomUserDetails user) {
         long actor = policy.actor(user).getId();
         if (request == null || request.clientMessageId() == null) throw invalid();
@@ -100,7 +126,8 @@ public class ChatMessageService {
     private ChatMessageDto dto(ChatMessage message, List<ChatAttachment> files) {
         return new ChatMessageDto(message.getId(), message.getSequenceNo(), message.getSenderId(), message.getBody(), message.getCreatedAt(),
                 files.stream().map(file -> new ChatMessageDto.Attachment(file.getId(), file.getOriginalName(), file.getMimeType(), file.getSizeBytes(),
-                    file.getMimeType().startsWith("image/") ? storage.readUrl(file.getStorageKey(), null) : null)).toList(), message.getReadAt());
+                    file.getMimeType().startsWith("image/") ? storage.readUrl(file.getStorageKey(), null) : null)).toList(), message.getReadAt(),
+                "LOCATION".equals(message.getMessageType()) ? new ChatMessageDto.Location(message.getLatitude(), message.getLongitude(), message.getLocationLabel()) : null);
     }
     private AppException invalid() { return new AppException(ErrorCode.CHAT_INPUT_INVALID); }
 }

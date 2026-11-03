@@ -20,9 +20,18 @@ public class ChatMessage {
     @Column(columnDefinition = "text") private String body;
     @Column(name = "created_at", nullable = false, updatable = false) private OffsetDateTime createdAt;
     @Column(name = "read_at") private OffsetDateTime readAt;
+    @Column private Double latitude;
+    @Column private Double longitude;
+    @Column(name = "location_label", length = 200) private String locationLabel;
     public ChatMessage(long conversationId, long senderId, long sequence, UUID clientId, String type, String body) {
         this.conversationId = conversationId; this.senderId = senderId; sequenceNo = sequence;
         clientMessageId = clientId; messageType = type; this.body = body;
     }
     @PrePersist void create() { createdAt = OffsetDateTime.now(); }
+    public static ChatMessage location(long conversationId, long senderId, long sequence, UUID clientId,
+            double latitude, double longitude, String label) {
+        var message = new ChatMessage(conversationId, senderId, sequence, clientId, "LOCATION", null);
+        message.latitude = latitude; message.longitude = longitude; message.locationLabel = label;
+        return message;
+    }
 }

@@ -6,6 +6,7 @@ import com.example.base.dto.chat.ChatPageDto;
 import com.example.base.dto.chat.ChatMessageDto;
 import com.example.base.dto.chat.SendChatRequest;
 import com.example.base.dto.chat.ReadChatRequest;
+import com.example.base.dto.chat.ChatLocationRequest;
 import com.example.base.service.chat.ChatReadService;
 import com.example.base.repository.ChatQueryRepository;
 import com.example.base.service.chat.ChatAccessPolicy;
@@ -25,6 +26,11 @@ public class ChatController {
     private final ChatReadService reads;
     private final ChatQueryRepository queries;
     private final ChatAccessPolicy policy;
+    @PostMapping("/chats/{id}/locations")
+    public ResponseEntity<ApiResponse<ChatMessageDto>> location(@PathVariable long id, @Valid @RequestBody ChatLocationRequest request,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(messages.sendLocation(id, request, user)));
+    }
     @GetMapping("/chats/{id}/read-receipts")
     public ResponseEntity<ApiResponse<ChatMessageDto.Receipts>> receipts(@PathVariable long id,
             @RequestParam(defaultValue = "0") long afterSequence, @RequestParam long throughSequence,

@@ -3,6 +3,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useChat } from '../ChatProvider';
 import { getMessages, sendMessage, sendAttachments, markChatRead, getReadReceipts } from '../api/chatApi';
 import ChatAttachments from './ChatAttachments';
+import LocationPicker from './LocationPicker';
+import ChatLocation from './ChatLocation';
 
 const merge = (old, incoming) => {
   const indexed = new Map(old.map(row => [row.id, row]));
@@ -22,6 +24,7 @@ export default function ChatThread({ chat }) {
   const [olderBusy, setOlderBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [files, setFiles] = useState([]);
+  const [locationOpen, setLocationOpen] = useState(false);
   const viewport = useRef(null);
   const pinBottom = useRef(true);
   const anchor = useRef(null);
@@ -160,6 +163,7 @@ export default function ChatThread({ chat }) {
       {!rows.length && <p className="chat-empty">{loaded ? 'Chưa có tin nhắn.' : 'Đang tải tin nhắn…'}</p>}
       {rows.map(row => <article key={row.id} data-sequence={row.sequence} data-sender={row.senderId} className={`chat-bubble ${String(row.senderId) === String(user.id) ? 'mine' : ''}`}>
         {row.body && <p>{row.body}</p>}
+        {row.location && <ChatLocation location={row.location} />}
         {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
         <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
         {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
@@ -170,6 +174,7 @@ export default function ChatThread({ chat }) {
     {chat.canSend ? <><div className="chat-selected-files">{files.map((file, index) => <span key={`${file.name}:${index}`}>{file.name}
       <button type="button" disabled={busy} aria-label={`Bỏ tệp ${file.name}`} onClick={() => { setFiles(old => old.filter((_, n) => n !== index)); retry.current = null; }}>×</button></span>)}</div>
     <form className="chat-composer" onSubmit={send}>
+      <button type="button" className="chat-location-button" disabled={busy} onClick={() => setLocationOpen(true)}>Vị trí</button>
       <label className="sr-only" htmlFor="chat-message">Nội dung tin nhắn</label>
       <label className="chat-attach-button" title={`Tối đa ${limits.attachmentMaxCount} tệp JPG/PNG/PDF`}>
         <span>Đính kèm</span><input type="file" multiple accept=".jpg,.jpeg,.png,.pdf" disabled={busy} onChange={event => {
@@ -187,6 +192,8 @@ export default function ChatThread({ chat }) {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
       }} />
       <button className="btn btn-accent" type="submit" disabled={busy || (!body.trim() && !files.length)}>{busy ? 'Đang gửi…' : 'Gửi'}</button>
-    </form></> : <p role="status" className="chat-readonly">{chat.readOnlyReason}</p>}
+    </form>{locationOpen && <LocationPicker chatId={chat.id} onClose={() => setLocationOpen(false)} onSent={message => {
+      pinBottom.current = true; setRows(old => merge(old, [message])); setLocationOpen(false); refresh();
+    }} />}</> : <p role="status" className="chat-readonly">{chat.readOnlyReason}</p>}
   </>;
 }

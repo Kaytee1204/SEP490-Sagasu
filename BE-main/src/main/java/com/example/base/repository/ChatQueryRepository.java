@@ -14,7 +14,8 @@ public class ChatQueryRepository {
         String cutoff = before == null ? null : before.toString();
         return jdbc.query("""
             SELECT c.conversation_id, c.post_id, p.title, a.full_name,
-                   COALESCE(m.body, CASE WHEN m.message_id IS NULL THEN 'Chưa có tin nhắn' ELSE 'Tệp đính kèm' END) AS preview,
+                   COALESCE(m.body, CASE WHEN m.message_id IS NULL THEN 'Chưa có tin nhắn'
+                     WHEN m.message_type='LOCATION' THEN COALESCE(m.location_label,'Đã chia sẻ vị trí') ELSE 'Tệp đính kèm' END) AS preview,
                    c.last_activity_at,
                    (SELECT count(*) FROM chat_message u WHERE u.conversation_id=c.conversation_id
                       AND u.sender_id<>? AND u.sequence_no>mine.last_read_sequence) AS unread,

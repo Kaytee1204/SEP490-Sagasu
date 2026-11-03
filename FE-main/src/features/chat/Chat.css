@@ -15,6 +15,26 @@
 .chat-error { color: #a52c2c; padding: 10px 18px; }
 .chat-readonly { padding: 14px 18px; background: #fff7dc; color: #755300; }
 .chat-back { display: none; }
+.chat-location-button { color:#1c7070; padding:10px 0; font-size:.8rem; }
+.chat-location-card { min-width:200px; display:flex; flex-direction:column; gap:7px; padding:12px; border:1px solid #9cc9c3; border-radius:12px; background:#f2fbf9; color:#185e5e; text-decoration:none; }
+.chat-location-card > span { font-size:.8rem; }
+.chat-location-link { display:flex; gap:6px; align-items:center; font-weight:600; }
+.chat-location-dialog { width:min(660px,calc(100vw - 24px)); max-height:calc(100dvh - 24px); padding:0; border:0; border-radius:18px; overflow:auto; color:#183438; background:#fff; }
+.chat-location-dialog::backdrop { background:rgba(8,20,24,.58); backdrop-filter:blur(8px); }
+.chat-location-dialog > header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px 6px; }
+.chat-location-dialog h2 { display:flex; gap:8px; align-items:center; font-size:1.2rem; font-weight:700; }
+.chat-location-hint { padding:8px 20px; font-size:.85rem; color:#52666d; }
+.chat-location-map { height:300px; width:100%; background:#eaf0f1; }
+.chat-map-pin { font-size:30px; background:none; border:none; }
+.chat-location-dialog form { padding:16px 20px; }
+.chat-location-dialog fieldset { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.chat-location-dialog label { display:flex; flex-direction:column; gap:5px; font-size:.85rem; }
+.chat-location-dialog input { border:1px solid #b9cfd2; border-radius:8px; padding:8px 10px; min-width:0; width:100%; }
+.chat-coordinate-inputs { display:grid; grid-template-columns:1fr 1fr auto; align-items:end; gap:10px; }
+.chat-location-dialog footer { display:flex; justify-content:flex-end; gap:10px; }
+.chat-location-dialog fieldset > a { color:#1c7070; text-decoration:underline; font-size:.85rem; }
+.chat-location-dialog.is-busy .chat-location-map { pointer-events:none; }
+@media(max-width:480px) { .chat-coordinate-inputs { grid-template-columns:1fr 1fr; } .chat-coordinate-inputs button { grid-column:1/-1; } .chat-location-map { height:250px; } .chat-composer { gap:7px; padding:10px; } }
 .chat-selected-files { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px; }
 .chat-selected-files:has(span) { padding-top:10px; }
 .chat-selected-files span { display:flex; gap:10px; align-items:center; background:#eef8f7; border-radius:8px; padding:4px 8px; font-size:.8rem; overflow-wrap:anywhere; }
