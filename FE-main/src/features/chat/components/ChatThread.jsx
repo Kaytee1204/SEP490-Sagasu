@@ -63,11 +63,14 @@ export default function ChatThread({ chat }) {
         if (document.visibilityState !== 'visible' || !document.hasFocus() || document.querySelector('dialog[open]')) return;
         const bounds = element.getBoundingClientRect();
         if (!bounds.height) return;
+        const visibleTop = Math.max(bounds.top, 0);
+        const visibleBottom = Math.min(bounds.bottom, window.innerHeight);
+        if (visibleBottom <= visibleTop) return;
         let visible = requestedRead.current;
         for (const bubble of element.querySelectorAll('[data-sequence]')) {
           const box = bubble.getBoundingClientRect();
           const sequence = Number(bubble.dataset.sequence);
-          if (bubble.dataset.sender !== String(user.id) && box.bottom <= bounds.bottom && box.bottom > bounds.top
+          if (bubble.dataset.sender !== String(user.id) && box.bottom <= visibleBottom && box.bottom > visibleTop
               && sequence <= syncedThrough.current) visible = Math.max(visible, sequence);
         }
         if (visible <= requestedRead.current) return;
@@ -84,11 +87,14 @@ export default function ChatThread({ chat }) {
     document.addEventListener('visibilitychange', scheduleRead);
     document.addEventListener('focusin', scheduleRead);
     window.addEventListener('focus', scheduleRead);
+    window.addEventListener('scroll', scheduleRead, { passive: true });
+    window.addEventListener('resize', scheduleRead);
     scheduleRead();
     return () => {
       disposed = true; clearTimeout(timer); element.removeEventListener('scroll', scheduleRead);
       document.removeEventListener('visibilitychange', scheduleRead); document.removeEventListener('focusin', scheduleRead);
       window.removeEventListener('focus', scheduleRead);
+      window.removeEventListener('scroll', scheduleRead); window.removeEventListener('resize', scheduleRead);
     };
   }, [rows, chat.id, chat.lastReadSequence, user.id]);
   useLayoutEffect(() => {
