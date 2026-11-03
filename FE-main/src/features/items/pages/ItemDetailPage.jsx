@@ -132,6 +132,29 @@ function PostDetail({ id, onRetry }) {
             </button>
             )}
 
+                        {!post.canEditOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
+              <Link
+                to={`/van-phong/xac-minh/${post.id}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9.5px 18px',
+                  borderRadius: '8px',
+                  border: '1px solid #0d9488',
+                  background: '#0d9488',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textDecoration: 'none',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                }}
+              >
+                <span>Xác minh nhận đồ tại văn phòng</span>
+                <ArrowRight size={15} />
+              </Link>
+            )}
+
             {!post.canEditOwnPost && (current.myClaim || (post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
               && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN')) && (
               <Link
