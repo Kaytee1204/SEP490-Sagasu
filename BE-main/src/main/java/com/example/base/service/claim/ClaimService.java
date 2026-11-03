@@ -37,6 +37,7 @@ public class ClaimService {
     private final PlatformTransactionManager transactionManager;
     private final EntityManager entityManager;
     private final ClaimQuestionnaireService questionnaires;
+    private final com.example.base.service.chat.ChatConversationService chatConversations;
 
     public ClaimResultDto submit(long postId, SubmitClaimRequest request, List<MultipartFile> files, CustomUserDetails user) {
         return create(postId, null, request, files, user);
@@ -188,6 +189,7 @@ public class ClaimService {
             post.reserveForClaim();
         }
         claim.review(request.decision());
+        if ("APPROVED".equals(request.decision())) chatConversations.forApprovedClaim(claim);
         activities.save(new ClaimActivity(claim, actor,
                 "APPROVED".equals(request.decision()) ? "APPROVE" : "REJECT", "PENDING", request.reason()));
         claims.flush();

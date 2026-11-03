@@ -3,6 +3,10 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT_404", "Không tìm thấy cuộc trò chuyện được phép truy cập"),
+    CHAT_UNAVAILABLE(HttpStatus.CONFLICT, "CHAT_409_STATE", "Chỉ được nhắn tin sau khi claim P2P được chấp thuận và bài đang chờ trao trả"),
+    CHAT_INPUT_INVALID(HttpStatus.BAD_REQUEST, "CHAT_400", "Nội dung hoặc con trỏ tin nhắn không hợp lệ"),
+    CHAT_DUPLICATE_PAYLOAD(HttpStatus.CONFLICT, "CHAT_409_RETRY", "Mã gửi tin đã được dùng cho nội dung khác"),
     CLAIM_QUESTIONNAIRE_INVALID(HttpStatus.BAD_REQUEST, "CLAIM_400_ANSWERS", "Câu trả lời claim chưa hợp lệ"),
     CLAIM_QUESTIONNAIRE_STALE(HttpStatus.CONFLICT, "CLAIM_409_QUESTIONS", "Bộ câu hỏi đã thay đổi. Vui lòng mở lại form claim"),
     CLAIM_QUESTIONNAIRE_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_NO_QUESTIONS", "Chưa có bộ câu hỏi khả dụng cho claim"),

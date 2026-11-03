@@ -13,6 +13,7 @@ import OfficeHandoverAction from '../components/detail/OfficeHandoverAction';
 import SmartMatchModal from '../components/detail/SmartMatchModal';
 import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
+import OpenChatButton from '@/features/chat/components/OpenChatButton';
 
 const STATUS_LABELS = {
   OPEN: 'Đang tìm / chờ nhận',
@@ -160,6 +161,9 @@ function PostDetail({ id, onRetry }) {
 
           {post.postType === 'FOUND' && post.canEditOwnPost && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
+          {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
+            && post.status === 'RESERVED' && (post.canEditOwnPost || current.myClaim?.status === 'APPROVED')
+            && <OpenChatButton postId={post.id} />}
 
           {post.officeReceipt && <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-label="Thông tin nhà trường tiếp nhận">
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được nhà trường lưu giữ'}</h2>

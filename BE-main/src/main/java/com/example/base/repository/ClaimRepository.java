@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.Optional;
 
 public interface ClaimRepository extends JpaRepository<Claim, Long> {
+    Optional<Claim> findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(long postId, String status);
     boolean existsByPost_Id(Long postId);
     boolean existsByPost_IdAndStatusIn(Long postId, Collection<String> statuses);
     boolean existsByPost_IdAndClaimant_IdAndStatusIn(Long postId, Long claimantId, Collection<String> statuses);

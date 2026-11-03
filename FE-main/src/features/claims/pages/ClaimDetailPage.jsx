@@ -5,6 +5,7 @@ import { getClaim, getClaimOnPost, reviewClaim, cancelClaim } from '../api/claim
 import { CLAIM_STATUS, CLAIM_ACTION, claimDate, evidenceUrl, validClaimId, claimDetailPath } from '../claimUtils';
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import ClaimAnswerSummary from '../components/ClaimAnswerSummary';
+import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import '../Claims.css';
 
 export default function ClaimDetailPage() {
@@ -93,6 +94,7 @@ function ClaimDetail({ postId, id }) {
             <small>{image.originalName || 'Ảnh bằng chứng'}</small></div>;
         })}</div>{!claim.evidence.length && <p className="claims-muted">Hồ sơ không đính kèm ảnh.</p>}
       </section>
+      {claim.status === 'APPROVED' && <OpenChatButton postId={claim.postId} />}
       <ClaimAnswerSummary answers={claim.answers} />
       {claim.canReview && <form className="claim-panel claim-form" onSubmit={event => { event.preventDefault(); act('review'); }}>
         <h2>Xét duyệt hồ sơ</h2><label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
