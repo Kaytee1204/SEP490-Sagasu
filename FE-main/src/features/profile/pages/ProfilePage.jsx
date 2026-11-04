@@ -28,7 +28,19 @@ async function loadPostCounts() {
 
 export default function ProfilePage() {
   const { user, isPureAdmin, refreshProfile, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState('posts');
+  const [activeTab, setActiveTabState] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('sagasu_profile_tab');
+      if (saved && TABS.some(t => t.key === saved)) return saved;
+    } catch { /* ignore */ }
+    return 'posts';
+  });
+  const setActiveTab = (tabKey) => {
+    setActiveTabState(tabKey);
+    try {
+      sessionStorage.setItem('sagasu_profile_tab', tabKey);
+    } catch { /* ignore */ }
+  };
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { getPostForEdit, getPostCategories, updatePost } from '../api/postApi';
 import StepDetailsForm from '../components/post/StepDetailsForm';
 import '../../profile/pages/MyPostsPage.css';
@@ -19,6 +19,8 @@ export default function EditPostPage() {
 }
 
 function Editor({ id, onReload }) {
+  const location = useLocation();
+  const backUrl = location.state?.from || '/tin-dang-cua-toi';
   const [loaded,setLoaded]=useState(null);
   const [form,setForm]=useState(null);
   const [kept,setKept]=useState([]);
@@ -77,10 +79,10 @@ function Editor({ id, onReload }) {
 
   if(saved)return <main className="container-sm my-posts-page"><h1>Đã lưu bài đăng #{saved.id}</h1>
     <p role="status">{saved.moderationStatus==='VISIBLE'?'Bài đăng đã được cập nhật và hiển thị.':'Bài đăng đã được gửi lại để Approver duyệt.'}</p>
-    <div className="my-post-actions"><Link className="btn btn-primary" to="/tin-dang-cua-toi">Về tin đăng của tôi</Link>
-      <Link className="btn btn-ghost" to={`/chi-tiet/${id}`}>Xem bài đăng</Link></div></main>;
+    <div className="my-post-actions"><Link className="btn btn-primary" to={backUrl}>Về tin đăng của tôi</Link>
+      <Link className="btn btn-ghost" to={`/chi-tiet/${id}`} state={{ from: backUrl }}>Xem bài đăng</Link></div></main>;
   return <main className="container-sm my-posts-page">
-    <header className="my-posts-heading"><h1>Sửa bài đăng</h1><Link to="/tin-dang-cua-toi">Về tin đăng của tôi</Link></header>
+    <header className="my-posts-heading"><h1>Sửa bài đăng</h1><Link to={backUrl}>Về tin đăng của tôi</Link></header>
     {error&&<div role="alert"><p>{error}</p><button type="button" className="btn btn-ghost" disabled={saving} onClick={onReload}>Tải lại bài đăng</button></div>}
     {!loaded?!error&&<p role="status">Đang tải bài đăng…</p>:<form onSubmit={submit}>
       <fieldset disabled={saving} style={{border:0,padding:0,minWidth:0}}>

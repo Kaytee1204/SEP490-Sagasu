@@ -89,6 +89,18 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     Optional<Post> findOwnDetail(@Param("id") long id, @Param("ownerId") long ownerId);
 
     @Query("""
+            select p.id from Post p
+            where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
+              and p.postType=:oppositeType and p.id <> :excludeId
+            order by case when p.category.categoryId = :categoryId then 0 else 1 end asc,
+                     p.createdAt desc, p.id desc
+            """)
+    List<Long> findCandidateIdsForMatching(@Param("oppositeType") String oppositeType,
+                                           @Param("categoryId") Long categoryId,
+                                           @Param("excludeId") long excludeId,
+                                           Pageable pageable);
+
+    @Query("""
             select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images
             where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
               and p.postType=:oppositeType and p.id <> :excludeId

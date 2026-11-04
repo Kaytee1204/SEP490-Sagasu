@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { getMyPosts, deletePost } from '@/features/items/api/postApi';
 import Pagination from '@/components/common/Pagination';
@@ -8,21 +9,67 @@ import './MyPostsPage.css';
 
 const FILTERS = [['ALL', 'Tất cả'], ['VISIBLE', 'Đang hiển thị'], ['PENDING', 'Chờ duyệt'],
 ['REJECTED', 'Bị từ chối'], ['HIDDEN', 'Bị ẩn']];
+const VALID_FILTERS = new Set(FILTERS.map(([key]) => key));
+const STORAGE_KEY = 'sagasu_my_posts_state';
+
+function readSavedMyPostsState() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return { page: 1, filter: 'ALL' };
+    const parsed = JSON.parse(raw);
+    const page = Number.isInteger(parsed?.page) && parsed.page >= 1 ? parsed.page : 1;
+    const filter = VALID_FILTERS.has(parsed?.filter) ? parsed.filter : 'ALL';
+    return { page, filter };
+  } catch {
+    return { page: 1, filter: 'ALL' };
+  }
+}
 
 export default function MyPostsPage({ embedded = false }) {
   const { user } = useAuth();
-  const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState('ALL');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const saved = readSavedMyPostsState();
+
+  const rawUrlPage = searchParams.get('page');
+  const urlPage = rawUrlPage && /^[1-9]\d*$/.test(rawUrlPage) ? Number(rawUrlPage) : null;
+  const rawUrlFilter = searchParams.get('filter');
+  const urlFilter = rawUrlFilter && VALID_FILTERS.has(rawUrlFilter) ? rawUrlFilter : null;
+
+  const [page, setPageState] = useState(() => urlPage ?? saved.page);
+  const [filter, setFilterState] = useState(() => urlFilter ?? saved.filter);
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (urlPage !== null) setPageState(urlPage);
+    if (urlFilter !== null) setFilterState(urlFilter);
+  }, [urlPage, urlFilter]);
+
+  const syncState = (nextPage, nextFilter) => {
+    setPageState(nextPage);
+    setFilterState(nextFilter);
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ page: nextPage, filter: nextFilter }));
+    } catch { /* ignore storage quota errors */ }
+    const updated = new URLSearchParams(searchParams);
+    if (nextPage <= 1) updated.delete('page');
+    else updated.set('page', String(nextPage));
+    if (nextFilter === 'ALL') updated.delete('filter');
+    else updated.set('filter', nextFilter);
+    setSearchParams(updated, { replace: true });
+  };
+
+  const handlePageChange = (nextPage) => syncState(nextPage, filter);
+  const handleFilterChange = (nextFilter) => syncState(1, nextFilter);
+
   const Wrapper = embedded ? 'section' : 'main';
   return <Wrapper className={`my-posts-page ${embedded ? 'my-posts-embedded' : 'container'}`}
     aria-label={embedded ? 'Tin đăng của tôi' : undefined}>
     {!embedded && <header className="my-posts-heading"><h1>Tin đăng của tôi</h1></header>}
     <div className="my-posts-filters" aria-label="Lọc trạng thái bài đăng">
       {FILTERS.map(([key, label]) => <button key={key} className={`chip ${filter === key ? 'active' : ''}`}
-        aria-pressed={filter === key} onClick={() => { setFilter(key); setPage(1); }}>{label}</button>)}
+        aria-pressed={filter === key} onClick={() => handleFilterChange(key)}>{label}</button>)}
     </div>
-    <MyPostList key={`${user?.id}:${page}:${filter}:${attempt}`} page={page} filter={filter} onPage={setPage}
+    <MyPostList key={`${user?.id}:${page}:${filter}:${attempt}`} page={page} filter={filter} onPage={handlePageChange}
       onReload={() => setAttempt(n => n + 1)} />
   </Wrapper>;
 }

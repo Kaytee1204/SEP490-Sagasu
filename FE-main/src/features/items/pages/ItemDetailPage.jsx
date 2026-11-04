@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
 import { getLatestClaimOnPost } from '@/features/claims/api/claimApi';
@@ -40,10 +40,32 @@ export default function ItemDetailPage() {
 
 function PostDetail({ id, onRetry }) {
   const { isAdmin, isManager, isApprover } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [result, setResult] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showSmartMatch, setShowSmartMatch] = useState(false);
   const validId = /^[1-9]\d*$/.test(id);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [id]);
+
+  const handleGoBack = () => {
+    if (location.state?.from) {
+      navigate(location.state.from);
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      let fallback = '/tim-kiem';
+      try {
+        fallback = sessionStorage.getItem('sagasu_search_last_url') || '/tim-kiem';
+      } catch { /* ignore */ }
+      navigate(fallback);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +112,10 @@ function PostDetail({ id, onRetry }) {
   return (
     <main className="post-detail-page">
       <nav className="container post-detail-breadcrumb" aria-label="Điều hướng">
+        <button type="button" className="post-detail-back-btn" onClick={handleGoBack}>
+          <ArrowLeft size={15} aria-hidden="true" />
+          <span>Quay lại danh sách</span>
+        </button>
         <Link to="/">Trang chủ</Link><ChevronRight size={14} />
         <span>{post.title}</span>
       </nav>

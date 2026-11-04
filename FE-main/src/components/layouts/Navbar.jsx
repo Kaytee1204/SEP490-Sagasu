@@ -192,14 +192,55 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { isAuthenticated, user, isAdmin, isApprover, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const lastScrollYRef = useRef(0);
 
   const isActive = (path) => location.pathname === path;
-  const isHomePage = location.pathname === '/';
 
-  // Close mobile drawer on navigation
+  // Close mobile drawer on navigation and ensure header is visible
   useEffect(() => {
     setMobileMenuOpen(false);
+    setIsHeaderVisible(true);
+    lastScrollYRef.current = window.scrollY || 0;
   }, [location.pathname]);
+
+  // Show header immediately when scrolling up; hide when scrolling down past navbar height
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY || 0;
+
+    const handleScroll = () => {
+      const currentY = Math.max(0, window.scrollY || document.documentElement.scrollTop || 0);
+      const delta = currentY - lastScrollYRef.current;
+
+      if (currentY <= 48) {
+        setIsHeaderVisible(true);
+      } else if (delta < -3) {
+        setIsHeaderVisible(true);
+      } else if (delta > 8 && currentY > 72 && !mobileMenuOpen) {
+        setIsHeaderVisible(false);
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+
+    const handleWheel = (event) => {
+      if (event.deltaY < -2) {
+        setIsHeaderVisible(true);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('wheel', handleWheel, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('wheel', handleWheel);
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    const visible = isHeaderVisible || mobileMenuOpen;
+    document.documentElement.style.setProperty('--navbar-offset', visible ? '68px' : '0px');
+  }, [isHeaderVisible, mobileMenuOpen]);
 
   const handleMobileLogout = async () => {
     setMobileMenuOpen(false);
@@ -209,7 +250,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="navbar" style={isHomePage ? { position: 'relative', top: 'auto' } : {}}>
+      <nav className={`navbar ${!isHeaderVisible && !mobileMenuOpen ? 'navbar--hidden' : ''}`}>
         <div className="container navbar-inner">
           {/* Logo Sagasu SVG */}
           <Link to="/" className="flex items-center gap-2 flex-shrink-0 group" aria-label="Sagasu">

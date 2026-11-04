@@ -54,24 +54,43 @@ public class SmartMatchService {
         }
         Post source = targetOpt.orElseThrow(() -> new AppException(ErrorCode.POST_NOT_VISIBLE));
 
-        // Phân quyền: Chỉ chủ bài đăng (author), Manager hoặc Admin mới được phép sử dụng tính năng AI đối sánh
-        boolean isOwner = viewerId != null && source.getCreatedBy() != null && viewerId.equals(source.getCreatedBy().getId());
-        boolean isPrivileged = viewerRole == com.example.base.entity.AccountRole.ADMIN || viewerRole == com.example.base.entity.AccountRole.MANAGER;
+        // Phân quyền: Chỉ chủ bài đăng (author/account), Manager hoặc Admin mới được phép sử dụng tính năng AI đối sánh
+        boolean isOwner = viewerId != null && (
+                (source.getCreatedBy() != null && viewerId.equals(source.getCreatedBy().getId()))
+                        || (source.getAccount() != null && viewerId.equals(source.getAccount().getId()))
+        );
+        boolean isPrivileged = viewerRole == com.example.base.entity.AccountRole.ADMIN
+                || viewerRole == com.example.base.entity.AccountRole.MANAGER;
 
         if (!isOwner && !isPrivileged) {
             throw new AppException(ErrorCode.FORBIDDEN, "Chỉ chủ bài đăng, Quản trị viên (Admin) hoặc Quản lý (Manager) mới có thể sử dụng tính năng đối sánh AI cho bài đăng này.");
         }
 
         String oppositeType = "LOST".equalsIgnoreCase(source.getPostType()) ? "FOUND" : "LOST";
-        List<Post> candidates = postRepository.findActiveCandidatesForMatching(
+        Long categoryId = source.getCategory() != null ? source.getCategory().getCategoryId() : null;
+
+        List<Long> candidateIds = postRepository.findCandidateIdsForMatching(
                 oppositeType,
+                categoryId,
                 postId,
-                PageRequest.of(0, 30)
+                PageRequest.of(0, 20)
         );
 
+        if (candidateIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Post> candidates = postRepository.findVisibleByIds(candidateIds);
         if (candidates.isEmpty()) {
             return Collections.emptyList();
         }
+
+        // Preserve priority order from candidateIds
+        Map<Long, Integer> orderMap = new HashMap<>();
+        for (int i = 0; i < candidateIds.size(); i++) {
+            orderMap.put(candidateIds.get(i), i);
+        }
+        candidates.sort(Comparator.comparingInt(p -> orderMap.getOrDefault(p.getId(), Integer.MAX_VALUE)));
 
         // Try delegating to Python AI Service
         try {
@@ -91,8 +110,8 @@ public class SmartMatchService {
     @SuppressWarnings("unchecked")
     private List<SmartMatchItemDto> callPythonAiService(Post source, List<Post> candidates) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(3000);
-        factory.setReadTimeout(12000);
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(30000);
         RestTemplate restTemplate = new RestTemplate(factory);
 
         Map<String, Object> sourceItemMap = toItemMap(source);
@@ -165,22 +184,22 @@ public class SmartMatchService {
             intersection.retainAll(candTokens);
             Set<String> union = new HashSet<>(srcTokens);
             union.addAll(candTokens);
-            double textSim = union.isEmpty() ? 0.3 : (double) intersection.size() / union.size();
+            double textSim = union.isEmpty() ? 0.35 : (double) intersection.size() / union.size();
 
             // Category bonus
             boolean sameCat = !srcCat.isBlank() && srcCat.equalsIgnoreCase(candCat);
             if (sameCat) {
-                textSim = Math.min(1.0, textSim + 0.35);
+                textSim = Math.min(0.98, Math.max(0.55, textSim + 0.40));
             }
 
             // 2. Spatio-temporal similarity
             double timeSim = 0.5;
             if (srcTime != null && candTime != null) {
                 long days = Math.abs(Duration.between(srcTime, candTime).toDays());
-                timeSim = Math.max(0.1, Math.exp(-0.1 * days));
+                timeSim = Math.max(0.2, Math.exp(-0.1 * days));
             }
 
-            double spaceSim = 0.3;
+            double spaceSim = 0.4;
             if (!srcLoc.isBlank() && !candLoc.isBlank()) {
                 if (srcLoc.equals(candLoc)) {
                     spaceSim = 1.0;
@@ -189,7 +208,7 @@ public class SmartMatchService {
                     Set<String> locTokens2 = tokenize(candLoc);
                     locTokens1.retainAll(locTokens2);
                     if (!locTokens1.isEmpty()) {
-                        spaceSim = 0.75;
+                        spaceSim = 0.78;
                     }
                 }
             }
@@ -197,10 +216,13 @@ public class SmartMatchService {
 
             // 3. Visual & Color estimation
             boolean bothHaveImages = srcImg != null && candImg != null;
-            double visSim = bothHaveImages ? Math.min(0.98, textSim + 0.15) : 0.40;
-            double colorSim = bothHaveImages ? Math.min(0.98, 0.65 + textSim * 0.25) : 0.50;
+            double visSim = bothHaveImages
+                    ? Math.min(0.95, (sameCat ? 0.68 : 0.45) + textSim * 0.25)
+                    : 0.45;
+            double colorSim = bothHaveImages
+                    ? Math.min(0.95, 0.68 + textSim * 0.22)
+                    : 0.50;
 
-            // Hard Cutoff Rule: khi có ảnh rõ mà dưới 55% -> loại luôn!
             if (bothHaveImages && visSim < 0.55) {
                 continue;
             }
@@ -208,12 +230,11 @@ public class SmartMatchService {
             double finalScore = bothHaveImages
                     ? (0.55 * visSim + 0.15 * colorSim + 0.15 * textSim + 0.15 * stSim) * 100.0
                     : (srcImg != null || candImg != null)
-                    ? (0.30 * 0.50 + 0.45 * textSim + 0.25 * stSim) * 100.0
+                    ? (0.30 * 0.55 + 0.45 * textSim + 0.25 * stSim) * 100.0
                     : (0.60 * textSim + 0.40 * stSim) * 100.0;
 
             finalScore = Math.round(Math.min(97.5, Math.max(25.0, finalScore)) * 10.0) / 10.0;
 
-            // Ngưỡng tối thiểu để hiển thị
             if (finalScore < 45.0) {
                 continue;
             }
