@@ -67,7 +67,8 @@ public class DataInitializer {
             "db/migrations/14_office_claims.sql",
             "db/migrations/15_reports.sql",
             "db/migrations/16_p2p_handover.sql",
-            "db/migrations/17_confirm_p2p_receipt.sql"
+            "db/migrations/17_confirm_p2p_receipt.sql",
+            "db/migrations/18_handover_reports.sql"
     );
 
     @Bean

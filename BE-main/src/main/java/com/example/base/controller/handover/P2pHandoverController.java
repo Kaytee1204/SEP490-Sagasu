@@ -11,6 +11,10 @@ import java.util.List;
 @RestController @RequestMapping("/api/claims/{claimId}/handover") @RequiredArgsConstructor
 public class P2pHandoverController {
     private final P2pHandoverService service;
+    @PostMapping(value="/issues",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> issue(@PathVariable long claimId,@RequestPart("data") P2pHandoverService.IssueRequest data,@RequestPart(value="images",required=false) List<MultipartFile> images,@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.issue(claimId,data,images,user)));
+    }
     @PostMapping("/confirm") public ResponseEntity<?> confirm(@PathVariable long claimId,@RequestBody P2pHandoverService.ConfirmRequest request,@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.confirm(claimId,request,user)));
     }

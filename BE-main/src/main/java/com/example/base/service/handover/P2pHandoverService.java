@@ -28,11 +28,14 @@ public class P2pHandoverService {
     private final ClaimRoutingPolicy routing;
     private final ChatConversationService conversations;
     private final WorkflowImages images;
+    private final ReportService reports;
+    private final ReportRepository reportRepository;
     private final EntityManager em;
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager transactions;
     public record RecordRequest(String note,Long expectedClaimVersion,UUID clientRequestId) {}
     public record ConfirmRequest(Long expectedVersion) {}
+    public record IssueRequest(String reason,Long expectedVersion,UUID clientRequestId) {}
     public record Detail(Long id,long claimId,String status,String note,OffsetDateTime recordedAt,OffsetDateTime confirmedAt,
         long version,boolean canRecord,boolean canConfirm,boolean canReportIssue,List<ReportService.Evidence> evidence,ReportService.Detail issue) {}
     @Transactional(readOnly=true)
@@ -71,7 +74,7 @@ public class P2pHandoverService {
         if(c.getClaimant().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
         P2pHandover h=handovers.findByClaimId(claimId).orElseThrow(this::changed);em.refresh(h,LockModeType.PESSIMISTIC_WRITE);
         if("COMPLETED".equals(h.getStatus()))return dto(c,h,actor);
-        if(!ready(c)||!"WAITING_CONFIRMATION".equals(h.getStatus())||h.getVersion()!=request.expectedVersion())throw changed();
+        if(!ready(c)||!"WAITING_CONFIRMATION".equals(h.getStatus())||h.getVersion()!=request.expectedVersion()||issueId(h.getId())!=null)throw changed();
         h.confirm(actor);c.completeReceipt();c.getPost().markReturnedFromP2pHandover();
         Account account=em.find(Account.class,actor);
         activities.save(new ClaimActivity(c,account,"CONFIRM_RECEIPT","APPROVED",null));
@@ -79,6 +82,39 @@ public class P2pHandoverService {
             other.closeAfterReturn();activities.save(new ClaimActivity(other,account,"AUTO_CLOSE","PENDING","ITEM_RETURNED"));
         }
         claims.flush();handovers.flush();conversations.notifyChanged(c);return dto(c,h,actor);
+    }
+    public Detail issue(long claimId,IssueRequest request,List<MultipartFile> files,CustomUserDetails user) {
+        if(request==null||request.clientRequestId()==null||request.expectedVersion()==null||request.reason()==null||request.reason().isBlank()||request.reason().length()>5000)throw invalid();
+        long actor=actors.actor(user).getId();String reason=request.reason().strip();
+        var prepared=images.prepare("ISSUE:"+claimId+":"+reason,files);var tx=new TransactionTemplate(transactions);
+        Detail old=tx.execute(status->{Claim c=claim(claimId);participant(c,actor);if(c.getClaimant().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
+            Detail retry=issueRetry(c,actor,request.clientRequestId(),prepared.hash());if(retry!=null)return retry;
+            requireIssue(c,handovers.findByClaimId(claimId).orElseThrow(this::changed),request.expectedVersion());return null;});
+        if(old!=null)return old;
+        var uploaded=images.upload("handover-reports/"+claimId,prepared);boolean[] inserted={false};
+        try {Detail result=tx.execute(status->{
+            Claim c=lock(claimId);actors.actor(user);participant(c,actor);if(c.getClaimant().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
+            P2pHandover h=handovers.findByClaimId(claimId).orElseThrow(this::changed);em.refresh(h,LockModeType.PESSIMISTIC_WRITE);
+            Detail retry=issueRetry(c,actor,request.clientRequestId(),prepared.hash());if(retry!=null)return retry;
+            requireIssue(c,h,request.expectedVersion());
+            Report report=reports.insert(actor,"HANDOVER_ISSUE","CLAIM",claimId,reason,request.clientRequestId(),prepared.hash(),uploaded);inserted[0]=true;
+            jdbc.update("insert into p2p_handover_issue(report_id,handover_id) values(?,?)",report.getId(),h.getId());
+            h.reportIssue();c.touchWorkflow();activities.save(new ClaimActivity(c,em.find(Account.class,actor),"REPORT_ISSUE","APPROVED","Báo cáo sự cố #"+report.getId()));
+            claims.flush();handovers.flush();conversations.notifyChanged(c);return dto(c,h,actor);
+        });if(!inserted[0])images.cleanup(uploaded);return result;}catch(RuntimeException ex){images.cleanup(uploaded);throw ex;}
+    }
+    private void requireIssue(Claim c,P2pHandover h,long version) {
+        if(!ready(c)||!"WAITING_CONFIRMATION".equals(h.getStatus())||h.getVersion()!=version||issueId(h.getId())!=null)throw changed();
+    }
+    private Detail issueRetry(Claim c,long actor,UUID request,String hash) {
+        var old=reports.retry(actor,request,hash);
+        if(old==null)return null;
+        P2pHandover h=handovers.findByClaimId(c.getId()).orElseThrow(this::changed);
+        if(!"HANDOVER_ISSUE".equals(old.kind())||old.targetId()!=c.getId()||!Objects.equals(issueId(h.getId()),old.id()))throw new AppException(ErrorCode.WORKFLOW_DUPLICATE_PAYLOAD);
+        return dto(c,h,actor);
+    }
+    private Long issueId(long handover) {
+        return jdbc.query("select report_id from p2p_handover_issue where handover_id=?",(rs,n)->rs.getLong(1),handover).stream().findFirst().orElse(null);
     }
     private void requireRecord(Claim c,long actor,long version) {
         if(c.getPost().getAccount().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
@@ -95,10 +131,13 @@ public class P2pHandoverService {
         Claim c=claims.findForUpdate(id).orElseThrow(()->new AppException(ErrorCode.HANDOVER_NOT_FOUND));em.refresh(c,LockModeType.PESSIMISTIC_WRITE);return c;
     }
     private Detail dto(Claim c,P2pHandover h,long actor) {
+        Long reportId=h==null?null:issueId(h.getId());
+        ReportService.Detail issue=reportId==null?null:reports.detail(reportRepository.findById(reportId).orElseThrow(this::changed));
+        boolean canRespond=h!=null&&"WAITING_CONFIRMATION".equals(h.getStatus())&&ready(c)&&c.getClaimant().getId()==actor&&reportId==null;
         var evidence=h==null?List.<ReportService.Evidence>of():jdbc.query("select * from p2p_handover_evidence where handover_id=? order by sort_order",(rs,n)->new ReportService.Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),h.getId());
         return new Detail(h==null?null:h.getId(),c.getId(),h==null?"NOT_RECORDED":h.getStatus(),h==null?null:h.getNote(),h==null?null:h.getRecordedAt(),h==null?null:h.getConfirmedAt(),h==null?0:h.getVersion(),
             h==null&&ready(c)&&c.getPost().getAccount().getId()==actor,
-            h!=null&&"WAITING_CONFIRMATION".equals(h.getStatus())&&ready(c)&&c.getClaimant().getId()==actor,false,evidence,null);
+            canRespond,canRespond,evidence,issue);
     }
     private AppException invalid(){return new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);}
     private AppException changed(){return new AppException(ErrorCode.HANDOVER_STATE_CHANGED);}

@@ -24,4 +24,5 @@ public class P2pHandover {
     @PrePersist void create() { recordedAt=createdAt=updatedAt=OffsetDateTime.now(); }
     @PreUpdate void update() {updatedAt=OffsetDateTime.now();}
     public void confirm(long actor) {status="COMPLETED";confirmedBy=actor;confirmedAt=OffsetDateTime.now();}
+    public void reportIssue() {status="DISPUTED";}
 }

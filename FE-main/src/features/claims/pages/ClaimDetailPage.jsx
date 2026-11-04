@@ -53,6 +53,12 @@ function ClaimDetail({ postId, id }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
+  const [focusRevision,setFocusRevision]=useState(0);
+  useEffect(()=>{
+    const refetch=()=>{if(document.visibilityState==='visible')setFocusRevision(value=>value+1);};
+    window.addEventListener('focus',refetch);document.addEventListener('visibilitychange',refetch);
+    return()=>{window.removeEventListener('focus',refetch);document.removeEventListener('visibilitychange',refetch);};
+  },[]);
   const previewImages = (claim?.evidence || []).map(image => ({
     id: image.id, url: evidenceUrl(image.url), name: image.originalName || 'Ảnh bằng chứng',
   })).filter(image => image.url);
@@ -62,7 +68,7 @@ function ClaimDetail({ postId, id }) {
     getClaimOnPost(postId, id).then(data => { if (!cancelled) { setClaim(data); setError(''); } })
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [postId, id,revision]);
+  }, [postId, id,revision,focusRevision]);
   async function act(action) {
     if (inFlight.current) return;
     if (action === 'review' && !reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; }
