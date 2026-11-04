@@ -40,7 +40,11 @@ class ApiClient {
       const response = await fetch(url, config);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Lỗi HTTP ${response.status}`);
+        const err = new Error(errorData.message || `Lỗi HTTP ${response.status}`);
+        err.code = errorData.code;
+        err.status = response.status;
+        err.data = errorData;
+        throw err;
       }
       return await response.json();
     } catch (error) {

@@ -1,6 +1,6 @@
 // src/features/auth/components/LoginForm.jsx
 import React, { useState } from 'react';
-import { ShieldCheck, ArrowLeft, RefreshCw, Eye, EyeOff, KeyRound, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, RefreshCw, Eye, EyeOff, KeyRound, CheckCircle2, Lock } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { authApi } from '../api/authApi';
@@ -10,7 +10,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   const queryParams = new URLSearchParams(location.search);
   const isForgotQuery = queryParams.get('mode') === 'forgot';
 
-  // Mode: 'login' | 'otp' | 'forgot_email' | 'forgot_reset'
+  // Mode: 'login' | 'otp' | 'forgot_email' | 'forgot_otp' | 'forgot_new_password'
   const [mode, setMode] = useState(isForgotQuery ? 'forgot_email' : initialMode);
 
   // Login states
@@ -19,12 +19,12 @@ export default function LoginForm({ initialMode = 'login' }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // OTP Login states (chỉ dành cho role USER)
+  // OTP Login states (nếu luồng đăng nhập yêu cầu OTP)
   const [otpCode, setOtpCode] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpMessage, setOtpMessage] = useState('');
 
-  // Forgot password states
+  // Forgot password & Unlock account states
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -90,13 +90,26 @@ export default function LoginForm({ initialMode = 'login' }) {
       const result = await login(trimmedInput, password);
       handleLoginResult(result);
     } catch (err) {
+      // Khi sai 5 lần liên tiếp: tài khoản bị khóa và BE tự động gửi OTP đến email
+      if (err.code === 'ACC_403_LOCKED' || err.message?.includes('khóa') || err.message?.includes('5 lần')) {
+        setForgotEmail(trimmedInput);
+        setForgotOtp('');
+        setForgotMessage(
+          err.message ||
+            'Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Hệ thống đã gửi mã OTP đặt lại mật khẩu đến email của bạn. Vui lòng kiểm tra email và nhập OTP để mở khóa.'
+        );
+        setError('');
+        setSuccess('');
+        setMode('forgot_otp');
+        return;
+      }
       setError(err.message || 'Email hoặc mật khẩu không chính xác');
     } finally {
       setLoading(false);
     }
   };
 
-  // ── BẤM XÁC THỰC OTP ĐĂNG NHẬP (USER) ──
+  // ── BẤM XÁC THỰC OTP ĐĂNG NHẬP (USER/MFA) ──
   const handleVerifyLoginOtp = async (e) => {
     e.preventDefault();
     setError('');
@@ -140,7 +153,7 @@ export default function LoginForm({ initialMode = 'login' }) {
     }
   };
 
-  // ── QUÊN MẬT KHẨU: BƯỚC 1 - GỬI YÊU CẦU OTP ──
+  // ── QUÊN MẬT KHẨU / MỞ KHÓA: BƯỚC 1 - GỬI YÊU CẦU OTP QUA EMAIL ──
   const handleRequestForgotOtp = async (e) => {
     e.preventDefault();
     setError('');
@@ -153,7 +166,7 @@ export default function LoginForm({ initialMode = 'login' }) {
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedEmail.toLowerCase() !== 'admin' && !emailRegex.test(trimmedEmail)) {
+    if (trimmedEmail.toLowerCase() !== 'admin' && trimmedEmail.toLowerCase() !== 'user' && !emailRegex.test(trimmedEmail)) {
       setError('Vui lòng nhập đúng định dạng Email (VD: example@gmail.com)');
       return;
     }
@@ -164,12 +177,12 @@ export default function LoginForm({ initialMode = 'login' }) {
       const data = res?.data || res;
       setForgotMessage(
         data?.note ||
-          `Mã xác thực OTP khôi phục mật khẩu đã được gửi tới email ${trimmedEmail}. Vui lòng kiểm tra hộp thư.`
+          `Mã xác thực OTP (hiệu lực 5 phút) đã được gửi tới email ${trimmedEmail}. Vui lòng kiểm tra hộp thư.`
       );
       setForgotOtp('');
       setNewPassword('');
       setConfirmPassword('');
-      setMode('forgot_reset');
+      setMode('forgot_otp');
     } catch (err) {
       setError(err.message || 'Không tìm thấy tài khoản với email này hoặc lỗi hệ thống');
     } finally {
@@ -177,15 +190,16 @@ export default function LoginForm({ initialMode = 'login' }) {
     }
   };
 
-  // ── QUÊN MẬT KHẨU: GỬI LẠI MÃ OTP ──
+  // ── GỬI LẠI MÃ OTP CHO QUÊN MẬT KHẨU / MỞ KHÓA ──
   const handleResendForgotOtp = async () => {
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       const res = await authApi.forgotPassword(forgotEmail.trim());
       const data = res?.data || res;
       setForgotMessage(
-        data?.note || 'Đã gửi lại mã xác thực OTP mới về email của bạn.'
+        data?.note || 'Đã gửi lại mã xác thực OTP mới về email của bạn (hiệu lực 5 phút).'
       );
     } catch (err) {
       setError(err.message || 'Không thể gửi lại mã OTP');
@@ -194,14 +208,41 @@ export default function LoginForm({ initialMode = 'login' }) {
     }
   };
 
-  // ── QUÊN MẬT KHẨU: BƯỚC 2 - XÁC THỰC OTP & ĐẶT MẬT KHẨU MỚI ──
-  const handleConfirmResetPassword = async (e) => {
+  // ── QUÊN MẬT KHẨU / MỞ KHÓA: BƯỚC 2 - XÁC THỰC MÃ OTP (CHỈ KHI HỢP LỆ MỚI CHUYỂN BƯỚC) ──
+  const handleVerifyResetOtp = async (e) => {
     e.preventDefault();
     setError('');
 
     const cleanOtp = forgotOtp.trim();
     if (!/^[0-9]{6}$/.test(cleanOtp)) {
       setError('Mã OTP phải gồm đúng 6 chữ số');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authApi.verifyResetOtp(forgotEmail.trim(), cleanOtp);
+      // OTP hợp lệ! Cho phép chuyển sang bước đặt mật khẩu mới
+      setError('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setMode('forgot_new_password');
+    } catch (err) {
+      // OTP sai hoặc hết hạn -> Không cho phép chuyển bước
+      setError(err.message || 'Mã OTP không chính xác hoặc đã hết hạn (5 phút)');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── QUÊN MẬT KHẨU / MỞ KHÓA: BƯỚC 3 - ĐẶT MẬT KHẨU MỚI & MỞ KHÓA ──
+  const handleConfirmResetPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    const cleanOtp = forgotOtp.trim();
+    if (!/^[0-9]{6}$/.test(cleanOtp)) {
+      setError('Mã OTP không hợp lệ, vui lòng quay lại bước nhập OTP');
       return;
     }
 
@@ -223,12 +264,13 @@ export default function LoginForm({ initialMode = 'login' }) {
     setLoading(true);
     try {
       await authApi.resetPassword(forgotEmail.trim(), cleanOtp, newPassword);
-      setSuccess('Đặt lại mật khẩu thành công! Vui lòng đăng nhập bằng mật khẩu mới.');
+      setSuccess('Đặt lại mật khẩu và mở khóa tài khoản thành công! Vui lòng đăng nhập bằng mật khẩu mới.');
       setEmail(forgotEmail.trim());
       setPassword('');
+      setError('');
       setMode('login');
     } catch (err) {
-      setError(err.message || 'Mã OTP không chính xác hoặc đã hết hạn');
+      setError(err.message || 'Không thể đặt lại mật khẩu. Vui lòng kiểm tra lại mã OTP.');
     } finally {
       setLoading(false);
     }
@@ -324,7 +366,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   };
 
   // ═════════════════════════════════════════════════════════════════════
-  // GIAO DIỆN 1: QUÊN MẬT KHẨU - BƯỚC 1 (NHẬP EMAIL)
+  // GIAO DIỆN 1: QUÊN MẬT KHẨU / MỞ KHÓA - BƯỚC 1 (NHẬP EMAIL)
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_email') {
     return (
@@ -355,10 +397,10 @@ export default function LoginForm({ initialMode = 'login' }) {
               margin: '0 0 8px',
             }}
           >
-            Quên mật khẩu
+            Quên mật khẩu / Mở khóa
           </h2>
           <p style={{ fontSize: '0.84rem', color: '#8e8ea9', lineHeight: 1.5, margin: 0 }}>
-            Nhập địa chỉ email tài khoản của bạn để nhận mã xác thực OTP đặt lại mật khẩu mới.
+            Nhập địa chỉ email tài khoản của bạn để nhận mã xác thực OTP đặt lại mật khẩu mới và mở khóa tài khoản.
           </p>
         </div>
 
@@ -429,9 +471,147 @@ export default function LoginForm({ initialMode = 'login' }) {
   }
 
   // ═════════════════════════════════════════════════════════════════════
-  // GIAO DIỆN 2: QUÊN MẬT KHẨU - BƯỚC 2 (NHẬP OTP & ĐẶT MẬT KHẨU MỚI)
+  // GIAO DIỆN 2: QUÊN MẬT KHẨU / MỞ KHÓA - BƯỚC 2 (NHẬP MÃ OTP)
+  // "OTP hợp lệ mới được chuyển sang bước đặt mật khẩu mới"
+  // "Nếu OTP sai hoặc hết hạn: không cho phép đặt lại mật khẩu"
   // ═════════════════════════════════════════════════════════════════════
-  if (mode === 'forgot_reset') {
+  if (mode === 'forgot_otp') {
+    return (
+      <div style={cardContainerStyle}>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: '12px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#ef4444',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '14px',
+            }}
+          >
+            <Lock size={26} />
+          </div>
+          <h2
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.55rem',
+              fontWeight: 700,
+              color: '#2b2b3c',
+              margin: '0 0 8px',
+            }}
+          >
+            Nhập mã xác thực OTP
+          </h2>
+          <p style={{ fontSize: '0.84rem', color: '#64748b', lineHeight: 1.5, margin: 0 }}>
+            {forgotMessage ||
+              `Mã OTP gồm 6 chữ số (hiệu lực 5 phút, dùng 1 lần) đã được gửi đến email ${forgotEmail}. Vui lòng nhập mã để tiếp tục.`}
+          </p>
+        </div>
+
+        <form onSubmit={handleVerifyResetOtp} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* OTP Input */}
+          <div style={{ position: 'relative' }}>
+            <label htmlFor="forgot-otp-input" style={notchedLabelStyle}>
+              Mã OTP (6 chữ số)
+            </label>
+            <input
+              id="forgot-otp-input"
+              type="text"
+              maxLength={6}
+              placeholder="••••••"
+              value={forgotOtp}
+              onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
+              autoFocus
+              style={{
+                ...inputStyle,
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                letterSpacing: '0.35em',
+                textAlign: 'center',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#5848f4';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#cbd5e1';
+              }}
+            />
+          </div>
+
+          {error && <div style={errorBoxStyle}>{error}</div>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={primaryBtnStyle}
+            onMouseEnter={(e) => {
+              if (!loading) e.currentTarget.style.background = '#4b3be0';
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) e.currentTarget.style.background = '#5848f4';
+            }}
+          >
+            {loading ? 'Đang xác thực...' : 'Xác nhận mã OTP'}
+          </button>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setError('');
+                setMode('login');
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#64748b',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: 0,
+              }}
+            >
+              <ArrowLeft size={14} /> Quay lại đăng nhập
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResendForgotOtp}
+              disabled={loading}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#5848f4',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: 0,
+              }}
+            >
+              <RefreshCw size={13} /> Gửi lại mã OTP
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════════
+  // GIAO DIỆN 3: ĐẶT MẬT KHẨU MỚI & MỞ KHÓA TÀI KHOẢN (BƯỚC 3)
+  // "Đặt mật khẩu mới thành công: cập nhật password hash, reset số lần sai về 0 và mở khóa"
+  // "Người dùng quay lại trang Login để đăng nhập bằng mật khẩu mới"
+  // ═════════════════════════════════════════════════════════════════════
+  if (mode === 'forgot_new_password') {
     return (
       <div style={cardContainerStyle}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -460,43 +640,14 @@ export default function LoginForm({ initialMode = 'login' }) {
               margin: '0 0 8px',
             }}
           >
-            Đặt lại mật khẩu
+            Đặt mật khẩu mới
           </h2>
           <p style={{ fontSize: '0.84rem', color: '#8e8ea9', lineHeight: 1.5, margin: 0 }}>
-            {forgotMessage}
+            Mã OTP hợp lệ! Hãy nhập mật khẩu mới để cập nhật mật khẩu, mở khóa tài khoản và thiết lập lại số lần đăng nhập sai về 0.
           </p>
         </div>
 
         <form onSubmit={handleConfirmResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {/* OTP Input */}
-          <div style={{ position: 'relative' }}>
-            <label htmlFor="forgot-otp" style={notchedLabelStyle}>
-              Mã OTP (6 chữ số)
-            </label>
-            <input
-              id="forgot-otp"
-              type="text"
-              maxLength={6}
-              placeholder="••••••"
-              value={forgotOtp}
-              onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
-              autoFocus
-              style={{
-                ...inputStyle,
-                fontSize: '1.25rem',
-                fontWeight: 700,
-                letterSpacing: '0.35em',
-                textAlign: 'center',
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#5848f4';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#cbd5e1';
-              }}
-            />
-          </div>
-
           {/* New Password */}
           <div style={{ position: 'relative' }}>
             <label htmlFor="new-password" style={notchedLabelStyle}>
@@ -508,6 +659,7 @@ export default function LoginForm({ initialMode = 'login' }) {
               placeholder="8-16 ký tự, có ký tự đặc biệt"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              autoFocus
               style={{ ...inputStyle, paddingRight: '44px' }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = '#5848f4';
@@ -570,15 +722,15 @@ export default function LoginForm({ initialMode = 'login' }) {
               if (!loading) e.currentTarget.style.background = '#5848f4';
             }}
           >
-            {loading ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
+            {loading ? 'Đang cập nhật & Mở khóa...' : 'Xác nhận đổi mật khẩu & Mở khóa'}
           </button>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginTop: '2px' }}>
             <button
               type="button"
               onClick={() => {
                 setError('');
-                setMode('forgot_email');
+                setMode('forgot_otp');
               }}
               style={{
                 background: 'none',
@@ -593,27 +745,7 @@ export default function LoginForm({ initialMode = 'login' }) {
                 padding: 0,
               }}
             >
-              <ArrowLeft size={14} /> Quay lại
-            </button>
-
-            <button
-              type="button"
-              onClick={handleResendForgotOtp}
-              disabled={loading}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#5848f4',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: 0,
-              }}
-            >
-              <RefreshCw size={13} /> Gửi lại mã OTP
+              <ArrowLeft size={14} /> Quay lại nhập OTP
             </button>
           </div>
         </form>
@@ -622,7 +754,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   }
 
   // ═════════════════════════════════════════════════════════════════════
-  // GIAO DIỆN 3: XÁC THỰC OTP ĐĂNG NHẬP (ROLE USER)
+  // GIAO DIỆN 4: XÁC THỰC OTP ĐĂNG NHẬP (NẾU BẬT MFA CHO USER)
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'otp') {
     return (
@@ -760,7 +892,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   }
 
   // ═════════════════════════════════════════════════════════════════════
-  // GIAO DIỆN 4: ĐĂNG NHẬP CHÍNH (EMAIL + MẬT KHẨU)
+  // GIAO DIỆN 5: ĐĂNG NHẬP CHÍNH (EMAIL + MẬT KHẨU)
   // ═════════════════════════════════════════════════════════════════════
   return (
     <div style={cardContainerStyle}>
