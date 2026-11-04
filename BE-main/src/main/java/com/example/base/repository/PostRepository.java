@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.time.OffsetDateTime;
 
-public interface PostRepository extends JpaRepository<Post, Long> {
+public interface PostRepository extends JpaRepository<Post, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Post> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Post p where p.id=:id")
     Optional<Post> findForClaimUpdate(@Param("id") long id);

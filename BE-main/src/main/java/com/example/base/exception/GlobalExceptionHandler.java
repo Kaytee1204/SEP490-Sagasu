@@ -13,6 +13,19 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler({org.springframework.dao.OptimisticLockingFailureException.class,
+            org.springframework.dao.PessimisticLockingFailureException.class})
+    public ResponseEntity<ErrorResponse> handleConcurrentChange(Exception ex) {
+        return ResponseEntity.status(409).body(new ErrorResponse("DATA_CONFLICT",
+                "Dữ liệu vừa được xử lý bởi người khác. Vui lòng tải lại và kiểm tra trước khi tiếp tục."));
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataConflict(Exception ex) {
+        return ResponseEntity.status(409).body(new ErrorResponse("DATA_CONFLICT",
+                "Không thể lưu do dữ liệu trùng hoặc không còn hợp lệ. Vui lòng tải lại và kiểm tra."));
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(Exception ex) {
         return ResponseEntity.status(403).body(new ErrorResponse(ErrorCode.FORBIDDEN.getCode(), ErrorCode.FORBIDDEN.getDefaultMessage()));

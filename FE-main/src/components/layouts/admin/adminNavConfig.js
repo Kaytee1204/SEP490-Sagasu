@@ -1,10 +1,11 @@
 // src/components/layouts/admin/adminNavConfig.js
-import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck } from 'lucide-react';
 
 export const ADMIN_NAV_SECTIONS = [
   {
-    title: 'Tiếp nhận & xét duyệt',
-    items: [{ label: 'Hàng đợi tiếp nhận', path: '/approver/receipts', icon: ClipboardList, roles: ['APPROVER'] }],
+    title: 'Tiếp nhận đồ',
+    items: [{ label: 'Hồ sơ tiếp nhận', path: '/approver/receipts', icon: ClipboardList, roles: ['APPROVER'] },
+      { label: 'Đồ đang lưu kho', path: '/approver/storage', icon: Warehouse, roles: ['APPROVER'] }],
   },
   {
     title: 'Tổng quan',
@@ -22,11 +23,13 @@ export const ADMIN_NAV_SECTIONS = [
     title: 'Quản lý dữ liệu',
     items: [
       { label: 'Danh mục', path: '/admin/categories', icon: Tags, roles: ['MANAGER'] },
+      { label: 'Kho & vị trí lưu trữ', path: '/admin/storage', icon: Warehouse, roles: ['MANAGER'] },
+      { label: 'Yêu cầu nhận đồ', path: '/admin/office-claims', icon: FileCheck, roles: ['MANAGER'] },
       {
         label: 'Tin đăng',
         path: '/admin/items',
         icon: Package,
-        roles: ['ADMIN', 'MANAGER'],
+        roles: ['MANAGER'],
       },
       {
         label: 'Báo cáo vi phạm',

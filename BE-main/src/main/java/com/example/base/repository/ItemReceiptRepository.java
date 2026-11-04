@@ -11,7 +11,9 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-public interface ItemReceiptRepository extends JpaRepository<ItemReceipt, Long> {
+public interface ItemReceiptRepository extends JpaRepository<ItemReceipt, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<ItemReceipt> {
+    Optional<ItemReceipt> findByPostId(Long postId);
+    boolean existsByStorageLocation_IdInAndStatusIn(java.util.Collection<Long> locations, java.util.Collection<String> statuses);
     @Query("""
         select r.id from ItemReceipt r
         where (:filter = 'ALL' or r.status = :filter)

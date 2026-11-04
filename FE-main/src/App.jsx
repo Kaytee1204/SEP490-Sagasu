@@ -15,7 +15,12 @@ import MyClaimsPage, { PostClaimsPage } from '@/features/claims/pages/MyClaimsPa
 import ClaimDetailPage, { LegacyClaimRedirect } from '@/features/claims/pages/ClaimDetailPage';
 import AdminLayout from '@/components/layouts/admin/AdminLayout';
 import MainLayout from '@/components/layouts/MainLayout';
-import AdminItemsPage from '@/features/admin/pages/AdminItemsPage';
+import PostAdministration from '@/features/office/pages/PostAdministration';
+import StaffPostDetail from '@/features/office/pages/StaffPostDetail';
+import StoragePage from '@/features/office/pages/StoragePage';
+import OfficeClaimList from '@/features/office/pages/OfficeClaimList';
+import OfficeClaimForm from '@/features/office/pages/OfficeClaimForm';
+import OfficeClaimDetail from '@/features/office/pages/OfficeClaimDetail';
 import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
@@ -69,6 +74,9 @@ function AppRoutes() {
 
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>
+        <Route path="/van-phong/claims" element={<ProtectedRoute><OfficeClaimList mine /></ProtectedRoute>} />
+        <Route path="/van-phong/claims/:id" element={<ProtectedRoute><OfficeClaimDetail mine /></ProtectedRoute>} />
+        <Route path="/van-phong/xac-minh/:id" element={<ProtectedRoute><OfficeClaimForm /></ProtectedRoute>} />
         <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
         <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />
         <Route path="/bai-dang/:postId/claims/:claimId" element={<ProtectedRoute><ClaimDetailPage /></ProtectedRoute>} />
@@ -148,13 +156,19 @@ function AppRoutes() {
         <Route index element={<AccountDashboardPage />} />
         <Route path="users" element={<AccountDashboardPage />} />
         <Route path="users/:id" element={<AdminUserDetailsPage />} />
-        <Route path="items" element={<AdminItemsPage />} />
+        <Route path="items" element={<ProtectedRoute managerOnly><PostAdministration /></ProtectedRoute>} />
+        <Route path="items/:id" element={<ProtectedRoute managerOnly><StaffPostDetail /></ProtectedRoute>} />
+        <Route path="storage" element={<ProtectedRoute managerOnly><StoragePage /></ProtectedRoute>} />
+        <Route path="office-claims" element={<ProtectedRoute managerOnly><OfficeClaimList /></ProtectedRoute>} />
+        <Route path="office-claims/new" element={<ProtectedRoute managerOnly><OfficeClaimForm counter /></ProtectedRoute>} />
+        <Route path="office-claims/:id" element={<ProtectedRoute managerOnly><OfficeClaimDetail /></ProtectedRoute>} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>
 
       
       <Route path="/approver" element={<ProtectedRoute approverOnly><AdminLayout /></ProtectedRoute>}>
+        <Route path="storage" element={<StoragePage />} />
         <Route index element={<Navigate to="/approver/receipts" replace />} />
         <Route path="receipts" element={<ReceiptQueuePage />} />
         <Route path="receipts/new" element={<IntakeFormPage />} />
