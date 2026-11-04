@@ -9,10 +9,12 @@ import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.util.Optional;
 
-public interface ClaimRepository extends JpaRepository<Claim, Long> {
+public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Claim c where c.post.id=:postId and c.status='PENDING' order by c.id")
     java.util.List<Claim> findWaitingForReturn(@Param("postId") long postId);
+
     Optional<Claim> findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(long postId, String status);
     boolean existsByPost_Id(Long postId);
     boolean existsByPost_IdAndStatusIn(Long postId, Collection<String> statuses);
