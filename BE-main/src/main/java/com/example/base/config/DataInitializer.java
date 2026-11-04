@@ -9,8 +9,25 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
+
+import javax.sql.DataSource;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.zip.GZIPInputStream;
 
 @Configuration
 public class DataInitializer {
@@ -20,7 +37,8 @@ public class DataInitializer {
     @Bean
     public CommandLineRunner initDefaultAccounts(
             AccountRepository accountRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            DataSource dataSource
     ) {
         return args -> {
             // 1. Seed tài khoản ADMIN: admin / 123
@@ -98,13 +116,194 @@ public class DataInitializer {
                 accountRepository.save(testUser);
             }
 
+            // 4. Seed tài khoản USER: kayfrancistee@gmail.com / 123
+            String thirdEmail = "kayfrancistee@gmail.com";
+            Account thirdUser = accountRepository.findByEmailIgnoreCase(thirdEmail).orElse(null);
+            if (thirdUser == null) {
+                thirdUser = new Account();
+                thirdUser.setFullName("Kay Francis Tee");
+                thirdUser.setEmail(thirdEmail);
+                thirdUser.setPasswordHash(passwordEncoder.encode("123"));
+                thirdUser.setRole(AccountRole.USER);
+                thirdUser.setStatus(AccountStatus.ACTIVE);
+                thirdUser.setMustChangePassword(false);
+                thirdUser.setCreatedBy(admin);
+                accountRepository.save(thirdUser);
+            }
+
+            // 5. Tự động đồng bộ 4.203 bài đăng R2 Dataset (LOST + FOUND) cho mọi môi trường (Local & Render Staging)
+            seedR2DatasetPostsIfMissing(dataSource);
+
             log.info("==================================================================");
             log.info("[SEED DATA - KhanhTB]");
             log.info("1. ADMIN   -> email: admin | password: 123");
             log.info("2. MANAGER -> email: {} | password: 123", managerEmail);
             log.info("3. USER    -> email: user  | password: 123");
+            log.info("4. USER    -> email: {} | password: 123", thirdEmail);
             log.info("Swagger UI : http://localhost:8080/swagger-ui.html");
             log.info("==================================================================");
         };
+    }
+
+    private void seedR2DatasetPostsIfMissing(DataSource dataSource) {
+        ClassPathResource resource = new ClassPathResource("seed/r2_dataset_manifest.tsv.gz");
+        if (!resource.exists()) {
+            return;
+        }
+
+        try (Connection conn = dataSource.getConnection()) {
+            Set<String> existingIdentifiers = new HashSet<>();
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT private_identifiers FROM post WHERE private_identifiers LIKE 'DATASET_IMPORT:%'")) {
+                while (rs.next()) {
+                    existingIdentifiers.add(rs.getString(1));
+                }
+            } catch (Exception ex) {
+                log.warn("[SEED R2 DATASET] Bảng post chưa sẵn sàng, bỏ qua seed R2 dataset: {}", ex.getMessage());
+                return;
+            }
+
+            if (existingIdentifiers.size() >= 4203) {
+                log.info("[SEED R2 DATASET] Đã có đủ {} bài đăng R2 trong Database.", existingIdentifiers.size());
+                return;
+            }
+
+            Map<String, Long> accountByEmail = new HashMap<>();
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT id, lower(email) FROM accounts")) {
+                while (rs.next()) {
+                    accountByEmail.put(rs.getString(2), rs.getLong(1));
+                }
+            }
+
+            Map<String, Long> categoryByName = new HashMap<>();
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT category_id, name FROM category")) {
+                while (rs.next()) {
+                    categoryByName.put(rs.getString(2).trim().toLowerCase(), rs.getLong(1));
+                }
+            }
+
+            boolean origAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+
+            String insertCategorySql = "INSERT INTO category (name, is_active) VALUES (?, true) RETURNING category_id";
+            String insertPostSql = """
+                    INSERT INTO post (
+                        account_id, created_by, category_id, post_type, title, description,
+                        location_text, event_at, private_identifiers, status, custody_mode,
+                        moderation_status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', 'P2P', 'VISIBLE', ?, ?)
+                    RETURNING post_id
+                    """;
+            String insertImgSql = """
+                    INSERT INTO post_image (
+                        post_id, storage_key, image_url, sort_order, mime_type,
+                        size_bytes, width, height, content_hash, created_at
+                    ) VALUES (?, ?, NULL, 0, ?, ?, ?, ?, ?, ?)
+                    """;
+
+            int inserted = 0;
+            int index = 0;
+            OffsetDateTime baseTime = OffsetDateTime.now().minusMinutes(10);
+
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(
+                    new GZIPInputStream(resource.getInputStream()), StandardCharsets.UTF_8));
+                 PreparedStatement psCat = conn.prepareStatement(insertCategorySql);
+                 PreparedStatement psPost = conn.prepareStatement(insertPostSql);
+                 PreparedStatement psImg = conn.prepareStatement(insertImgSql)) {
+
+                String line;
+                while ((line = br.readLine()) != null) {
+                    index++;
+                    if (line.isBlank()) continue;
+                    String[] parts = line.split("\t", -1);
+                    if (parts.length < 13) continue;
+
+                    String postType = parts[0];
+                    String ownerEmail = parts[1].toLowerCase();
+                    String categoryName = parts[2];
+                    String title = parts[3];
+                    String description = parts[4];
+                    String locationText = parts[5];
+                    String privateIdentifier = parts[6];
+                    String storageKey = parts[7];
+                    String mimeType = parts[8];
+                    long sizeBytes = Long.parseLong(parts[9]);
+                    int width = Integer.parseInt(parts[10]);
+                    int height = Integer.parseInt(parts[11]);
+                    String contentHash = parts[12];
+
+                    if (existingIdentifiers.contains(privateIdentifier)) {
+                        continue;
+                    }
+
+                    Long authorId = accountByEmail.getOrDefault(ownerEmail, accountByEmail.get("user"));
+                    if (authorId == null) continue;
+
+                    String catKey = categoryName.trim().toLowerCase();
+                    Long categoryId = categoryByName.get(catKey);
+                    if (categoryId == null) {
+                        psCat.setString(1, categoryName.trim());
+                        try (ResultSet rsCat = psCat.executeQuery()) {
+                            if (rsCat.next()) {
+                                categoryId = rsCat.getLong(1);
+                                categoryByName.put(catKey, categoryId);
+                            }
+                        }
+                    }
+                    if (categoryId == null) continue;
+
+                    OffsetDateTime eventAt = baseTime.minusMinutes(index % 4320);
+                    Timestamp tsEvent = Timestamp.from(eventAt.toInstant());
+                    Timestamp tsNow = Timestamp.from(OffsetDateTime.now().toInstant());
+
+                    psPost.setLong(1, authorId);
+                    psPost.setLong(2, authorId);
+                    psPost.setLong(3, categoryId);
+                    psPost.setString(4, postType);
+                    psPost.setString(5, title);
+                    psPost.setString(6, description);
+                    psPost.setString(7, locationText);
+                    psPost.setTimestamp(8, tsEvent);
+                    psPost.setString(9, privateIdentifier);
+                    psPost.setTimestamp(10, tsNow);
+                    psPost.setTimestamp(11, tsNow);
+
+                    long postId;
+                    try (ResultSet rsPost = psPost.executeQuery()) {
+                        rsPost.next();
+                        postId = rsPost.getLong(1);
+                    }
+
+                    psImg.setLong(1, postId);
+                    psImg.setString(2, storageKey);
+                    psImg.setString(3, mimeType);
+                    psImg.setLong(4, sizeBytes);
+                    psImg.setInt(5, width);
+                    psImg.setInt(6, height);
+                    psImg.setString(7, contentHash);
+                    psImg.setTimestamp(8, tsNow);
+                    psImg.addBatch();
+
+                    inserted++;
+                    if (inserted % 400 == 0) {
+                        psImg.executeBatch();
+                        conn.commit();
+                    }
+                }
+
+                psImg.executeBatch();
+                conn.commit();
+                log.info("[SEED R2 DATASET] Đã tự động đồng bộ thành công {} bài đăng R2 vào Database!", inserted);
+            } catch (Exception e) {
+                conn.rollback();
+                log.error("[SEED R2 DATASET] Lỗi khi đồng bộ bài đăng R2: {}", e.getMessage(), e);
+            } finally {
+                conn.setAutoCommit(origAutoCommit);
+            }
+        } catch (Exception e) {
+            log.warn("[SEED R2 DATASET] Không thể kết nối Database để seed R2 dataset: {}", e.getMessage());
+        }
     }
 }
