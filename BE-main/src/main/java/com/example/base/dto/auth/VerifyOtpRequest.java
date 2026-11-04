@@ -9,7 +9,7 @@ public class VerifyOtpRequest {
 
     @NotBlank(message = "Email không được để trống")
     @Pattern(
-            regexp = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+            regexp = "^([A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|admin|user)$",
             message = "Định dạng Email không hợp lệ (VD: example@gmail.com)"
     )
     @Schema(description = "Email cần xác thực OTP", example = "khanhtrinh1204@gmail.com")

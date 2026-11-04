@@ -84,16 +84,25 @@ public class AuthController {
     @PostMapping("/forgot-password")
     @Operation(
             summary = "Quên mật khẩu - Bước 1: Gửi mã OTP khôi phục về Email",
-            description = "Gửi mã OTP 6 số (FORGOT_PASSWORD) về email để khôi phục mật khẩu."
+            description = "Gửi mã OTP 6 số (FORGOT_PASSWORD) về email để khôi phục mật khẩu và mở khóa tài khoản."
     )
     public ResponseEntity<ApiResponse<Map<String, Object>>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Đã gửi mã OTP khôi phục mật khẩu", authService.forgotPassword(request)));
     }
 
+    @PostMapping("/verify-reset-otp")
+    @Operation(
+            summary = "Quên mật khẩu - Bước 2: Xác thực mã OTP trước khi cho phép đặt mật khẩu mới",
+            description = "Xác thực mã OTP 6 số (FORGOT_PASSWORD). OTP hợp lệ mới được chuyển sang bước đặt mật khẩu mới."
+    )
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyResetOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok("Mã OTP hợp lệ", authService.verifyResetPasswordOtp(request)));
+    }
+
     @PostMapping("/reset-password")
     @Operation(
-            summary = "Quên mật khẩu - Bước 2: Đặt lại mật khẩu mới bằng mã OTP",
-            description = "Xác thực mã OTP nhận từ /api/auth/forgot-password và cập nhật mật khẩu mới (8-16 ký tự, có ký tự đặc biệt)."
+            summary = "Quên mật khẩu - Bước 3: Đặt lại mật khẩu mới bằng mã OTP, reset số lần sai và mở khóa",
+            description = "Xác thực mã OTP nhận từ email và cập nhật mật khẩu mới (8-16 ký tự, có ký tự đặc biệt), reset số lần đăng nhập sai về 0 và mở khóa tài khoản."
     )
     public ResponseEntity<ApiResponse<AccountDto>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Đặt lại mật khẩu thành công", authService.resetPassword(request)));

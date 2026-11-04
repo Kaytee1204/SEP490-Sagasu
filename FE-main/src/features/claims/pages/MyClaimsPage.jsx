@@ -87,7 +87,7 @@ function ClaimList({ postId, embedded = false, initialView = 'received' }) {
   return <Wrapper className={`${embedded ? '' : 'container'} claims-page ${embedded ? 'claims-embedded' : ''}`} aria-label={title}>
     <header className="claims-heading"><div>{embedded ? <h2>{title}</h2> : <h1>{title}</h1>}
       <p className="claims-muted">{view === 'office' ? 'Xét duyệt yêu cầu nhận đồ đã được phòng ban tiếp nhận, xác minh.' : incoming ? 'Xem claim trên các bài của bạn và mở hồ sơ để xét duyệt.' : 'Theo dõi những yêu cầu nhận đồ bạn đã gửi.'}</p></div>
-      <Link className="btn btn-ghost" to={postId ? `/chi-tiet/${postId}` : '/tim-kiem'}>{postId ? 'Về bài đăng' : 'Tìm đồ thất lạc'}</Link></header>
+      <div className="claims-filters"><Link className="btn btn-ghost" to="/van-phong/claims">Yêu cầu tại văn phòng</Link><Link className="btn btn-ghost" to={postId ? `/chi-tiet/${postId}` : '/tim-kiem'}>{postId ? 'Về bài đăng' : 'Tìm đồ thất lạc'}</Link></div></header>
     {!postId && <div className="claims-filters" role="tablist" aria-label="Loại danh sách claim">
       {[['received', 'Claim P2P trên bài của tôi'], ['sent', 'Tôi đã gửi'], ...(isApprover ? [['office', 'Claim gửi phòng ban']] : [])].map(([value, label]) => <button type="button" key={value}
         role="tab" aria-selected={view === value} className={`chip ${view === value ? 'active' : ''}`}

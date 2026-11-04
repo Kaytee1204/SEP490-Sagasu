@@ -21,7 +21,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
     Optional<Claim> findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(Long postId, Long claimantId, String claimType);
 
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})
-    @Query("select c from Claim c where c.claimant.id=:actorId and (:status='ALL' or c.status=:status) order by c.createdAt desc, c.id desc")
+    @Query("select c from Claim c where c.claimType='P2P' and c.claimant.id=:actorId and (:status='ALL' or c.status=:status) order by c.createdAt desc, c.id desc")
     Page<Claim> findMine(@Param("actorId") long actorId, @Param("status") String status, Pageable pageable);
 
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})

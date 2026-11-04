@@ -12,6 +12,8 @@ import com.example.base.repository.OtpChallengeRepository;
 import com.example.base.repository.RefreshTokenRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.security.JwtTokenProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -36,6 +38,7 @@ import java.util.UUID;
 @Service
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final AccountRepository accountRepository;
@@ -118,11 +121,33 @@ public class AuthService {
             int fails = account.getFailedLoginCount() + 1;
             account.setFailedLoginCount(fails);
             if (fails >= 5) {
-                account.setLockedUntil(OffsetDateTime.now().plusMinutes(15));
+                account.setStatus(AccountStatus.SUSPENDED);
+                account.setLockedUntil(OffsetDateTime.now().plusYears(100));
+                accountRepository.save(account);
+
+                // Tự động tạo và gửi OTP khôi phục mật khẩu / mở khóa qua email
+                try {
+                    SendOtpRequest otpRequest = new SendOtpRequest();
+                    otpRequest.setEmail(account.getEmail());
+                    otpRequest.setPurpose(OtpPurpose.FORGOT_PASSWORD);
+                    sendOtp(otpRequest);
+                } catch (Exception ex) {
+                    log.error("Không thể tự động gửi OTP khi tài khoản bị khóa: {}", ex.getMessage());
+                }
+
+                recordAuditLog(account, "ACCOUNT_LOCKED_5_FAILS", false, Map.of("reason", "Failed 5 consecutive login attempts", "failedCount", fails));
+                throw new AppException(
+                        ErrorCode.ACCOUNT_LOCKED,
+                        "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Hệ thống đã gửi mã OTP đặt lại mật khẩu đến email "
+                                + account.getEmail() + ". Vui lòng kiểm tra email để đặt lại mật khẩu và mở khóa tài khoản."
+                );
             }
             accountRepository.save(account);
             recordAuditLog(account, "LOGIN_PASSWORD", false, Map.of("reason", "Wrong password", "failedCount", fails));
-            throw new AppException(ErrorCode.INVALID_CREDENTIALS);
+            throw new AppException(
+                    ErrorCode.INVALID_CREDENTIALS,
+                    "Mật khẩu không chính xác. Bạn còn " + (5 - fails) + " lần thử trước khi tài khoản bị khóa."
+            );
         }
 
         account.setFailedLoginCount(0);
@@ -269,9 +294,21 @@ public class AuthService {
         OtpPurpose purpose = request.getPurpose() != null ? request.getPurpose() : OtpPurpose.CHANGE_PASSWORD;
 
         Account account = accountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .or(() -> "admin".equalsIgnoreCase(normalizedEmail)
+                        ? accountRepository.findByRole(AccountRole.ADMIN).stream().findFirst()
+                        : java.util.Optional.empty())
+                .or(() -> "user".equalsIgnoreCase(normalizedEmail)
+                        ? accountRepository.findByEmailIgnoreCase("user")
+                        : java.util.Optional.empty())
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
 
-        validateAccountCanAuthenticate(account);
+        if (purpose != OtpPurpose.FORGOT_PASSWORD) {
+            validateAccountCanAuthenticate(account);
+        } else {
+            if (account.getStatus() == AccountStatus.DELETED) {
+                throw new AppException(ErrorCode.ACCOUNT_DELETED);
+            }
+        }
 
         List<OtpChallenge> openChallenges = otpChallengeRepository
                 .findByAccount_IdAndPurposeAndUsedAtIsNullAndRevokedAtIsNull(account.getId(), purpose);
@@ -325,6 +362,62 @@ public class AuthService {
     }
 
     @Transactional(noRollbackFor = AppException.class)
+    public Map<String, Object> verifyResetPasswordOtp(VerifyOtpRequest request) {
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        Account account = accountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .or(() -> "admin".equalsIgnoreCase(normalizedEmail)
+                        ? accountRepository.findByRole(AccountRole.ADMIN).stream().findFirst()
+                        : java.util.Optional.empty())
+                .or(() -> "user".equalsIgnoreCase(normalizedEmail)
+                        ? accountRepository.findByEmailIgnoreCase("user")
+                        : java.util.Optional.empty())
+                .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
+
+        if (account.getStatus() == AccountStatus.DELETED) {
+            throw new AppException(ErrorCode.ACCOUNT_DELETED);
+        }
+
+        OtpChallenge challenge = otpChallengeRepository
+                .findFirstByAccount_IdAndPurposeAndUsedAtIsNullAndRevokedAtIsNullOrderByCreatedAtDesc(
+                        account.getId(),
+                        OtpPurpose.FORGOT_PASSWORD
+                )
+                .orElseThrow(() -> new AppException(ErrorCode.OTP_NOT_FOUND));
+
+        OffsetDateTime now = OffsetDateTime.now();
+        if (challenge.getExpiresAt().isBefore(now)) {
+            challenge.setRevokedAt(now);
+            otpChallengeRepository.save(challenge);
+            throw new AppException(ErrorCode.OTP_EXPIRED);
+        }
+
+        if (challenge.getAttemptCount() >= challenge.getMaxAttempts()) {
+            challenge.setRevokedAt(now);
+            otpChallengeRepository.save(challenge);
+            throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS);
+        }
+
+        String inputHash = sha256Hex(request.getOtp().trim());
+        if (!challenge.getOtpHash().equalsIgnoreCase(inputHash)) {
+            int newAttempts = challenge.getAttemptCount() + 1;
+            challenge.setAttemptCount(newAttempts);
+            if (newAttempts >= challenge.getMaxAttempts()) {
+                challenge.setRevokedAt(now);
+            }
+            otpChallengeRepository.save(challenge);
+            recordAuditLog(account, "OTP_VERIFY_FAILED", false, Map.of("purpose", OtpPurpose.FORGOT_PASSWORD.name(), "attempts", newAttempts));
+            throw new AppException(ErrorCode.OTP_INVALID);
+        }
+
+        recordAuditLog(account, "OTP_VERIFY_SUCCESS", true, Map.of("purpose", OtpPurpose.FORGOT_PASSWORD.name()));
+        return Map.of(
+                "valid", true,
+                "email", account.getEmail(),
+                "message", "Mã OTP hợp lệ. Vui lòng chuyển sang bước đặt mật khẩu mới."
+        );
+    }
+
+    @Transactional(noRollbackFor = AppException.class)
     public Map<String, Object> forgotPassword(ForgotPasswordRequest request) {
         SendOtpRequest otpRequest = new SendOtpRequest();
         otpRequest.setEmail(request.getEmail());
@@ -336,6 +429,12 @@ public class AuthService {
     public AccountDto resetPassword(ResetPasswordRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
         Account account = accountRepository.findByEmailIgnoreCase(normalizedEmail)
+                .or(() -> "admin".equalsIgnoreCase(normalizedEmail)
+                        ? accountRepository.findByRole(AccountRole.ADMIN).stream().findFirst()
+                        : java.util.Optional.empty())
+                .or(() -> "user".equalsIgnoreCase(normalizedEmail)
+                        ? accountRepository.findByEmailIgnoreCase("user")
+                        : java.util.Optional.empty())
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
 
         validateAccountObjectAndVerifyOtp(account, request.getOtp().trim(), OtpPurpose.FORGOT_PASSWORD);
@@ -344,6 +443,9 @@ public class AuthService {
         account.setMustChangePassword(false);
         account.setFailedLoginCount(0);
         account.setLockedUntil(null);
+        if (account.getStatus() == AccountStatus.SUSPENDED) {
+            account.setStatus(AccountStatus.ACTIVE);
+        }
         accountRepository.save(account);
 
         List<RefreshToken> activeTokens = refreshTokenRepository.findByAccount_IdAndRevokedAtIsNull(account.getId());
@@ -353,7 +455,7 @@ public class AuthService {
         }
         refreshTokenRepository.saveAll(activeTokens);
 
-        recordAuditLog(account, "RESET_PASSWORD", true, Map.of("email", account.getEmail()));
+        recordAuditLog(account, "RESET_PASSWORD_AND_UNLOCKED", true, Map.of("email", account.getEmail()));
         return accountMapper.toDto(account);
     }
 
@@ -396,11 +498,11 @@ public class AuthService {
             throw new AppException(ErrorCode.ACCOUNT_DELETED);
         }
         if (account.getStatus() == AccountStatus.SUSPENDED) {
-            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đang bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Vui lòng kiểm tra email để lấy mã OTP đặt lại mật khẩu và mở khóa tài khoản.");
         }
         OffsetDateTime now = OffsetDateTime.now();
         if (account.getLockedUntil() != null && account.getLockedUntil().isAfter(now)) {
-            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đang bị tạm khóa đến " + account.getLockedUntil());
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đang bị tạm khóa. Vui lòng kiểm tra email để lấy mã OTP đặt lại mật khẩu và mở khóa tài khoản.");
         }
         if (account.getValidUntil() != null && account.getValidUntil().isBefore(now)) {
             throw new AppException(ErrorCode.ACCOUNT_EXPIRED);

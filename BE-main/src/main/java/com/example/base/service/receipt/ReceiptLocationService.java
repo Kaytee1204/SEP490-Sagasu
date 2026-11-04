@@ -29,11 +29,19 @@ public class ReceiptLocationService {
     // Called within the receipt write transaction. Historical inactive assignments may be kept.
     public StorageLocation resolve(Long id, StorageLocation existing) {
         if (id == null) return null;
-        if (existing != null && existing.getId().equals(id)) return existing;
-        StorageLocation location = entityManager.find(StorageLocation.class, id, LockModeType.PESSIMISTIC_READ);
+        var all = locations.lockAll();
+        StorageLocation location = all.stream().filter(l -> l.getId().equals(id)).findFirst().orElse(null);
         if (location == null) throw unavailable();
-        entityManager.refresh(location, LockModeType.PESSIMISTIC_READ);
+        entityManager.refresh(location, LockModeType.PESSIMISTIC_WRITE);
         if (!location.isActive()) throw unavailable();
+        var visited = new java.util.HashSet<Long>();
+        StorageLocation ancestor = location;
+        while (ancestor.getParentId() != null) {
+            if (!visited.add(ancestor.getId())) throw unavailable();
+            Long parent = ancestor.getParentId();
+            ancestor = all.stream().filter(l -> l.getId().equals(parent)).findFirst().orElseThrow(this::unavailable);
+            if (!ancestor.isActive()) throw unavailable();
+        }
         return location;
     }
 

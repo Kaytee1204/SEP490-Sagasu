@@ -55,6 +55,15 @@ export const authApi = {
     return res.data;
   },
 
+  async verifyResetOtp(email, otp) {
+    const res = await apiClient.post('/auth/verify-reset-otp', {
+      email,
+      otp,
+      purpose: 'FORGOT_PASSWORD',
+    });
+    return res.data;
+  },
+
   async resetPassword(email, otp, newPassword) {
     const res = await apiClient.post('/auth/reset-password', {
       email,

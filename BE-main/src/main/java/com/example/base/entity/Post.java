@@ -156,6 +156,10 @@ public class Post {
     }
 
     public void reserveForClaim() { status = "RESERVED"; }
+    public void moderate(String status, String reason, Account manager) {
+        moderationStatus = status; moderationNote = reason;
+        moderatedBy = manager; moderatedAt = updatedAt = OffsetDateTime.now();
+    }
     public void reopenAfterClaimCancellation() { status = "OPEN"; }
     public void markReturnedFromP2pHandover() { status="RETURNED";updatedAt=OffsetDateTime.now(); }
 

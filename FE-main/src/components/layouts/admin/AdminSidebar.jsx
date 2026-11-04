@@ -50,7 +50,7 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-6">
-        {ADMIN_NAV_SECTIONS.map((section) => (
+        {ADMIN_NAV_SECTIONS.filter(section => section.items.some(item => !item.roles || item.roles.includes(user?.role))).map((section) => (
           <div key={section.title} className="space-y-1">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1">
               {section.title}
