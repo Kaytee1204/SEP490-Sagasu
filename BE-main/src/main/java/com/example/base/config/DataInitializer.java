@@ -41,6 +41,9 @@ public class DataInitializer {
             DataSource dataSource
     ) {
         return args -> {
+            // 0. Tự động chuẩn hóa các role cũ (vd: CHECKER -> APPROVER, EXTERNAL_USER -> USER) trước khi truy vấn JPA
+            migrateLegacyAccountRoles(dataSource);
+
             // 1. Seed tài khoản ADMIN: admin / 123
             Account admin = accountRepository.findByEmailIgnoreCase("admin").orElse(null);
             if (admin == null) {
@@ -143,6 +146,40 @@ public class DataInitializer {
             log.info("Swagger UI : http://localhost:8080/swagger-ui.html");
             log.info("==================================================================");
         };
+    }
+
+    private void migrateLegacyAccountRoles(DataSource dataSource) {
+        try (Connection conn = dataSource.getConnection();
+             Statement st = conn.createStatement()) {
+            try (ResultSet rs = st.executeQuery("""
+                    SELECT con.conname
+                    FROM pg_constraint con
+                    JOIN pg_class rel ON rel.oid = con.conrelid
+                    WHERE rel.relname = 'accounts' AND con.contype = 'c'
+                      AND pg_get_constraintdef(con.oid) ILIKE '%role%'
+                    """)) {
+                Set<String> legacyConstraints = new HashSet<>();
+                while (rs.next()) {
+                    legacyConstraints.add(rs.getString(1));
+                }
+                for (String c : legacyConstraints) {
+                    st.execute("ALTER TABLE accounts DROP CONSTRAINT IF EXISTS \"" + c + "\"");
+                }
+            }
+            int updatedChecker = st.executeUpdate("UPDATE accounts SET role = 'APPROVER' WHERE upper(role) = 'CHECKER'");
+            int updatedOther = st.executeUpdate("UPDATE accounts SET role = 'USER' WHERE role NOT IN ('ADMIN', 'USER', 'APPROVER', 'MANAGER')");
+            st.execute("""
+                    ALTER TABLE accounts
+                    ADD CONSTRAINT chk_accounts_role
+                    CHECK (role IN ('ADMIN', 'USER', 'APPROVER', 'MANAGER'))
+                    """);
+            if (updatedChecker > 0 || updatedOther > 0) {
+                log.info("[SEED DATA] Đã chuyển đổi {} tài khoản CHECKER -> APPROVER và {} tài khoản role cũ -> USER.",
+                        updatedChecker, updatedOther);
+            }
+        } catch (Exception e) {
+            log.warn("[SEED DATA] Bỏ qua chuẩn hóa role cũ trên bảng accounts: {}", e.getMessage());
+        }
     }
 
     private void seedR2DatasetPostsIfMissing(DataSource dataSource) {
