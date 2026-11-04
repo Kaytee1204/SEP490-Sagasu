@@ -88,6 +88,7 @@ function ClaimDetail({ postId, id }) {
         <p>Người claim: <strong>{claim.claimantName}</strong> · {claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : <>Người nhặt: <strong>{claim.finderName}</strong></>}</p>
         {claim.claimType === 'OFFICE' && <p className="claim-notice">Đồ đã được phòng ban tiếp nhận, xác minh. {claim.storageLocationName && <>Nơi lưu trữ: {claim.storageLocationName}. </>}Hồ sơ do cán bộ tiếp nhận xét duyệt; không có chat P2P.</p>}
         <p className="claims-muted">Gửi lúc {claimDate(claim.createdAt)}</p>
+        {claim.closeReason==='ITEM_RETURNED'&&<p className="claim-notice">Hồ sơ được tự động đóng vì bài đã được trao trả cho người có claim được chấp thuận. Hồ sơ và bằng chứng vẫn được giữ.</p>}
         {claim.status === 'APPROVED' && <p className="claim-notice">{claim.claimType === 'OFFICE' ? 'Phòng ban' : 'Người nhặt'} đã chấp thuận yêu cầu nhận đồ. Đây chưa phải xác nhận đã bàn giao hoặc đã nhận đồ.</p>}
         <h3>Căn cứ nhận đồ</h3><p className="claim-prose">{claim.description}</p>
         {claim.evidenceNote && <><h3>Ghi chú bằng chứng</h3><p className="claim-prose">{claim.evidenceNote}</p></>}

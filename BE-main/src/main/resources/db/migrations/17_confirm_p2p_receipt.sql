@@ -1,0 +1,9 @@
+BEGIN;
+ALTER TABLE claim ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
+ALTER TABLE claim ADD COLUMN IF NOT EXISTS close_reason TEXT;
+ALTER TABLE claim DROP CONSTRAINT IF EXISTS chk_claim_status;
+ALTER TABLE claim ADD CONSTRAINT chk_claim_status CHECK(status IN ('PENDING','APPROVED','REJECTED','CANCELLED','COMPLETED','CLOSED'));
+ALTER TABLE claim DROP CONSTRAINT IF EXISTS chk_claim_closed;
+ALTER TABLE claim ADD CONSTRAINT chk_claim_closed CHECK(((status='CLOSED' AND closed_at IS NOT NULL AND nullif(btrim(close_reason),'') IS NOT NULL)
+ OR (status<>'CLOSED' AND closed_at IS NULL AND close_reason IS NULL)) IS TRUE);
+COMMIT;

@@ -24,7 +24,7 @@ import java.util.*;
 
 @Service @RequiredArgsConstructor @Slf4j
 public class ClaimService {
-    private static final Set<String> FILTERS = Set.of("ALL", "PENDING", "APPROVED", "REJECTED", "CANCELLED");
+    private static final Set<String> FILTERS = Set.of("ALL", "PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "CLOSED");
     private static final Set<String> ACTIVE_STATUSES = Set.of("PENDING", "APPROVED");
     private static final Set<String> RETRYABLE_STATUSES = Set.of("REJECTED", "CANCELLED");
     private final ClaimRepository claims;
@@ -182,7 +182,7 @@ public class ClaimService {
                         answer.getQuestionLabel(), answer.getAnswerText(), answer.getSectionTitle(),
                         answer.getTemplateCode(), answer.getTemplateVersion())).toList(), chatConversations.canOpen(claim),
                 claim.getClaimType(), claim.getReceipt() == null || claim.getReceipt().getStorageLocation() == null
-                        ? null : claim.getReceipt().getStorageLocation().getName());
+                        ? null : claim.getReceipt().getStorageLocation().getName(),claim.getCloseReason(),claim.getClosedAt());
     }
 
     @Transactional
@@ -306,7 +306,7 @@ public class ClaimService {
     private ClaimPageDto page(Page<Claim> result, int page, int size) {
         return new ClaimPageDto(result.getContent().stream().map(c -> new ClaimSummaryDto(c.getId(), c.getPost().getId(),
                 c.getPost().getTitle(), name(c.getClaimant()), name(c.getPost().getAccount()), c.getStatus(),
-                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType())).toList(), page, size, result.getTotalElements(), result.getTotalPages());
+                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType(),c.getCloseReason())).toList(), page, size, result.getTotalElements(), result.getTotalPages());
     }
     private String name(Account account) { return account.getFullName() == null || account.getFullName().isBlank() ? "Thành viên" : account.getFullName(); }
     private ClaimResultDto result(Claim claim) { return new ClaimResultDto(claim.getId(), claim.getPost().getId(), claim.getStatus(), claim.getVersion()); }

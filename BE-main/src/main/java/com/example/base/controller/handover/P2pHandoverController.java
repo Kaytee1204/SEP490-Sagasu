@@ -11,6 +11,9 @@ import java.util.List;
 @RestController @RequestMapping("/api/claims/{claimId}/handover") @RequiredArgsConstructor
 public class P2pHandoverController {
     private final P2pHandoverService service;
+    @PostMapping("/confirm") public ResponseEntity<?> confirm(@PathVariable long claimId,@RequestBody P2pHandoverService.ConfirmRequest request,@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.confirm(claimId,request,user)));
+    }
     @GetMapping public ResponseEntity<?> detail(@PathVariable long claimId,@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.detail(claimId,user)));
     }

@@ -1,7 +1,7 @@
 import { useEffect,useRef,useState } from 'react';
 import { useChat } from '@/features/chat/ChatProvider';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
-import { getHandover,uploadHandover } from './handoverApi';
+import { getHandover,uploadHandover,confirmHandover } from './handoverApi';
 import './Handover.css';
 const statusLabels={NOT_RECORDED:'Chưa ghi nhận giao đồ',WAITING_CONFIRMATION:'Chờ người nhận xác nhận',COMPLETED:'Đã nhận đồ',DISPUTED:'Có sự cố — chờ Manager xử lý'};
 const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});
@@ -20,6 +20,11 @@ export default function HandoverPanel({claim,onChanged}) {
     catch(e){setError(e.message);setRefresh(n=>n+1);}finally{inFlight.current=false;setBusy(false);}
   }
   const evidence=(data?.evidence||[]).map(item=>({...item,name:item.name||'Ảnh giao đồ'}));
+  async function confirmReceipt() {
+    if(inFlight.current||!window.confirm('Bạn đã nhận đúng đồ và muốn hoàn tất? Sau xác nhận, không thể báo sự cố bàn giao tại đây.'))return;
+    inFlight.current=true;setBusy(true);setError('');
+    try{setData(await confirmHandover(claim.id,data.version));onChanged();}catch(e){setError(e.message);setRefresh(n=>n+1);}finally{inFlight.current=false;setBusy(false);}
+  }
   return <section className="claim-panel handover-panel"><h2>Bàn giao đồ P2P</h2>
     {error&&<p role="alert" className="claim-alert">{error}</p>}{!data&&!error&&<p>Đang tải bàn giao…</p>}
     {data&&<><p className="claim-notice">{statusLabels[data.status]}</p>{data.recordedAt&&<p>Người nhặt ghi nhận giao lúc {date(data.recordedAt)}</p>}{data.note&&<p className="claim-prose">{data.note}</p>}
@@ -32,6 +37,8 @@ export default function HandoverPanel({claim,onChanged}) {
     </form>}
     {data.status==='NOT_RECORDED'&&!data.canRecord&&<p className="claims-muted">Chờ người nhặt ghi nhận đã giao đồ sau khi claim được chấp thuận.</p>}
     {data.status==='WAITING_CONFIRMATION'&&<p className="claims-muted">Ghi nhận giao đồ đã được lưu. Chờ người nhận phản hồi; chưa phải xác nhận đã nhận đồ.</p>}
+    {data.canConfirm&&<div className="handover-actions"><button type="button" className="btn btn-accent" disabled={busy} onClick={confirmReceipt}>Xác nhận đã nhận đồ</button></div>}
+    {data.confirmedAt&&<p className="claim-notice">Người nhận xác nhận lúc {date(data.confirmedAt)}. Bài đã trao trả; chat chỉ đọc.</p>}
     </>}
     {image!==null&&<ClaimEvidencePreview images={evidence} initialIndex={image} onClose={()=>setImage(null)}/>}
   </section>;

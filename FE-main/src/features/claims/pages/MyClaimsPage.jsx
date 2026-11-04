@@ -104,6 +104,7 @@ function ClaimList({ postId, embedded = false, initialView = 'received' }) {
       {snapshot.result.content.length ? snapshot.result.content.map(claim => <Link className="claim-card" key={claim.id} to={claimDetailPath(claim.postId, claim.id)}>
         <span className={`claim-status claim-status-${claim.status}`}>{CLAIM_STATUS[claim.status]}</span>
         <span className="claims-muted"> · {claim.claimType === 'OFFICE' ? 'Phòng ban tiếp nhận' : 'P2P'}</span>
+        {claim.closeReason==='ITEM_RETURNED'&&<p className="claims-muted">Đã đóng vì bài đã được trao trả.</p>}
         <h2>{claim.postTitle}</h2><p>Hồ sơ #{claim.id} · {incoming ? `Người claim: ${claim.claimantName}` : claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : `Người nhặt: ${claim.finderName}`}</p>
         <p className="claims-muted">Gửi lúc {claimDate(claim.createdAt)}</p><span>{incoming && claim.status === 'PENDING' ? 'Mở hồ sơ để xét duyệt →' : 'Xem hồ sơ →'}</span>
       </Link>) : <div className="claim-panel"><p>{status !== 'ALL' ? 'Không có hồ sơ ở trạng thái này.'

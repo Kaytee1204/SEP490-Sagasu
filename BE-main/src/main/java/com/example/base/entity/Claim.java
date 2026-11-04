@@ -29,6 +29,8 @@ public class Claim {
     @Column(name = "created_at", nullable = false, updatable = false) private OffsetDateTime createdAt;
     @Column(name = "updated_at", nullable = false) private OffsetDateTime updatedAt;
     @Column(name = "cancelled_at") private OffsetDateTime cancelledAt;
+    @Column(name="closed_at") private OffsetDateTime closedAt;
+    @Column(name="close_reason",columnDefinition="text") private String closeReason;
     @Version @Column(nullable = false) private long version;
     @OneToMany(mappedBy = "claim", cascade = CascadeType.PERSIST)
     @OrderBy("sortOrder ASC, id ASC") @Getter(AccessLevel.NONE)
@@ -51,6 +53,8 @@ public class Claim {
     public void addEvidence(ClaimEvidence image) { image.attachTo(this); evidence.add(image); }
     public boolean isOffice() { return "OFFICE".equals(claimType); }
     public void touchWorkflow() { updatedAt=OffsetDateTime.now(); }
+    public void completeReceipt() { status="COMPLETED";touchWorkflow(); }
+    public void closeAfterReturn() { status="CLOSED";closedAt=OffsetDateTime.now();closeReason="ITEM_RETURNED";touchWorkflow(); }
     public List<ClaimEvidence> getEvidence() { return Collections.unmodifiableList(evidence); }
     public void addAnswer(ClaimAnswer answer) { answer.attachTo(this); answers.add(answer); }
     public List<ClaimAnswer> getAnswers() { return Collections.unmodifiableList(answers); }

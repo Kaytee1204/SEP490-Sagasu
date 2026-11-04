@@ -157,6 +157,7 @@ public class Post {
 
     public void reserveForClaim() { status = "RESERVED"; }
     public void reopenAfterClaimCancellation() { status = "OPEN"; }
+    public void markReturnedFromP2pHandover() { status="RETURNED";updatedAt=OffsetDateTime.now(); }
 
     public boolean canRequestOfficeHandover() {
         return "FOUND".equals(postType) && "P2P".equals(custodyMode) && "OPEN".equals(status)
