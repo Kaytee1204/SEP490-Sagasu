@@ -204,12 +204,17 @@ CREATE INDEX IF NOT EXISTS item_receipt_status_idx
 CREATE INDEX IF NOT EXISTS item_receipt_image_receipt_idx
     ON item_receipt_image (item_receipt_id);
 
--- 6. TRIGGER TU DONG CAP NHAT UPDATED_AT
-CREATE OR REPLACE TRIGGER trg_storage_location_updated_at
+-- 6. FUNCTION & TRIGGER TU DONG CAP NHAT UPDATED_AT
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END; $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_storage_location_updated_at ON storage_location;
+CREATE TRIGGER trg_storage_location_updated_at
     BEFORE UPDATE ON storage_location
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE OR REPLACE TRIGGER trg_item_receipt_updated_at
+DROP TRIGGER IF EXISTS trg_item_receipt_updated_at ON item_receipt;
+CREATE TRIGGER trg_item_receipt_updated_at
     BEFORE UPDATE ON item_receipt
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

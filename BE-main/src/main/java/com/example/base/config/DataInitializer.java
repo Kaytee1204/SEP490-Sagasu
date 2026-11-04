@@ -228,7 +228,17 @@ public class DataInitializer {
     private void ensureCoreSchemaAndDefaults(DataSource dataSource) {
         try (Connection conn = dataSource.getConnection();
              Statement st = conn.createStatement()) {
-            // Đảm bảo DEFAULT cho category, post, post_image khi tạo từ Hibernate ddl-auto=update
+            // 1. Khởi tạo các PL/pgSQL trigger functions trước mọi bảng và trigger
+            execSafe(st, """
+                    CREATE OR REPLACE FUNCTION set_updated_at()
+                    RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END; $$ LANGUAGE plpgsql
+                    """);
+            execSafe(st, """
+                    CREATE OR REPLACE FUNCTION set_post_category_updated_at()
+                    RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END; $$ LANGUAGE plpgsql
+                    """);
+
+            // 2. Đảm bảo DEFAULT và trigger cho category, post, post_image, accounts
             execSafe(st, "ALTER TABLE category ALTER COLUMN is_active SET DEFAULT true");
             execSafe(st, "ALTER TABLE category ALTER COLUMN created_at SET DEFAULT now()");
             execSafe(st, "ALTER TABLE category ALTER COLUMN updated_at SET DEFAULT now()");
@@ -240,7 +250,14 @@ public class DataInitializer {
             execSafe(st, "ALTER TABLE post ALTER COLUMN created_at SET DEFAULT now()");
             execSafe(st, "ALTER TABLE post ALTER COLUMN updated_at SET DEFAULT now()");
 
-            // Tạo cột tsvector search_document và GIN index cho chức năng tìm kiếm bài đăng
+            execSafe(st, "DROP TRIGGER IF EXISTS trg_accounts_updated_at ON accounts");
+            execSafe(st, "CREATE TRIGGER trg_accounts_updated_at BEFORE UPDATE ON accounts FOR EACH ROW EXECUTE FUNCTION set_updated_at()");
+            execSafe(st, "DROP TRIGGER IF EXISTS trg_category_updated_at ON category");
+            execSafe(st, "CREATE TRIGGER trg_category_updated_at BEFORE UPDATE ON category FOR EACH ROW EXECUTE FUNCTION set_post_category_updated_at()");
+            execSafe(st, "DROP TRIGGER IF EXISTS trg_post_updated_at ON post");
+            execSafe(st, "CREATE TRIGGER trg_post_updated_at BEFORE UPDATE ON post FOR EACH ROW EXECUTE FUNCTION set_post_category_updated_at()");
+
+            // 3. Tạo cột tsvector search_document và GIN index cho chức năng tìm kiếm bài đăng
             execSafe(st, """
                     ALTER TABLE post
                     ADD COLUMN IF NOT EXISTS search_document tsvector
@@ -255,7 +272,7 @@ public class DataInitializer {
             execSafe(st, "ALTER TABLE post_image ALTER COLUMN sort_order SET DEFAULT 0");
             execSafe(st, "ALTER TABLE post_image ALTER COLUMN created_at SET DEFAULT now()");
 
-            // Seed đủ 16 danh mục chuẩn trước khi chạy questionnaire và R2 dataset
+            // 4. Seed đủ 16 danh mục chuẩn trước khi chạy questionnaire và R2 dataset
             String insertCatSql = """
                     INSERT INTO category (name, is_active, created_at, updated_at)
                     SELECT ?, true, now(), now()
@@ -268,7 +285,7 @@ public class DataInitializer {
                     ps.executeUpdate();
                 }
             }
-            log.info("[SCHEMA INIT] Đã đảm bảo cột post.search_document và 16 danh mục chuẩn.");
+            log.info("[SCHEMA INIT] Đã đảm bảo function set_updated_at(), cột post.search_document và 16 danh mục chuẩn.");
         } catch (Exception e) {
             log.warn("[SCHEMA INIT] Cảnh báo khi khởi tạo core schema/defaults: {}", e.getMessage());
         }
@@ -278,13 +295,21 @@ public class DataInitializer {
         for (String path : SQL_MIGRATIONS) {
             ClassPathResource res = new ClassPathResource(path);
             if (!res.exists()) continue;
-            try (Connection conn = dataSource.getConnection();
-                 Statement st = conn.createStatement()) {
-                String sql = StreamUtils.copyToString(res.getInputStream(), StandardCharsets.UTF_8);
-                st.execute(sql);
-                log.info("[SQL MIGRATION] Đã thực thi thành công: {}", path);
+            try (Connection conn = dataSource.getConnection()) {
+                try (Statement st = conn.createStatement()) {
+                    String sql = StreamUtils.copyToString(res.getInputStream(), StandardCharsets.UTF_8);
+                    st.execute(sql);
+                    log.info("[SQL MIGRATION] Đã thực thi thành công: {}", path);
+                } catch (Exception e) {
+                    // Nếu script có BEGIN; mà bị lỗi giữa chừng, bắt buộc ROLLBACK để không làm treo HikariCP connection
+                    try (Statement rb = conn.createStatement()) {
+                        rb.execute("ROLLBACK");
+                    } catch (Exception ignored) {
+                    }
+                    log.warn("[SQL MIGRATION] Đã rollback script ({}): {}", path, e.getMessage());
+                }
             } catch (Exception e) {
-                log.warn("[SQL MIGRATION] Bỏ qua hoặc đã tồn tại ({}): {}", path, e.getMessage());
+                log.warn("[SQL MIGRATION] Không thể mở kết nối cho ({}): {}", path, e.getMessage());
             }
         }
     }
