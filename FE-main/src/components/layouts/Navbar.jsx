@@ -43,6 +43,7 @@ function AvatarDropdown() {
     { icon: User, label: 'Hồ sơ cá nhân', to: '/ho-so' },
     { icon: Bell, label: 'Bài đăng của tôi', to: '/bai-dang-cua-toi' },
     { icon: ShieldCheck, label: 'Claim của tôi', to: '/claim-cua-toi' },
+    { icon: ShieldCheck, label: 'Báo cáo của tôi', to: '/bao-cao-cua-toi' },
     { icon: Bell, label: 'Tin nhắn', to: '/tin-nhan' },
   ];
 
@@ -405,7 +406,8 @@ export default function Navbar() {
                     className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">
                     <ShieldCheck size={16} className="text-slate-400" /><span>Claim của tôi</span>
                   </Link>
-                  {isAdmin && (
+                    <Link to="/bao-cao-cua-toi" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"><ShieldCheck size={16}/><span>Báo cáo của tôi</span></Link>
+                    {isAdmin && (
                     <Link
                       to="/admin"
                       onClick={() => setMobileMenuOpen(false)}

@@ -1,11 +1,12 @@
 import { useEffect,useId,useRef,useState } from 'react';
 import { Flag,X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { createReport } from './reportApi';
 import './Reports.css';
 export default function ReportButton({type,id,label='Báo cáo'}) {
   const [open,setOpen]=useState(false),[sent,setSent]=useState(null);
   return <><button type="button" className="report-trigger" onClick={()=>setOpen(true)} title={label} aria-label={label}><Flag size={15}/><span>{label}</span></button>
-    {sent && <span className="claims-muted" role="status">Đã gửi báo cáo #{sent}</span>}
+    {sent && <Link className="claims-muted" role="status" to={`/bao-cao/${sent}`}>Đã gửi báo cáo #{sent} — Xem hồ sơ</Link>}
     {open && <ReportForm type={type} id={id} close={()=>setOpen(false)} done={result=>{setSent(result.id);setOpen(false);}}/>}</>;
 }
 function ReportForm({type,id,close,done}) {

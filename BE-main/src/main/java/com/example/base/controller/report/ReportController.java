@@ -11,6 +11,10 @@ import java.util.List;
 @RestController @RequestMapping("/api/reports") @RequiredArgsConstructor
 public class ReportController {
     private final ReportService service;
+    @GetMapping("/mine")
+    public ResponseEntity<?> mine(@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="ALL") String status,@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.mine(page,status,user)));
+    }
     @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> create(@RequestPart("data") ReportService.Submit data,@RequestPart(value="images",required=false) List<MultipartFile> images,@AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.create(data,images,user)));

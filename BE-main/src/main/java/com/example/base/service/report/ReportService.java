@@ -75,6 +75,14 @@ public class ReportService {
         }).orElse(null);
     }
     @Transactional(readOnly=true)
+    public Page mine(int page,String status,CustomUserDetails user) {
+        long actor=actors.actor(user).getId();
+        if(page<1 || page>1000000 || !Set.of("ALL","OPEN","IN_REVIEW","RESOLVED","REJECTED").contains(status))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
+        var paging=PageRequest.of(page-1,12);
+        var result="ALL".equals(status)?reports.findByReporterIdOrderByCreatedAtDescIdDesc(actor,paging):reports.findByReporterIdAndStatusOrderByCreatedAtDescIdDesc(actor,status,paging);
+        return new Page(result.stream().map(this::detail).toList(),result.getTotalPages(),result.getTotalElements());
+    }
+    @Transactional(readOnly=true)
     public Detail mineDetail(long id,CustomUserDetails user) {
         long actor=actors.actor(user).getId(); Report report=reports.findById(id).orElseThrow(()->new AppException(ErrorCode.REPORT_NOT_FOUND));
         if(report.getReporterId()!=actor)throw new AppException(ErrorCode.REPORT_NOT_FOUND);
