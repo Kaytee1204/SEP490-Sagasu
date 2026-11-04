@@ -28,6 +28,7 @@ import CategoryManagementPage from '@/features/category/pages/CategoryManagement
 import ReceiptQueuePage from '@/features/approver/pages/ReceiptQueuePage';
 import IntakeFormPage from '@/features/approver/pages/IntakeFormPage';
 import IntakeDetailPage from '@/features/approver/pages/IntakeDetailPage';
+import ChatPage from '@/features/chat/pages/ChatPage';
 
 function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
   const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
@@ -77,6 +78,8 @@ function AppRoutes() {
         <Route path="/van-phong/claims" element={<ProtectedRoute><OfficeClaimList mine /></ProtectedRoute>} />
         <Route path="/van-phong/claims/:id" element={<ProtectedRoute><OfficeClaimDetail mine /></ProtectedRoute>} />
         <Route path="/van-phong/xac-minh/:id" element={<ProtectedRoute><OfficeClaimForm /></ProtectedRoute>} />
+        <Route path="/tin-nhan" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+        <Route path="/tin-nhan/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
         <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />
         <Route path="/bai-dang/:postId/claims/:claimId" element={<ProtectedRoute><ClaimDetailPage /></ProtectedRoute>} />

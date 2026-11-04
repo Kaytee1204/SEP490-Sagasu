@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { MapPin, Clock } from 'lucide-react';
 
 const STATUS = { OPEN: 'Đang xử lý', RESERVED: 'Đang xác minh nhận đồ', RETURNED: 'Đã trao trả', CLOSED: 'Đã đóng' };
@@ -13,6 +13,8 @@ function Thumbnail({ url, title }) {
 }
 
 export default function SearchMatchCard({ item }) {
+  const location = useLocation();
+  const fromState = { from: `${location.pathname}${location.search}`, fromLabel: 'Danh sách tìm kiếm' };
   const found = item.postType === 'FOUND';
   const eventTime = new Date(item.eventAt).toLocaleString('vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short',
@@ -24,11 +26,11 @@ export default function SearchMatchCard({ item }) {
         <span className={`badge ${found ? 'badge-found' : 'badge-lost'}`}>{found ? 'Nhặt được' : 'Cần tìm'}</span>
         <span className="post-list-category">{item.categoryName}</span>
       </div>
-      <h2><Link to={`/chi-tiet/${item.id}`}>{item.title}</Link></h2>
+      <h2><Link to={`/chi-tiet/${item.id}`} state={fromState}>{item.title}</Link></h2>
       <p><MapPin size={16} aria-hidden="true" />{item.locationText}</p>
       <p><Clock size={16} aria-hidden="true" />{eventTime}</p>
       <p className="post-list-handling">{STATUS[item.status] || item.status}</p>
-      <Link to={`/chi-tiet/${item.id}`} className="btn btn-ghost btn-full">Xem chi tiết</Link>
+      <Link to={`/chi-tiet/${item.id}`} state={fromState} className="btn btn-ghost btn-full">Xem chi tiết</Link>
     </div>
   </article>;
 }

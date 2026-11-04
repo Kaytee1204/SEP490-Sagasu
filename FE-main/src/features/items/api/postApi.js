@@ -14,6 +14,10 @@ export async function getPostDetail(id) {
   return response.data;
 }
 
+export async function requestOfficeHandover(id) {
+  return (await apiClient.post(`/posts/${encodeURIComponent(id)}/office-handover`, {})).data;
+}
+
 export async function getSmartMatches(id) {
   const response = await apiClient.get(`/posts/${encodeURIComponent(id)}/smart-matches`);
   return response.data;

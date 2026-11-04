@@ -9,11 +9,6 @@ public record CreateFoundPostRequest(
                 @NotNull @Positive Long categoryId,
                 @NotBlank @Size(max = 1000) String locationText,
                 @NotNull @PastOrPresent OffsetDateTime eventAt,
-                @NotNull @Pattern(regexp = "P2P|OFFICE") String custodyMode,
+                @Pattern(regexp = "P2P", message = "Bài mới mặc định là P2P; giao bên tiếp nhận sau khi đăng thành công") String custodyMode,
                 @Size(max = 5000) String privateIdentifiers,
-                @Future OffsetDateTime handoverRequestedAt) {
-    @AssertTrue(message = "Vui lòng đề xuất ngày/giờ giao đồ cho Approver")
-    public boolean isOfficeHandoverScheduled() {
-        return !"OFFICE".equals(custodyMode) || handoverRequestedAt != null;
-    }
-}
+                @Null(message = "Hiện không hỗ trợ đặt lịch giao đồ") OffsetDateTime handoverRequestedAt) {}

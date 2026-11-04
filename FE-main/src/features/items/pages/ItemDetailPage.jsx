@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
 import { getLatestClaimOnPost } from '@/features/claims/api/claimApi';
-import { claimDetailPath } from '@/features/claims/claimUtils';
+import { claimDetailPath, canSubmitPostClaim, postClaimType } from '@/features/claims/claimUtils';
 import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
 import PrivateIdentifiersEditor from '../components/detail/PrivateIdentifiersEditor';
+import OfficeHandoverAction from '../components/detail/OfficeHandoverAction';
 import SmartMatchModal from '../components/detail/SmartMatchModal';
 import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
+import OpenChatButton from '@/features/chat/components/OpenChatButton';
 
 const STATUS_LABELS = {
   OPEN: 'Đang tìm / chờ nhận',
@@ -37,11 +39,33 @@ export default function ItemDetailPage() {
 }
 
 function PostDetail({ id, onRetry }) {
-  const { isAdmin, isManager } = useAuth();
+  const { isAdmin, isManager, isApprover } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [result, setResult] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [showSmartMatch, setShowSmartMatch] = useState(false);
   const validId = /^[1-9]\d*$/.test(id);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [id]);
+
+  const handleGoBack = () => {
+    if (location.state?.from) {
+      navigate(location.state.from);
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      let fallback = '/tim-kiem';
+      try {
+        fallback = sessionStorage.getItem('sagasu_search_last_url') || '/tim-kiem';
+      } catch { /* ignore */ }
+      navigate(fallback);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +112,10 @@ function PostDetail({ id, onRetry }) {
   return (
     <main className="post-detail-page">
       <nav className="container post-detail-breadcrumb" aria-label="Điều hướng">
+        <button type="button" className="post-detail-back-btn" onClick={handleGoBack}>
+          <ArrowLeft size={15} aria-hidden="true" />
+          <span>Quay lại danh sách</span>
+        </button>
         <Link to="/">Trang chủ</Link><ChevronRight size={14} />
         <span>{post.title}</span>
       </nav>
@@ -132,7 +160,7 @@ function PostDetail({ id, onRetry }) {
             </button>
             )}
 
-                        {!post.canEditOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
+            {!post.canEditOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
               <Link
                 to={`/van-phong/xac-minh/${post.id}`}
                 style={{
@@ -155,8 +183,7 @@ function PostDetail({ id, onRetry }) {
               </Link>
             )}
 
-            {!post.canEditOwnPost && (current.myClaim || (post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
-              && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN')) && (
+            {!post.canEditOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
               <Link
                 to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
                 style={{
@@ -174,13 +201,18 @@ function PostDetail({ id, onRetry }) {
                   boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                 }}
               >
-                <span>{current.myClaim ? 'Xem claim đã gửi' : 'Xác minh nhận đồ (Claim)'}</span>
+                <span>{current.myClaim ? 'Xem claim đã gửi' : postClaimType(post) === 'OFFICE' ? 'Gửi yêu cầu nhận đồ cho phòng ban' : 'Xác minh nhận đồ (Claim)'}</span>
                 <ArrowRight size={15} />
               </Link>
             )}
           </div>
 
-          {post.postType === 'FOUND' && post.canEditOwnPost && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
+          {post.postType === 'FOUND' && (post.canEditOwnPost || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
+          <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
+          {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
+            && post.moderationStatus === 'VISIBLE'
+            && post.status === 'RESERVED' && (post.canEditOwnPost || current.myClaim?.status === 'APPROVED')
+            && <OpenChatButton postId={post.id} />}
 
           {post.officeReceipt && <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-label="Thông tin văn phòng tiếp nhận">
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được văn phòng lưu giữ'}</h2>
@@ -192,11 +224,9 @@ function PostDetail({ id, onRetry }) {
           {post.postType === 'FOUND' && !post.officeReceipt && <div>
             <strong>Hình thức trao trả: </strong>
             {post.custodyMode === 'OFFICE'
-              ? 'Đề nghị giao đồ cho Approver; chờ xét duyệt và thống nhất lịch giao đồ.'
+              ? 'Đã gửi yêu cầu giao cho bên tiếp nhận; chưa xác nhận đã bàn giao đồ.'
               : 'Người nhặt chọn tự giữ để trao trả.'}
           </div>}
-          {post.handoverRequestedAt && <p>Lịch giao đồ đề xuất: {new Date(post.handoverRequestedAt).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})}.
-            Đây chưa phải lịch hẹn được xác nhận.</p>}
           <ItemCharacteristics description={post.description} />
           {post.canEditOwnPost && <PrivateIdentifiersEditor key={post.id} postId={post.id} />}
         </section>

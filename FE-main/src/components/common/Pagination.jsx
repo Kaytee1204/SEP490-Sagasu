@@ -10,6 +10,12 @@ export default function Pagination({
 }) {
   if (totalPages <= 1) return null;
 
+  const handleSelectPage = (nextPage) => {
+    if (nextPage === currentPage || nextPage < 1 || nextPage > totalPages) return;
+    onPageChange(nextPage);
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  };
+
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -44,7 +50,7 @@ export default function Pagination({
       <button
         type="button"
         disabled={currentPage <= 1}
-        onClick={() => onPageChange(currentPage - 1)}
+        onClick={() => handleSelectPage(currentPage - 1)}
         className="p-2 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         aria-label="Trang trước"
       >
@@ -66,7 +72,7 @@ export default function Pagination({
           <button
             key={page}
             type="button"
-            onClick={() => onPageChange(page)}
+            onClick={() => handleSelectPage(page)}
             className={`min-w-9 h-9 px-2 text-sm font-medium rounded-lg transition-colors ${
               isActive
                 ? 'bg-[var(--teal-600)] text-white shadow-xs'
@@ -82,7 +88,7 @@ export default function Pagination({
       <button
         type="button"
         disabled={currentPage >= totalPages}
-        onClick={() => onPageChange(currentPage + 1)}
+        onClick={() => handleSelectPage(currentPage + 1)}
         className="p-2 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         aria-label="Trang tiếp theo"
       >

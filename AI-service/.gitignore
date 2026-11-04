@@ -9,12 +9,13 @@ venv/
 .venv/
 ENV/
 
-# Model weights & Checkpoints (Do NOT commit large weights to Git)
+# Model weights & Checkpoints (Do NOT commit large weights or local vector cache to Git)
 weights/*.pt
 weights/*.pth
 weights/*.bin
 weights/*.safetensors
 weights/*.onnx
+weights/*.sqlite*
 !weights/.gitkeep
 
 # Cache & Temp

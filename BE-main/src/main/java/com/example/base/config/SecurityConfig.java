@@ -70,6 +70,7 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/ws/chat").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/accounts/import/template",

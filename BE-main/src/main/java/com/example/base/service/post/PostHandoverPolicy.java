@@ -4,17 +4,25 @@ import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import java.time.OffsetDateTime;
 
-/** A user's proposed handover time, not an appointment confirmed by Approver. */
+/** Custody changes use the separate handover action; appointments are currently disabled. */
 final class PostHandoverPolicy {
     private PostHandoverPolicy() {}
 
-    static void validateRequestedTime(String postType, String custodyMode, OffsetDateTime requestedAt) {
-        boolean officeHandover = "FOUND".equals(postType) && "OFFICE".equals(custodyMode);
-        if (officeHandover && requestedAt == null) {
-            throw new AppException(ErrorCode.POST_HANDOVER_TIME_REQUIRED);
+    static void validateCreation(String custodyMode, OffsetDateTime requestedAt) {
+        requireNoAppointment(requestedAt);
+        if (custodyMode != null && !"P2P".equals(custodyMode)) {
+            throw new AppException(ErrorCode.POST_CUSTODY_INVALID);
         }
-        if (requestedAt != null && (!officeHandover || !requestedAt.isAfter(OffsetDateTime.now()))) {
-            throw new AppException(ErrorCode.POST_HANDOVER_TIME_INVALID);
+    }
+
+    static void validateEdit(String currentCustody, String requestedCustody, OffsetDateTime requestedAt) {
+        requireNoAppointment(requestedAt);
+        if (requestedCustody != null && !currentCustody.equals(requestedCustody)) {
+            throw new AppException(ErrorCode.POST_CUSTODY_CHANGE_REQUIRES_HANDOVER);
         }
+    }
+
+    private static void requireNoAppointment(OffsetDateTime requestedAt) {
+        if (requestedAt != null) throw new AppException(ErrorCode.POST_HANDOVER_TIME_DISABLED);
     }
 }

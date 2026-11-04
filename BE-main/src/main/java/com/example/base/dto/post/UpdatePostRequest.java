@@ -10,12 +10,7 @@ public record UpdatePostRequest(
         @NotNull @Positive Long categoryId,
         @NotBlank @Size(max=1000) String locationText,
         @NotNull @PastOrPresent OffsetDateTime eventAt,
-        @NotNull @Pattern(regexp="P2P|OFFICE") String custodyMode,
+        @Pattern(regexp="P2P|OFFICE") String custodyMode,
         @NotNull @Size(max=5) List<@NotNull @Positive Long> keptImageIds,
         @NotNull OffsetDateTime expectedUpdatedAt,
-        @Future OffsetDateTime handoverRequestedAt) {
-    @AssertTrue(message = "Vui lòng đề xuất ngày/giờ giao đồ cho Approver")
-    public boolean isOfficeHandoverScheduled() {
-        return !"OFFICE".equals(custodyMode) || handoverRequestedAt != null;
-    }
-}
+        @Null(message = "Hiện không hỗ trợ đặt lịch giao đồ") OffsetDateTime handoverRequestedAt) {}

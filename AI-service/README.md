@@ -33,3 +33,5 @@ python main.py
 * Swagger UI tài liệu API: [http://localhost:8000/docs](http://localhost:8000/docs)
 * Endpoint kiểm tra sức khỏe: [http://localhost:8000/health](http://localhost:8000/health)
 * Endpoint so khớp: `POST http://localhost:8000/api/match`
+#5 Run-cop dòng này để chạy
+.\venv\Scripts\python.exe main.py

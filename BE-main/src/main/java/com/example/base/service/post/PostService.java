@@ -13,6 +13,7 @@ import com.example.base.mapper.PostMapper;
 import com.example.base.repository.CategoryRepository;
 import com.example.base.repository.PostRepository;
 import com.example.base.repository.ItemReceiptRepository;
+import com.example.base.repository.ClaimRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +33,7 @@ public class PostService {
     private final PostMapper mapper;
     private final CategoryRepository categories;
     private final ItemReceiptRepository receipts;
+    private final ClaimRepository claims;
 
     @Transactional(readOnly = true)
     public List<CategoryDto> getActiveCategories() {
@@ -89,6 +92,9 @@ public class PostService {
         Post post = result.orElseThrow(() -> new AppException(ErrorCode.POST_NOT_VISIBLE));
         var officeReceipt = receipts.findPublicIntakes(List.of(postId)).stream().findFirst()
                 .map(OfficeReceiptDto::from).orElse(null);
-        return mapper.toDetail(post, viewerId, officeReceipt);
+        boolean canRequestHandover = viewerId != null && viewerId.equals(post.getAccount().getId())
+                && post.canRequestOfficeHandover() && !receipts.existsByPostId(postId)
+                && !claims.existsByPost_IdAndStatusIn(postId, Set.of("PENDING", "APPROVED"));
+        return mapper.toDetail(post, viewerId, officeReceipt, canRequestHandover);
     }
 }

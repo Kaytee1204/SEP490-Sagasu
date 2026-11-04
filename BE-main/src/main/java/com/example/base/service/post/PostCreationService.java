@@ -40,23 +40,20 @@ public class PostCreationService {
     /** UC15: a Lost post always uses P2P. */
     public CreatedPostDto createLost(CreateLostPostRequest request, List<MultipartFile> files, CustomUserDetails user) {
         PostDraft draft = new PostDraft("LOST", request.title(), request.description(), request.categoryId(),
-                request.locationText(), request.eventAt(), "P2P", request.privateIdentifiers(), null);
+                request.locationText(), request.eventAt(), request.privateIdentifiers());
         return create(draft, files, user);
     }
 
-    /** UC16: Found OFFICE always waits for Approver review and includes a proposed handover time. */
+    /** UC16: every new Found post starts in P2P; office handover is requested after publication. */
     public CreatedPostDto createFound(CreateFoundPostRequest request, List<MultipartFile> files, CustomUserDetails user) {
-        if (!"P2P".equals(request.custodyMode()) && !"OFFICE".equals(request.custodyMode())) {
-            throw new AppException(ErrorCode.POST_CUSTODY_INVALID);
-        }
+        PostHandoverPolicy.validateCreation(request.custodyMode(), request.handoverRequestedAt());
         PostDraft draft = new PostDraft("FOUND", request.title(), request.description(), request.categoryId(),
-                request.locationText(), request.eventAt(), request.custodyMode(), request.privateIdentifiers(), request.handoverRequestedAt());
+                request.locationText(), request.eventAt(), request.privateIdentifiers());
         return create(draft, files, user);
     }
 
     private CreatedPostDto create(PostDraft draft, List<MultipartFile> files, CustomUserDetails user) {
         long authorId = PostAccessPolicy.requireAuthor(user);
-        PostHandoverPolicy.validateRequestedTime(draft.postType(), draft.custodyMode(), draft.handoverRequestedAt());
         if (!categories.existsByCategoryIdAndActiveTrue(draft.categoryId())) {
             throw new AppException(ErrorCode.POST_CATEGORY_UNAVAILABLE);
         }
@@ -81,12 +78,11 @@ public class PostCreationService {
                 .orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN));
         var category = categories.findActiveForPostCreation(draft.categoryId())
                 .orElseThrow(() -> new AppException(ErrorCode.POST_CATEGORY_UNAVAILABLE));
-        PostHandoverPolicy.validateRequestedTime(draft.postType(), draft.custodyMode(), draft.handoverRequestedAt());
 
         Post post;
         if ("FOUND".equals(draft.postType())) {
             post = Post.found(author, category, draft.title().trim(), draft.description().trim(),
-                    draft.locationText().trim(), draft.eventAt(), draft.custodyMode(), draft.handoverRequestedAt());
+                    draft.locationText().trim(), draft.eventAt(), "P2P", null);
         } else {
             post = Post.lost(author, category, draft.title().trim(), draft.description().trim(),
                     draft.locationText().trim(), draft.eventAt());
@@ -125,6 +121,5 @@ public class PostCreationService {
 
     /** Common internal input for Lost/Found; never used as a public response. */
     private record PostDraft(String postType, String title, String description, Long categoryId,
-                             String locationText, OffsetDateTime eventAt, String custodyMode,
-                             String privateIdentifiers, OffsetDateTime handoverRequestedAt) {}
+                             String locationText, OffsetDateTime eventAt, String privateIdentifiers) {}
 }

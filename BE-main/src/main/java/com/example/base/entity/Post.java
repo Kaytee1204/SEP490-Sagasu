@@ -125,14 +125,13 @@ public class Post {
     }
 
     public void edit(Category category, String title, String description, String locationText,
-                     OffsetDateTime eventAt, String custodyMode, OffsetDateTime handoverRequestedAt) {
+                     OffsetDateTime eventAt) {
         this.category = category;
         this.title = title.strip();
         this.description = description.strip();
         this.locationText = locationText.strip();
         this.eventAt = eventAt;
-        this.custodyMode = custodyMode;
-        this.handoverRequestedAt = handoverRequestedAt;
+        this.handoverRequestedAt = null;
         this.updatedAt = OffsetDateTime.now();
         // Rejected content must still be reviewed when resubmitted.
         boolean officeHandover = "FOUND".equals(postType) && "OFFICE".equals(custodyMode);
@@ -162,6 +161,21 @@ public class Post {
         moderatedBy = manager; moderatedAt = updatedAt = OffsetDateTime.now();
     }
     public void reopenAfterClaimCancellation() { status = "OPEN"; }
+
+    public boolean canRequestOfficeHandover() {
+        return "FOUND".equals(postType) && "P2P".equals(custodyMode) && "OPEN".equals(status)
+                && "VISIBLE".equals(moderationStatus) && deletedAt == null;
+    }
+
+    public void requestOfficeHandover() {
+        custodyMode = "OFFICE";
+        moderationStatus = "PENDING";
+        handoverRequestedAt = null;
+        moderatedBy = null;
+        moderatedAt = null;
+        moderationNote = null;
+        updatedAt = OffsetDateTime.now();
+    }
 
     @PrePersist
     void onCreate() {

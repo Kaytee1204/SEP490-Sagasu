@@ -20,12 +20,20 @@ import java.util.List;
 @RestController
 @RequestMapping("/api")
 @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-@Tag(name = "8. Claims P2P", description = "UC40-45: Hồ sơ nhận đồ riêng tư giữa người claim và Finder")
+@Tag(name = "8. Claims", description = "Claim P2P do người nhặt xét duyệt; claim đồ đã tiếp nhận do phòng ban xét duyệt")
 public class ClaimController {
     private final ClaimService service;
 
     public ClaimController(ClaimService service) {
         this.service = service;
+    }
+
+    @GetMapping("/claims/office")
+    @PreAuthorize("hasRole('APPROVER')")
+    public ResponseEntity<ApiResponse<ClaimPageDto>> office(@RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "12") int size, @RequestParam(defaultValue = "ALL") String status,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return response(200, service.office(page, size, status, user));
     }
 
     @PostMapping(value = "/posts/{postId}/claims", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

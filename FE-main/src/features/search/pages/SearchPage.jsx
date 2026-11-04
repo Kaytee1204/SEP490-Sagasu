@@ -17,24 +17,63 @@ function readFilters(params) {
   return filters;
 }
 
+const SEARCH_STORAGE_KEY = 'sagasu_search_params';
+
+function readSavedSearchParams() {
+  try {
+    return sessionStorage.getItem(SEARCH_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function SearchPage() {
   const [params, setParams] = useSearchParams();
   const [reload, setReload] = useState(0);
   const [categories, setCategories] = useState([]);
   const [categoryError, setCategoryError] = useState('');
+  const restoredRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
     getPostCategories().then(data => { if (!cancelled) setCategories(data); })
       .catch(() => { if (!cancelled) setCategoryError('Không tải được danh mục. Hãy tải lại trang để thử lại.'); });
     return () => { cancelled = true; };
   }, []);
-  const rawPage = params.get('page') || '1';
+
+  const currentQuery = params.toString();
+  const effectiveParams = (!currentQuery && !restoredRef.current && readSavedSearchParams())
+    ? new URLSearchParams(readSavedSearchParams())
+    : params;
+
+  useEffect(() => {
+    if (!currentQuery && !restoredRef.current) {
+      const saved = readSavedSearchParams();
+      restoredRef.current = true;
+      if (saved) {
+        setParams(new URLSearchParams(saved), { replace: true });
+        return;
+      }
+    }
+    restoredRef.current = true;
+    try {
+      sessionStorage.setItem(SEARCH_STORAGE_KEY, currentQuery);
+      sessionStorage.setItem('sagasu_search_last_url', `/tim-kiem${currentQuery ? `?${currentQuery}` : ''}`);
+    } catch { /* ignore */ }
+  }, [currentQuery, setParams]);
+
+  const rawPage = effectiveParams.get('page') || '1';
   const page = /^[1-9]\d*$/.test(rawPage) && Number(rawPage) <= 2147483647 ? Number(rawPage) : 1;
-  const filters = readFilters(params);
+  const filters = readFilters(effectiveParams);
   const changePage = next => {
-    const updated = new URLSearchParams(params);
+    const updated = new URLSearchParams(effectiveParams);
     if (next === 1) updated.delete('page');
     else updated.set('page', String(next));
+    const nextStr = updated.toString();
+    try {
+      sessionStorage.setItem(SEARCH_STORAGE_KEY, nextStr);
+      sessionStorage.setItem('sagasu_search_last_url', `/tim-kiem${nextStr ? `?${nextStr}` : ''}`);
+    } catch { /* ignore */ }
     setParams(updated);
   };
   const applyFilters = values => {
@@ -42,16 +81,28 @@ export default function SearchPage() {
     for (const key of FILTER_KEYS) {
       if (values[key].trim()) updated.set(key, values[key].trim());
     }
+    const nextStr = updated.toString();
+    try {
+      sessionStorage.setItem(SEARCH_STORAGE_KEY, nextStr);
+      sessionStorage.setItem('sagasu_search_last_url', `/tim-kiem${nextStr ? `?${nextStr}` : ''}`);
+    } catch { /* ignore */ }
     setParams(updated);
     setReload(current => current + 1);
+  };
+  const resetAll = () => {
+    try {
+      sessionStorage.removeItem(SEARCH_STORAGE_KEY);
+      sessionStorage.setItem('sagasu_search_last_url', '/tim-kiem');
+    } catch { /* ignore */ }
+    setParams({});
   };
 
   return <main className="post-search-page">
     <SearchWorkspace key={JSON.stringify([filters.keyword, filters.timeRange, filters.fromDate, filters.toDate])} initial={filters} categories={categories}
-      categoryError={categoryError} onApply={applyFilters} onReset={() => setParams({})}>
-      <PostList key={`${params.toString()}:${reload}`} page={page} filters={filters}
+      categoryError={categoryError} onApply={applyFilters} onReset={resetAll}>
+      <PostList key={`${effectiveParams.toString()}:${reload}`} page={page} filters={filters}
         onReload={() => setReload(value => value + 1)} onPageChange={changePage}
-        onReset={() => setParams({})} />
+        onReset={resetAll} />
     </SearchWorkspace>
   </main>;
 }

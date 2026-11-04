@@ -92,7 +92,7 @@ public class PostManagementService {
         }
         return new EditPostDto(post.getId(), post.getPostType(), post.getTitle(), post.getDescription(),
                 post.getCategory().getCategoryId(), post.getCategory().getName(), post.getLocationText(),
-                post.getEventAt(), post.getCustodyMode(), post.getUpdatedAt(), images, post.getHandoverRequestedAt());
+                post.getEventAt(), post.getCustodyMode(), post.getUpdatedAt(), images);
     }
 
     /** UC19: validate -> upload -> lock/recheck/save -> remove old image objects after commit. */
@@ -138,6 +138,23 @@ public class PostManagementService {
         posts.flush();
     }
 
+    /** Request only; physical receipt and Approver decisions belong to the later intake flow. */
+    @Transactional
+    public CreatedPostDto requestOfficeHandover(long postId, CustomUserDetails user) {
+        long ownerId = PostAccessPolicy.requireAuthor(user);
+        Post post = lockOwnedPost(postId, ownerId);
+        accounts.findActiveAccountForPostCreation(ownerId)
+                .orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN));
+        requireNoReceipt(post);
+        if (!post.canRequestOfficeHandover()) throw new AppException(ErrorCode.POST_OFFICE_HANDOVER_UNAVAILABLE);
+        if (claims.existsByPost_IdAndStatusIn(postId, Set.of("PENDING", "APPROVED"))) {
+            throw new AppException(ErrorCode.POST_OFFICE_HANDOVER_CLAIM_BLOCKED);
+        }
+        post.requestOfficeHandover();
+        posts.flush();
+        return new CreatedPostDto(post.getId(), post.getPostType(), post.getStatus(), post.getModerationStatus());
+    }
+
     private UpdateResult saveUpdate(long postId, long ownerId, UpdatePostRequest request,
                                     List<ValidatedImage> newImages, List<String> uploadedKeys) {
         accounts.findActiveAccountForPostCreation(ownerId)
@@ -150,7 +167,7 @@ public class PostManagementService {
 
         List<String> removedKeys = findRemovedImageKeys(post, request.keptImageIds());
         post.edit(category, request.title(), request.description(), request.locationText(),
-                request.eventAt(), request.custodyMode(), request.handoverRequestedAt());
+                request.eventAt());
         int finalImageCount = request.keptImageIds().size() + newImages.size();
         moveImagesToTemporaryPositions(post, finalImageCount);
         post.retainImages(request.keptImageIds());
@@ -207,7 +224,7 @@ public class PostManagementService {
 
 
     private void validateUpdate(Post post, UpdatePostRequest request) {
-        PostHandoverPolicy.validateRequestedTime(post.getPostType(), request.custodyMode(), request.handoverRequestedAt());
+        PostHandoverPolicy.validateEdit(post.getCustodyMode(), request.custodyMode(), request.handoverRequestedAt());
         if (!post.getUpdatedAt().isEqual(request.expectedUpdatedAt())) {
             throw new AppException(ErrorCode.POST_STALE);
         }
@@ -215,9 +232,6 @@ public class PostManagementService {
         List<Long> existingIds = post.getImages().stream().map(PostImage::getId).toList();
         if (requestedIds.size() != request.keptImageIds().size() || !existingIds.containsAll(requestedIds)) {
             throw new AppException(ErrorCode.POST_IMAGES_INVALID);
-        }
-        if ("LOST".equals(post.getPostType()) && !"P2P".equals(request.custodyMode())) {
-            throw new AppException(ErrorCode.POST_CUSTODY_INVALID);
         }
         if (!categories.existsByCategoryIdAndActiveTrue(request.categoryId())) {
             throw new AppException(ErrorCode.POST_CATEGORY_UNAVAILABLE);
@@ -273,7 +287,7 @@ public class PostManagementService {
                 post.getLocationText(), post.getStatus(), post.getModerationStatus(), post.getCreatedAt(),
                 post.getUpdatedAt(), thumbnail, editReason == null,
                 deleteReason == null,
-                editReason, deleteReason, post.getHandoverRequestedAt());
+                editReason, deleteReason);
     }
 
     private String getEditBlockedReason(Post post, long viewerId) {

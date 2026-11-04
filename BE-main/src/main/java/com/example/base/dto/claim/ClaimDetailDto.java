@@ -8,8 +8,11 @@ public record ClaimDetailDto(Long id, Long postId, String postTitle, String post
         Long claimantId, String claimantName, String finderName, String status,
         String description, String evidenceNote, OffsetDateTime createdAt, OffsetDateTime updatedAt,
         long version, boolean canReview, boolean canCancel, boolean canRetry,
-        List<EvidenceDto> evidence, List<ActivityDto> activities) {
+        List<EvidenceDto> evidence, List<ActivityDto> activities, List<AnswerDto> answers, boolean canOpenChat,
+        String claimType, String storageLocationName) {
     public record EvidenceDto(Long id, String url, String originalName, String mimeType, long sizeBytes) {}
     public record ActivityDto(Long id, String action, String actorName, String fromStatus,
             String toStatus, String reason, OffsetDateTime createdAt) {}
+    public record AnswerDto(String questionCode, String questionLabel, String answerText,
+            String sectionTitle, String templateCode, int templateVersion) {}
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { getPostForEdit, getPostCategories, updatePost } from '../api/postApi';
 import StepDetailsForm from '../components/post/StepDetailsForm';
 import '../../profile/pages/MyPostsPage.css';
@@ -19,6 +19,8 @@ export default function EditPostPage() {
 }
 
 function Editor({ id, onReload }) {
+  const location = useLocation();
+  const backUrl = location.state?.from || '/tin-dang-cua-toi';
   const [loaded,setLoaded]=useState(null);
   const [form,setForm]=useState(null);
   const [kept,setKept]=useState([]);
@@ -33,10 +35,8 @@ function Editor({ id, onReload }) {
     Promise.all([getPostForEdit(id),getPostCategories()]).then(([post,categories])=>{
       if(cancelled)return;
       const eventInputs=toVietnamInputs(post.eventAt);
-      const handoverInputs=toVietnamInputs(post.handoverRequestedAt);
       setForm({itemName:post.title,description:post.description,categoryId:String(post.categoryId),
-        location:post.locationText,date:eventInputs.date,time:eventInputs.time,custodyMode:post.custodyMode,
-        handoverDate:handoverInputs.date,handoverTime:handoverInputs.time});
+        location:post.locationText,date:eventInputs.date,time:eventInputs.time});
       setKept(post.images);
       setLoaded({post,categories});
     }).catch(err=>{if(!cancelled)setError(err.message);});
@@ -67,17 +67,11 @@ function Editor({ id, onReload }) {
     if(!Number.isFinite(new Date(eventAt).getTime())||new Date(eventAt).getTime()>Date.now()){
       setError('Thời gian xảy ra phải hợp lệ và không ở tương lai (giờ Việt Nam).');return;
     }
-    const officeHandover=loaded.post.postType==='FOUND'&&form.custodyMode==='OFFICE';
-    const handoverRequestedAt=officeHandover?`${form.handoverDate}T${form.handoverTime}:00+07:00`:null;
-    if(officeHandover&&(!form.handoverDate||!form.handoverTime||!Number.isFinite(new Date(handoverRequestedAt).getTime())
-      ||new Date(handoverRequestedAt).getTime()<=Date.now())){
-      setError('Vui lòng đề xuất ngày/giờ giao đồ trong tương lai (giờ Việt Nam).');return;
-    }
     inFlight.current=true;setSaving(true);setError('');
     try{
       const result=await updatePost(id,{title:form.itemName.trim(),description:form.description.trim(),
-        categoryId:Number(form.categoryId),locationText:form.location.trim(),eventAt,custodyMode:form.custodyMode,
-        expectedUpdatedAt:loaded.post.updatedAt,keptImageIds:kept.map(image=>image.id),handoverRequestedAt},files.map(item=>item.file));
+        categoryId:Number(form.categoryId),locationText:form.location.trim(),eventAt,
+        expectedUpdatedAt:loaded.post.updatedAt,keptImageIds:kept.map(image=>image.id)},files.map(item=>item.file));
       setSaved(result);
     }catch(err){setError(err.message);}
     finally{setSaving(false);inFlight.current=false;}
@@ -85,17 +79,17 @@ function Editor({ id, onReload }) {
 
   if(saved)return <main className="container-sm my-posts-page"><h1>Đã lưu bài đăng #{saved.id}</h1>
     <p role="status">{saved.moderationStatus==='VISIBLE'?'Bài đăng đã được cập nhật và hiển thị.':'Bài đăng đã được gửi lại để Approver duyệt.'}</p>
-    <div className="my-post-actions"><Link className="btn btn-primary" to="/tin-dang-cua-toi">Về tin đăng của tôi</Link>
-      <Link className="btn btn-ghost" to={`/chi-tiet/${id}`}>Xem bài đăng</Link></div></main>;
+    <div className="my-post-actions"><Link className="btn btn-primary" to={backUrl}>Về tin đăng của tôi</Link>
+      <Link className="btn btn-ghost" to={`/chi-tiet/${id}`} state={{ from: backUrl }}>Xem bài đăng</Link></div></main>;
   return <main className="container-sm my-posts-page">
-    <header className="my-posts-heading"><h1>Sửa bài đăng</h1><Link to="/tin-dang-cua-toi">Về tin đăng của tôi</Link></header>
+    <header className="my-posts-heading"><h1>Sửa bài đăng</h1><Link to={backUrl}>Về tin đăng của tôi</Link></header>
     {error&&<div role="alert"><p>{error}</p><button type="button" className="btn btn-ghost" disabled={saving} onClick={onReload}>Tải lại bài đăng</button></div>}
     {!loaded?!error&&<p role="status">Đang tải bài đăng…</p>:<form onSubmit={submit}>
       <fieldset disabled={saving} style={{border:0,padding:0,minWidth:0}}>
         <p>Bài phải còn mở và chưa bị ẩn để chỉnh sửa. Bài Found giao văn phòng trường và bài bị từ chối sẽ cần duyệt lại.</p>
         <div className="card" style={{padding:24,marginBlock:20}}>
           <StepDetailsForm formData={form} onChange={setForm} postType={loaded.post.postType.toLowerCase()}
-            categories={loaded.categories} showPrivate={false} />
+            categories={loaded.categories} />
           {!loaded.categories.some(category=>String(category.id)===form.categoryId)&&
             <p role="alert">Danh mục cũ đã ngừng hoạt động. Vui lòng chọn danh mục khác.</p>}
         </div>
@@ -110,7 +104,7 @@ function Editor({ id, onReload }) {
           <label className="input-label" htmlFor="edit-post-files">Thêm ảnh mới</label>
           <input id="edit-post-files" type="file" accept="image/jpeg,image/png" multiple onChange={upload}/>
         </section>
-        <p>Dấu hiệu nhận dạng riêng tư được quản lý riêng tại <Link to={`/chi-tiet/${id}`}>trang chi tiết của bạn</Link>.</p>
+        <p>Ghi chú xác minh riêng tư (không bắt buộc) được quản lý tại <Link to={`/chi-tiet/${id}`}>trang chi tiết của bạn</Link>.</p>
         <div className="my-post-actions"><button className="btn btn-primary" disabled={saving}>{saving?'Đang lưu…':'Lưu thay đổi'}</button>
           {!saving&&<Link className="btn btn-ghost" to="/tin-dang-cua-toi">Hủy</Link>}</div>
       </fieldset>

@@ -11,8 +11,8 @@ logger = logging.getLogger("ai_service")
 
 app = FastAPI(
     title="Sagasu AI Multimodal Smart Match Service",
-    description="Pipeline: YOLOv8 Smart Crop + ViT/CLIP (Vision & Vietnamese Text) + HSV + Spatio-Temporal + Visual Gating",
-    version="1.0.0"
+    description="Pipeline: YOLOv8 Smart Crop + ViT/CLIP (Vision & Vietnamese Text) + HSV + Spatio-Temporal + Visual Gating + Persistent Vector Store",
+    version="1.1.0"
 )
 
 app.add_middleware(
@@ -35,6 +35,7 @@ class ItemData(BaseModel):
     imageUrl: Optional[str] = None
     authorName: Optional[str] = None
     postType: Optional[str] = None
+    status: Optional[str] = "OPEN"
 
 class MatchRequest(BaseModel):
     sourceItem: ItemData
@@ -52,7 +53,16 @@ def health_check():
         "status": "UP",
         "service": "Sagasu AI Service",
         "yoloReady": matcher.cropper.model is not None,
-        "clipReady": matcher.clip.model is not None
+        "clipReady": matcher.clip.vision_model is not None and matcher.clip.text_model is not None,
+        "vectorStore": matcher.store.stats()
+    }
+
+@app.get("/api/cache-stats")
+def cache_stats():
+    return {
+        "code": 200,
+        "message": "Persistent Vector Store statistics",
+        "data": matcher.store.stats()
     }
 
 @app.post("/api/match", response_model=MatchResponse)
@@ -75,4 +85,4 @@ def match_items(req: MatchRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

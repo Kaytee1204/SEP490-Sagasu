@@ -38,6 +38,10 @@ public class PostMapper {
     }
 
     public PostDetailDto toDetail(Post post, Long viewerId, OfficeReceiptDto officeReceipt) {
+        return toDetail(post, viewerId, officeReceipt, false);
+    }
+
+    public PostDetailDto toDetail(Post post, Long viewerId, OfficeReceiptDto officeReceipt, boolean canRequestOfficeHandover) {
         var category = post.getCategory();
         var images = post.getImages().stream().map(image -> new PostDetailDto.ImageDto(image.getId(),
                 storage.readUrl(image.getStorageKey(), image.getImageUrl()), image.getSortOrder())).toList();
@@ -46,7 +50,7 @@ public class PostMapper {
                 category.getCategoryId(), category.getName(), post.getLocationText(), post.getLatitude(),
                 post.getLongitude(),
                 post.getEventAt(), post.getStatus(), post.getCustodyMode(), post.getCreatedAt(), images,
-                isOwner && officeReceipt == null, post.getModerationStatus(), isOwner ? post.getHandoverRequestedAt() : null,
-                post.getCreatedBy().getFullName(), officeReceipt);
+                isOwner && officeReceipt == null, post.getModerationStatus(),
+                post.getCreatedBy().getFullName(), officeReceipt, canRequestOfficeHandover);
     }
 }
