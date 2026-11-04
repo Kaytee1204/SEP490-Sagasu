@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.util.Optional;
 
-public interface ClaimRepository extends JpaRepository<Claim, Long> {
+public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
     Optional<Claim> findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(long postId, String status);
     boolean existsByPost_Id(Long postId);
     boolean existsByPost_IdAndStatusIn(Long postId, Collection<String> statuses);
@@ -18,7 +18,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
     Optional<Claim> findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(Long postId, Long claimantId, String claimType);
 
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})
-    @Query("select c from Claim c where c.claimant.id=:actorId and (:status='ALL' or c.status=:status) order by c.createdAt desc, c.id desc")
+    @Query("select c from Claim c where c.claimType='P2P' and c.claimant.id=:actorId and (:status='ALL' or c.status=:status) order by c.createdAt desc, c.id desc")
     Page<Claim> findMine(@Param("actorId") long actorId, @Param("status") String status, Pageable pageable);
 
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})

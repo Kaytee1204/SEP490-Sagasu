@@ -271,7 +271,11 @@ public class ClaimService {
         if (id <= 0) throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
         return posts.findById(id).orElseThrow(this::missing);
     }
-    private Claim claim(long id) { return claims.findById(id).orElseThrow(this::missing); }
+    private Claim claim(long id) {
+        Claim c = claims.findById(id).orElseThrow(this::missing);
+        if (!"P2P".equals(c.getClaimType()) || c.getClaimant() == null) throw missing();
+        return c;
+    }
     private long claimPostId(long id) { return claims.findPostId(id).orElseThrow(this::missing); }
     private Post lockPost(long id) {
         Post post = posts.findForClaimUpdate(id).orElseThrow(this::missing);
@@ -281,6 +285,7 @@ public class ClaimService {
     private Claim lockClaim(long id) {
         Claim claim = claims.findForUpdate(id).orElseThrow(this::missing);
         entityManager.refresh(claim, LockModeType.PESSIMISTIC_WRITE);
+        if (!"P2P".equals(claim.getClaimType()) || claim.getClaimant() == null) throw missing();
         return claim;
     }
     private void requireVersion(Claim claim, Long version) {

@@ -131,7 +131,7 @@ public class PostManagementService {
     public void delete(long postId, DeletePostRequest request, CustomUserDetails user) {
         Post post = lockOwnedPost(postId, PostAccessPolicy.requireAuthor(user));
         requireNoReceipt(post);
-        if (claims.existsByPost_IdAndStatusIn(postId, Set.of("PENDING", "APPROVED"))) {
+        if (claims.existsByPost_IdAndStatusIn(postId, Set.of("PENDING", "NEEDS_INFO", "APPROVED"))) {
             throw new AppException(ErrorCode.CLAIM_POST_DELETE_BLOCKED);
         }
         post.softDelete(request.reason());
@@ -300,7 +300,7 @@ public class PostManagementService {
 
     private String getDeleteBlockedReason(Post post, long viewerId) {
         if (!Objects.equals(post.getAccount().getId(), viewerId)) return "Bài được đăng hộ tài khoản khác";
-        if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("PENDING", "APPROVED"))) return "Bài còn claim đang chờ hoặc đã được chấp thuận";
+        if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("PENDING", "NEEDS_INFO", "APPROVED"))) return "Bài còn claim đang chờ hoặc đã được chấp thuận";
         return null;
     }
 
