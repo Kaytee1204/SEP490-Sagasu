@@ -3,6 +3,8 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    HANDOVER_NOT_FOUND(HttpStatus.NOT_FOUND,"HANDOVER_404","Không tìm thấy bàn giao P2P của bạn"),
+    HANDOVER_STATE_CHANGED(HttpStatus.CONFLICT,"HANDOVER_409_STATE","Trạng thái bàn giao đã thay đổi hoặc thao tác không còn được phép. Vui lòng tải lại hồ sơ"),
     WORKFLOW_INPUT_INVALID(HttpStatus.BAD_REQUEST,"WORKFLOW_400","Thông tin không hợp lệ. Vui lòng kiểm tra và gửi lại"),
     WORKFLOW_DUPLICATE_PAYLOAD(HttpStatus.CONFLICT,"WORKFLOW_409_RETRY","Yêu cầu đã gửi có nội dung khác. Vui lòng tải lại"),
     REPORT_DUPLICATE(HttpStatus.CONFLICT,"REPORT_409_OPEN","Bạn đã có báo cáo đang chờ xử lý cho đối tượng này"),

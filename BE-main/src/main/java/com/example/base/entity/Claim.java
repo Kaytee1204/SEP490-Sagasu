@@ -50,6 +50,7 @@ public class Claim {
 
     public void addEvidence(ClaimEvidence image) { image.attachTo(this); evidence.add(image); }
     public boolean isOffice() { return "OFFICE".equals(claimType); }
+    public void touchWorkflow() { updatedAt=OffsetDateTime.now(); }
     public List<ClaimEvidence> getEvidence() { return Collections.unmodifiableList(evidence); }
     public void addAnswer(ClaimAnswer answer) { answer.attachTo(this); answers.add(answer); }
     public List<ClaimAnswer> getAnswers() { return Collections.unmodifiableList(answers); }

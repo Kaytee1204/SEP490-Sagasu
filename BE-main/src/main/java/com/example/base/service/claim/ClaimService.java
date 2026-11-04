@@ -32,6 +32,7 @@ public class ClaimService {
     private final PostRepository posts;
     private final AccountRepository accounts;
     private final ClaimRoutingPolicy routing;
+    private final P2pHandoverRepository handovers;
     private final ImageStorage storage;
     private final ImageValidator validator;
     private final PlatformTransactionManager transactionManager;
@@ -254,6 +255,7 @@ public class ClaimService {
 
     private boolean cancellable(Claim claim) {
         return Set.of("PENDING", "APPROVED").contains(claim.getStatus())
+                && !handovers.existsByClaimId(claim.getId())
                 && routing.matches(claim, Set.of("OPEN", "RESERVED"));
     }
 

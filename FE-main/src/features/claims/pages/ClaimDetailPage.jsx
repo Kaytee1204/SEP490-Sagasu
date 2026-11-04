@@ -7,6 +7,8 @@ import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import ClaimAnswerSummary from '../components/ClaimAnswerSummary';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import ReportButton from '@/features/reports/ReportButton';
+import HandoverPanel from '@/features/handover/HandoverPanel';
+import { useChat } from '@/features/chat/ChatProvider';
 import '../Claims.css';
 
 export default function ClaimDetailPage() {
@@ -39,6 +41,7 @@ function LegacyClaimLookup({ id }) {
 }
 
 function ClaimDetail({ postId, id }) {
+  const {revision}=useChat();
   const { user } = useAuth();
   const location = useLocation();
   const [claim, setClaim] = useState(null);
@@ -59,7 +62,7 @@ function ClaimDetail({ postId, id }) {
     getClaimOnPost(postId, id).then(data => { if (!cancelled) { setClaim(data); setError(''); } })
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [postId, id]);
+  }, [postId, id,revision]);
   async function act(action) {
     if (inFlight.current) return;
     if (action === 'review' && !reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; }
@@ -98,6 +101,7 @@ function ClaimDetail({ postId, id }) {
       </section>
       {claim.canOpenChat && <OpenChatButton postId={claim.postId} />}
       <ClaimAnswerSummary answers={claim.answers} />
+      {claim.claimType==='P2P'&&<HandoverPanel claim={claim} onChanged={()=>getClaimOnPost(postId,id).then(setClaim).catch(e=>setError(e.message))}/>}
       <ReportButton type="CLAIM" id={claim.id} label="Báo cáo hồ sơ claim" />
       {claim.canReview && <form className="claim-panel claim-form" onSubmit={event => { event.preventDefault(); act('review'); }}>
         <h2>Xét duyệt hồ sơ</h2><label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
