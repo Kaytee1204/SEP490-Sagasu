@@ -3,6 +3,11 @@ package com.example.base.exception;
 import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
+    WORKFLOW_INPUT_INVALID(HttpStatus.BAD_REQUEST,"WORKFLOW_400","Thông tin không hợp lệ. Vui lòng kiểm tra và gửi lại"),
+    WORKFLOW_DUPLICATE_PAYLOAD(HttpStatus.CONFLICT,"WORKFLOW_409_RETRY","Yêu cầu đã gửi có nội dung khác. Vui lòng tải lại"),
+    REPORT_DUPLICATE(HttpStatus.CONFLICT,"REPORT_409_OPEN","Bạn đã có báo cáo đang chờ xử lý cho đối tượng này"),
+    REPORT_NOT_FOUND(HttpStatus.NOT_FOUND,"REPORT_404","Không tìm thấy báo cáo của bạn"),
+    REPORT_TARGET_UNAVAILABLE(HttpStatus.NOT_FOUND,"REPORT_404_TARGET","Không tìm thấy đối tượng hoặc bạn không có quyền báo cáo đối tượng này"),
     CHAT_ADDRESS_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "CHAT_503_ADDRESS", "Chưa lấy được tên địa chỉ. Vị trí đã chọn vẫn được giữ nguyên"),
     CHAT_ATTACHMENT_INVALID(HttpStatus.BAD_REQUEST, "CHAT_400_FILE", "Tệp phải là JPG, PNG hoặc PDF hợp lệ và nằm trong giới hạn chat"),
     CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT_404", "Không tìm thấy cuộc trò chuyện được phép truy cập"),

@@ -64,7 +64,8 @@ public class DataInitializer {
             "db/migrations/11_p2p_chat.sql",
             "db/migrations/12_chat_read_timestamps.sql",
             "db/migrations/13_chat_locations.sql",
-            "db/migrations/14_office_claims.sql"
+            "db/migrations/14_office_claims.sql",
+            "db/migrations/15_reports.sql"
     );
 
     @Bean

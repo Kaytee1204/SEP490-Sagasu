@@ -7,6 +7,7 @@ import ChatAttachments from './ChatAttachments';
 import LocationPicker from './LocationPicker';
 import ChatLocation from './ChatLocation';
 import CameraCapture from './CameraCapture';
+import ReportButton from '@/features/reports/ReportButton';
 
 const merge = (old, incoming) => {
   const indexed = new Map(old.map(row => [row.id, row]));
@@ -183,6 +184,7 @@ export default function ChatThread({ chat }) {
         {row.location && <ChatLocation location={row.location} />}
         {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
         <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
+        {String(row.senderId)!==String(user.id)&&<ReportButton type="MESSAGE" id={row.id} label="Báo cáo tin nhắn"/>}
         {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
           && <small>{row.readAt ? `Đã xem lúc ${receiptTime(row.readAt)}` : 'Đã xem'}</small>}
       </article>)}

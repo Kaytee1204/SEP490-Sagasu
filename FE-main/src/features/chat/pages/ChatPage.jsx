@@ -6,6 +6,7 @@ import { useChat } from '../ChatProvider';
 import ChatList from '../components/ChatList';
 import ChatThread from '../components/ChatThread';
 import '../Chat.css';
+import ReportButton from '@/features/reports/ReportButton';
 
 export default function ChatPage() {
   const { conversationId } = useParams();
@@ -33,6 +34,7 @@ function ChatPanel({ id }) {
     {!chat && !error && <p className="chat-empty">Đang tải cuộc trò chuyện…</p>}
     {chat && <><header className="chat-header"><Link className="chat-back" to="/tin-nhan">← Danh sách</Link>
       <h2>{chat.otherName || 'Thành viên'}</h2>
+      <ReportButton type="USER" id={chat.otherAccountId} label="Báo cáo tài khoản"/>
       <Link to={`/chi-tiet/${chat.postId}`}>{chat.postTitle}</Link>
       <div className="chat-row-title"><Link to={`/bai-dang/${chat.postId}/claims/${chat.claimId}`}>Xem hồ sơ claim</Link>
         <small className="chat-muted">{online ? 'Đã kết nối' : 'Đang kết nối lại…'}</small></div>

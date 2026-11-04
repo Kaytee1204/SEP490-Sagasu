@@ -14,6 +14,7 @@ import SmartMatchModal from '../components/detail/SmartMatchModal';
 import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
+import ReportButton from '@/features/reports/ReportButton';
 
 const STATUS_LABELS = {
   OPEN: 'Đang tìm / chờ nhận',
@@ -205,6 +206,7 @@ function PostDetail({ id, onRetry }) {
               : 'Người nhặt chọn tự giữ để trao trả.'}
           </div>}
           <ItemCharacteristics description={post.description} />
+          <ReportButton type="POST" id={post.id} label="Báo cáo bài đăng" />
           {post.canEditOwnPost && <PrivateIdentifiersEditor key={post.id} postId={post.id} />}
         </section>
       </div>

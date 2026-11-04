@@ -6,6 +6,7 @@ import { CLAIM_STATUS, CLAIM_ACTION, claimDate, evidenceUrl, validClaimId, claim
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import ClaimAnswerSummary from '../components/ClaimAnswerSummary';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
+import ReportButton from '@/features/reports/ReportButton';
 import '../Claims.css';
 
 export default function ClaimDetailPage() {
@@ -97,6 +98,7 @@ function ClaimDetail({ postId, id }) {
       </section>
       {claim.canOpenChat && <OpenChatButton postId={claim.postId} />}
       <ClaimAnswerSummary answers={claim.answers} />
+      <ReportButton type="CLAIM" id={claim.id} label="Báo cáo hồ sơ claim" />
       {claim.canReview && <form className="claim-panel claim-form" onSubmit={event => { event.preventDefault(); act('review'); }}>
         <h2>Xét duyệt hồ sơ</h2><label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
           <option value="APPROVED">Chấp thuận</option><option value="REJECTED">Từ chối — căn cứ chưa phù hợp hoặc chưa đủ</option></select></label>
