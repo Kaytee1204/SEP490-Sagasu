@@ -70,13 +70,15 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/api/office-invitations/preview", "/api/office-invitations/respond").permitAll()
                         .requestMatchers(HttpMethod.GET, "/ws/chat").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/accounts/import/template",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/v3/api-docs",
+                                "/v3/api-docs",
+
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers("/api/accounts/me", "/api/accounts/me/**").authenticated()

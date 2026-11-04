@@ -77,7 +77,9 @@ export default function ReviewForm({ claim, onDone }) {
               <CalendarDays size={20} />
               <strong>Hẹn người nhận đến văn phòng</strong>
               <p className="of-muted">
-                Lịch được lưu cùng quyết định duyệt, sau đó hệ thống gửi thư.
+                Email có nút đồng ý hoặc từ chối lịch hẹn, không cần đăng nhập.
+                Không phản hồi trong 12 giờ từ khi gửi thành công sẽ tự động bị
+                từ chối.
               </p>
             </div>
             <label>
@@ -89,6 +91,10 @@ export default function ReviewForm({ claim, onDone }) {
                 value={form.scheduledAt}
                 onChange={(e) => change("scheduledAt", e.target.value)}
               />
+              <small>
+                Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để người nhận có đủ
+                thời gian phản hồi.
+              </small>
             </label>
             <label>
               Địa điểm nhận đồ *

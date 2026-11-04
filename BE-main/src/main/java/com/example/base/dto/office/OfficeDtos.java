@@ -30,7 +30,8 @@ public final class OfficeDtos {
         @Email @Size(max=255) String email, @Size(max=2000) String appointmentNote) {}
     public record Supplement(@NotNull @PositiveOrZero Long expectedVersion,
         @NotBlank @Size(max=2000) String information) {}
-    public record AppointmentView(Long id, OffsetDateTime scheduledAt, String location, String note, String status) {}
+    public record AppointmentView(Long id, OffsetDateTime scheduledAt, String location, String note, String status,
+        String responseStatus, OffsetDateTime responseDeadline, String cancellationReason) {}
     public record ClaimView(Long id, Long postId, String postTitle, String status, String channel,
         Long claimantId, String claimantName, String claimantEmail, String claimantPhone, String createdBy,
         String description, String evidenceNote, String privateIdentifiers, long version,

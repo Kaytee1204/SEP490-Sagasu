@@ -36,7 +36,7 @@ public class OfficeClaimService {
     private final AppointmentRepository appointments;
     private final OfficeAccess access;
     private final OfficeManagementService management;
-    private final AppointmentEmailService email;
+    private final OfficeInvitationService invitations;
     private final ImageStorage storage;
     private final ImageValidator images;
     private final Validator validator;
@@ -132,7 +132,7 @@ public class OfficeClaimService {
         if(!"IN_STORAGE".equals(r.getStatus())||!"ACCEPTED".equals(r.getReviewStatus())||r.getReceivedAt()==null)
             throw bad("Văn phòng chưa tiếp nhận hoặc đã trao trả đồ vật.");
     }
-    private record Committed(Long id,String status,AppointmentEmailService.Mail mail) {}
+    private record Committed(Long id,String status,boolean sendInvitation) {}
     private record EmailCheck(@NotBlank @Email String email) {}
     public ReviewResult review(long id,Decision request,CustomUserDetails user) {
         Committed committed=new TransactionTemplate(transactions).execute(tx->{
@@ -142,7 +142,7 @@ public class OfficeClaimService {
             String previous=c.getStatus(); Appointment a=null;
             if("APPROVED".equals(request.decision())) {
                 if(claims.existsByPost_IdAndStatusIn(c.getPost().getId(),List.of("APPROVED"))) throw bad("Đồ vật đã có yêu cầu được duyệt.");
-                if(request.scheduledAt()==null||!request.scheduledAt().isAfter(OffsetDateTime.now())) throw bad("Chọn thời gian hẹn trong tương lai.");
+                if(request.scheduledAt()==null||!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1))) throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
                 if(clean(request.location())==null) throw bad("Nhập địa điểm nhận đồ.");
                 String recipient=clean(request.email()); if(recipient==null) recipient=recipient(c);
                 if(!validator.validate(new EmailCheck(recipient)).isEmpty()) throw bad("Cần email hợp lệ của người nhận để gửi lịch hẹn.");
@@ -153,19 +153,27 @@ public class OfficeClaimService {
             c.review(request.decision());
             String action=switch(request.decision()) { case "APPROVED"->"APPROVE"; case "REJECTED"->"REJECT"; default->"REQUEST_INFO"; };
             activities.save(new ClaimActivity(c,actor,action,previous,request.reason())); claims.flush();
-            return new Committed(c.getId(),c.getStatus(),a==null?null:mail(c,a));
+            return new Committed(c.getId(),c.getStatus(),a!=null);
         });
-        return new ReviewResult(committed.id(),committed.status(),committed.mail()==null?"NOT_REQUIRED":email.send(committed.mail())?"SENT":"FAILED");
+        String delivery="NOT_REQUIRED";
+        if(committed.sendInvitation()) {
+            try { delivery=invitations.send(committed.id())?"SENT":"FAILED"; }
+            catch(RuntimeException failure) {
+                // Approval has committed: report mail failure, not a misleading failed approval.
+                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Invitation delivery failed after approval for claim {} ({})",committed.id(),failure.getClass().getSimpleName());
+                delivery="FAILED";
+            }
+        }
+        return new ReviewResult(committed.id(),committed.status(),delivery);
     }
     public ReviewResult resend(long id,CustomUserDetails user) {
-        AppointmentEmailService.Mail mail=new TransactionTemplate(transactions).execute(tx->{
+        new TransactionTemplate(transactions).executeWithoutResult(tx->{
             access.require(user,MANAGER); Claim c=locked(id); eligible(c.getPost());
             if(!"APPROVED".equals(c.getStatus())) throw bad("Yêu cầu chưa được duyệt.");
             Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(id,"SCHEDULED").orElseThrow(()->bad("Chưa có lịch hẹn."));
             if(!a.getScheduledAt().isAfter(OffsetDateTime.now())) throw bad("Lịch hẹn đã qua, không gửi lại email cũ.");
-            return mail(c,a);
         });
-        return new ReviewResult(id,"APPROVED",email.send(mail)?"SENT":"FAILED");
+        return new ReviewResult(id,"APPROVED",invitations.send(id)?"SENT":"FAILED");
     }
     @Transactional
     public void supplement(long id,Supplement request,CustomUserDetails user) {
@@ -174,7 +182,6 @@ public class OfficeClaimService {
         c.review("PENDING"); activities.save(new ClaimActivity(c,actor,"RESUBMIT","NEEDS_INFO",request.information()));
     }
     private String recipient(Claim c) { return c.getClaimantEmail()!=null?c.getClaimantEmail():c.getClaimant()==null?null:c.getClaimant().getEmail(); }
-    private AppointmentEmailService.Mail mail(Claim c,Appointment a) { return new AppointmentEmailService.Mail(c.getId(),recipient(c),c.getClaimantName(),c.getPost().getTitle(),a.getScheduledAt(),a.getLocation(),a.getNote()); }
     private Claim office(long id) { return claims.findById(id).filter(c->"OFFICE".equals(c.getClaimType())).orElseThrow(()->new AppException(ErrorCode.CLAIM_NOT_FOUND)); }
     private Claim locked(long id) {
         Long postId=claims.findPostId(id).orElseThrow(()->new AppException(ErrorCode.CLAIM_NOT_FOUND));
@@ -185,7 +192,7 @@ public class OfficeClaimService {
     private void participant(Claim c,Account actor) { if(actor.getRole()!=MANAGER&&(c.getClaimant()==null||!c.getClaimant().getId().equals(actor.getId()))) throw new AppException(ErrorCode.FORBIDDEN); }
     private void version(Claim c,Long v) { if(v==null||v!=c.getVersion()) throw new AppException(ErrorCode.CLAIM_STALE); }
     private ClaimView view(Claim c,boolean detail,boolean manager) {
-        var appointment=detail?appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(c.getId(),"SCHEDULED").map(a->new AppointmentView(a.getId(),a.getScheduledAt(),a.getLocation(),a.getNote(),a.getStatus())).orElse(null):null;
+        var appointment=detail?appointments.findFirstByClaim_IdOrderByIdDesc(c.getId()).map(a->new AppointmentView(a.getId(),a.getScheduledAt(),a.getLocation(),a.getNote(),a.getStatus(),a.getResponseStatus(),a.getResponseDeadline(),a.getCancellationReason())).orElse(null):null;
         return new ClaimView(c.getId(),c.getPost().getId(),c.getPost().getTitle(),c.getStatus(),c.getSubmissionChannel(),
             c.getClaimant()==null?null:c.getClaimant().getId(),c.getClaimantName(),detail?recipient(c):null,detail?c.getClaimantPhone():null,
             person(c.getCreatedBy()),detail?c.getDescription():null,detail?c.getEvidenceNote():null,detail&&manager?c.getPost().getPrivateIdentifiers():null,c.getVersion(),c.getCreatedAt(),

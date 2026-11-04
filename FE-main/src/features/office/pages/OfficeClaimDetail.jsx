@@ -129,10 +129,17 @@ export default function OfficeClaimDetail({ mine = false }) {
                             REQUEST_INFO: "Yêu cầu bổ sung",
                             RESUBMIT: "Bổ sung thông tin",
                             CANCEL: "Hủy hồ sơ",
+                            INVITE_CONFIRM: "Đồng ý lịch hẹn qua email",
+                            INVITE_DECLINE: "Từ chối lịch hẹn qua email",
+                            INVITE_EXPIRE:
+                              "Hết hạn phản hồi — hệ thống tự động",
                           }[a.action] || a.action}
                         </strong>
                         <p className="of-muted">
-                          {a.actorName} · {date(a.createdAt)}
+                          {a.action === "INVITE_EXPIRE"
+                            ? "Hệ thống"
+                            : a.actorName}{" "}
+                          · {date(a.createdAt)}
                         </p>
                         {a.reason && <p className="of-prose">{a.reason}</p>}
                       </li>
@@ -147,6 +154,38 @@ export default function OfficeClaimDetail({ mine = false }) {
                     <h2 style={{ marginTop: 12 }}>Lịch hẹn nhận đồ</h2>
                     <strong>{date(claim.appointment.scheduledAt)}</strong>
                     <p className="of-prose">{claim.appointment.location}</p>
+                    <Notice
+                      error={["EXPIRED", "DECLINED"].includes(
+                        claim.appointment.responseStatus,
+                      )}
+                    >
+                      {
+                        {
+                          UNSENT:
+                            "Chưa gửi được lời mời; thời hạn 12 giờ chưa bắt đầu.",
+                          LEGACY: "Lịch cũ chưa áp dụng phản hồi qua email.",
+                          PENDING:
+                            "Đang chờ phản hồi qua liên kết trong email.",
+                          CONFIRMED: "Người nhận đã đồng ý lịch hẹn.",
+                          DECLINED: "Người nhận đã từ chối lịch hẹn.",
+                          EXPIRED:
+                            "Không phản hồi trong 12 giờ; yêu cầu bị từ chối và lịch hẹn đã hủy.",
+                        }[claim.appointment.responseStatus]
+                      }
+                    </Notice>
+                    {claim.appointment.responseDeadline && (
+                      <p>
+                        Hạn phản hồi:{" "}
+                        <strong>
+                          {date(claim.appointment.responseDeadline)}
+                        </strong>
+                      </p>
+                    )}
+                    {claim.appointment.cancellationReason && (
+                      <p className="of-prose">
+                        {claim.appointment.cancellationReason}
+                      </p>
+                    )}
                     {claim.appointment.note && (
                       <p className="of-prose">{claim.appointment.note}</p>
                     )}
@@ -154,17 +193,19 @@ export default function OfficeClaimDetail({ mine = false }) {
                       Mang theo giấy tờ và bằng chứng để xác minh trực tiếp. Yêu
                       cầu được duyệt chưa có nghĩa đồ đã trao trả.
                     </p>
-                    {!mine && (
-                      <button
-                        type="button"
-                        className="of-button"
-                        disabled={busy}
-                        onClick={resend}
-                      >
-                        <Mail size={16} />
-                        {busy ? "Đang gửi…" : "Gửi lại thư lịch hẹn"}
-                      </button>
-                    )}
+                    {!mine &&
+                      claim.appointment.status === "SCHEDULED" &&
+                      claim.appointment.responseStatus !== "CONFIRMED" && (
+                        <button
+                          type="button"
+                          className="of-button"
+                          disabled={busy}
+                          onClick={resend}
+                        >
+                          <Mail size={16} />
+                          {busy ? "Đang gửi…" : "Gửi lại thư lịch hẹn"}
+                        </button>
+                      )}
                   </section>
                 )}
                 {!mine && ["PENDING", "NEEDS_INFO"].includes(claim.status) && (

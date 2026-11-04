@@ -9,6 +9,24 @@
   line-height: 1.55;
   font-family: var(--font-body, sans-serif);
 }
+.of-invitation-page {
+  max-width: 760px;
+  padding-top: 48px;
+}
+.of-invitation-page .of-facts {
+  margin: 24px 0;
+}
+.of-invitation-options {
+  border: 1px solid #d4dfe2;
+  border-radius: 10px;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+.of-invitation-options legend {
+  font-weight: 650;
+  padding: 0 6px;
+}
 .office-page * {
   box-sizing: border-box;
 }

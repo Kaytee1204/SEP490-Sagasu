@@ -21,6 +21,7 @@ import StoragePage from '@/features/office/pages/StoragePage';
 import OfficeClaimList from '@/features/office/pages/OfficeClaimList';
 import OfficeClaimForm from '@/features/office/pages/OfficeClaimForm';
 import OfficeClaimDetail from '@/features/office/pages/OfficeClaimDetail';
+import InvitationPage from '@/features/office/pages/InvitationPage';
 import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
@@ -59,6 +60,7 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/van-phong/lich-hen" element={<InvitationPage />} />
       {/* ── AUTH ROUTES (Dành cho tất cả các Role) ── */}
       <Route
         path="/dang-nhap"
