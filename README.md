@@ -1,4 +1,4 @@
-# SAGASU - Enterprise Lost and Found Management Platform
+# SAGASU - Lost-and-Found Information Search & User Connection System - SEP490-G17
 
 **Project Code:** SEP490-Sagasu  
 **Version:** 1.0.0  
