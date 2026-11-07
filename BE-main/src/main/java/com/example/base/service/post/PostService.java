@@ -93,8 +93,8 @@ public class PostService {
         var officeReceipt = receipts.findPublicIntakes(List.of(postId)).stream().findFirst()
                 .map(OfficeReceiptDto::from).orElse(null);
         boolean canRequestHandover = viewerId != null && viewerId.equals(post.getAccount().getId())
-                && post.canRequestOfficeHandover() && !receipts.existsByPostId(postId)
-                && !claims.existsByPost_IdAndStatusIn(postId, Set.of("PENDING", "APPROVED"));
+                // DaiHV integration: active claims move with the item on physical receipt.
+                && post.canRequestOfficeHandover() && !receipts.existsByPostId(postId);
         return mapper.toDetail(post, viewerId, officeReceipt, canRequestHandover);
     }
 }

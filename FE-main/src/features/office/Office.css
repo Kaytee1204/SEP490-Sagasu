@@ -9,6 +9,35 @@
   line-height: 1.55;
   font-family: var(--font-body, sans-serif);
 }
+
+/* Office transfer and return: compact steps, accessible controls, responsive cards. */
+.of-return-steps { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 14px; }
+.of-return-steps li { display: flex; align-items: center; gap: 12px; color: #64748b; }
+.of-return-steps li > span { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; background: #f1f5f9; border-radius: 50%; }
+.of-return-steps li > div { flex: 1; }
+.of-return-steps strong, .of-return-steps small { display: block; }
+.of-return-steps small { font-size: 11px; }
+.of-return-steps .is-complete { color: #0f766e; }
+.of-return-steps .is-complete > span { background: #ccfbf1; }
+.of-actions-wrap { flex-wrap: wrap; margin: 16px 0; }
+.of-return-record, .of-verification-history { border-top: 1px solid #e2e8f0; margin-top: 20px; padding-top: 16px; }
+.of-verification-history summary { cursor: pointer; font-weight: 650; padding: 6px 0; }
+.of-form label.of-check { display: flex; align-items: flex-start; gap: 10px; padding: 14px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; }
+.of-form .of-check input { width: 18px; height: 18px; min-height: 18px; margin-top: 3px; flex-shrink: 0; accent-color: #0f766e; }
+.of-transfer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; margin-top: 24px; }
+.of-transfer-card { display: flex; flex-direction: column; border: 1px solid #dfe7e9; border-radius: 14px; overflow: hidden; background: #fff; }
+.of-transfer-image { width: 100%; height: 180px; object-fit: cover; background: #f1f5f9; }
+.of-transfer-placeholder { display: grid; place-items: center; color: #64748b; }
+.of-transfer-body { padding: 20px; }
+.of-transfer-body h2 { margin-top: 12px; overflow-wrap: anywhere; }
+.of-transfer-status { display: inline-block; padding: 4px 10px; border-radius: 6px; background: #f1f5f9; font-size: 12px; font-weight: 650; }
+.of-transfer-status.is-complete { background: #ccfbf1; color: #115e59; }
+.of-question-answers { display: grid; gap: 16px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; margin: 16px 0; }
+.of-question-answers dt { font-weight: 650; margin-bottom: 6px; }
+.of-question-answers dd { margin: 0; color: #475569; }
+@media (max-width: 900px) {
+  .of-claim-grid > aside { order: -1; }
+}
 .of-invitation-page {
   max-width: 760px;
   padding-top: 48px;

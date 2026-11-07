@@ -10,6 +10,10 @@ import java.util.Collection;
 import java.util.Optional;
 
 public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
+    // DaiHV integration: always called after locking the post, matching P2P lock order.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Claim c where c.post.id=:postId order by c.id")
+    java.util.List<Claim> findAllForOfficeTransfer(@Param("postId") long postId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Claim c where c.post.id=:postId and c.status='PENDING' order by c.id")

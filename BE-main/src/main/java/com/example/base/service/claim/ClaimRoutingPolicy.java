@@ -25,7 +25,8 @@ public class ClaimRoutingPolicy {
     }
 
     public boolean reviewer(Claim claim, Account actor) {
-        if (Objects.equals(claim.getClaimant().getId(), actor.getId())) return false;
+        if (claim.getClaimant()!=null && Objects.equals(claim.getClaimant().getId(), actor.getId())) return false;
+        // DaiHV integration: Approver owns intake, office dossier review and return processing.
         return claim.isOffice() ? actor.getRole() == AccountRole.APPROVER
                 : Objects.equals(claim.getPost().getAccount().getId(), actor.getId());
     }

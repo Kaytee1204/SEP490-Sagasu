@@ -11,6 +11,7 @@ import Header from "../components/Header";
 import Notice from "../components/Notice";
 import LoadState from "../components/LoadState";
 import ReceiptInfo from "../components/ReceiptInfo";
+import OfficeReturnPanel from "../components/OfficeReturnPanel";
 import "../Office.css";
 
 export default function OfficeClaimDetail({ mine = false }) {
@@ -42,7 +43,7 @@ export default function OfficeClaimDetail({ mine = false }) {
     <div className="office-page">
       <Link
         className="of-back"
-        to={mine ? "/van-phong/claims" : "/admin/office-claims"}
+        to={mine ? "/van-phong/claims" : "/approver/office-claims"}
       >
         ← Danh sách yêu cầu
       </Link>
@@ -57,7 +58,7 @@ export default function OfficeClaimDetail({ mine = false }) {
               <Badge value={claim.status} />
               <Badge value={claim.channel} />
             </Header>
-            <div className="of-detail-grid">
+            <div className="of-detail-grid of-claim-grid">
               <div>
                 <section className="of-panel">
                   <h2>Thông tin người khai</h2>
@@ -83,6 +84,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                 <section className="of-panel">
                   <h2>Căn cứ sở hữu</h2>
                   <p className="of-prose">{claim.description}</p>
+                  {!!claim.answers?.length && <dl className="of-question-answers">{claim.answers.map((answer) => <div key={answer.id}><dt>{answer.question}</dt><dd className="of-prose">{answer.answer}</dd></div>)}</dl>}
                   {claim.evidenceNote && (
                     <div className="of-callout of-prose">
                       {claim.evidenceNote}
@@ -129,6 +131,13 @@ export default function OfficeClaimDetail({ mine = false }) {
                             REQUEST_INFO: "Yêu cầu bổ sung",
                             RESUBMIT: "Bổ sung thông tin",
                             CANCEL: "Hủy hồ sơ",
+                            TRANSFER_OFFICE: "Chuyển trách nhiệm sang văn phòng",
+                            RESCHEDULE: "Đổi lịch hẹn",
+                            OFFICE_CANCEL: "Hủy lịch và thu hồi duyệt",
+                            HANDOVER: "Ghi nhận giao đồ",
+                            CONFIRM_RECEIPT: "Người nhận xác nhận đã nhận đồ",
+                            AUTO_CLOSE: "Đóng hồ sơ do đồ đã được trao trả",
+                            REPORT_ISSUE: "Phản ánh việc nhận đồ",
                             INVITE_CONFIRM: "Đồng ý lịch hẹn qua email",
                             INVITE_DECLINE: "Từ chối lịch hẹn qua email",
                             INVITE_EXPIRE:
@@ -148,6 +157,10 @@ export default function OfficeClaimDetail({ mine = false }) {
                 </section>
               </div>
               <aside className="of-sticky">
+                <OfficeReturnPanel claim={claim} mine={mine} onChanged={(result) => {
+                  setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã đổi lịch, nhưng chưa gửi được email. Hãy gửi lại thư lịch hẹn." : "Đã cập nhật tiến trình trao trả." });
+                  state.reload();
+                }} />
                 {claim.appointment && (
                   <section className="of-panel of-appointment">
                     <CalendarDays size={26} color="#0f766e" />
@@ -173,7 +186,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                         }[claim.appointment.responseStatus]
                       }
                     </Notice>
-                    {claim.appointment.responseDeadline && (
+                    {claim.appointment.status === "SCHEDULED" && claim.appointment.responseStatus === "PENDING" && claim.appointment.responseDeadline && (
                       <p>
                         Hạn phản hồi:{" "}
                         <strong>
@@ -189,10 +202,10 @@ export default function OfficeClaimDetail({ mine = false }) {
                     {claim.appointment.note && (
                       <p className="of-prose">{claim.appointment.note}</p>
                     )}
-                    <p className="of-muted">
+                    {claim.appointment.status === "SCHEDULED" && <p className="of-muted">
                       Mang theo giấy tờ và bằng chứng để xác minh trực tiếp. Yêu
                       cầu được duyệt chưa có nghĩa đồ đã trao trả.
-                    </p>
+                    </p>}
                     {!mine &&
                       claim.appointment.status === "SCHEDULED" &&
                       claim.appointment.responseStatus !== "CONFIRMED" && (

@@ -3,6 +3,7 @@ export const labels = {
   RESERVED: "Đã có yêu cầu được duyệt",
   RETURNED: "Đã trao trả",
   CLOSED: "Đã đóng",
+  COMPLETED: "Hoàn tất trao trả",
   VISIBLE: "Đang hiển thị",
   HIDDEN: "Đã ẩn",
   PENDING: "Chờ xử lý",

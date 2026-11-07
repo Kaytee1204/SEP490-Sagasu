@@ -118,20 +118,14 @@ export default function StoragePage() {
                                 >
                                   Xem bài đăng
                                 </Link>
-                                <Link
-                                  className="of-inline-link"
-                                  to={`/admin/office-claims/new?postId=${item.postId}`}
-                                >
-                                  Lập yêu cầu →
-                                </Link>
                               </>
                             ) : (
-                              <Link
+                              <><Link
                                 className="of-button"
                                 to={`/approver/receipts/${item.id}`}
                               >
                                 Xem hồ sơ tiếp nhận
-                              </Link>
+                              </Link><Link className="of-inline-link" to={`/approver/office-claims/new?postId=${item.postId}`}>Lập yêu cầu nhận đồ →</Link></>
                             )}
                           </div>
                         </div>

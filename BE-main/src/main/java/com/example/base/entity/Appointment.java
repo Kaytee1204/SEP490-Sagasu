@@ -40,6 +40,11 @@ public class Appointment {
         Appointment a = new Appointment(); a.claim = claim; a.createdBy = actor;
         a.scheduledAt = time; a.location = location; a.note = note; return a;
     }
+    public void cancelByOffice(String reason) {
+        status = "CANCELLED"; cancellationReason = reason; cancelledAt = OffsetDateTime.now();
+        responseTokenHash = null;
+    }
+    public void completeAtOffice() { status = "COMPLETED"; responseTokenHash = null; }
     @PrePersist void create() { createdAt = updatedAt = OffsetDateTime.now(); }
     @PreUpdate void update() { updatedAt = OffsetDateTime.now(); }
 }

@@ -36,9 +36,7 @@ export default function OfficeClaimForm({ counter = false }) {
   const selected = useLoad(
     () =>
       postId
-        ? counter
-          ? officeApi.post(postId)
-          : getPostDetail(postId)
+        ? getPostDetail(postId)
         : Promise.resolve(null),
     `post:${postId}:${counter}`,
   );
@@ -62,10 +60,10 @@ export default function OfficeClaimForm({ counter = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
-  const back = counter ? "/admin/office-claims" : "/van-phong/claims";
+  const back = counter ? "/approver/office-claims" : "/van-phong/claims";
   const valid =
     selected.data &&
-    selected.data.status === "OPEN" &&
+    ["OPEN", "RESERVED"].includes(selected.data.status) &&
     selected.data.moderationStatus === "VISIBLE" &&
     selected.data.custodyMode === "OFFICE";
   async function submit(e) {

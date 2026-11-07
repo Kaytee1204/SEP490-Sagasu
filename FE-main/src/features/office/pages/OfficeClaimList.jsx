@@ -19,7 +19,7 @@ export default function OfficeClaimList({ mine = false }) {
     () => officeApi.claims(filters, mine),
     JSON.stringify(filters) + mine,
   );
-  const base = mine ? "/van-phong/claims" : "/admin/office-claims";
+  const base = mine ? "/van-phong/claims" : "/approver/office-claims";
   const change = (key, value) =>
     setFilters((f) => ({ ...f, [key]: value, page: 1 }));
   return (
@@ -40,6 +40,9 @@ export default function OfficeClaimList({ mine = false }) {
             <Plus size={18} />
             Lập yêu cầu tại quầy
           </Link>
+        )}
+        {mine && (
+          <Link className="of-button" to="/van-phong/chuyen-giao">Theo dõi giao đồ cho văn phòng</Link>
         )}
         {mine && (
           <Link className="of-button" to="/claim-cua-toi?view=sent">
@@ -69,6 +72,8 @@ export default function OfficeClaimList({ mine = false }) {
               "APPROVED",
               "REJECTED",
               "CANCELLED",
+              "COMPLETED",
+              "CLOSED",
             ].map((v) => [v, v === "ALL" ? "Tất cả" : labels[v]])}
           />
         </div>

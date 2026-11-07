@@ -133,6 +133,7 @@ public class ClaimService {
     @Transactional(readOnly = true)
     public ClaimPageDto office(int page, int size, String status, CustomUserDetails user) {
         Account actor = activeActor(user);
+        // DaiHV integration: office dossier access follows the Approver role.
         if (actor.getRole() != AccountRole.APPROVER) throw new AppException(ErrorCode.FORBIDDEN);
         return page(claims.findOffice(filter(status), pageable(page, size)), page, size);
     }
@@ -141,7 +142,7 @@ public class ClaimService {
     public ClaimPageDto onPost(long postId, int page, int size, String status, CustomUserDetails user) {
         Account actor = activeActor(user);
         Post post = post(postId);
-        boolean approver = actor.getRole() == AccountRole.APPROVER;
+        boolean approver = actor.getRole() == AccountRole.APPROVER; // Office reviewer; repository parameter retains its legacy name.
         if (!Objects.equals(post.getAccount().getId(), actor.getId()) && !approver) throw missing();
         return page(claims.findOnPost(postId, actor.getId(), approver, filter(status), pageable(page, size)), page, size);
     }
@@ -191,6 +192,8 @@ public class ClaimService {
         Post post = lockPost(claimPostId(id));
         routing.lockReceipt(post);
         Claim claim = lockClaim(id);
+        // DaiHV integration: office approval must use OfficeClaimService, which creates the appointment.
+        if (claim.isOffice()) throw new AppException(ErrorCode.BAD_REQUEST, "Duyệt hồ sơ tại mục Yêu cầu nhận đồ của văn phòng.");
         if (!routing.reviewer(claim, actor)) throw missing();
         if (request == null || !Set.of("APPROVED", "REJECTED").contains(Objects.toString(request.decision(), ""))
                 || request.reason() == null || request.reason().isBlank() || request.reason().length() > 2000) {
@@ -254,7 +257,8 @@ public class ClaimService {
     }
 
     private boolean cancellable(Claim claim) {
-        return Set.of("PENDING", "APPROVED").contains(claim.getStatus())
+        // DaiHV integration: office cancellation must also invalidate its appointment/invitation.
+        return !claim.isOffice() && Set.of("PENDING", "APPROVED").contains(claim.getStatus())
                 && !handovers.existsByClaimId(claim.getId())
                 && routing.matches(claim, Set.of("OPEN", "RESERVED"));
     }

@@ -22,6 +22,8 @@ import OfficeClaimList from '@/features/office/pages/OfficeClaimList';
 import OfficeClaimForm from '@/features/office/pages/OfficeClaimForm';
 import OfficeClaimDetail from '@/features/office/pages/OfficeClaimDetail';
 import InvitationPage from '@/features/office/pages/InvitationPage';
+// DaiHV integration: office custody requests share the existing protected layouts.
+import OfficeTransfers from '@/features/office/pages/OfficeTransfers';
 import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
@@ -79,6 +81,7 @@ function AppRoutes() {
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>
         <Route path="/van-phong/claims" element={<ProtectedRoute><OfficeClaimList mine /></ProtectedRoute>} />
+        <Route path="/van-phong/chuyen-giao" element={<ProtectedRoute><OfficeTransfers mine /></ProtectedRoute>} />
         <Route path="/van-phong/claims/:id" element={<ProtectedRoute><OfficeClaimDetail mine /></ProtectedRoute>} />
         <Route path="/van-phong/xac-minh/:id" element={<ProtectedRoute><OfficeClaimForm /></ProtectedRoute>} />
         <Route path="/tin-nhan" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
@@ -167,9 +170,7 @@ function AppRoutes() {
         <Route path="items" element={<ProtectedRoute managerOnly><PostAdministration /></ProtectedRoute>} />
         <Route path="items/:id" element={<ProtectedRoute managerOnly><StaffPostDetail /></ProtectedRoute>} />
         <Route path="storage" element={<ProtectedRoute managerOnly><StoragePage /></ProtectedRoute>} />
-        <Route path="office-claims" element={<ProtectedRoute managerOnly><OfficeClaimList /></ProtectedRoute>} />
-        <Route path="office-claims/new" element={<ProtectedRoute managerOnly><OfficeClaimForm counter /></ProtectedRoute>} />
-        <Route path="office-claims/:id" element={<ProtectedRoute managerOnly><OfficeClaimDetail /></ProtectedRoute>} />
+        <Route path="transfers" element={<ProtectedRoute managerOnly><OfficeTransfers /></ProtectedRoute>} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>
@@ -177,6 +178,11 @@ function AppRoutes() {
       
       <Route path="/approver" element={<ProtectedRoute approverOnly><AdminLayout /></ProtectedRoute>}>
         <Route path="storage" element={<StoragePage />} />
+        {/* DaiHV: Approver owns counter claims and the office return workflow. */}
+        <Route path="transfers" element={<OfficeTransfers />} />
+        <Route path="office-claims" element={<OfficeClaimList />} />
+        <Route path="office-claims/new" element={<OfficeClaimForm counter />} />
+        <Route path="office-claims/:id" element={<OfficeClaimDetail />} />
         <Route index element={<Navigate to="/approver/receipts" replace />} />
         <Route path="receipts" element={<ReceiptQueuePage />} />
         <Route path="receipts/new" element={<IntakeFormPage />} />

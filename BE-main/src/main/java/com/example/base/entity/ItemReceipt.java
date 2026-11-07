@@ -63,6 +63,19 @@ public class ItemReceipt {
         return receipt;
     }
 
+    // DaiHV integration: retain the existing post and its claim IDs when receiving a transfer.
+    public static ItemReceipt transferred(String code, Account officer, Post post, String condition, StorageLocation location) {
+        ItemReceipt receipt = draft(code, officer);
+        receipt.source = "EXISTING_POST";
+        receipt.edit(post.getCategory(), post.getTitle(), post.getDescription(), condition,
+                post.getLocationText(), post.getEventAt(), post.getPrivateIdentifiers(), null);
+        receipt.assignLocation(location);
+        post.getImages().forEach(image -> receipt.addImage(ItemReceiptImage.fromTransferredPost(image)));
+        receipt.receiveAndPublish(officer, post.getId());
+        return receipt;
+    }
+    public void returnedByOffice() { status = "RETURNED"; updatedAt = OffsetDateTime.now(); }
+
     public void receiveAndPublish(Account officer, Long publishedPostId) {
         if (!java.util.Set.of("DRAFT", "SUBMITTED").contains(status) || "REJECTED".equals(reviewStatus) || postId != null || receivedAt != null
                 || storageLocation == null || publishedPostId == null) {
