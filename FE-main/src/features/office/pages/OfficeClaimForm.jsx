@@ -61,11 +61,13 @@ export default function OfficeClaimForm({ counter = false }) {
   const [error, setError] = useState("");
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const back = counter ? "/approver/office-claims" : "/van-phong/claims";
+  const isOwner = Boolean(selected.data?.isOwner || selected.data?.canEditOwnPost);
   const valid =
     selected.data &&
     ["OPEN", "RESERVED"].includes(selected.data.status) &&
     selected.data.moderationStatus === "VISIBLE" &&
-    selected.data.custodyMode === "OFFICE";
+    selected.data.custodyMode === "OFFICE" &&
+    (counter || !isOwner);
   async function submit(e) {
     e.preventDefault();
     if (busy || !valid) return;
@@ -156,11 +158,9 @@ export default function OfficeClaimForm({ counter = false }) {
                     Bài #{postId} · <Badge value={selected.data.status} />
                   </p>
                   {!valid && (
-                    <Notice error>
-                      Bài này không còn nhận thêm yêu cầu. Vui lòng chọn đồ khác
-                      hoặc kiểm tra hồ sơ đã có.
-                    </Notice>
+                    <Notice error>{!counter && isOwner ? "Bạn là người đăng bài này nên không thể tự gửi yêu cầu nhận lại đồ." : "Bài này không còn nhận thêm yêu cầu. Vui lòng chọn đồ khác hoặc kiểm tra hồ sơ đã có."}</Notice>
                   )}
+                  
                 </div>
               )}
             </LoadState>

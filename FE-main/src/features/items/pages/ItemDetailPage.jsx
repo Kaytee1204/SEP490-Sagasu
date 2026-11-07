@@ -73,7 +73,7 @@ function PostDetail({ id, onRetry }) {
     if (!validId) return;
     getPostDetail(id)
       .then(async post => {
-        const myClaim = post.postType === 'FOUND' && !post.canEditOwnPost
+        const myClaim = post.postType === 'FOUND' && !post.isOwner && !post.canEditOwnPost
           ? await getLatestClaimOnPost(id).catch(() => null) : null;
         if (!cancelled) setResult({ id, post, myClaim });
       })
@@ -161,7 +161,7 @@ function PostDetail({ id, onRetry }) {
             </button>
             )}
 
-            {!post.canEditOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
+            {!post.isOwner && !post.canEditOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
               <Link
                 to={`/van-phong/xac-minh/${post.id}`}
                 style={{
@@ -184,7 +184,7 @@ function PostDetail({ id, onRetry }) {
               </Link>
             )}
 
-            {!post.canEditOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
+            {!post.isOwner && !post.canEditOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
               <Link
                 to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
                 style={{
@@ -208,7 +208,7 @@ function PostDetail({ id, onRetry }) {
             )}
           </div>
 
-          {post.postType === 'FOUND' && (post.canEditOwnPost || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
+          {post.postType === 'FOUND' && ((post.isOwner || post.canEditOwnPost) || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
           {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
             && post.moderationStatus === 'VISIBLE'
@@ -219,7 +219,7 @@ function PostDetail({ id, onRetry }) {
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được văn phòng lưu giữ'}</h2>
             <dl className="space-y-3 text-sm leading-6"><div><dt className="text-slate-600">{post.officeReceipt.status === 'RETURNED' ? 'Nơi lưu trữ trước khi trao trả' : 'Nơi lưu trữ'}</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.storageLocationName || 'Liên hệ văn phòng tiếp nhận'}</dd></div><div><dt className="text-slate-600">Cán bộ tiếp nhận</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.receivedBy || 'Chưa cập nhật tên'}</dd></div><div><dt className="text-slate-600">Thời điểm tiếp nhận</dt><dd className="font-semibold text-slate-900">{new Date(post.officeReceipt.receivedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</dd></div></dl>
           </section>}
-          {post.canEditOwnPost && <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng của tôi</Link>}
+          {(post.isOwner || post.canEditOwnPost) && <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng của tôi</Link>}
           {post.moderationStatus === 'PENDING' && <p role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
           <div><strong>Trạng thái: </strong>{STATUS_LABELS[post.status] || post.status}</div>
           {post.postType === 'FOUND' && !post.officeReceipt && <div>

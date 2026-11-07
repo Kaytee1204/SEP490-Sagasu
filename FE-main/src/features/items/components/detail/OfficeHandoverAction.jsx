@@ -26,7 +26,7 @@ export default function OfficeHandoverAction({ post, onTransferred }) {
     }
   }
 
-  if (!post.canRequestOfficeHandover) return post.canEditOwnPost ? <Link to="/van-phong/chuyen-giao" className="btn btn-ghost">Theo dõi giao đồ cho văn phòng</Link> : null;
+  if (!post.canRequestOfficeHandover) return (post.isOwner || post.canEditOwnPost) ? <Link to="/van-phong/chuyen-giao" className="btn btn-ghost">Theo dõi giao đồ cho văn phòng</Link> : null;
   return <section aria-label="Giao cho bên tiếp nhận" className="space-y-3">
     {error && <p role="alert" className="text-red-700">{error}</p>}
     {!confirming ? <button type="button" className="btn btn-ghost" onClick={() => setConfirming(true)}>Giao cho bên tiếp nhận</button>

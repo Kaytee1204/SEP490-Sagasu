@@ -238,7 +238,9 @@ public class ClaimService {
     }
 
     private void validateNewClaim(Post post, long actorId, Long previousId) {
-        if (Objects.equals(post.getAccount().getId(), actorId)) throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
+        if (Objects.equals(post.getAccount().getId(), actorId) || (post.getCreatedBy() != null && Objects.equals(post.getCreatedBy().getId(), actorId))) {
+            throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
+        }
         if (!routing.canSubmit(post)) throw new AppException(ErrorCode.CLAIM_POST_UNAVAILABLE);
         if (previousId != null) {
             Claim old = claim(previousId);

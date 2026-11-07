@@ -122,7 +122,10 @@ public class OfficeClaimService {
         if(lock) em.refresh(p,LockModeType.PESSIMISTIC_WRITE);
         eligible(p);
         if(!"OPEN".equals(p.getStatus())||!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
-        if(!counter&&p.getAccount().getId().equals(actor.getId())) throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
+        Account claimant = counter ? counterClaimant(r) : actor;
+        if (claimant != null && (Objects.equals(p.getAccount().getId(), claimant.getId()) || (p.getCreatedBy() != null && Objects.equals(p.getCreatedBy().getId(), claimant.getId())))) {
+            throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
+        }
         return p;
     }
     private void eligible(Post p) {
