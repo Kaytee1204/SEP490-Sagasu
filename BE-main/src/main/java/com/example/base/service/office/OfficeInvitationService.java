@@ -23,6 +23,7 @@ public class OfficeInvitationService {
     private final AppointmentEmailService email;
     private final PlatformTransactionManager transactions;
     private final EntityManager em;
+    private final OfficeAccess access;
 
     private Claim lock(long id) {
         Long postId=claims.findPostId(id).orElseThrow(()->bad("Không tìm thấy hồ sơ."));
@@ -64,16 +65,30 @@ public class OfficeInvitationService {
             Appointment found=lookup(hash); Claim c=lock(found.getClaim().getId());
             em.refresh(found,LockModeType.PESSIMISTIC_WRITE);
             if(!hash.equals(found.getResponseTokenHash())) throw invalid();
-            if(!java.util.Set.of("CONFIRM","DECLINE").contains(request.decision())) throw bad("Lựa chọn không hợp lệ.");
+            return applyResponse(c,found,request.decision(),"qua email");
+        });
+    }
+    public View respondOnSite(long id,com.example.base.dto.office.OfficeWorkflowDtos.AppointmentResponse request,com.example.base.security.CustomUserDetails user) {
+        return new TransactionTemplate(transactions).execute(tx->{
+            Account actor=access.require(user);Claim c=lock(id);
+            if(c.getClaimant()==null || !c.getClaimant().getId().equals(actor.getId()))throw bad("Chỉ người yêu cầu nhận đồ được phản hồi lịch hẹn này.");
+            Appointment found=appointments.findById(request.appointmentId()).orElseThrow(()->bad("Không tìm thấy lịch hẹn."));
+            if(!found.getClaim().getId().equals(c.getId()))throw bad("Lịch hẹn không thuộc yêu cầu này.");
+            em.refresh(found,LockModeType.PESSIMISTIC_WRITE);
+            if("CANCELLED".equals(found.getStatus()) && !java.util.Set.of("DECLINED","EXPIRED").contains(found.getResponseStatus()))throw bad("Lịch hẹn đã thay đổi. Hãy tải lại để xem lịch mới.");
+            return applyResponse(c,found,request.decision(),"trên hệ thống");
+        });
+    }
+    private View applyResponse(Claim c,Appointment found,String decision,String channel) {
+            if(!java.util.Set.of("CONFIRM","DECLINE").contains(decision)) throw bad("Lựa chọn không hợp lệ.");
             OffsetDateTime now=OffsetDateTime.now();
             if(!"PENDING".equals(found.getResponseStatus()) || !"SCHEDULED".equals(found.getStatus()) || !"APPROVED".equals(c.getStatus())) return view(found);
             if(found.responseExpired(now)) reject(c,found,"EXPIRED",now);
-            else if("CONFIRM".equals(request.decision())) {
+            else if("CONFIRM".equals(decision)) {
                 found.confirmInvitation(now);
-                activities.save(new ClaimActivity(c,c.getClaimant()==null?c.getCreatedBy():c.getClaimant(),"INVITE_CONFIRM","APPROVED","Người nhận đồng ý lịch hẹn qua liên kết trong email."));
+                activities.save(new ClaimActivity(c,c.getClaimant()==null?c.getCreatedBy():c.getClaimant(),"INVITE_CONFIRM","APPROVED","Người nhận đồng ý lịch hẹn " + channel + "."));
             } else reject(c,found,"DECLINED",now);
             return view(found);
-        });
     }
     private View view(Appointment a) {
         String status=a.getResponseStatus();
@@ -83,7 +98,7 @@ public class OfficeInvitationService {
     }
     private void reject(Claim c,Appointment a,String response,OffsetDateTime now) {
         boolean expired="EXPIRED".equals(response);
-        String reason=expired?"Không phản hồi lời mời nhận đồ trong thời hạn 12 giờ.":"Người nhận từ chối lịch hẹn qua email.";
+        String reason=expired?"Không phản hồi lời mời nhận đồ trong thời hạn 12 giờ.":"Người nhận từ chối lịch hẹn.";
         a.rejectInvitation(response,reason,now); c.review("REJECTED");
         if("RESERVED".equals(c.getPost().getStatus())) c.getPost().reopenAfterClaimCancellation();
         Account actor=expired||c.getClaimant()==null?a.getCreatedBy():c.getClaimant();

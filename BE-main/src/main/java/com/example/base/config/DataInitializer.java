@@ -60,6 +60,7 @@ public class DataInitializer {
             "db/migrations/07_p2p_claim_draft.sql",
             "db/migrations/08_allow_claim_retry_after_cancel.sql",
             "db/migrations/09_add_claim_categories.sql",
+            "db/migrations/compatibility_existing_tables.sql",
             "db/migrations/10_claim_questionnaires.sql",
             "db/migrations/11_p2p_chat.sql",
             "db/migrations/12_chat_read_timestamps.sql",
@@ -70,7 +71,11 @@ public class DataInitializer {
             "db/migrations/16_p2p_handover.sql",
             "db/migrations/17_confirm_p2p_receipt.sql",
             "db/migrations/18_handover_reports.sql",
-            "db/migrations/19_claim_author_compatibility.sql"
+            "db/migrations/19_claim_author_compatibility.sql",
+            // DaiHV integration: office custody transfer and return, after the shared claim schema.
+            "db/migrations/19_office_transfer_and_return.sql",
+            // DaiHV: appointment invitations for people bringing found items to the office.
+            "db/migrations/20_office_intake_schedule.sql"
     );
 
     @Bean
@@ -304,6 +309,7 @@ public class DataInitializer {
             try (Connection conn = dataSource.getConnection()) {
                 try (Statement st = conn.createStatement()) {
                     String sql = StreamUtils.copyToString(res.getInputStream(), StandardCharsets.UTF_8);
+                    sql = MigrationCompatibility.prepare(path, sql);
                     st.execute(sql);
                     log.info("[SQL MIGRATION] Đã thực thi thành công: {}", path);
                 } catch (Exception e) {

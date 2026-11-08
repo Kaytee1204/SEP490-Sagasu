@@ -14,7 +14,6 @@ import jakarta.validation.Validator;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.*;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,11 +23,12 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import static com.example.base.service.office.OfficeManagementService.*;
 import static com.example.base.service.office.OfficeAccess.bad;
-import static com.example.base.entity.AccountRole.MANAGER;
+import static com.example.base.entity.AccountRole.APPROVER;
 
 @Service @RequiredArgsConstructor
 public class OfficeClaimService {
     private final ClaimRepository claims;
+    private final OfficeClaimProgress progress;
     private final PostRepository posts;
     private final AccountRepository accounts;
     private final ItemReceiptRepository receipts;
@@ -45,7 +45,7 @@ public class OfficeClaimService {
 
     @Transactional(readOnly=true)
     public List<ClaimantOption> findClaimants(String q, CustomUserDetails user) {
-        access.require(user,MANAGER);
+        access.require(user,APPROVER);
         String keyword=q.strip();
         if(keyword.length()<3) return List.of();
         if(keyword.length()>255) throw bad("Email tìm kiếm tối đa 255 ký tự.");
@@ -61,26 +61,19 @@ public class OfficeClaimService {
     }
 
     @Transactional(readOnly=true)
-    public PageData<ClaimView> list(int page,String status,String q,boolean mine,CustomUserDetails user) {
-        Account actor=mine?access.require(user):access.require(user,MANAGER);
-        if(!Set.of("ALL","PENDING","NEEDS_INFO","APPROVED","REJECTED","CANCELLED").contains(status)) throw bad("Trạng thái không hợp lệ.");
+    public PageData<ClaimView> list(int page,String status,String q,String stage,boolean mine,CustomUserDetails user) {
+        Account actor=mine?access.require(user):access.require(user,APPROVER);
+        if(!Set.of("ALL","PENDING","NEEDS_INFO","APPROVED","REJECTED","CANCELLED","COMPLETED","CLOSED").contains(status)) throw bad("Trạng thái không hợp lệ.");
         String keyword=q==null?"":q.strip().toLowerCase(Locale.ROOT);
         if(keyword.length()>200) throw bad("Từ khóa tối đa 200 ký tự.");
-        Page<Claim> data=claims.findAll((root,cq,cb)-> {
-            var filters=new ArrayList<jakarta.persistence.criteria.Predicate>();
-            filters.add(cb.equal(root.get("claimType"),"OFFICE"));
-            if(mine) filters.add(cb.equal(root.get("claimant").get("id"),actor.getId()));
-            if(!"ALL".equals(status)) filters.add(cb.equal(root.get("status"),status));
-            filters.add(cb.or(cb.gt(cb.locate(cb.lower(root.get("post").get("title")),keyword),0),
-                cb.gt(cb.locate(cb.lower(cb.coalesce(root.<String>get("claimantName"),"")),keyword),0)));
-            return cb.and(filters.toArray(jakarta.persistence.criteria.Predicate[]::new));
-        },page(page));
-        return result(data,data.stream().map(c->view(c,false,actor.getRole()==MANAGER)).toList());
+        var data=progress.list(page,status,stage,keyword,mine?actor.getId():null);
+        var content=data.content().stream().map(row->view(claims.findById(row.id()).orElseThrow(),false,actor.getRole()==APPROVER,actor.getId(),row)).toList();
+        return new PageData<>(content,data.page(),data.totalElements(),data.totalPages());
     }
     @Transactional(readOnly=true)
     public ClaimView detail(long id,CustomUserDetails user) {
         Account actor=access.require(user); Claim c=office(id); participant(c,actor);
-        return view(c,true,actor.getRole()==MANAGER);
+        return view(c,true,actor.getRole()==APPROVER,actor.getId(),progress.of(c.getId()));
     }
     public Long submit(Submission request,List<MultipartFile> files,boolean counter,CustomUserDetails user) {
         new TransactionTemplate(transactions).executeWithoutResult(tx->validateSubmission(request,counter,user,false));
@@ -92,7 +85,7 @@ public class OfficeClaimService {
             }
             return new TransactionTemplate(transactions).execute(tx->{
                 Post post=validateSubmission(request,counter,user,true);
-                Account actor=counter?access.require(user,MANAGER):access.require(user);
+                Account actor=counter?access.require(user,APPROVER):access.require(user);
                 String contact=clean(request.claimantEmail());
                 Account claimant=counter?counterClaimant(request):actor;
                 if(counter) contact=claimant.getEmail();
@@ -102,7 +95,7 @@ public class OfficeClaimService {
                 if(name==null) throw bad("Nhập họ tên người yêu cầu nhận đồ.");
                 if(contact==null&&claimant!=null) contact=claimant.getEmail();
                 Claim c=Claim.office(post,claimant,actor,counter?"COUNTER":"ONLINE",name,
-                    contact==null?null:contact.toLowerCase(Locale.ROOT),clean(request.claimantPhone()),request.description(),request.evidenceNote());
+                    contact==null?null:contact.toLowerCase(Locale.ROOT),clean(request.claimantPhone()),request.description(),request.evidenceNote(),receipts.findByPostId(post.getId()).orElseThrow());
                 for(int i=0;i<validated.size();i++) {
                     var image=validated.get(i); String filename=files.get(i).getOriginalFilename();
                     if(filename!=null) { filename=filename.replace('\\','/'); filename=filename.substring(filename.lastIndexOf('/')+1); if(filename.length()>255) filename=filename.substring(filename.length()-255); }
@@ -116,13 +109,16 @@ public class OfficeClaimService {
         }
     }
     private Post validateSubmission(Submission r,boolean counter,CustomUserDetails user,boolean lock) {
-        Account actor=counter?access.require(user,MANAGER):access.require(user);
+        Account actor=counter?access.require(user,APPROVER):access.require(user);
         if(counter) counterClaimant(r);
         Post p=(lock?posts.findForClaimUpdate(r.postId()):posts.findById(r.postId())).orElseThrow(()->bad("Không tìm thấy bài đăng."));
         if(lock) em.refresh(p,LockModeType.PESSIMISTIC_WRITE);
         eligible(p);
         if(!"OPEN".equals(p.getStatus())||!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
-        if(!counter&&p.getAccount().getId().equals(actor.getId())) throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
+        Account claimant = counter ? counterClaimant(r) : actor;
+        if (claimant != null && (Objects.equals(p.getAccount().getId(), claimant.getId()) || (p.getCreatedBy() != null && Objects.equals(p.getCreatedBy().getId(), claimant.getId())))) {
+            throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
+        }
         return p;
     }
     private void eligible(Post p) {
@@ -136,7 +132,8 @@ public class OfficeClaimService {
     private record EmailCheck(@NotBlank @Email String email) {}
     public ReviewResult review(long id,Decision request,CustomUserDetails user) {
         Committed committed=new TransactionTemplate(transactions).execute(tx->{
-            Account actor=access.require(user,MANAGER); Claim c=locked(id); eligible(c.getPost()); version(c,request.expectedVersion());
+            Account actor=access.require(user,APPROVER); Claim c=locked(id); eligible(c.getPost()); version(c,request.expectedVersion());
+            if(c.getClaimant()!=null && c.getClaimant().getId().equals(actor.getId())) throw bad("Không được tự xét duyệt hồ sơ nhận đồ của mình.");
             if(!Set.of("PENDING","NEEDS_INFO").contains(c.getStatus())) throw bad("Hồ sơ này đã được xử lý. Hãy tải lại.");
             if(!"PENDING".equals(c.getStatus())&&!"REJECTED".equals(request.decision())) throw bad("Chờ bổ sung thông tin trước khi duyệt.");
             String previous=c.getStatus(); Appointment a=null;
@@ -168,7 +165,7 @@ public class OfficeClaimService {
     }
     public ReviewResult resend(long id,CustomUserDetails user) {
         new TransactionTemplate(transactions).executeWithoutResult(tx->{
-            access.require(user,MANAGER); Claim c=locked(id); eligible(c.getPost());
+            access.require(user,APPROVER); Claim c=locked(id); eligible(c.getPost());
             if(!"APPROVED".equals(c.getStatus())) throw bad("Yêu cầu chưa được duyệt.");
             Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(id,"SCHEDULED").orElseThrow(()->bad("Chưa có lịch hẹn."));
             if(!a.getScheduledAt().isAfter(OffsetDateTime.now())) throw bad("Lịch hẹn đã qua, không gửi lại email cũ.");
@@ -189,16 +186,16 @@ public class OfficeClaimService {
         Claim c=claims.findForUpdate(id).orElseThrow(); em.refresh(c,LockModeType.PESSIMISTIC_WRITE);
         if(!"OFFICE".equals(c.getClaimType())) throw new AppException(ErrorCode.CLAIM_NOT_FOUND); return c;
     }
-    private void participant(Claim c,Account actor) { if(actor.getRole()!=MANAGER&&(c.getClaimant()==null||!c.getClaimant().getId().equals(actor.getId()))) throw new AppException(ErrorCode.FORBIDDEN); }
+    private void participant(Claim c,Account actor) { if(actor.getRole()!=APPROVER&&(c.getClaimant()==null||!c.getClaimant().getId().equals(actor.getId()))) throw new AppException(ErrorCode.FORBIDDEN); }
     private void version(Claim c,Long v) { if(v==null||v!=c.getVersion()) throw new AppException(ErrorCode.CLAIM_STALE); }
-    private ClaimView view(Claim c,boolean detail,boolean manager) {
+    private ClaimView view(Claim c,boolean detail,boolean reviewer,long actorId,OfficeClaimProgress.Progress phase) {
         var appointment=detail?appointments.findFirstByClaim_IdOrderByIdDesc(c.getId()).map(a->new AppointmentView(a.getId(),a.getScheduledAt(),a.getLocation(),a.getNote(),a.getStatus(),a.getResponseStatus(),a.getResponseDeadline(),a.getCancellationReason())).orElse(null):null;
         return new ClaimView(c.getId(),c.getPost().getId(),c.getPost().getTitle(),c.getStatus(),c.getSubmissionChannel(),
             c.getClaimant()==null?null:c.getClaimant().getId(),c.getClaimantName(),detail?recipient(c):null,detail?c.getClaimantPhone():null,
-            person(c.getCreatedBy()),detail?c.getDescription():null,detail?c.getEvidenceNote():null,detail&&manager?c.getPost().getPrivateIdentifiers():null,c.getVersion(),c.getCreatedAt(),
-            detail&&manager?receipts.findByPostId(c.getPost().getId()).map(management::receiptView).orElse(null):null,
+            person(c.getCreatedBy()),detail?c.getDescription():null,detail?c.getEvidenceNote():null,detail&&reviewer?c.getPost().getPrivateIdentifiers():null,c.getVersion(),c.getCreatedAt(),
+            detail&&reviewer?receipts.findByPostId(c.getPost().getId()).map(management::receiptView).orElse(null):null,
             detail?c.getEvidence().stream().map(e->new ClaimDetailDto.EvidenceDto(e.getId(),storage.readUrl(e.getStorageKey(),null),e.getOriginalName(),e.getMimeType(),e.getSizeBytes())).toList():List.of(),
-            detail?activities.findByClaim_IdOrderByCreatedAtAscIdAsc(c.getId()).stream().map(e->new ClaimDetailDto.ActivityDto(e.getId(),e.getAction(),person(e.getActor()),e.getFromStatus(),e.getToStatus(),e.getReason(),e.getCreatedAt())).toList():List.of(),appointment);
+            detail?activities.findByClaim_IdOrderByCreatedAtAscIdAsc(c.getId()).stream().map(e->new ClaimDetailDto.ActivityDto(e.getId(),e.getAction(),person(e.getActor()),e.getFromStatus(),e.getToStatus(),e.getReason(),e.getCreatedAt())).toList():List.of(),appointment,detail?c.getAnswers().stream().map(a->new AnswerView(a.getId(),a.getQuestionLabel(),a.getAnswerText(),a.getSectionTitle())).toList():List.of(),phase.stage(),phase.scheduledAt(),reviewer&&(c.getClaimant()==null||c.getClaimant().getId()!=actorId)&&Set.of("PENDING","NEEDS_INFO").contains(c.getStatus()),c.getClaimant()!=null&&c.getClaimant().getId()==actorId);
     }
 }
 

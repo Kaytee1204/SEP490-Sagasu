@@ -56,6 +56,8 @@ public class PostManagementService {
     private final EntityManager entityManager;
     private final ItemReceiptRepository receipts;
     private final com.example.base.repository.ClaimRepository claims;
+    // DaiHV integration: the office module owns physical custody transfer.
+    private final com.example.base.service.office.OfficeTransferService officeTransfers;
 
     /** UC18: page IDs first, then load images/category without collection-fetch pagination. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -147,16 +149,7 @@ public class PostManagementService {
     /** Request only; physical receipt and Approver decisions belong to the later intake flow. */
     @Transactional
     public CreatedPostDto requestOfficeHandover(long postId, CustomUserDetails user) {
-        long ownerId = PostAccessPolicy.requireAuthor(user);
-        Post post = lockOwnedPost(postId, ownerId);
-        accounts.findActiveAccountForPostCreation(ownerId)
-                .orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN));
-        requireNoReceipt(post);
-        if (!post.canRequestOfficeHandover()) throw new AppException(ErrorCode.POST_OFFICE_HANDOVER_UNAVAILABLE);
-        if (claims.existsByPost_IdAndStatusIn(postId, Set.of("PENDING", "APPROVED"))) {
-            throw new AppException(ErrorCode.POST_OFFICE_HANDOVER_CLAIM_BLOCKED);
-        }
-        post.requestOfficeHandover();
+        Post post = officeTransfers.request(postId, user);
         posts.flush();
         return new CreatedPostDto(post.getId(), post.getPostType(), post.getStatus(), post.getModerationStatus());
     }

@@ -12,6 +12,8 @@ import java.time.format.DateTimeFormatter;
 
 @Service
 public class AppointmentEmailService {
+    public record IntakeMail(long transferId, String recipient, String name, String title,
+                             OffsetDateTime time, String location, String note) {}
     private final JavaMailSender sender;
     private final String from, frontendUrl;
     public AppointmentEmailService(JavaMailSender sender, @Value("${spring.mail.username:}") String from,
@@ -60,6 +62,36 @@ public class AppointmentEmailService {
             helper.setText(plain,body); sender.send(message); return true;
         } catch(Exception failure) {
             LoggerFactory.getLogger(getClass()).warn("Office appointment mail failed for claim {} ({})",mail.claimId(),failure.getClass().getSimpleName()); return false;
+        }
+    }
+    public boolean sendIntake(IntakeMail mail, String token, OffsetDateTime deadline) {
+        String link=frontendUrl+"/van-phong/hen-giao-do#token="+token;
+        String confirm=link+"&decision=CONFIRM", decline=link+"&decision=DECLINE";
+        String plain="Xin chào "+mail.name()+",\nVăn phòng mời bạn mang đồ đến bàn giao.\nĐồ vật: "+mail.title()
+                +"\nThời gian: "+date(mail.time())+" (UTC+7)\nĐịa điểm: "+mail.location()
+                +"\nHạn phản hồi: "+date(deadline)+" (UTC+7)\nĐồng ý: "+confirm+"\nTừ chối: "+decline
+                +"\nVăn phòng chỉ nhận trách nhiệm giữ đồ sau khi kiểm tra và nhận đồ thực tế."
+                +"\nNếu chưa sắp xếp được, hãy từ chối lịch để văn phòng hẹn lại. Không cần đăng nhập."
+                +(mail.note()==null?"":"\nLời nhắn: "+mail.note());
+        String html="""
+            <!doctype html><html lang="vi"><body style="font-family:Arial,sans-serif;background:#f1f5f4;padding:24px;color:#183b3b">
+            <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:16px">
+            <p style="color:#0f766e">VĂN PHÒNG · SAGASU</p><h1>Lịch mang đồ đến văn phòng</h1>
+            <p>Xin chào %s,</p><p>Cảm ơn bạn đã giữ giúp đồ thất lạc. Bạn có thể mang đồ đến theo lịch sau:</p>
+            <p><strong>%s</strong></p><p>Thời gian: %s (UTC+7)</p><p>Địa điểm: %s</p><p>%s</p>
+            <p>Vui lòng phản hồi trước %s (UTC+7).</p>
+            <p><a href="%s" style="display:inline-block;background:#0f766e;color:white;padding:14px;border-radius:8px">Đồng ý lịch hẹn</a></p>
+            <p><a href="%s">Tôi chưa sắp xếp được</a></p>
+            <p>Văn phòng sẽ kiểm tra và xác nhận khi bạn mang đồ đến. Nếu từ chối hoặc chưa phản hồi trong 12 giờ,
+            yêu cầu tiếp nhận vẫn được giữ để văn phòng hẹn lại.</p><p>Không cần đăng nhập. Không chia sẻ liên kết này.</p></div></body></html>
+            """.formatted(h(mail.name()),h(mail.title()),h(date(mail.time())),h(mail.location()),h(mail.note()),h(date(deadline)),h(confirm),h(decline));
+        try {
+            var message=sender.createMimeMessage();var helper=new MimeMessageHelper(message,true,"UTF-8");
+            if(!from.isBlank())helper.setFrom(from);
+            helper.setTo(mail.recipient());helper.setSubject("[Sagasu] Lịch mang đồ đến văn phòng — yêu cầu #"+mail.transferId());
+            helper.setText(plain,html);sender.send(message);return true;
+        } catch(Exception failure) {
+            LoggerFactory.getLogger(getClass()).warn("Intake appointment mail failed for transfer {} ({})",mail.transferId(),failure.getClass().getSimpleName());return false;
         }
     }
 }

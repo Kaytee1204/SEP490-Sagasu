@@ -28,4 +28,12 @@ public class ItemReceiptImage {
         createdAt = OffsetDateTime.now();
     }
     void attachTo(ItemReceipt receipt) { this.receipt = receipt; }
+    // DaiHV integration: retain existing public photos in the transfer receipt without re-uploading.
+    public static ItemReceiptImage fromTransferredPost(PostImage image) {
+        ItemReceiptImage result = new ItemReceiptImage();
+        result.storageKey = image.getStorageKey(); result.imageUrl = image.getImageUrl();
+        result.sortOrder = image.getSortOrder(); result.mimeType = image.getMimeType();
+        result.sizeBytes = image.getSizeBytes(); result.createdAt = OffsetDateTime.now();
+        return result;
+    }
 }

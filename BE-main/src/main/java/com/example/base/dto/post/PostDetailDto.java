@@ -14,7 +14,8 @@ public record PostDetailDto(
         BigDecimal latitude, BigDecimal longitude, OffsetDateTime eventAt,
         String status, String custodyMode, OffsetDateTime createdAt,
         List<ImageDto> images, boolean canEditOwnPost, String moderationStatus,
-        String authorName, OfficeReceiptDto officeReceipt, boolean canRequestOfficeHandover) {
+        String authorName, OfficeReceiptDto officeReceipt, boolean canRequestOfficeHandover,
+        boolean isOwner) {
     public record ImageDto(Long id, String url, int sortOrder) {
     }
 }

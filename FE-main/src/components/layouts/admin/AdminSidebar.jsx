@@ -72,7 +72,8 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <Icon size={17} className={active ? 'text-teal-400' : 'text-slate-400'} />
-                    <span className="truncate">{item.label}</span>
+                    {/* DaiHV: allow the office intake label to wrap instead of hiding its meaning. */}
+                    <span className={item.wrapLabel ? 'whitespace-normal leading-5' : 'truncate'}>{item.label}</span>
                   </div>
                   {hasBadge && (
                     <span className="text-[11px] font-bold bg-rose-500 text-white px-2 py-0.5 rounded-full min-w-5 text-center">

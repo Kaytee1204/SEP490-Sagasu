@@ -11,7 +11,7 @@ export function postClaimType(post) {
   return null;
 }
 export const canSubmitPostClaim = post => Boolean(postClaimType(post))
-  && post.status === 'OPEN' && post.moderationStatus === 'VISIBLE';
+  && post.status === 'OPEN' && post.moderationStatus === 'VISIBLE' && !post.isOwner && !post.canEditOwnPost;
 export function evidenceUrl(value) {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; }
   catch { return null; }

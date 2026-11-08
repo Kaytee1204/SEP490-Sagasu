@@ -131,7 +131,7 @@ public class Post {
         this.description = description.strip();
         this.locationText = locationText.strip();
         this.eventAt = eventAt;
-        this.handoverRequestedAt = null;
+        // DaiHV integration: editing content must not cancel a pending custody request.
         this.updatedAt = OffsetDateTime.now();
         // Rejected content must still be reviewed when resubmitted.
         boolean officeHandover = "FOUND".equals(postType) && "OFFICE".equals(custodyMode);
@@ -164,19 +164,32 @@ public class Post {
     public void markReturnedFromP2pHandover() { status="RETURNED";updatedAt=OffsetDateTime.now(); }
 
     public boolean canRequestOfficeHandover() {
-        return "FOUND".equals(postType) && "P2P".equals(custodyMode) && "OPEN".equals(status)
+        // DaiHV integration: an approved P2P claim may be transferred for office re-review.
+        return "FOUND".equals(postType) && "P2P".equals(custodyMode) && java.util.Set.of("OPEN", "RESERVED").contains(status)
+                && handoverRequestedAt == null
                 && "VISIBLE".equals(moderationStatus) && deletedAt == null;
     }
 
     public void requestOfficeHandover() {
-        custodyMode = "OFFICE";
-        moderationStatus = "PENDING";
-        handoverRequestedAt = null;
-        moderatedBy = null;
-        moderatedAt = null;
-        moderationNote = null;
+        // DaiHV integration: custody changes only after physical receipt, not on request.
+        handoverRequestedAt = OffsetDateTime.now();
         updatedAt = OffsetDateTime.now();
     }
+
+    public void cancelOfficeRequest() {
+        // Legacy requests switched custody before receipt; restore the actual finder custody.
+        if ("OFFICE".equals(custodyMode)) {
+            custodyMode = "P2P";
+            if ("PENDING".equals(moderationStatus)) moderationStatus = "VISIBLE";
+        }
+        handoverRequestedAt = null; updatedAt = OffsetDateTime.now();
+    }
+    public void receiveAtOffice() {
+        custodyMode = "OFFICE"; status = "OPEN"; handoverRequestedAt = null;
+        if ("PENDING".equals(moderationStatus)) moderationStatus = "VISIBLE";
+        updatedAt = OffsetDateTime.now();
+    }
+    public void markReturnedFromOffice() { status = "RETURNED"; updatedAt = OffsetDateTime.now(); }
 
     @PrePersist
     void onCreate() {

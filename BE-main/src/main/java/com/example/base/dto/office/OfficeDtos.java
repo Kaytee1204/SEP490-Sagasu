@@ -32,10 +32,12 @@ public final class OfficeDtos {
         @NotBlank @Size(max=2000) String information) {}
     public record AppointmentView(Long id, OffsetDateTime scheduledAt, String location, String note, String status,
         String responseStatus, OffsetDateTime responseDeadline, String cancellationReason) {}
+    public record AnswerView(Long id, String question, String answer, String section) {}
     public record ClaimView(Long id, Long postId, String postTitle, String status, String channel,
         Long claimantId, String claimantName, String claimantEmail, String claimantPhone, String createdBy,
         String description, String evidenceNote, String privateIdentifiers, long version,
         OffsetDateTime createdAt, ReceiptView receipt, List<ClaimDetailDto.EvidenceDto> evidence,
-        List<ClaimDetailDto.ActivityDto> activities, AppointmentView appointment) {}
+        List<ClaimDetailDto.ActivityDto> activities, AppointmentView appointment, List<AnswerView> answers,
+        String stage, OffsetDateTime collectionAt, boolean canReview, boolean ownRequest) {}
     public record ReviewResult(Long id, String status, String emailStatus) {}
 }

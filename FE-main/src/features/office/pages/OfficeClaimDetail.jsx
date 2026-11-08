@@ -11,6 +11,7 @@ import Header from "../components/Header";
 import Notice from "../components/Notice";
 import LoadState from "../components/LoadState";
 import ReceiptInfo from "../components/ReceiptInfo";
+import OfficeReturnPanel from "../components/OfficeReturnPanel";
 import "../Office.css";
 
 export default function OfficeClaimDetail({ mine = false }) {
@@ -42,7 +43,7 @@ export default function OfficeClaimDetail({ mine = false }) {
     <div className="office-page">
       <Link
         className="of-back"
-        to={mine ? "/van-phong/claims" : "/admin/office-claims"}
+        to={mine ? "/van-phong/claims" : "/approver/office-claims"}
       >
         ← Danh sách yêu cầu
       </Link>
@@ -51,13 +52,14 @@ export default function OfficeClaimDetail({ mine = false }) {
         {claim && (
           <>
             <Header
-              title={`Hồ sơ #${claim.id}`}
+              title={`Yêu cầu nhận lại đồ #${claim.id}`}
               description={`${claim.postTitle} · Gửi lúc ${date(claim.createdAt)}`}
             >
               <Badge value={claim.status} />
               <Badge value={claim.channel} />
             </Header>
-            <div className="of-detail-grid">
+            {!mine && claim.ownRequest && ["PENDING", "NEEDS_INFO"].includes(claim.status) && <Notice>Đây là yêu cầu nhận đồ của bạn. Nhờ một nhân viên khác xét duyệt nhé.</Notice>}
+            <div className="of-detail-grid of-claim-grid">
               <div>
                 <section className="of-panel">
                   <h2>Thông tin người khai</h2>
@@ -83,6 +85,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                 <section className="of-panel">
                   <h2>Căn cứ sở hữu</h2>
                   <p className="of-prose">{claim.description}</p>
+                  {!!claim.answers?.length && <dl className="of-question-answers">{claim.answers.map((answer) => <div key={answer.id}><dt>{answer.question}</dt><dd className="of-prose">{answer.answer}</dd></div>)}</dl>}
                   {claim.evidenceNote && (
                     <div className="of-callout of-prose">
                       {claim.evidenceNote}
@@ -129,8 +132,15 @@ export default function OfficeClaimDetail({ mine = false }) {
                             REQUEST_INFO: "Yêu cầu bổ sung",
                             RESUBMIT: "Bổ sung thông tin",
                             CANCEL: "Hủy hồ sơ",
-                            INVITE_CONFIRM: "Đồng ý lịch hẹn qua email",
-                            INVITE_DECLINE: "Từ chối lịch hẹn qua email",
+                            TRANSFER_OFFICE: "Chuyển trách nhiệm sang văn phòng",
+                            RESCHEDULE: "Đổi lịch hẹn",
+                            OFFICE_CANCEL: "Hủy lịch và thu hồi duyệt",
+                            HANDOVER: "Ghi nhận giao đồ",
+                            CONFIRM_RECEIPT: "Hoàn tất trao trả",
+                            AUTO_CLOSE: "Đóng hồ sơ do đồ đã được trao trả",
+                            REPORT_ISSUE: "Phản ánh việc nhận đồ",
+                            INVITE_CONFIRM: "Đồng ý lịch hẹn",
+                            INVITE_DECLINE: "Từ chối lịch hẹn",
                             INVITE_EXPIRE:
                               "Hết hạn phản hồi — hệ thống tự động",
                           }[a.action] || a.action}
@@ -148,7 +158,11 @@ export default function OfficeClaimDetail({ mine = false }) {
                 </section>
               </div>
               <aside className="of-sticky">
-                {claim.appointment && (
+                <OfficeReturnPanel claim={claim} mine={mine} onChanged={(result) => {
+                  setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã đổi lịch, nhưng chưa gửi được email. Hãy gửi lại thư lịch hẹn." : "Đã cập nhật tiến trình trao trả." });
+                  state.reload();
+                }} />
+                {claim.appointment && !(mine && claim.status === "APPROVED") && (
                   <section className="of-panel of-appointment">
                     <CalendarDays size={26} color="#0f766e" />
                     <h2 style={{ marginTop: 12 }}>Lịch hẹn nhận đồ</h2>
@@ -165,7 +179,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                             "Chưa gửi được lời mời; thời hạn 12 giờ chưa bắt đầu.",
                           LEGACY: "Lịch cũ chưa áp dụng phản hồi qua email.",
                           PENDING:
-                            "Đang chờ phản hồi qua liên kết trong email.",
+                            "Đang chờ người nhận phản hồi trên hệ thống hoặc qua email.",
                           CONFIRMED: "Người nhận đã đồng ý lịch hẹn.",
                           DECLINED: "Người nhận đã từ chối lịch hẹn.",
                           EXPIRED:
@@ -173,7 +187,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                         }[claim.appointment.responseStatus]
                       }
                     </Notice>
-                    {claim.appointment.responseDeadline && (
+                    {claim.appointment.status === "SCHEDULED" && claim.appointment.responseStatus === "PENDING" && claim.appointment.responseDeadline && (
                       <p>
                         Hạn phản hồi:{" "}
                         <strong>
@@ -189,10 +203,10 @@ export default function OfficeClaimDetail({ mine = false }) {
                     {claim.appointment.note && (
                       <p className="of-prose">{claim.appointment.note}</p>
                     )}
-                    <p className="of-muted">
+                    {claim.appointment.status === "SCHEDULED" && <p className="of-muted">
                       Mang theo giấy tờ và bằng chứng để xác minh trực tiếp. Yêu
                       cầu được duyệt chưa có nghĩa đồ đã trao trả.
-                    </p>
+                    </p>}
                     {!mine &&
                       claim.appointment.status === "SCHEDULED" &&
                       claim.appointment.responseStatus !== "CONFIRMED" && (
@@ -208,7 +222,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                       )}
                   </section>
                 )}
-                {!mine && ["PENDING", "NEEDS_INFO"].includes(claim.status) && (
+                {!mine && claim.canReview && (
                   <ReviewForm
                     key={`${claim.id}:${claim.version}`}
                     claim={claim}

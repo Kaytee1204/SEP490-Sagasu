@@ -45,12 +45,13 @@ public class PostMapper {
         var category = post.getCategory();
         var images = post.getImages().stream().map(image -> new PostDetailDto.ImageDto(image.getId(),
                 storage.readUrl(image.getStorageKey(), image.getImageUrl()), image.getSortOrder())).toList();
-        boolean isOwner = viewerId != null && viewerId.equals(post.getAccount().getId());
+        boolean isOwner = viewerId != null && (viewerId.equals(post.getAccount().getId())
+                || (post.getCreatedBy() != null && viewerId.equals(post.getCreatedBy().getId())));
         return new PostDetailDto(post.getId(), post.getPostType(), post.getTitle(), post.getDescription(),
                 category.getCategoryId(), category.getName(), post.getLocationText(), post.getLatitude(),
                 post.getLongitude(),
                 post.getEventAt(), post.getStatus(), post.getCustodyMode(), post.getCreatedAt(), images,
                 isOwner && officeReceipt == null, post.getModerationStatus(),
-                post.getCreatedBy().getFullName(), officeReceipt, canRequestOfficeHandover);
+                post.getCreatedBy().getFullName(), officeReceipt, canRequestOfficeHandover, isOwner);
     }
 }

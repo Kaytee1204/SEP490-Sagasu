@@ -25,17 +25,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class OfficeClaimController {
 
     private final OfficeClaimService service;
-    @GetMapping("/claimants") @PreAuthorize("hasRole('MANAGER')")
-    public ApiResponse<List<ClaimantOption>> claimants(@RequestParam String q,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.findClaimants(q,user)); }
-    @GetMapping @PreAuthorize("hasRole('MANAGER')")
-    public ApiResponse<PageData<ClaimView>> list(@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="ALL") String status,@RequestParam(defaultValue="") String q,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.list(page,status,q,false,user)); }
-    @GetMapping("/mine") public ApiResponse<PageData<ClaimView>> mine(@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="ALL") String status,@RequestParam(defaultValue="") String q,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.list(page,status,q,true,user)); }
-    @GetMapping("/{id}") public ApiResponse<ClaimView> detail(@PathVariable long id,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.detail(id,user)); }
-    @PostMapping(value="/counter",consumes="multipart/form-data") @PreAuthorize("hasRole('MANAGER')")
+    // DaiHV: all office claim processing belongs to Approver (updated UC assignment).
+    @GetMapping("/claimants") @PreAuthorize("hasRole('APPROVER')")
+    public ApiResponse<List<ClaimantOption>> claimants(@RequestParam(name="q") String q,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.findClaimants(q,user)); }
+    @GetMapping @PreAuthorize("hasRole('APPROVER')")
+    public ApiResponse<PageData<ClaimView>> list(@RequestParam(name="page", defaultValue="1") int page,@RequestParam(name="status", defaultValue="ALL") String status,@RequestParam(name="q", defaultValue="") String q,@RequestParam(name="stage", defaultValue="ALL") String stage,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.list(page,status,q,stage,false,user)); }
+    @GetMapping("/mine") public ApiResponse<PageData<ClaimView>> mine(@RequestParam(name="page", defaultValue="1") int page,@RequestParam(name="status", defaultValue="ALL") String status,@RequestParam(name="q", defaultValue="") String q,@RequestParam(name="stage", defaultValue="ALL") String stage,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.list(page,status,q,stage,true,user)); }
+    @GetMapping("/{id}") public ApiResponse<ClaimView> detail(@PathVariable("id") long id,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.detail(id,user)); }
+    @PostMapping(value="/counter",consumes="multipart/form-data") @PreAuthorize("hasRole('APPROVER')")
     public ApiResponse<Long> counter(@Valid @RequestPart("data") Submission request,@RequestPart(value="images",required=false) List<MultipartFile> files,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.submit(request,files,true,user)); }
     @PostMapping(consumes="multipart/form-data") public ApiResponse<Long> online(@Valid @RequestPart("data") Submission request,@RequestPart(value="images",required=false) List<MultipartFile> files,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.submit(request,files,false,user)); }
-    @PostMapping("/{id}/review") @PreAuthorize("hasRole('MANAGER')") public ApiResponse<ReviewResult> review(@PathVariable long id,@Valid @RequestBody Decision r,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.review(id,r,user)); }
-    @PostMapping("/{id}/appointment-email") @PreAuthorize("hasRole('MANAGER')") public ApiResponse<ReviewResult> resend(@PathVariable long id,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.resend(id,user)); }
-    @PostMapping("/{id}/supplement") public ApiResponse<Void> supplement(@PathVariable long id,@Valid @RequestBody Supplement r,@AuthenticationPrincipal CustomUserDetails user) { service.supplement(id,r,user); return ApiResponse.ok(null); }
+    @PostMapping("/{id}/review") @PreAuthorize("hasRole('APPROVER')") public ApiResponse<ReviewResult> review(@PathVariable("id") long id,@Valid @RequestBody Decision r,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.review(id,r,user)); }
+    @PostMapping("/{id}/appointment-email") @PreAuthorize("hasRole('APPROVER')") public ApiResponse<ReviewResult> resend(@PathVariable("id") long id,@AuthenticationPrincipal CustomUserDetails user) { return ApiResponse.ok(service.resend(id,user)); }
+    @PostMapping("/{id}/supplement") public ApiResponse<Void> supplement(@PathVariable("id") long id,@Valid @RequestBody Supplement r,@AuthenticationPrincipal CustomUserDetails user) { service.supplement(id,r,user); return ApiResponse.ok(null); }
 }
 

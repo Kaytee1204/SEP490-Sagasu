@@ -28,7 +28,8 @@ public class Claim {
     @Column(name = "claimant_email", length = 255) private String claimantEmail;
     @Column(name = "claimant_phone", length = 40) private String claimantPhone;
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "item_receipt_id", updatable = false) private ItemReceipt receipt;
+    // DaiHV integration: custody transfer attaches an existing P2P dossier to its office receipt.
+    @JoinColumn(name = "item_receipt_id") private ItemReceipt receipt;
     @Column(nullable = false, columnDefinition = "text") private String description;
     @Column(name = "evidence_note", columnDefinition = "text") private String evidenceNote;
     @Column(nullable = false, length = 16) private String status = "PENDING";
@@ -71,13 +72,22 @@ public class Claim {
     public List<ClaimAnswer> getAnswers() { return Collections.unmodifiableList(answers); }
     public void review(String decision) { status = decision; }
     public static Claim office(Post post, Account claimant, Account author, String channel,
-                               String name, String email, String phone, String description, String note) {
-        Claim claim = submit(post, claimant, description, note);
+                               String name, String email, String phone, String description, String note, ItemReceipt receipt) {
+        Claim claim = submit(post, claimant, description, note, java.util.Objects.requireNonNull(receipt));
         claim.claimType = "OFFICE"; claim.submissionChannel = channel; claim.createdBy = author;
         claim.claimantName = name; claim.claimantEmail = email; claim.claimantPhone = phone;
         return claim;
     }
     public void contactEmail(String email) { claimantEmail = email; }
+    public void transferToOffice(ItemReceipt receipt) {
+        this.receipt = receipt; claimType = "OFFICE";
+        if ("APPROVED".equals(status)) status = "PENDING";
+        if (claimant != null) {
+            if (claimantName == null) claimantName = claimant.getFullName();
+            if (claimantEmail == null) claimantEmail = claimant.getEmail().strip().toLowerCase(java.util.Locale.ROOT);
+        }
+        touchWorkflow();
+    }
     public void cancel() { status = "CANCELLED"; cancelledAt = OffsetDateTime.now(); }
     @PrePersist void onCreate() { createdAt = OffsetDateTime.now(); updatedAt = createdAt; }
     @PreUpdate void onUpdate() { updatedAt = OffsetDateTime.now(); }

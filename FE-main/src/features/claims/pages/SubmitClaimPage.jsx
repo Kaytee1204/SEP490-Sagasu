@@ -40,7 +40,7 @@ function ClaimForm({ postId, retryId }) {
       .then(([post, old, questionnaire]) => {
         if (cancelled) return;
         let problem = !canSubmitPostClaim(post) ? 'Bài chưa nhận claim: cần là bài P2P hoặc đồ đã được phòng ban xác nhận tiếp nhận, đang hiển thị và còn mở.' : '';
-        if (post.canEditOwnPost) problem = 'Bạn không thể claim bài đăng của chính mình.';
+        if (post.isOwner || post.canEditOwnPost) problem = 'Bạn không thể claim bài đăng của chính mình.';
         if (old && (String(old.postId) !== postId || !old.canRetry)) problem = 'Hồ sơ này chưa được phép gửi lại, hoặc bài không còn nhận claim.';
         setLoaded({ post, old, questionnaire, problem });
       });
