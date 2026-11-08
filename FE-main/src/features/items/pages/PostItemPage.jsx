@@ -1,14 +1,13 @@
+import '@/features/workspace/Workspace.css';
 import { useState, useRef, useEffect } from 'react';
 import { Link, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import StepIndicator from '../components/post/StepIndicator';
 import StepImagesUpload from '../components/post/StepImagesUpload';
 import StepDetailsForm from '../components/post/StepDetailsForm';
 import StepReview from '../components/post/StepReview';
 import PostTypeSelector from '../components/post/PostTypeSelector';
 import { getPostCategories, createLostPost, createFoundPost } from '../api/postApi';
 
-const STEPS = ['Hình ảnh', 'Thông tin', 'Xác nhận'];
 
 export default function PostItemPage() {
   const [params] = useSearchParams();
@@ -16,10 +15,8 @@ export default function PostItemPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const fileInputRef = useRef(null);
-  const detailsRef = useRef(null);
   const previews = useRef([]);
   const inFlight = useRef(false);
-  const [step, setStep] = useState(0);
   const [categories, setCategories] = useState(null);
   const [categoryError, setCategoryError] = useState('');
   const [categoryAttempt, setCategoryAttempt] = useState(0);
@@ -29,6 +26,22 @@ export default function PostItemPage() {
   const [created, setCreated] = useState(null);
   const [formData, setFormData] = useState({ itemName: '', description: '', categoryId: '', date: '', time: '', location: '' });
   const isFound = params.get('type') === 'found' || location.state?.type === 'found' || location.pathname === '/dang-tin-nhat-duoc';
+
+  const draftKey = `sagasu-post-draft-${user?.id}`;
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  useEffect(() => {
+    try {
+      const draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null');
+      if (draft && typeof draft === 'object') setFormData(current => Object.fromEntries(
+        Object.entries(current).map(([key, value]) => [key, typeof draft[key] === 'string' ? draft[key] : value])
+      ));
+    } catch { /* Draft storage is optional. */ }
+    setDraftLoaded(true);
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftLoaded || created) return;
+    try { sessionStorage.setItem(draftKey, JSON.stringify(formData)); } catch { /* Storage may be unavailable. */ }
+  }, [draftKey, draftLoaded, formData, created]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,16 +83,6 @@ export default function PostItemPage() {
     return '';
   }
 
-  function next() {
-    if (step === 1) {
-      if (!detailsRef.current.reportValidity()) return;
-      const validation = validateDetails();
-      if (validation) return setError(validation);
-    }
-    setError('');
-    setStep(value => value + 1);
-  }
-
   async function submit() {
     if (inFlight.current) return;
     const validation = validateDetails();
@@ -94,6 +97,7 @@ export default function PostItemPage() {
         eventAt: `${formData.date}T${formData.time}:00+07:00`,
       }, images.map(image => image.file));
       setCreated(post);
+      try { sessionStorage.removeItem(draftKey); } catch { /* Storage may be unavailable. */ }
       previews.current.forEach(url => URL.revokeObjectURL(url));
       previews.current = [];
       setImages([]);
@@ -119,30 +123,27 @@ export default function PostItemPage() {
   </main>;
 
   const review = { ...formData, images: images.map(image => image.preview), categoryName: categories?.find(c => String(c.id) === formData.categoryId)?.name };
-  return <main style={{ background: 'var(--bg-canvas)', minHeight: '70vh', padding: '48px 0 80px' }}>
+  return <main className="post-create-page" style={{ background: 'var(--bg-canvas)', minHeight: '70vh', padding: '48px 0 80px' }}>
     <div className="container-sm">
+
       <h1 className="text-display-lg" style={{ textAlign: 'center' }}>{isFound ? 'Đăng tin nhặt được' : 'Đăng tin mất đồ'}</h1>
-      <p style={{ textAlign: 'center', marginBlock: 16 }}>Chia sẻ thông tin món đồ để cộng đồng hỗ trợ tìm kiếm và trao trả. Thời gian sử dụng giờ Việt Nam.</p>
-      <StepIndicator currentStep={step} steps={STEPS} />
+      <p style={{ textAlign: 'center', marginBlock: 16 }}>Điền thông tin và đăng bài. Các ô có dấu * là bắt buộc.</p>
+      <p className="claims-muted">Nội dung được lưu tạm trong phiên này. Khi mở lại trang, vui lòng chọn lại ảnh.</p>
       <div className="card" style={{ padding: 'clamp(16px, 4vw, 40px)' }}>
         {categoryError && <div role="alert"><p>{categoryError}</p><button type="button" className="btn btn-ghost" onClick={() => setCategoryAttempt(n => n + 1)}>Tải lại danh mục</button></div>}
         {!categories && !categoryError && <p role="status">Đang tải danh mục…</p>}
         {categories?.length === 0 && <p role="alert">Chưa có danh mục đang hoạt động để đăng bài.</p>}
         {error && <p role="alert" style={{ color: 'var(--status-lost)', marginBottom: 20 }}>{error}</p>}
-        <fieldset disabled={submitting} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-          {step === 0 && <PostTypeSelector postType={isFound ? 'found' : 'lost'}
-            onSelectType={type => navigate(type === 'found' ? '/dang-tin-nhat-duoc' : '/dang-tin', { state: null })} />}
-          {step === 0 && <StepImagesUpload images={review.images} fileInputRef={fileInputRef} onUpload={upload} onRemove={remove} />}
-          {step === 1 && <form ref={detailsRef} onSubmit={e => { e.preventDefault(); next(); }}>
+        <form onSubmit={event => { event.preventDefault(); submit(); }}>
+          <fieldset disabled={submitting} className="post-compose-fields">
+            <PostTypeSelector postType={isFound ? 'found' : 'lost'}
+              onSelectType={type => navigate(type === 'found' ? '/dang-tin-nhat-duoc' : '/dang-tin', { state: null })} />
             <StepDetailsForm formData={formData} postType={isFound ? 'found' : 'lost'} onChange={setFormData} categories={categories || []} />
-          </form>}
-          {step === 2 && <StepReview formData={review} postType={isFound ? 'found' : 'lost'} />}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', marginTop: 32 }}>
-            {step > 0 ? <button type="button" className="btn btn-ghost" onClick={() => { setStep(s => s - 1); setError(''); }}>Quay lại</button> : <span />}
-            {step < 2 ? <button type="button" className="btn btn-primary" disabled={!categories?.length || Boolean(categoryError)} onClick={next}>Tiếp tục</button>
-              : <button type="button" className="btn btn-primary" onClick={submit}>{submitting ? 'Đang đăng…' : 'Đăng bài'}</button>}
-          </div>
-        </fieldset>
+            <StepImagesUpload images={review.images} fileInputRef={fileInputRef} onUpload={upload} onRemove={remove} />
+            <details className="workflow-disclosure"><summary>Xem trước bài đăng</summary><StepReview formData={review} postType={isFound ? 'found' : 'lost'} /></details>
+            <button type="submit" className="btn btn-primary" disabled={!categories?.length || Boolean(categoryError)}>{submitting ? 'Đang đăng…' : 'Đăng tin'}</button>
+          </fieldset>
+        </form>
       </div>
     </div>
   </main>;

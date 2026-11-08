@@ -1,3 +1,4 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getPostCategories, getVisiblePosts } from '@/features/items/api/postApi';

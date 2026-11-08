@@ -184,7 +184,7 @@ export default function ChatThread({ chat }) {
         {row.location && <ChatLocation location={row.location} />}
         {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
         <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
-        {String(row.senderId)!==String(user.id)&&<ReportButton type="MESSAGE" id={row.id} label="Báo cáo tin nhắn"/>}
+        {String(row.senderId)!==String(user.id)&&<details className="workflow-menu"><summary aria-label="Thao tác tin nhắn">⋯</summary><div><ReportButton type="MESSAGE" id={row.id} targetLabel={row.body?.slice(0, 120) || "Tin nhắn đính kèm"} label="Báo cáo tin nhắn"/></div></details>}
         {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
           && <small>{row.readAt ? `Đã xem lúc ${receiptTime(row.readAt)}` : 'Đã xem'}</small>}
       </article>)}

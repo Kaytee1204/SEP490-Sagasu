@@ -1,3 +1,4 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { getPostForEdit, getPostCategories, updatePost } from '../api/postApi';
@@ -82,6 +83,7 @@ function Editor({ id, onReload }) {
     <div className="my-post-actions"><Link className="btn btn-primary" to={backUrl}>Về tin đăng của tôi</Link>
       <Link className="btn btn-ghost" to={`/chi-tiet/${id}`} state={{ from: backUrl }}>Xem bài đăng</Link></div></main>;
   return <main className="container-sm my-posts-page">
+
     <header className="my-posts-heading"><h1>Sửa bài đăng</h1><Link to={backUrl}>Về tin đăng của tôi</Link></header>
     {error&&<div role="alert"><p>{error}</p><button type="button" className="btn btn-ghost" disabled={saving} onClick={onReload}>Tải lại bài đăng</button></div>}
     {!loaded?!error&&<p role="status">Đang tải bài đăng…</p>:<form onSubmit={submit}>

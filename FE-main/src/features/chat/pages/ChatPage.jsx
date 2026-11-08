@@ -1,3 +1,4 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -34,10 +35,10 @@ function ChatPanel({ id }) {
     {!chat && !error && <p className="chat-empty">Đang tải cuộc trò chuyện…</p>}
     {chat && <><header className="chat-header"><Link className="chat-back" to="/tin-nhan">← Danh sách</Link>
       <h2>{chat.otherName || 'Thành viên'}</h2>
-      <ReportButton type="USER" id={chat.otherAccountId} label="Báo cáo tài khoản"/>
+      <details className="workflow-menu"><summary aria-label="Thao tác cuộc trò chuyện">⋯</summary><div><ReportButton type="USER" id={chat.otherAccountId} targetLabel={chat.otherName} label="Báo cáo tài khoản"/></div></details>
       <Link to={`/chi-tiet/${chat.postId}`}>{chat.postTitle}</Link>
-      <div className="chat-row-title"><Link to={`/bai-dang/${chat.postId}/claims/${chat.claimId}`}>Xem hồ sơ claim</Link>
-        <small className="chat-muted">{online ? 'Đã kết nối' : 'Đang kết nối lại…'}</small></div>
+      <div className="chat-row-title"><Link to={`/bai-dang/${chat.postId}/claims/${chat.claimId}#handover`}>Tiến trình nhận đồ</Link>
+        {!online && <small role="status" className="chat-muted">Đang kết nối lại…</small>}</div>
     </header><ChatThread chat={chat} /></>}
   </section>;
 }

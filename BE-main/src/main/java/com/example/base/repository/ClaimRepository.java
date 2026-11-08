@@ -27,7 +27,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     Page<Claim> findMine(@Param("actorId") long actorId, @Param("status") String status, Pageable pageable);
 
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})
-    @Query("select c from Claim c where c.claimType='P2P' and c.post.account.id=:finderId and (:status='ALL' or c.status=:status) order by c.createdAt desc, c.id desc")
+    @Query("select c from Claim c where c.claimType='P2P' and c.post.account.id=:finderId and (:status='ALL' or c.status=:status) order by case when c.status='PENDING' then 0 else 1 end, c.createdAt desc, c.id desc")
     Page<Claim> findReceived(@Param("finderId") long finderId, @Param("status") String status, Pageable pageable);
 
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})

@@ -1,3 +1,4 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -64,6 +65,7 @@ export default function MyPostsPage({ embedded = false }) {
   const Wrapper = embedded ? 'section' : 'main';
   return <Wrapper className={`my-posts-page ${embedded ? 'my-posts-embedded' : 'container'}`}
     aria-label={embedded ? 'Tin đăng của tôi' : undefined}>
+
     {!embedded && <header className="my-posts-heading"><h1>Tin đăng của tôi</h1></header>}
     <div className="my-posts-filters" aria-label="Lọc trạng thái bài đăng">
       {FILTERS.map(([key, label]) => <button key={key} className={`chip ${filter === key ? 'active' : ''}`}

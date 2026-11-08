@@ -19,15 +19,17 @@ export default function MyPostCard({ post, onDelete }) {
       </span>
       <h2><Link className="my-post-detail-link" to={`/chi-tiet/${post.id}`} state={fromState}>{post.title}</Link></h2>
       <p>{post.categoryName} · {post.locationText}</p>
-      <p><strong>{MODERATION[post.moderationStatus]}</strong> · {HANDLING[post.status]}</p>
-      <p>Đăng ngày {new Date(post.createdAt).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})}</p>
-      {post.editBlockedReason && <p className="my-post-note">Không thể sửa: {post.editBlockedReason}.</p>}
-      {post.deleteBlockedReason && <p className="my-post-note">Không thể xóa: {post.deleteBlockedReason}.</p>}
+      <p><strong>{post.moderationStatus === 'VISIBLE' ? HANDLING[post.status] : MODERATION[post.moderationStatus]}</strong></p>
+      <p>Đăng ngày {new Date(post.createdAt).toLocaleDateString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'})}</p>
     </div>
     <div className="my-post-actions">
-      {post.postType === 'FOUND' && <Link className="btn btn-ghost" to={`/bai-dang/${post.id}/claims`} state={fromState}>Claim nhận đồ</Link>}
+      {post.postType === 'FOUND' && <Link className="btn btn-ghost" to={`/bai-dang/${post.id}/claims${post.pendingClaimCount > 0 ? '?claimStatus=PENDING' : ''}`} state={fromState}>{post.pendingClaimCount > 0 ? `${post.pendingClaimCount} yêu cầu chờ duyệt` : 'Xem yêu cầu nhận đồ'}</Link>}
+      <details className="workflow-menu"><summary aria-label="Thao tác bài đăng">⋯</summary><div>
       {post.canEdit && <Link className="btn btn-ghost" to={`/sua-tin/${post.id}`} state={fromState}>Sửa bài</Link>}
       {post.canDelete && <button type="button" className="btn btn-ghost" onClick={() => onDelete(post)}>Xóa bài</button>}
+      {post.editBlockedReason && <p className="my-post-note">Sửa bài: {post.editBlockedReason}</p>}
+      {post.deleteBlockedReason && <p className="my-post-note">Xóa bài: {post.deleteBlockedReason}</p>}
+      </div></details>
     </div>
   </article>;
 }

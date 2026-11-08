@@ -196,6 +196,7 @@ export default function Navbar() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const lastScrollYRef = useRef(0);
 
+  const keepHeaderVisible = location.pathname === '/tim-kiem';
   const isActive = (path) => location.pathname === path;
 
   // Close mobile drawer on navigation and ensure header is visible
@@ -239,9 +240,9 @@ export default function Navbar() {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    const visible = isHeaderVisible || mobileMenuOpen;
+    const visible = keepHeaderVisible || isHeaderVisible || mobileMenuOpen;
     document.documentElement.style.setProperty('--navbar-offset', visible ? '68px' : '0px');
-  }, [isHeaderVisible, mobileMenuOpen]);
+  }, [keepHeaderVisible, isHeaderVisible, mobileMenuOpen]);
 
   const handleMobileLogout = async () => {
     setMobileMenuOpen(false);
@@ -251,7 +252,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className={`navbar ${!isHeaderVisible && !mobileMenuOpen ? 'navbar--hidden' : ''}`}>
+      <nav className={`navbar ${!keepHeaderVisible && !isHeaderVisible && !mobileMenuOpen ? 'navbar--hidden' : ''}`}>
         <div className="container navbar-inner">
           {/* Logo Sagasu SVG */}
           <Link to="/" className="flex items-center gap-2 flex-shrink-0 group" aria-label="Sagasu">

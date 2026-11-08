@@ -311,7 +311,7 @@ public class ClaimService {
     private ClaimPageDto page(Page<Claim> result, int page, int size) {
         return new ClaimPageDto(result.getContent().stream().map(c -> new ClaimSummaryDto(c.getId(), c.getPost().getId(),
                 c.getPost().getTitle(), name(c.getClaimant()), name(c.getPost().getAccount()), c.getStatus(),
-                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType(),c.getCloseReason())).toList(), page, size, result.getTotalElements(), result.getTotalPages());
+                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType(),c.getCloseReason(), c.getDescription().substring(0, Math.min(c.getDescription().length(), 180)))).toList(), page, size, result.getTotalElements(), result.getTotalPages());
     }
     private String name(Account account) { return account.getFullName() == null || account.getFullName().isBlank() ? "Thành viên" : account.getFullName(); }
     private ClaimResultDto result(Claim claim) { return new ClaimResultDto(claim.getId(), claim.getPost().getId(), claim.getStatus(), claim.getVersion()); }

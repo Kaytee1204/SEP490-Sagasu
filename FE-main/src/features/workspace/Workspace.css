@@ -1,0 +1,92 @@
+:is(.claims-page,.reports-page,.my-posts-page,.post-create-page,.post-detail-page,.chat-shell) { line-height:1.6; }
+:is(.claims-page,.reports-page,.my-posts-page,.post-create-page,.post-detail-page,.chat-shell) .btn { min-height:44px; border-radius:12px; padding:10px 18px; font-weight:650; gap:8px; text-align:center; }
+:is(.claims-page,.reports-page,.my-posts-page,.post-create-page) :is(.btn-primary,.btn-accent) { background:#176e68; color:white; border:1px solid #176e68; box-shadow:0 3px 8px #176e6818; }
+:is(.claims-page,.reports-page,.my-posts-page,.post-create-page) :is(.btn-primary,.btn-accent):hover:not(:disabled) { background:#11534f; }
+:is(.claims-page,.reports-page,.my-posts-page,.post-create-page) .btn-ghost { background:white; border:1px solid #cbdedb; color:#285956; }
+:is(.claims-page,.reports-page,.my-posts-page,.post-create-page,.chat-shell) button:disabled { opacity:.5; cursor:not-allowed; }
+:is(.claims-page,.reports-page,.my-posts-page,.post-create-page,.chat-shell) :is(button,a,input,textarea,select,summary):focus-visible { outline:3px solid #259d90; outline-offset:3px; }
+:is(.claims-page,.reports-page,.my-posts-page) h1 { font-weight:750; letter-spacing:-.025em; font-size:clamp(1.5rem,3vw,2rem); }
+.claims-heading { align-items:flex-start; gap:20px; }
+.claims-filters[role=tablist] { padding:6px; border-radius:14px; background:#eaf1f0; width:fit-content; }
+.claims-filters[role=tablist] .chip { border:0; border-radius:10px; background:transparent; min-height:44px; }
+.claims-filters[role=tablist] .chip.active { background:white; color:#176e68; box-shadow:0 2px 6px #163d3512; }
+:is(.claims-filters,.my-posts-filters) .chip { min-height:40px; padding:8px 14px; }
+:is(.claim-panel,.claim-card,.report-card,.my-post-card) { border-color:#dce8e6; border-radius:18px; box-shadow:0 3px 14px #183c3505; }
+:is(.claim-panel,.report-card) { padding:clamp(18px,3vw,30px); }
+:is(.claim-card,a.report-card,.my-post-card):hover { border-color:#86bcb3; box-shadow:0 6px 20px #183c3510; }
+:is(.claim-panel,.report-card) h2 { color:#183c38; font-size:1.15rem; font-weight:700; }
+.claim-panel h3 { color:#60736f; font-size:.82rem; margin-top:24px; }
+.claim-panel > .claim-prose { font-size:1rem; line-height:1.75; }
+.claim-form { gap:24px; }
+.claim-form :is(textarea,select,input[type=date],input[type=time]) { border-color:#c7d9d5; padding:13px 14px; }
+.claim-form > .btn { align-self:flex-start; min-width:180px; }
+.claim-question { background:#f9fcfb; padding:20px; }
+.claim-evidence { grid-template-columns:repeat(auto-fill,minmax(110px,150px)); }
+.claim-evidence small { margin-top:6px; color:#61766f; font-size:.75rem; }
+.claim-history summary { cursor:pointer; font-weight:700; color:#315b53; padding:4px 0; }
+.claim-history[open] summary { margin-bottom:24px; }
+.claim-danger-zone { border-color:#efd8d4; background:#fffafa; }
+.claim-danger-zone .btn { color:#a43434; border-color:#e7bcbc; background:white; }
+.handover-panel { border:1px solid #a8d3c8; border-top:4px solid #237a6b; }
+.handover-panel > h2 { margin-bottom:20px; }
+.handover-panel .claim-notice { background:#edf7f2; padding:18px; }
+.report-trigger { min-height:40px; border:1px solid #dce5e3; background:white; margin-block:8px; padding:8px 12px; }
+.report-dialog footer { padding-top:16px; border-top:1px solid #e5eeeb; }
+.report-dialog footer .btn { min-height:44px; padding:10px 20px; }
+.report-card { text-decoration:none; }
+.reports-page > h1 { margin-bottom:8px; }
+.reports-page > .claims-filters { margin-top:24px; }
+.my-post-actions { align-self:center; }
+.my-post-card .my-post-actions .btn { min-width:100px; }
+.post-create-page .card { border:1px solid #dce8e6; border-radius:20px; box-shadow:0 10px 36px #173c3508; }
+.chat-shell { box-shadow:0 12px 40px #163d3510; }
+.chat-list { background:#fbfdfc; }
+.chat-list-row { border:1px solid transparent; min-height:90px; }
+.chat-list-row.active { background:#e6f3ef; border-color:#bddbd3; }
+.chat-header { background:white; padding:16px 22px; }
+.chat-header > a:not(.chat-back) { padding:8px 12px; background:#f1f7f5; border-radius:8px; font-size:.88rem; }
+.chat-header .report-trigger { align-self:flex-end; margin:0; }
+.chat-messages { padding:24px; gap:16px; background:#f2f7f5; }
+.chat-bubble { max-width:78%; padding:12px 16px; }
+.chat-composer { background:white; gap:12px; }
+.chat-tool-button { width:44px; height:44px; }
+.chat-composer textarea { border-radius:14px; background:#f8fbfa; }
+.post-search-filter-panel .btn { min-height:44px; }
+@media(max-width:600px) {
+ .claim-form > .btn,.handover-actions .btn { width:100%; }
+ .claims-heading .claim-actions { width:100%; }
+ .my-post-actions .btn { flex:1; }
+ .chat-messages { padding:14px; }
+ .chat-bubble { max-width:90%; }
+ .chat-header { padding:12px 16px; }
+}
+/* Task-focused forms and secondary actions. */
+.post-compose-fields { border:0; padding:0; margin:0; display:flex; flex-direction:column; gap:28px; min-width:0; }
+.workflow-disclosure { border:1px solid #dce8e6; border-radius:12px; padding:14px 16px; margin-block:16px; }
+:is(.workflow-disclosure,.workflow-evidence,.report-card) > summary { cursor:pointer; font-weight:650; color:#275b53; min-height:32px; }
+:is(.workflow-disclosure,.workflow-evidence)[open] > summary { margin-bottom:18px; }
+.workflow-menu { position:relative; }
+.workflow-menu > summary { display:grid; place-items:center; min-width:44px; min-height:44px; border:1px solid #dce8e6; border-radius:10px; cursor:pointer; background:white; font-size:1.35rem; list-style:none; }
+.workflow-menu > summary::-webkit-details-marker { display:none; }
+.workflow-menu > div { display:flex; flex-direction:column; gap:8px; padding:12px; margin-top:8px; background:white; border:1px solid #dce8e6; border-radius:12px; max-width:280px; }
+.my-post-actions .workflow-menu > div { position:absolute; right:0; z-index:5; width:min(260px,75vw); box-shadow:0 8px 30px #173c3520; }
+.my-post-actions { align-items:flex-start; }
+.chat-header { position:relative; padding-right:72px; }
+.chat-header > .workflow-menu { position:absolute; right:16px; top:16px; z-index:2; }
+.chat-header > .workflow-menu > div { position:absolute; right:0; width:190px; }
+.chat-bubble .workflow-menu > summary { min-width:32px; min-height:28px; font-size:1rem; background:transparent; border:0; }
+.chat-bubble .workflow-menu { align-self:flex-end; width:fit-content; margin-left:auto; }
+#handover { scroll-margin-top:100px; }
+.workflow-options { display:flex; flex-wrap:wrap; gap:10px; }
+.workflow-options label { display:flex; flex-direction:row; align-items:center; padding:12px 16px; border:1px solid #d0dfda; border-radius:10px; cursor:pointer; font-weight:400; }
+.workflow-options label:has(input:checked) { background:#e6f3ef; border-color:#258875; }
+.workflow-options input { accent-color:#176e68; }
+.report-reasons { border:0; padding:0; display:flex; flex-wrap:wrap; gap:8px; }
+.report-reasons legend { margin-bottom:10px; font-size:.88rem; }
+.report-reasons button { min-height:44px; padding:8px 12px; border:1px solid #cbdedb; border-radius:10px; }
+.report-reasons button[aria-pressed=true] { background:#e6f3ef; border-color:#258875; }
+.workflow-evidence > .claim-panel { box-shadow:none; border:0; padding:0; }
+.workflow-post-context { display:flex; align-items:center; gap:14px; padding:16px; margin-bottom:24px; border:1px solid #dce8e6; border-radius:14px; background:white; color:inherit; text-decoration:none; }
+.workflow-post-context img { width:72px; height:72px; border-radius:10px; object-fit:cover; }
+.workflow-post-context small { display:block; margin-top:4px; color:#60736f; }
+.workflow-preview { color:#52665f; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }

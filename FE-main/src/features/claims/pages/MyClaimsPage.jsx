@@ -1,7 +1,9 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
+import { getPostDetail } from '@/features/items/api/postApi';
 import { getMyClaims, getReceivedClaims, getOfficeClaims, getClaimsOnPost } from '../api/claimApi';
 import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath } from '../claimUtils';
 import '../Claims.css';
@@ -19,9 +21,16 @@ export function PostClaimsPage() {
   return <ClaimList key={`${user?.id}:${id}`} postId={id} />;
 }
 function ClaimList({ postId, embedded = false, initialView = 'received' }) {
-  const { isApprover } = useAuth();
+  const { isApprover, user } = useAuth();
+  const [post, setPost] = useState(null);
+  useEffect(() => {
+    if (!postId) return;
+    let active = true;
+    getPostDetail(postId).then(value => { if (active) setPost(value); }).catch(() => {});
+    return () => { active = false; };
+  }, [postId]);
   const [searchParams, setSearchParams] = useSearchParams();
-  const storageKey = `sagasu_claims_state_${postId || 'my'}`;
+  const storageKey = `sagasu_claims_state_${user?.id}_${postId || 'my'}`;
 
   const readSavedState = () => {
     try {
@@ -83,13 +92,18 @@ function ClaimList({ postId, embedded = false, initialView = 'received' }) {
   }, [postId, incoming, view, page, status, key]);
   const loading = snapshot.key !== key;
   const Wrapper = embedded ? 'section' : 'main';
-  const title = postId ? `Claim nhận đồ trên bài #${postId}` : 'Claim của tôi';
+  const title = 'Yêu cầu nhận đồ';
   return <Wrapper className={`${embedded ? '' : 'container'} claims-page ${embedded ? 'claims-embedded' : ''}`} aria-label={title}>
-    <header className="claims-heading"><div>{embedded ? <h2>{title}</h2> : <h1>{title}</h1>}
-      <p className="claims-muted">{view === 'office' ? 'Xét duyệt yêu cầu nhận đồ đã được phòng ban tiếp nhận, xác minh.' : incoming ? 'Xem claim trên các bài của bạn và mở hồ sơ để xét duyệt.' : 'Theo dõi những yêu cầu nhận đồ bạn đã gửi.'}</p></div>
-      <div className="claims-filters"><Link className="btn btn-ghost" to="/van-phong/claims">Yêu cầu tại văn phòng</Link><Link className="btn btn-ghost" to={postId ? `/chi-tiet/${postId}` : '/tim-kiem'}>{postId ? 'Về bài đăng' : 'Tìm đồ thất lạc'}</Link></div></header>
+
+    {!embedded && <header className="claims-heading"><div><h1>{title}</h1>
+      <p className="claims-muted">{view === 'office' ? 'Xét duyệt yêu cầu nhận đồ đã được phòng ban tiếp nhận, xác minh.' : incoming ? 'Đọc căn cứ để xác định đúng chủ sở hữu. Yêu cầu chờ bạn duyệt được ưu tiên.' : 'Theo dõi những yêu cầu nhận đồ bạn đã gửi.'}</p></div>
+      <div className="claims-filters"><Link className="btn btn-ghost" to={postId ? `/chi-tiet/${postId}` : '/tim-kiem'}>{postId ? 'Về bài đăng' : 'Tìm đồ thất lạc'}</Link></div></header>}
+    {post && <Link className="workflow-post-context" to={`/chi-tiet/${post.id}`}>
+      {post.images?.[0]?.url && <img src={post.images[0].url} alt="" />}
+      <span><strong>{post.title}</strong><small>{post.locationText} · Xem bài đăng</small></span>
+    </Link>}
     {!postId && <div className="claims-filters" role="tablist" aria-label="Loại danh sách claim">
-      {[['received', 'Claim P2P trên bài của tôi'], ['sent', 'Tôi đã gửi'], ...(isApprover ? [['office', 'Claim gửi phòng ban']] : [])].map(([value, label]) => <button type="button" key={value}
+      {[['received', 'Người khác yêu cầu'], ['sent', 'Tôi yêu cầu'], ...(isApprover ? [['office', 'Claim gửi phòng ban']] : [])].map(([value, label]) => <button type="button" key={value}
         role="tab" aria-selected={view === value} className={`chip ${view === value ? 'active' : ''}`}
         onClick={() => updateClaimState(value, 1, 'ALL')}>{label}</button>)}
     </div>}
@@ -102,11 +116,12 @@ function ClaimList({ postId, embedded = false, initialView = 'received' }) {
       <button className="btn btn-ghost" type="button" onClick={() => setAttempt(n => n + 1)}>Thử lại</button></div> : <>
       <p className="claims-muted" role="status">{snapshot.result.totalElements} hồ sơ</p>
       {snapshot.result.content.length ? snapshot.result.content.map(claim => <Link className="claim-card" key={claim.id} to={claimDetailPath(claim.postId, claim.id)}>
-        <span className={`claim-status claim-status-${claim.status}`}>{CLAIM_STATUS[claim.status]}</span>
-        <span className="claims-muted"> · {claim.claimType === 'OFFICE' ? 'Phòng ban tiếp nhận' : 'P2P'}</span>
+        <span className={`claim-status claim-status-${claim.status}`}>{claim.status === 'PENDING' && claim.claimType === 'P2P' ? (incoming ? 'Chờ bạn xét duyệt' : 'Chờ người nhặt phản hồi') : CLAIM_STATUS[claim.status]}</span>
+        {claim.claimType === 'OFFICE' && <span className="claims-muted"> · Phòng ban tiếp nhận</span>}
         {claim.closeReason==='ITEM_RETURNED'&&<p className="claims-muted">Đã đóng vì bài đã được trao trả.</p>}
-        <h2>{claim.postTitle}</h2><p>Hồ sơ #{claim.id} · {incoming ? `Người claim: ${claim.claimantName}` : claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : `Người nhặt: ${claim.finderName}`}</p>
-        <p className="claims-muted">Gửi lúc {claimDate(claim.createdAt)}</p><span>{incoming && claim.status === 'PENDING' ? 'Mở hồ sơ để xét duyệt →' : 'Xem hồ sơ →'}</span>
+        <h2>{claim.postTitle}</h2><p>{incoming ? `Người yêu cầu: ${claim.claimantName}` : claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : `Người nhặt: ${claim.finderName}`}</p>
+        {claim.descriptionPreview && <p className="workflow-preview">{claim.descriptionPreview}</p>}
+        <p className="claims-muted">Gửi lúc {claimDate(claim.createdAt)}</p><span>{incoming && claim.status === 'PENDING' ? 'Xem căn cứ & xét duyệt →' : 'Xem hồ sơ →'}</span>
       </Link>) : <div className="claim-panel"><p>{status !== 'ALL' ? 'Không có hồ sơ ở trạng thái này.'
         : view === 'office' ? 'Chưa có claim gửi cho phòng ban.' : incoming ? 'Chưa có claim trên các bài đăng của bạn.' : 'Bạn chưa gửi claim nào.'}</p>
         {page > 1 && <button className="btn btn-ghost" onClick={() => updateClaimState(view, 1, status)}>Về trang đầu</button>}</div>}

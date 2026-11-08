@@ -1,3 +1,4 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
@@ -202,13 +203,13 @@ function PostDetail({ id, onRetry }) {
                   boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                 }}
               >
-                <span>{current.myClaim ? 'Xem claim đã gửi' : postClaimType(post) === 'OFFICE' ? 'Gửi yêu cầu nhận đồ cho phòng ban' : 'Xác minh nhận đồ (Claim)'}</span>
+                <span>{current.myClaim ? 'Theo dõi yêu cầu của tôi' : postClaimType(post) === 'OFFICE' ? 'Gửi yêu cầu nhận đồ cho phòng ban' : 'Đây là đồ của tôi'}</span>
                 <ArrowRight size={15} />
               </Link>
             )}
           </div>
 
-          {post.postType === 'FOUND' && (post.canEditOwnPost || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
+          {post.postType === 'FOUND' && (post.canEditOwnPost || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xét duyệt yêu cầu nhận đồ</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
           {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
             && post.moderationStatus === 'VISIBLE'
@@ -219,7 +220,7 @@ function PostDetail({ id, onRetry }) {
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được văn phòng lưu giữ'}</h2>
             <dl className="space-y-3 text-sm leading-6"><div><dt className="text-slate-600">{post.officeReceipt.status === 'RETURNED' ? 'Nơi lưu trữ trước khi trao trả' : 'Nơi lưu trữ'}</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.storageLocationName || 'Liên hệ văn phòng tiếp nhận'}</dd></div><div><dt className="text-slate-600">Cán bộ tiếp nhận</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.receivedBy || 'Chưa cập nhật tên'}</dd></div><div><dt className="text-slate-600">Thời điểm tiếp nhận</dt><dd className="font-semibold text-slate-900">{new Date(post.officeReceipt.receivedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</dd></div></dl>
           </section>}
-          {post.canEditOwnPost && <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng của tôi</Link>}
+          {post.canEditOwnPost && <Link className="btn btn-ghost" to={`/sua-tin/${post.id}`}>Sửa bài đăng</Link>}
           {post.moderationStatus === 'PENDING' && <p role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
           <div><strong>Trạng thái: </strong>{STATUS_LABELS[post.status] || post.status}</div>
           {post.postType === 'FOUND' && !post.officeReceipt && <div>
@@ -229,8 +230,8 @@ function PostDetail({ id, onRetry }) {
               : 'Người nhặt chọn tự giữ để trao trả.'}
           </div>}
           <ItemCharacteristics description={post.description} />
-          <ReportButton type="POST" id={post.id} label="Báo cáo bài đăng" />
-          {post.canEditOwnPost && <PrivateIdentifiersEditor key={post.id} postId={post.id} />}
+          <ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" />
+          {post.canEditOwnPost && <details className="workflow-disclosure"><summary>Ghi chú xác minh riêng tư</summary><PrivateIdentifiersEditor key={post.id} postId={post.id} /></details>}
         </section>
       </div>
 

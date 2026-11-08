@@ -1,3 +1,5 @@
+/* Clip horizontal overflow without creating a scroll container that breaks sticky bars. */
+html:has(.post-search-page), body:has(.post-search-page) { overflow-x: clip; }
 .post-search-page { min-height: 70vh; padding-bottom: 64px; }
 .post-search-workspace { --post-search-toolbar-height: 90px; }
 .post-search-toolbar { position: sticky; top: var(--navbar-offset, 68px); z-index: 50; background: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 16px 0; transition: top 220ms cubic-bezier(0.22, 1, 0.36, 1); }

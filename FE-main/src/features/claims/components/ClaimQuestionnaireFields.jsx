@@ -23,11 +23,20 @@ function ChoiceField({ question, value, onChange }) {
   const selected = question.options.find(option => option.value === choice);
   const details = question.inputType === 'CONTENTS' || selected?.detailsRequired || (choice && question.allowDetails);
   return <fieldset className="claim-question"><legend>{question.label}{question.required ? ' *' : ''}</legend>
+    {question.options.length <= 4 ? <div className="workflow-options">
+      {question.options.map(option => <label key={option.value}>
+        <input type="radio" name={`claim-${question.code}`} required={question.required}
+          checked={choice === option.value} value={option.value}
+          onChange={() => onChange({ choice: option.value, details: '' })} />
+        {option.label}
+      </label>)}
+    </div> : <>
     <label>{question.choicePrompt || 'Lựa chọn'}<select required={question.required} value={choice}
       onChange={event => onChange({ choice: event.target.value, details: '' })}>
       <option value="">Chọn câu trả lời</option>
       {question.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
     </select></label>
+    </>}
     {details && <label>{question.inputType === 'CONTENTS' ? 'Liệt kê đồ bên trong' : 'Mô tả thêm'}{selected?.detailsRequired ? ' *' : ' (không bắt buộc)'}
       <textarea maxLength={2000} required={Boolean(selected?.detailsRequired)} value={value?.details || ''}
         onChange={event => onChange({ choice, details: event.target.value })} /></label>}
@@ -59,7 +68,7 @@ export default function ClaimQuestionnaireFields({ questionnaire, answers, onAns
       {questionnaire.commonQuestions.map(render)}</section>
     <section className="claim-question-group" aria-label={`Câu hỏi ${questionnaire.categoryName}`}>
       <h2>Đặc điểm {questionnaire.categoryName.toLowerCase()}</h2>
-      <p className="claims-muted">Chỉ những câu hỏi phù hợp với loại đồ bạn chọn mới được hiển thị. Các ô có dấu * cần được trả lời.</p>
+      <p className="claims-muted">Các ô có dấu * là bắt buộc.</p>
       <p className="claims-muted">Không nhập mật khẩu, PIN, OTP, CVV hoặc đầy đủ số thẻ ngân hàng.</p>
       {questionnaire.categoryQuestions.map(render)}</section>
   </fieldset>;

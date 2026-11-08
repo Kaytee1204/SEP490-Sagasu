@@ -37,19 +37,19 @@ export default function HandoverPanel({claim,onChanged}) {
     inFlight.current=true;setBusy(true);setError('');
     try{setData(await confirmHandover(claim.id,data.version));onChanged();}catch(e){setError(e.message);setRefresh(n=>n+1);}finally{inFlight.current=false;setBusy(false);}
   }
-  return <section className="claim-panel handover-panel"><h2>Bàn giao đồ P2P</h2>
+  return <section id="handover" className="claim-panel handover-panel"><h2>Tiến trình nhận đồ</h2>
     {error&&<p role="alert" className="claim-alert">{error}</p>}{!data&&!error&&<p>Đang tải bàn giao…</p>}
-    {data&&<><p className="claim-notice">{statusLabels[data.status]}</p>{data.recordedAt&&<p>Người nhặt ghi nhận giao lúc {date(data.recordedAt)}</p>}{data.note&&<p className="claim-prose">{data.note}</p>}
+    {data&&<><p className="claim-notice">{statusLabels[data.status]}</p>{data.recordedAt&&<details className="workflow-disclosure"><summary>Chi tiết giao đồ và bằng chứng</summary><p>Người nhặt ghi nhận giao lúc {date(data.recordedAt)}</p>{data.note&&<p className="claim-prose">{data.note}</p>}
     <div className="report-evidence">{evidence.map((item,i)=><button key={item.id} type="button" onClick={()=>setImage(i)} aria-label="Xem ảnh giao đồ"><img src={item.url} alt={item.name}/></button>)}</div>
+    </details>}
     {data.canRecord&&<form className="claim-form" onSubmit={record}>
-      <label>Ghi chú giao đồ (tùy chọn)<textarea maxLength={2000} disabled={busy} value={note} onChange={e=>{setNote(e.target.value);request.current=null;}}/></label>
+      <details className="workflow-disclosure"><summary>Thêm ghi chú hoặc ảnh bàn giao</summary><label>Ghi chú giao đồ (tùy chọn)<textarea maxLength={2000} disabled={busy} value={note} onChange={e=>{setNote(e.target.value);request.current=null;}}/></label>
       <label>Ảnh bàn giao (tối đa 5 JPG/PNG, 5 MB/ảnh)<input type="file" accept="image/jpeg,image/png" multiple disabled={busy} onChange={e=>{const selected=[...e.target.files];e.target.value='';if(selected.length>5||selected.some(f=>!['image/jpeg','image/png'].includes(f.type)||!f.size||f.size>5242880)){setError('Chọn tối đa 5 ảnh JPG/PNG, mỗi ảnh không quá 5 MB.');return;}setFiles(selected);request.current=null;}}/></label>
       {files.map((file,i)=><p key={i}>{file.name}<button type="button" disabled={busy} onClick={()=>{setFiles(old=>old.filter((_,n)=>n!==i));request.current=null;}}> — Bỏ ảnh</button></p>)}
-      <button className="btn btn-accent" disabled={busy}>{busy?'Đang ghi nhận…':'Ghi nhận đã giao đồ'}</button>
+      </details><button className="btn btn-accent" disabled={busy}>{busy?'Đang ghi nhận…':'Tôi đã giao đồ'}</button>
     </form>}
     {data.status==='NOT_RECORDED'&&!data.canRecord&&<p className="claims-muted">Chờ người nhặt ghi nhận đã giao đồ sau khi claim được chấp thuận.</p>}
-    {data.status==='WAITING_CONFIRMATION'&&<p className="claims-muted">Ghi nhận giao đồ đã được lưu. Chờ người nhận phản hồi; chưa phải xác nhận đã nhận đồ.</p>}
-    {data.canConfirm&&<div className="handover-actions"><button type="button" className="btn btn-accent" disabled={busy} onClick={confirmReceipt}>Xác nhận đã nhận đồ</button></div>}
+    {data.canConfirm&&<div className="handover-actions"><button type="button" className="btn btn-accent" disabled={busy} onClick={confirmReceipt}>Tôi đã nhận đúng đồ</button></div>}
     {data.canReportIssue&&<button type="button" className="btn btn-ghost" disabled={busy} onClick={()=>setIssueOpen(value=>!value)}>Báo sự cố bàn giao</button>}
     {data.canReportIssue&&issueOpen&&<form className="claim-form" onSubmit={reportIssue}>
       <label>Lý do sự cố *<textarea required maxLength={5000} disabled={busy} value={reason} onChange={e=>{setReason(e.target.value);issueRequest.current=null;}}/></label>
