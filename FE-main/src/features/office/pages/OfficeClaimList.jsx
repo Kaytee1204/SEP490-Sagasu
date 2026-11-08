@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { officeApi } from "../api/officeApi";
-import { date, labels } from "../officeUtils";
+import { date, labels, progressLabels } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
 import Badge from "../components/Badge";
 import Header from "../components/Header";
@@ -11,10 +11,14 @@ import Empty from "../components/Empty";
 import SearchBox from "../components/SearchBox";
 import Select from "../components/Select";
 import Pager from "../components/Pager";
+import Notice from "../components/Notice";
+import ClaimProgress from "../components/ClaimProgress";
 import "../Office.css";
 
 export default function OfficeClaimList({ mine = false }) {
-  const [filters, setFilters] = useState({ page: 1, q: "", status: "ALL" });
+  const [filters, setFilters] = useState({ page: 1, q: "", status: "ALL", stage: "ALL" });
+  const [reviewError, setReviewError] = useState("");
+  const [reviewErrorId, setReviewErrorId] = useState(null);
   const state = useLoad(
     () => officeApi.claims(filters, mine),
     JSON.stringify(filters) + mine,
@@ -50,6 +54,7 @@ export default function OfficeClaimList({ mine = false }) {
           </Link>
         )}
       </Header>
+      <Notice error>{reviewError}</Notice>
       <div className="of-panel">
         <div className="of-toolbar">
           <SearchBox
@@ -60,6 +65,12 @@ export default function OfficeClaimList({ mine = false }) {
                 ? "Tìm đồ vật trong yêu cầu của bạn…"
                 : "Tìm đồ vật hoặc người yêu cầu…"
             }
+          />
+          <Select
+            label="Tiến trình xử lý"
+            value={filters.stage}
+            onChange={(v) => change("stage", v)}
+            options={[["ALL", "Tất cả giai đoạn"], ...Object.entries(progressLabels)]}
           />
           <Select
             label="Trạng thái hồ sơ"
@@ -84,7 +95,7 @@ export default function OfficeClaimList({ mine = false }) {
                 <Empty
                   text={
                     filters.q.trim() ||
-                    filters.status !== "ALL" ||
+                    filters.status !== "ALL" || filters.stage !== "ALL" ||
                     filters.page > 1
                       ? "Không tìm thấy yêu cầu phù hợp"
                       : mine
@@ -93,7 +104,7 @@ export default function OfficeClaimList({ mine = false }) {
                   }
                   description={
                     filters.q.trim() ||
-                    filters.status !== "ALL" ||
+                    filters.status !== "ALL" || filters.stage !== "ALL" ||
                     filters.page > 1
                       ? "Thử thay đổi từ khóa hoặc bỏ bộ lọc để xem lại danh sách."
                       : mine
@@ -102,13 +113,13 @@ export default function OfficeClaimList({ mine = false }) {
                   }
                 >
                   {filters.q.trim() ||
-                  filters.status !== "ALL" ||
+                  filters.status !== "ALL" || filters.stage !== "ALL" ||
                   filters.page > 1 ? (
                     <button
                       type="button"
                       className="of-button"
                       onClick={() =>
-                        setFilters({ page: 1, q: "", status: "ALL" })
+                        setFilters({ page: 1, q: "", status: "ALL", stage: "ALL" })
                       }
                     >
                       Xóa bộ lọc
@@ -128,9 +139,9 @@ export default function OfficeClaimList({ mine = false }) {
                   <table className="of-table">
                     <thead>
                       <tr>
-                        <th>Hồ sơ / Đồ vật</th>
+                        <th>Yêu cầu / Đồ vật</th>
                         <th>Người khai</th>
-                        <th>Trạng thái</th>
+                        <th>Tiến trình xử lý</th>
                         <th>Ngày gửi</th>
                         <th></th>
                       </tr>
@@ -141,7 +152,7 @@ export default function OfficeClaimList({ mine = false }) {
                           <td>
                             <Link to={`${base}/${c.id}`}>{c.postTitle}</Link>
                             <small>
-                              Hồ sơ #{c.id} · Bài #{c.postId}
+                              Yêu cầu #{c.id} · Bài #{c.postId}
                             </small>
                           </td>
                           <td>
@@ -153,16 +164,19 @@ export default function OfficeClaimList({ mine = false }) {
                             </small>
                           </td>
                           <td>
-                            <Badge value={c.status} />
+                            <ClaimProgress stage={c.stage} scheduledAt={c.collectionAt} />
                           </td>
                           <td>{date(c.createdAt)}</td>
                           <td>
-                            <Link className="of-button" to={`${base}/${c.id}`}>
-                              {!mine && c.status === "PENDING"
+                            <Link className="of-button" to={`${base}/${c.id}`} onClick={(e) => {
+                              if (!mine && c.ownRequest && ["PENDING", "NEEDS_INFO"].includes(c.status)) {e.preventDefault();setReviewErrorId(c.id);setReviewError("Đây là yêu cầu nhận đồ của bạn. Nhờ một nhân viên khác xét duyệt nhé.");}
+                            }}>
+                              {mine && c.stage === "AWAITING_REPLY" ? "Phản hồi lịch hẹn" : !mine && c.status === "PENDING"
                                 ? "Xét duyệt"
                                 : "Chi tiết"}{" "}
                               →
                             </Link>
+                            {reviewErrorId === c.id && <small role="alert" className="of-review-hint">Yêu cầu của bạn cần nhân viên khác xét duyệt.</small>}
                           </td>
                         </tr>
                       ))}

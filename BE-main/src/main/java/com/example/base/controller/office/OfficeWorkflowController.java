@@ -16,6 +16,12 @@ import java.util.List;
 public class OfficeWorkflowController {
     private final OfficeTransferService transfers;
     private final OfficeReturnService returns;
+    private final OfficeIntakeScheduleService intakeSchedules;
+    private final OfficeInvitationService invitations;
+    @PostMapping("/transfers/{id}/appointment-response") public ApiResponse<com.example.base.dto.office.InvitationDtos.View> respondIntake(@PathVariable("id") long id,@Valid @RequestBody AppointmentResponse request,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(intakeSchedules.respondOnSite(id,request,user));}
+    @PostMapping("/claims/{id}/appointment-response") public ApiResponse<com.example.base.dto.office.InvitationDtos.View> respondCollection(@PathVariable("id") long id,@Valid @RequestBody AppointmentResponse request,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(invitations.respondOnSite(id,request,user));}
+    @PostMapping("/transfers/{id}/schedule") public ApiResponse<String> schedule(@PathVariable("id") long id,@Valid @RequestBody IntakeSchedule request,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(intakeSchedules.schedule(id,request,user));}
+    @PostMapping("/transfers/{id}/appointment-email") public ApiResponse<String> resendIntake(@PathVariable("id") long id,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(intakeSchedules.send(id,user));}
     @GetMapping("/transfers")
     public ApiResponse<PageData<TransferView>> list(@RequestParam(name="page", defaultValue="1") int page,@RequestParam(name="status", defaultValue="PENDING") String status,@RequestParam(name="q", defaultValue="") String q,@RequestParam(name="mine", defaultValue="false") boolean mine,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(transfers.list(page,status,q,mine,user));}
     @GetMapping("/transfers/{id}") public ApiResponse<TransferView> transfer(@PathVariable("id") long id,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(transfers.detail(id,user));}
@@ -25,6 +31,5 @@ public class OfficeWorkflowController {
     @PostMapping("/claims/{id}/cancel") public ApiResponse<Workflow> cancel(@PathVariable("id") long id,@Valid @RequestBody VersionedReason r,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(returns.cancel(id,r,user));}
     @PostMapping("/claims/{id}/verify") public ApiResponse<Workflow> verify(@PathVariable("id") long id,@Valid @RequestBody Verify r,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(returns.verify(id,r,user));}
     @PostMapping(value="/claims/{id}/handover",consumes="multipart/form-data") public ApiResponse<Workflow> record(@PathVariable("id") long id,@Valid @RequestPart("data") RecordHandover r,@RequestPart("images") List<MultipartFile> files,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(returns.record(id,r,files,user));}
-    @PostMapping("/claims/{id}/confirm") public ApiResponse<Workflow> confirm(@PathVariable("id") long id,@Valid @RequestBody Confirm r,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(returns.confirm(id,r,user));}
-    @PostMapping("/claims/{id}/issue") public ApiResponse<Workflow> issue(@PathVariable("id") long id,@Valid @RequestBody VersionedReason r,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(returns.issue(id,r,user));}
+    @PostMapping("/claims/{id}/complete") public ApiResponse<Workflow> complete(@PathVariable("id") long id,@Valid @RequestBody Confirm r,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(returns.complete(id,r,user));}
 }

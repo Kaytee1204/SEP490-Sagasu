@@ -64,6 +64,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/van-phong/lich-hen" element={<InvitationPage />} />
+      <Route path="/van-phong/hen-giao-do" element={<InvitationPage intake />} />
       {/* ── AUTH ROUTES (Dành cho tất cả các Role) ── */}
       <Route
         path="/dang-nhap"

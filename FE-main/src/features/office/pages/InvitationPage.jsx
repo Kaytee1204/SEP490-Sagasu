@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CalendarDays, CheckCircle, Clock, XCircle } from "lucide-react";
-import { invitationApi } from "../api/invitationApi";
+import { invitationApi, intakeInvitationApi } from "../api/invitationApi";
 import { date } from "../officeUtils";
 import Notice from "../components/Notice";
 import "../Office.css";
@@ -24,11 +24,18 @@ const statuses = {
     "Vui lòng liên hệ văn phòng nếu cần hỗ trợ.",
   ],
 };
-export default function InvitationPage() {
+const intakeStatuses = {
+  CONFIRMED: ["Đã đồng ý lịch mang đồ đến", "Cảm ơn bạn. Vui lòng mang đồ đến văn phòng theo lịch trên; nhân viên sẽ kiểm tra và xác nhận tiếp nhận tại quầy."],
+  DECLINED: ["Đã từ chối lịch hẹn", "Yêu cầu tiếp nhận vẫn được giữ. Văn phòng sẽ liên hệ để hẹn lại lịch phù hợp."],
+  EXPIRED: ["Lịch hẹn cần được sắp xếp lại", "Chưa nhận được phản hồi trong 12 giờ. Yêu cầu tiếp nhận vẫn được giữ để văn phòng hẹn lại."],
+  CANCELLED: ["Lịch hẹn không còn hiệu lực", "Hãy kiểm tra yêu cầu tiếp nhận hoặc mở email lịch hẹn mới nhất."],
+};
+export default function InvitationPage({ intake = false }) {
   const { hash } = useLocation();
-  return <InvitationContent key={hash} hash={hash} />;
+  return <InvitationContent key={`${intake}:${hash}`} hash={hash} intake={intake} />;
 }
-function InvitationContent({ hash }) {
+function InvitationContent({ hash, intake }) {
+  const api = intake ? intakeInvitationApi : invitationApi;
   const params = new URLSearchParams(hash.slice(1));
   const token = params.get("token") || "";
   const proposed = params.get("decision") === "DECLINE" ? "DECLINE" : "CONFIRM";
@@ -47,7 +54,7 @@ function InvitationContent({ hash }) {
           throw new Error(
             "Liên kết không hợp lệ. Hãy mở nút trong email lịch hẹn mới nhất.",
           );
-        return invitationApi.preview(token);
+        return api.preview(token);
       })
       .then((value) => {
         if (active) setData(value);
@@ -61,7 +68,7 @@ function InvitationContent({ hash }) {
     return () => {
       active = false;
     };
-  }, [token, proposed, attempt]);
+  }, [token, proposed, attempt, api]);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -71,13 +78,13 @@ function InvitationContent({ hash }) {
     data.deadline &&
     now >= new Date(data.deadline).getTime();
   const status = expired ? "EXPIRED" : data?.status;
-  const result = statuses[status];
+  const result = (intake ? intakeStatuses : statuses)[status];
   async function submit() {
     if (busy || status !== "PENDING") return;
     setBusy(true);
     setError("");
     try {
-      setData(await invitationApi.respond(token, decision));
+      setData(await api.respond(token, decision));
     } catch (failure) {
       setError(failure.message);
     } finally {
@@ -89,7 +96,7 @@ function InvitationContent({ hash }) {
       <section className="of-panel">
         <p className="of-eyebrow">Văn phòng · Sagasu</p>
         <CalendarDays size={32} aria-hidden="true" />
-        <h1>Xác nhận lịch hẹn nhận đồ</h1>
+        <h1>{intake ? "Lịch mang đồ đến văn phòng" : "Xác nhận lịch hẹn nhận đồ"}</h1>
         <p className="of-muted">
           Không cần đăng nhập. Mở liên kết chưa được tính là phản hồi.
         </p>
@@ -115,7 +122,7 @@ function InvitationContent({ hash }) {
                 <dd>{data.title}</dd>
               </div>
               <div>
-                <dt>Thời gian nhận đồ</dt>
+                <dt>{intake ? "Thời gian mang đồ đến" : "Thời gian nhận đồ"}</dt>
                 <dd>{date(data.scheduledAt)}</dd>
               </div>
               <div>
@@ -170,7 +177,7 @@ function InvitationContent({ hash }) {
                 </fieldset>
                 {decision === "DECLINE" && (
                   <Notice error>
-                    Từ chối sẽ hủy lịch và kết thúc yêu cầu nhận đồ này.
+                    {intake ? "Nếu lịch chưa phù hợp, văn phòng sẽ giữ yêu cầu tiếp nhận để hẹn lại với bạn." : "Từ chối sẽ hủy lịch và kết thúc yêu cầu nhận đồ này."}
                   </Notice>
                 )}
                 <button

@@ -1,9 +1,12 @@
 import api from "@/services/apiClient";
 const data = async (promise) => (await promise).data;
 export const workflowApi = {
+  reply: (id, intake, body) => data(api.post(`/office-workflow/${intake ? "transfers" : "claims"}/${id}/appointment-response`, body)),
   transfers: (filters) => data(api.get(`/office-workflow/transfers?${new URLSearchParams(filters)}`)),
   transfer: (id) => data(api.get(`/office-workflow/transfers/${id}`)),
   decide: (id, body) => data(api.post(`/office-workflow/transfers/${id}`, body)),
+  schedule: (id, body) => data(api.post(`/office-workflow/transfers/${id}/schedule`, body)),
+  resendIntake: (id) => data(api.post(`/office-workflow/transfers/${id}/appointment-email`, {})),
   detail: (id) => data(api.get(`/office-workflow/claims/${id}`)),
   action: (id, action, body) => data(api.post(`/office-workflow/claims/${id}/${action}`, body)),
   record: (id, body, files) => {

@@ -6,7 +6,7 @@ export const ADMIN_NAV_SECTIONS = [
     title: 'Tiếp nhận & trao trả',
     // DaiHV integration: physical receipt of items transferred from existing posts.
     items: [{ label: 'Yêu cầu nhận đồ', path: '/approver/office-claims', icon: FileCheck, roles: ['APPROVER'] },
-      { label: 'Chuyển giao từ người nhặt', path: '/approver/transfers', icon: Package, roles: ['APPROVER'] },
+      { label: 'Yêu cầu tiếp nhận đồ thất lạc', path: '/approver/transfers', icon: Package, roles: ['APPROVER'], wrapLabel: true },
       { label: 'Hồ sơ tiếp nhận', path: '/approver/receipts', icon: ClipboardList, roles: ['APPROVER'] },
       { label: 'Đồ đang lưu kho', path: '/approver/storage', icon: Warehouse, roles: ['APPROVER'] }],
   },

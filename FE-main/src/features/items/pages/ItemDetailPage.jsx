@@ -208,7 +208,8 @@ function PostDetail({ id, onRetry }) {
             )}
           </div>
 
-          {post.postType === 'FOUND' && ((post.isOwner || post.canEditOwnPost) || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={`/bai-dang/${post.id}/claims`}>Xem claim nhận đồ trên bài này</Link>}
+          {/* DaiHV: route office staff to the office request workflow and use a Vietnamese label. */}
+          {post.postType === 'FOUND' && ((post.isOwner || post.canEditOwnPost) || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={post.officeReceipt && isApprover ? '/approver/office-claims' : `/bai-dang/${post.id}/claims`}>Yêu cầu nhận lại đồ</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
           {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
             && post.moderationStatus === 'VISIBLE'

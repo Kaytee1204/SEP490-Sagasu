@@ -6,8 +6,8 @@ import { workflowApi } from "../api/workflowApi";
 
 const titles = {
   verify: "Xác minh người nhận tại quầy", reschedule: "Đổi lịch hẹn nhận đồ",
-  cancel: "Hủy lịch và thu hồi duyệt", handover: "Ghi nhận giao đồ",
-  confirm: "Xác nhận đã nhận đồ", issue: "Phản ánh việc nhận đồ",
+  cancel: "Hủy lịch và thu hồi duyệt", handover: "Hoàn tất trao trả",
+  complete: "Xác nhận hoàn tất trao trả",
 };
 
 export default function ReturnActionDialog({ action, claim, workflow, onClose, onDone }) {
@@ -24,7 +24,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
     if (action === "handover" && !files.length) { setError("Thêm ít nhất một ảnh chứng minh việc giao đồ."); return; }
     setBusy(true); setError("");
     try {
-      const expectedVersion = ["confirm", "issue"].includes(action) ? workflow.handover.version : claim.version;
+      const expectedVersion = action === "complete" ? workflow.handover.version : claim.version;
       const body = { ...form, expectedVersion };
       if (action === "reschedule") body.scheduledAt = `${form.scheduledAt}:00+07:00`;
       const result = action === "handover"
@@ -50,15 +50,14 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
         <label>Lời nhắn cho người nhận<textarea maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} /></label>
       </>}
       {action === "cancel" && <Notice error>Lịch hẹn sẽ bị hủy, hồ sơ chuyển sang từ chối. Đồ vẫn ở văn phòng để xét duyệt người khác.</Notice>}
-      {action === "issue" && <Notice>Biên bản sẽ tạm dừng hoàn tất. Văn phòng giữ lại nội dung phản ánh; vui lòng liên hệ trực tiếp để được hỗ trợ.</Notice>}
-      {["reschedule", "cancel", "issue"].includes(action) && <label>{action === "issue" ? "Nội dung phản ánh" : "Lý do"} *<textarea required maxLength={2000} value={form.reason} disabled={busy} onChange={(e) => change("reason", e.target.value)} /></label>}
+      {["reschedule", "cancel"].includes(action) && <label>Lý do *<textarea required maxLength={2000} value={form.reason} disabled={busy} onChange={(e) => change("reason", e.target.value)} /></label>}
       {action === "handover" && <>
-        <p>Người nhận: <strong>{claim.claimantName}</strong>. Sau khi ghi nhận, đồ được đưa ra khỏi danh sách lưu kho và chờ người nhận xác nhận.</p>
+        <p>Trao trả cho <strong>{claim.claimantName}</strong>. Sau khi lưu, yêu cầu này hoàn tất, đồ ra khỏi kho và các yêu cầu còn chờ được kết thúc.</p>
         <label>Tình trạng đồ và phụ kiện khi giao *<textarea required maxLength={2000} value={form.condition} disabled={busy} onChange={(e) => change("condition", e.target.value)} /></label>
         <EvidencePicker files={files} setFiles={setFiles} disabled={busy} />
       </>}
-      {action === "confirm" && <p>Chỉ xác nhận khi bạn đã nhận đúng đồ từ văn phòng và kiểm tra tình trạng. Sau bước này, bài đăng hoàn tất trao trả và các hồ sơ đang chờ được đóng.</p>}
-      {["handover", "confirm"].includes(action) && <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>{action === "handover" ? "Tôi đã trực tiếp giao đúng đồ cho người nhận đã được xác minh." : "Tôi đã nhận và kiểm tra đúng đồ của mình."}</span></label>}
+      {action === "complete" && <p>Biên bản đã ghi nhận giao đồ trước đó. Chỉ hoàn tất khi văn phòng đã giao đủ đồ cho người nhận và kiểm tra thông tin trong biên bản.</p>}
+      {["handover", "complete"].includes(action) && <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi xác nhận văn phòng đã giao đúng và đủ đồ cho người nhận đã được xác minh.</span></label>}
       <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Để sau</button><button className={`of-button ${action === "cancel" ? "of-danger" : "of-primary"}`} disabled={busy}>{busy ? "Đang lưu…" : titles[action]}</button></div>
     </form>
   </Dialog>;

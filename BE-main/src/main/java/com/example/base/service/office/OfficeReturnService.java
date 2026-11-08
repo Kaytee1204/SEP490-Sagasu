@@ -99,7 +99,8 @@ public class OfficeReturnService {
                 for(var image:uploaded) jdbc.update("insert into office_handover_evidence(handover_id,storage_key,original_name,mime_type,size_bytes,content_hash,sort_order) values(?,?,?,?,?,?,?)",
                         handoverId,image.key(),image.name(),image.mime(),image.size(),image.hash(),image.order());
                 c.getReceipt().returnedByOffice(); appointment.completeAtOffice(); c.touchWorkflow();
-                activities.save(new ClaimActivity(c,current,"HANDOVER","APPROVED","Văn phòng đã giao đồ, chờ người nhận xác nhận."));
+                activities.save(new ClaimActivity(c,current,"HANDOVER","APPROVED","Văn phòng đã giao đủ đồ và ghi nhận biên bản trao trả."));
+                finish(c,current);
                 claims.flush();inserted[0]=true;return view(c,current);
             });
             if(!inserted[0]) images.cleanup(uploaded);
@@ -107,35 +108,27 @@ public class OfficeReturnService {
         } catch(RuntimeException failure) {images.cleanup(uploaded);throw failure;}
     }
 
+    /** Office-only completion for records created under the previous waiting-confirmation flow. */
     @Transactional
-    public Workflow confirm(long id,Confirm request,CustomUserDetails user) {
-        Account actor=access.require(user); Claim c=lock(id); recipient(c,actor);
-        Handover h=handover(id);
-        if(h==null)throw bad("Văn phòng chưa ghi nhận giao đồ.");
-        if("COMPLETED".equals(h.status()))return view(c,actor);
-        responseCheck(c,h,request.expectedVersion());
-        jdbc.update("update office_handover set status='COMPLETED',confirmed_at=now(),version=version+1 where handover_id=?",h.id());
-        c.completeReceipt(); c.getPost().markReturnedFromOffice();
-        activities.save(new ClaimActivity(c,actor,"CONFIRM_RECEIPT","APPROVED","Người nhận xác nhận đã nhận đồ tại văn phòng."));
-        for(Claim other:claims.findAllForOfficeTransfer(c.getPost().getId())) {
-            if(!other.getId().equals(c.getId()) && Set.of("PENDING","NEEDS_INFO").contains(other.getStatus())) {
-                String previous=other.getStatus(); other.closeAfterReturn();
-                activities.save(new ClaimActivity(other,actor,"AUTO_CLOSE",previous,"Đồ đã được trao trả và người nhận xác nhận."));
-            }
-        }
-        claims.flush();return view(c,actor);
-    }
-
-    @Transactional
-    public Workflow issue(long id,VersionedReason request,CustomUserDetails user) {
-        Account actor=access.require(user);Claim c=lock(id);recipient(c,actor);
+    public Workflow complete(long id,Confirm request,CustomUserDetails user) {
+        Account actor=approver(user); Claim c=lock(id);
+        if(c.getClaimant()!=null&&c.getClaimant().getId().equals(actor.getId()))throw bad("Nhờ nhân viên khác xử lý yêu cầu của bạn.");
         Handover h=handover(id);
         if(h==null)throw bad("Chưa có biên bản giao đồ.");
+        if("COMPLETED".equals(h.status()))return view(c,actor);
         responseCheck(c,h,request.expectedVersion());
-        // Resolution belongs to the later report feature. Preserve the issue and block completion.
-        jdbc.update("update office_handover set status='DISPUTED',issue_note=?,version=version+1 where handover_id=?",request.reason().strip(),h.id());
-        c.touchWorkflow();activities.save(new ClaimActivity(c,actor,"REPORT_ISSUE","APPROVED",request.reason().strip()));
-        claims.flush();return view(c,actor);
+        finish(c,actor);claims.flush();return view(c,actor);
+    }
+    private void finish(Claim c,Account actor) {
+        jdbc.update("update office_handover set status='COMPLETED',confirmed_at=now(),version=version+1 where claim_id=?",c.getId());
+        c.completeReceipt(); c.getPost().markReturnedFromOffice();
+        activities.save(new ClaimActivity(c,actor,"CONFIRM_RECEIPT","APPROVED","Văn phòng xác nhận đã giao đủ đồ cho người nhận. Hoàn tất trao trả."));
+        for(Claim other:claims.findAllForOfficeTransfer(c.getPost().getId())) {
+            if(!other.getId().equals(c.getId()) && Set.of("PENDING","NEEDS_INFO").contains(other.getStatus())) {
+                String previous=other.getStatus();other.closeAfterReturn();
+                activities.save(new ClaimActivity(other,actor,"AUTO_CLOSE",previous,"Đồ đã được văn phòng trao trả."));
+            }
+        }
     }
 
     private Workflow recordCheck(Claim c,Account actor,RecordHandover request,String hash) {
@@ -197,9 +190,9 @@ public class OfficeReturnService {
         boolean preparing=officer && approved && h==null && a!=null && c.getReceipt()!=null && "IN_STORAGE".equals(c.getReceipt().getStatus());
         boolean confirmed=a!=null&&"CONFIRMED".equals(a.getResponseStatus());
         boolean verified=confirmed&&!history.isEmpty()&&history.getFirst().appointmentId()==a.getId()&&"PASSED".equals(history.getFirst().result());
-        boolean canConfirm=h!=null&&approved&&"WAITING_CONFIRMATION".equals(h.status())&&c.getClaimant()!=null&&actor.getId().equals(c.getClaimant().getId());
-        String next=h!=null?switch(h.status()) {case "COMPLETED"->"Đã hoàn tất trao trả.";case "DISPUTED"->"Đã ghi nhận phản ánh. Tạm dừng hoàn tất; vui lòng liên hệ văn phòng.";default->"Văn phòng đã giao đồ. Chờ người nhận xác nhận.";}
-                :Set.of("REJECTED","CANCELLED","CLOSED").contains(c.getStatus())?"Hồ sơ đã kết thúc. Xem lý do trong lịch sử xử lý.":!approved?"Hồ sơ cần được duyệt trước khi thực hiện trao trả.":!confirmed?"Chờ người nhận đồng ý lịch hẹn qua email.":!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy.":"Đã xác minh. Có thể ghi nhận giao đồ.";
-        return new Workflow(history,h,preparing&&confirmed,preparing&&verified,preparing,preparing,canConfirm,next);
+        boolean canComplete=officer&&h!=null&&approved&&"WAITING_CONFIRMATION".equals(h.status());
+        String next=h!=null?switch(h.status()) {case "COMPLETED"->"Đã hoàn tất trao trả.";case "DISPUTED"->"Đã ghi nhận phản ánh. Vui lòng liên hệ văn phòng.";default->"Đã có biên bản giao đồ. Nhân viên văn phòng cần xác nhận hoàn tất.";}
+                :Set.of("REJECTED","CANCELLED","CLOSED").contains(c.getStatus())?"Hồ sơ đã kết thúc. Xem lý do trong lịch sử xử lý.":!approved?"Hồ sơ cần được duyệt trước khi thực hiện trao trả.":!confirmed?"Chờ người nhận đồng ý lịch hẹn qua email hoặc trên hệ thống.":!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy.":"Đã xác minh. Có thể ghi nhận giao đồ.";
+        return new Workflow(history,h,preparing&&confirmed,preparing&&verified,preparing,preparing,canComplete,next);
     }
 }

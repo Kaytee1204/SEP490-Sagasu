@@ -16,8 +16,10 @@ export default function OfficeHandoverAction({ post, onTransferred }) {
     try {
       const result = await requestOfficeHandover(post.id);
       // DaiHV integration: request only; office staff confirm physical custody later.
-      onTransferred({ ...post, custodyMode: 'P2P', moderationStatus: result.moderationStatus,
-        status: result.status, canRequestOfficeHandover: false });
+      onTransferred({
+        ...post, custodyMode: 'P2P', moderationStatus: result.moderationStatus,
+        status: result.status, canRequestOfficeHandover: false
+      });
     } catch (failure) {
       setError(failure.message || 'Chưa gửi được yêu cầu tiếp nhận.');
     } finally {

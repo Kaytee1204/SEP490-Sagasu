@@ -1,0 +1,5 @@
+.of-info-hint { position: relative; display: inline-flex; vertical-align: middle; flex-shrink: 0; }
+.of-info-hint-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #527373; cursor: help; }
+.of-info-hint-button:hover, .of-info-hint-button:focus-visible { background: #e0f2f1; color: #0f766e; outline: 2px solid #5eead4; }
+.of-info-hint-text { display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; width: min(280px, 75vw); padding: 12px 14px; background: #173b3b; color: white; border-radius: 10px; box-shadow: 0 8px 24px #0f253e30; font-size: 13px; line-height: 1.6; font-weight: 400; text-align: left; }
+.of-info-hint:hover .of-info-hint-text, .of-info-hint:focus-within .of-info-hint-text { display: block; }

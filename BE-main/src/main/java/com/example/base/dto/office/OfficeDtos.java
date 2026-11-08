@@ -37,6 +37,7 @@ public final class OfficeDtos {
         Long claimantId, String claimantName, String claimantEmail, String claimantPhone, String createdBy,
         String description, String evidenceNote, String privateIdentifiers, long version,
         OffsetDateTime createdAt, ReceiptView receipt, List<ClaimDetailDto.EvidenceDto> evidence,
-        List<ClaimDetailDto.ActivityDto> activities, AppointmentView appointment, List<AnswerView> answers) {}
+        List<ClaimDetailDto.ActivityDto> activities, AppointmentView appointment, List<AnswerView> answers,
+        String stage, OffsetDateTime collectionAt, boolean canReview, boolean ownRequest) {}
     public record ReviewResult(Long id, String status, String emailStatus) {}
 }

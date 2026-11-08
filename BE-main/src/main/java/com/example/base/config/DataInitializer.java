@@ -72,7 +72,9 @@ public class DataInitializer {
             "db/migrations/17_confirm_p2p_receipt.sql",
             "db/migrations/18_handover_reports.sql",
             // DaiHV integration: office custody transfer and return, after the shared claim schema.
-            "db/migrations/19_office_transfer_and_return.sql"
+            "db/migrations/19_office_transfer_and_return.sql",
+            // DaiHV: appointment invitations for people bringing found items to the office.
+            "db/migrations/20_office_intake_schedule.sql"
     );
 
     @Bean

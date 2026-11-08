@@ -1,7 +1,7 @@
 // Invitation tokens are sent in the request body, never in API URLs or auth headers.
 const base = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
-async function request(action, body) {
-  const response = await fetch(`${base}/office-invitations/${action}`, {
+async function request(action, body, intake = false) {
+  const response = await fetch(`${base}/${intake ? "office-intake-invitations" : "office-invitations"}/${action}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "omit",
@@ -19,4 +19,8 @@ async function request(action, body) {
 export const invitationApi = {
   preview: (token) => request("preview", { token }),
   respond: (token, decision) => request("respond", { token, decision }),
+};
+export const intakeInvitationApi = {
+  preview: (token) => request("preview", { token }, true),
+  respond: (token, decision) => request("respond", { token, decision }, true),
 };
