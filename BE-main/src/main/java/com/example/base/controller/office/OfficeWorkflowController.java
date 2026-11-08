@@ -15,6 +15,9 @@ import java.util.List;
 @RestController @RequestMapping("/api/office-workflow") @RequiredArgsConstructor
 public class OfficeWorkflowController {
     private final OfficeTransferService transfers;
+    @GetMapping("/counter/people") public ApiResponse<List<CounterPerson>> counterPeople(@RequestParam(name="q",defaultValue="") String q,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(transfers.counterPeople(q,user));}
+    @GetMapping("/counter/people/{id}/posts") public ApiResponse<List<CounterPost>> counterPosts(@PathVariable("id") long id,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(transfers.counterPosts(id,user));}
+    @PostMapping("/counter/receive") public ApiResponse<Long> counterReceive(@Valid @RequestBody CounterIntake request,@AuthenticationPrincipal CustomUserDetails user) {return ApiResponse.ok(transfers.receiveAtCounter(request,user));}
     private final OfficeReturnService returns;
     private final OfficeIntakeScheduleService intakeSchedules;
     private final OfficeInvitationService invitations;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import Notice from "./Notice";
 import { workflowApi } from "../api/workflowApi";
 export default function IntakeScheduleForm({ transfer, onClose, onDone, onBusyChange }) {
+  const needsReason = transfer.appointment && !["DECLINED", "EXPIRED"].includes(transfer.appointment.responseStatus);
   const [form, setForm] = useState({ scheduledAt: "", location: transfer.appointment?.location || "", note: "", reason: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -20,7 +21,8 @@ export default function IntakeScheduleForm({ transfer, onClose, onDone, onBusyCh
     <label>Ngày và giờ (UTC+7) *<input type="datetime-local" required disabled={busy} value={form.scheduledAt} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn thời điểm cách hiện tại hơn 12 giờ.</small></label>
     <label>Địa điểm tiếp nhận *<input required maxLength={1000} disabled={busy} value={form.location} onChange={(e) => change("location", e.target.value)} placeholder="Văn phòng, tòa nhà, số phòng…" /></label>
     <label>Lời nhắn<textarea maxLength={2000} disabled={busy} value={form.note} onChange={(e) => change("note", e.target.value)} placeholder="Hướng dẫn liên hệ hoặc đồ cần mang kèm…" /></label>
-    {transfer.appointment && <label>Lý do hẹn lại *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} /></label>}
+    {needsReason && <label>Lý do văn phòng đổi lịch *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} /></label>}
+    {transfer.appointment && !needsReason && <p className="of-muted">{transfer.appointment.responseStatus === "DECLINED" ? "Hẹn lại theo đề nghị của người giao; không cần nhập thêm lý do." : "Lịch trước đã hết hạn phản hồi. Bạn có thể sắp xếp lịch mới."}</p>}
     <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Để sau</button><button className="of-button of-primary" disabled={busy}>{busy ? "Đang lưu…" : "Lưu lịch và gửi email"}</button></div>
   </form>;
 }

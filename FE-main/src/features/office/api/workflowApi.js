@@ -1,6 +1,9 @@
 import api from "@/services/apiClient";
 const data = async (promise) => (await promise).data;
 export const workflowApi = {
+  counterPeople: (q) => data(api.get(`/office-workflow/counter/people?${new URLSearchParams({ q })}`)),
+  counterPosts: (id) => data(api.get(`/office-workflow/counter/people/${id}/posts`)),
+  counterReceive: (body) => data(api.post('/office-workflow/counter/receive', body)),
   reply: (id, intake, body) => data(api.post(`/office-workflow/${intake ? "transfers" : "claims"}/${id}/appointment-response`, body)),
   transfers: (filters) => data(api.get(`/office-workflow/transfers?${new URLSearchParams(filters)}`)),
   transfer: (id) => data(api.get(`/office-workflow/transfers/${id}`)),

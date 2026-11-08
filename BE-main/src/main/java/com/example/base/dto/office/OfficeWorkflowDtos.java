@@ -7,8 +7,13 @@ import java.util.UUID;
 
 public final class OfficeWorkflowDtos {
     private OfficeWorkflowDtos() {}
+    public record CounterPerson(long id,String name,String email) {}
+    public record CounterPost(long id,String title,String description,List<String> images,long previousHandovers) {}
+    public record CounterIntake(@NotNull @Positive Long accountId,@NotNull @Positive Long postId,
+            @NotNull @Positive Long locationId,@NotBlank @Size(max=2000) String condition,
+            @Size(max=2000) String reconciliationNote,@AssertTrue boolean physicallyReceived) {}
     public record AppointmentResponse(@NotNull @Positive Long appointmentId,
-            @NotBlank @Pattern(regexp="CONFIRM|DECLINE") String decision) {}
+            @NotBlank @Pattern(regexp="CONFIRM|DECLINE") String decision,@Size(max=2000) String reason) {}
     public record TransferDecision(@NotNull @PositiveOrZero Long expectedVersion,
             @NotBlank @Pattern(regexp="RECEIVED|REJECTED|CANCELLED") String decision,
             Long locationId, @Size(max=2000) String condition, @Size(max=2000) String reason,
@@ -18,7 +23,7 @@ public final class OfficeWorkflowDtos {
             String reason, String reconciliationNote, Long receiptId, long version,
             long activeClaims, long previousHandovers, List<String> images, IntakeAppointment appointment, long requestedBy) {}
     public record IntakeAppointment(long id, OffsetDateTime scheduledAt, String location, String note,
-            String status, String emailStatus, String responseStatus, OffsetDateTime responseDeadline) {}
+            String status, String emailStatus, String responseStatus, OffsetDateTime responseDeadline,String cancellationReason) {}
     public record IntakeSchedule(@NotNull @PositiveOrZero Long expectedVersion,
             @NotNull OffsetDateTime scheduledAt, @NotBlank @Size(max=1000) String location,
             @Size(max=2000) String note, @Size(max=2000) String reason) {}

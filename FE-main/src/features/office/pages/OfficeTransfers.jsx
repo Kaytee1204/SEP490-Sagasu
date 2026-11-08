@@ -12,7 +12,8 @@ import SearchBox from "../components/SearchBox";
 import Select from "../components/Select";
 import Pager from "../components/Pager";
 import TransferDialog from "../components/TransferDialog";
-import InfoHint from "../components/InfoHint";
+import CounterIntakeDialog from "../components/CounterIntakeDialog";
+import { useAuth } from "@/context/AuthContext";
 import "../Office.css";
 
 const statuses = [["PENDING", "Đang chờ tiếp nhận"], ["UNSCHEDULED", "Cần hẹn lịch"], ["AWAITING_REPLY", "Chờ phản hồi lịch"], ["CONFIRMED", "Đã đồng ý lịch"], ["RECEIVED", "Đã nhận đồ"], ["REJECTED", "Đã từ chối"], ["CANCELLED", "Đã hủy yêu cầu"], ["ALL", "Tất cả"]];
@@ -22,6 +23,8 @@ function progress(t) {
   return t.appointment.responseStatus === "CONFIRMED" ? "Đã đồng ý lịch" : t.appointment.responseStatus === "UNSENT" ? "Chưa gửi được lịch" : "Chờ phản hồi lịch";
 }
 export default function OfficeTransfers({ mine = false }) {
+  const { user } = useAuth();
+  const [counterOpen, setCounterOpen] = useState(false);
   const [filters, setFilters] = useState({ page: 1, status: mine ? "ALL" : "PENDING", q: "", mine });
   const state = useLoad(() => workflowApi.transfers(filters), JSON.stringify(filters));
   const [selected, setSelected] = useState(null);
@@ -29,7 +32,7 @@ export default function OfficeTransfers({ mine = false }) {
   const change = (key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }));
   return <div className="office-page">
     {mine && <Link className="of-back" to="/">← Trang chủ</Link>}
-    <Header title={mine ? "Gửi đồ đến văn phòng" : "Yêu cầu tiếp nhận đồ thất lạc"} description={mine ? "Theo dõi lịch hẹn mang đồ đến và kết quả tiếp nhận của văn phòng." : "Hẹn lịch với người giao, kiểm tra và tiếp nhận đồ tại quầy."}><InfoHint>Người giao giữ đồ đến khi văn phòng xác nhận đã nhận. Các yêu cầu nhận lại đồ sẽ được văn phòng tiếp tục xử lý.</InfoHint></Header>
+    <Header title={mine ? "Gửi đồ đến văn phòng" : "Yêu cầu tiếp nhận đồ thất lạc"} description={mine ? "Theo dõi lịch hẹn mang đồ đến và kết quả tiếp nhận của văn phòng." : "Hẹn lịch với người giao, kiểm tra và tiếp nhận đồ tại quầy."}>{!mine && user?.role === "APPROVER" && <button className="of-button of-primary" onClick={() => setCounterOpen(true)}>Tiếp nhận tại quầy</button>}</Header>
     <Notice>{message}</Notice>
     <section className="of-panel">
       <div className="of-toolbar"><SearchBox value={filters.q} onChange={(q) => change("q", q)} placeholder="Tìm theo tên đồ vật…" /><Select label="Trạng thái tiếp nhận" value={filters.status} onChange={(s) => change("status", s)} options={statuses} /></div>
@@ -42,5 +45,6 @@ export default function OfficeTransfers({ mine = false }) {
       </>}</LoadState>
     </section>
     {selected && <TransferDialog id={selected} mine={mine} onClose={() => setSelected(null)} onDone={() => { setMessage("Đã cập nhật yêu cầu tiếp nhận."); state.reload(); }} />}
+    {counterOpen && <CounterIntakeDialog onClose={() => setCounterOpen(false)} onDone={() => state.reload()} />}
   </div>;
 }

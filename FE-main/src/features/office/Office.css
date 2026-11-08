@@ -9,6 +9,24 @@
   line-height: 1.55;
   font-family: var(--font-body, sans-serif);
 }
+.of-counter-search { display:flex;align-items:center;gap:10px;border:1px solid #cbd5e1;border-radius:10px;padding-left:12px; }
+.of-counter-search input { border:0!important;background:transparent;min-width:0; }
+.of-counter-options { display:grid;gap:10px;max-height:340px;overflow:auto;margin:16px 0; }
+.of-counter-option { display:flex;flex-direction:column;gap:4px;text-align:left;border:1px solid #cbd5e1;background:#fff;border-radius:10px;padding:14px;cursor:pointer;overflow-wrap:anywhere; }
+.of-counter-option:hover,.of-counter-option:focus-visible { border-color:#0f766e;background:#f0fdfa; }
+.of-counter-option span,.of-counter-option small { color:#64748b; }
+.of-counter-post { flex-direction:row;align-items:center;gap:14px; }
+.of-counter-post img { width:64px;height:64px;object-fit:cover;border-radius:8px; }
+.of-counter-post strong,.of-counter-post small { display:block; }
+.of-counter-person { display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;background:#f0fdfa;border-radius:10px;margin:18px 0;overflow-wrap:anywhere; }
+.of-counter-person p { margin:4px 0;font-size:13px; }
+.of-counter-selected { padding:16px;border:1px solid #e2e8f0;border-radius:10px; }
+.of-counter-success { color:#115e59;padding:16px 0; }
+.of-counter-person > div { min-width:0; }
+.of-counter-person > button { flex-shrink:0; }
+.of-reply-reason { display:grid;gap:8px;margin:12px 0;font-weight:600; }
+.of-reply-reason textarea { width:100%;min-height:90px;resize:vertical;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit;font-weight:400;background:#fff; }
+.of-reply-reason small { font-weight:400;color:#64748b; }
 
 /* Office transfer and return: compact steps, accessible controls, responsive cards. */
 .of-return-steps { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 14px; }

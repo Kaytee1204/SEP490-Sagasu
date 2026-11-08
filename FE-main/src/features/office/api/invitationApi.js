@@ -22,5 +22,5 @@ export const invitationApi = {
 };
 export const intakeInvitationApi = {
   preview: (token) => request("preview", { token }, true),
-  respond: (token, decision) => request("respond", { token, decision }, true),
+  respond: (token, decision, reason) => request("respond", { token, decision, reason }, true),
 };

@@ -33,9 +33,11 @@ public class OfficeIntakeScheduleService {
             if(!"PENDING".equals(t.get("status")) || number(t,"version")!=request.expectedVersion()) throw bad("Yêu cầu đã thay đổi. Hãy tải lại.");
             if(number(t,"requested_by")==actor.getId())throw bad("Nhờ nhân viên khác sắp lịch tiếp nhận đồ của bạn.");
             if(!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1)))throw bad("Chọn lịch cách hiện tại hơn 12 giờ để người giao có thời gian phản hồi.");
-            boolean exists=Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from office_intake_appointment where transfer_id=?)",Boolean.class,id));
-            if(exists && (request.reason()==null||request.reason().isBlank()))throw bad("Nhập lý do đổi lịch.");
-            jdbc.update("update office_intake_appointment set status='CANCELLED',cancellation_reason=?,response_token_hash=null where transfer_id=? and status='SCHEDULED'",exists?request.reason().strip():"Thay lịch tiếp nhận",id);
+            var previous=jdbc.queryForList("select * from office_intake_appointment where transfer_id=? order by appointment_id desc limit 1",id).stream().findFirst().orElse(null);
+            boolean needsReason=previous!=null && "SCHEDULED".equals(previous.get("status")) && !("PENDING".equals(previous.get("response_status")) && time(previous.get("response_deadline"))!=null && !OffsetDateTime.now().isBefore(time(previous.get("response_deadline"))));
+            if(needsReason && (request.reason()==null||request.reason().isBlank()))throw bad("Nhập lý do văn phòng đổi lịch.");
+            String reason=needsReason?request.reason().strip():"Sắp xếp lịch mới sau khi người giao đề nghị đổi lịch hoặc lịch cũ hết hạn.";
+            jdbc.update("update office_intake_appointment set status='CANCELLED',cancellation_reason=?,response_token_hash=null where transfer_id=? and status='SCHEDULED'",reason,id);
             jdbc.update("update office_intake_appointment set response_token_hash=null where transfer_id=?",id);
             jdbc.update("insert into office_intake_appointment(transfer_id,scheduled_at,location,note,created_by) values(?,?,?,?,?)",id,request.scheduledAt(),request.location().strip(),request.note(),actor.getId());
             jdbc.update("update office_transfer set version=version+1 where transfer_id=?",id);
@@ -79,7 +81,7 @@ public class OfficeIntakeScheduleService {
         if(number(t,"requested_by")!=actor.getId())throw bad("Chỉ người gửi yêu cầu được phản hồi lịch hẹn này.");
         var a=jdbc.queryForList("select a.*,t.status as transfer_status,p.title from office_intake_appointment a join office_transfer t on t.transfer_id=a.transfer_id join post p on p.post_id=t.post_id where a.transfer_id=? order by a.appointment_id desc limit 1",id).stream().findFirst().orElseThrow(()->bad("Chưa có lịch hẹn."));
         if(number(a,"appointment_id")!=request.appointmentId())throw bad("Lịch hẹn đã thay đổi. Hãy tải lại để xem lịch mới.");
-        applyResponse(t,a,request.decision());
+        applyResponse(t,a,request.decision(),request.reason());
         return view(jdbc.queryForMap("select a.*,t.status as transfer_status,p.title from office_intake_appointment a join office_transfer t on t.transfer_id=a.transfer_id join post p on p.post_id=t.post_id where a.appointment_id=?",request.appointmentId()));
     }
 
@@ -87,17 +89,18 @@ public class OfficeIntakeScheduleService {
     public InvitationDtos.View respond(InvitationDtos.Response request) {
         String hash=InvitationTokens.hash(request.token());var initial=lookup(hash);
         Map<String,Object> t=lock(number(initial,"transfer_id"));var a=lookup(hash);
-        applyResponse(t,a,request.decision());
+        applyResponse(t,a,request.decision(),request.reason());
         return view(lookup(hash));
     }
-    private void applyResponse(Map<String,Object> t,Map<String,Object> a,String decision) {
+    private void applyResponse(Map<String,Object> t,Map<String,Object> a,String decision,String reason) {
         if(!Set.of("CONFIRM","DECLINE").contains(decision))throw bad("Lựa chọn không hợp lệ.");
         if(!"PENDING".equals(t.get("status"))||!"SCHEDULED".equals(a.get("status"))||!"PENDING".equals(a.get("response_status")))return;
         if(!OffsetDateTime.now().isBefore(time(a.get("response_deadline"))))expire(a);
         else {
             boolean confirm="CONFIRM".equals(decision);
+            if(!confirm && (reason==null||reason.isBlank()))throw bad("Cho văn phòng biết lý do bạn cần đổi lịch.");
             jdbc.update("update office_intake_appointment set response_status=?,responded_at=now(),status=?,cancellation_reason=? where appointment_id=?",
-                    confirm?"CONFIRMED":"DECLINED",confirm?"SCHEDULED":"CANCELLED",confirm?null:"Người giao chưa sắp xếp được lịch này.",a.get("appointment_id"));
+                    confirm?"CONFIRMED":"DECLINED",confirm?"SCHEDULED":"CANCELLED",confirm?null:reason.strip(),a.get("appointment_id"));
         }
         jdbc.update("update office_transfer set version=version+1 where transfer_id=?",t.get("transfer_id"));
     }

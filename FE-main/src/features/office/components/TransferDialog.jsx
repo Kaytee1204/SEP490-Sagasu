@@ -64,13 +64,13 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
       </> : <>
         {transfer.activeClaims > 0 && <p className="of-muted">Đồ vật này có {transfer.activeClaims} yêu cầu nhận lại đồ.</p>}
         {mine && a && <AppointmentReply key={a.id} appointment={a} id={id} intake onBusyChange={setBusy} onChanged={() => { state.reload(); onDone(); }} />}
-        {!mine && a && <section className="of-intake-appointment"><h3><CalendarDays size={18} /> Lịch mang đồ đến</h3><strong>{date(a.scheduledAt)}</strong><p className="of-prose">{a.location}</p><p className="of-stage-label">{responses[a.responseStatus]}</p>{a.note && <p className="of-prose">{a.note}</p>}{a.responseStatus === "PENDING" && <small>Hạn phản hồi: {date(a.responseDeadline)} · Qua email hoặc trên hệ thống.</small>}</section>}
+        {!mine && a && <section className="of-intake-appointment"><h3><CalendarDays size={18} /> Lịch mang đồ đến</h3><strong>{date(a.scheduledAt)}</strong><p className="of-prose">{a.location}</p><p className="of-stage-label">{responses[a.responseStatus]}</p>{a.note && <p className="of-prose">{a.note}</p>}{a.cancellationReason && <p className="of-prose"><strong>Lý do: </strong>{a.cancellationReason}</p>}{a.responseStatus === "PENDING" && <small>Hạn phản hồi: {date(a.responseDeadline)} · Qua email hoặc trên hệ thống.</small>}</section>}
         {!a && <p className="of-callout">{mine ? "Văn phòng sẽ hẹn bạn mang đồ đến. Bạn cứ giữ đồ cẩn thận trong lúc chờ nhé." : "Hẹn thời gian và địa điểm để người giao mang đồ đến văn phòng."}</p>}
         <Notice error>{error}</Notice>
         {self && <Notice>Nhờ một nhân viên khác xử lý yêu cầu tiếp nhận của bạn.</Notice>}
         {!mode && <div className="of-actions of-actions-wrap">
           {officer && !self && <>
-            {a?.responseStatus === "CONFIRMED" && a?.status === "SCHEDULED" && <button className="of-button of-primary" onClick={() => setMode("receive")}>Đã nhận đồ tại quầy</button>}
+            {<button className="of-button of-primary" onClick={() => setMode("receive")}>Đã nhận đồ tại quầy</button>}
             {(!a || ["DECLINED", "EXPIRED"].includes(a.responseStatus)) && <button className="of-button of-primary" onClick={() => setMode("schedule")}>{a ? "Sắp xếp lịch mới" : "Hẹn mang đồ đến"}</button>}
           </>}
           <button className="of-button" disabled={busy} onClick={() => state.reload()}>Làm mới trạng thái</button>
