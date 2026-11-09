@@ -125,21 +125,10 @@ public class AuthService {
                 account.setLockedUntil(OffsetDateTime.now().plusYears(100));
                 accountRepository.save(account);
 
-                // Tự động tạo và gửi OTP khôi phục mật khẩu / mở khóa qua email
-                try {
-                    SendOtpRequest otpRequest = new SendOtpRequest();
-                    otpRequest.setEmail(account.getEmail());
-                    otpRequest.setPurpose(OtpPurpose.FORGOT_PASSWORD);
-                    sendOtp(otpRequest);
-                } catch (Exception ex) {
-                    log.error("Không thể tự động gửi OTP khi tài khoản bị khóa: {}", ex.getMessage());
-                }
-
                 recordAuditLog(account, "ACCOUNT_LOCKED_5_FAILS", false, Map.of("reason", "Failed 5 consecutive login attempts", "failedCount", fails));
                 throw new AppException(
                         ErrorCode.ACCOUNT_LOCKED,
-                        "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Hệ thống đã gửi mã OTP đặt lại mật khẩu đến email "
-                                + account.getEmail() + ". Vui lòng kiểm tra email để đặt lại mật khẩu và mở khóa tài khoản."
+                        "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp."
                 );
             }
             accountRepository.save(account);
@@ -498,11 +487,11 @@ public class AuthService {
             throw new AppException(ErrorCode.ACCOUNT_DELETED);
         }
         if (account.getStatus() == AccountStatus.SUSPENDED) {
-            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đang bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Vui lòng kiểm tra email để lấy mã OTP đặt lại mật khẩu và mở khóa tài khoản.");
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp.");
         }
         OffsetDateTime now = OffsetDateTime.now();
         if (account.getLockedUntil() != null && account.getLockedUntil().isAfter(now)) {
-            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đang bị tạm khóa. Vui lòng kiểm tra email để lấy mã OTP đặt lại mật khẩu và mở khóa tài khoản.");
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đang bị khóa.");
         }
         if (account.getValidUntil() != null && account.getValidUntil().isBefore(now)) {
             throw new AppException(ErrorCode.ACCOUNT_EXPIRED);

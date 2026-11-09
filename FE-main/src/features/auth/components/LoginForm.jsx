@@ -102,25 +102,7 @@ export default function LoginForm({ initialMode = 'login' }) {
       const result = await login(rawInput, password);
       handleLoginResult(result);
     } catch (err) {
-      // Khi sai mật khẩu / tài khoản hoặc tài khoản bị khóa:
-      // Ở NGUYÊN TẠI TRANG LOGIN, CHỈ HIỂN THỊ HỘP CHỮ ĐỎ THÔNG BÁO, KHÔNG NHẢY TRANG, KHÔNG POPUP TO
-      const isLocked =
-        err.code === 'ACC_403_LOCKED' ||
-        err.message?.toLowerCase().includes('khóa') ||
-        err.message?.includes('5 lần');
-
-      if (isLocked) {
-        const lockMsg =
-          err.message ||
-          'Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Hệ thống đã gửi mã OTP đặt lại mật khẩu đến email của bạn.';
-        setForgotEmail(rawInput);
-        setForgotOtp('');
-        setForgotMessage(lockMsg);
-        setError(lockMsg);
-      } else {
-        const failMsg = err.message || 'Tài khoản hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
-        setError(failMsg);
-      }
+      setError(err.message || 'Tài khoản hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
     }
@@ -1059,32 +1041,7 @@ export default function LoginForm({ initialMode = 'login' }) {
         {/* Error message (Hiển thị hộp chữ đỏ trực tiếp trên form) */}
         {error && (
           <div style={errorBoxStyle}>
-            <div>{error}</div>
-            {error.toLowerCase().includes('khóa') && (
-              <div style={{ marginTop: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError('');
-                    setForgotEmail(email.trim());
-                    setForgotOtp('');
-                    setMode('forgot_otp');
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#5848f4',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    padding: 0,
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  Nhấp vào đây để nhập mã OTP mở khóa tài khoản
-                </button>
-              </div>
-            )}
+            {error}
           </div>
         )}
 
