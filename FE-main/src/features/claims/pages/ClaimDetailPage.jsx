@@ -7,6 +7,8 @@ import { CLAIM_STATUS, CLAIM_ACTION, claimDate, evidenceUrl, validClaimId, claim
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import ClaimAnswerSummary from '../components/ClaimAnswerSummary';
 import RejectClaimDialog from '../components/RejectClaimDialog';
+import CancelClaimDialog from '../components/CancelClaimDialog';
+import ApproveClaimDialog from '../components/ApproveClaimDialog';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import ReportButton from '@/features/reports/ReportButton';
 import HandoverPanel from '@/features/handover/HandoverPanel';
@@ -53,6 +55,8 @@ function ClaimDetail({ postId, id }) {
   const [reason, setReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
@@ -120,13 +124,16 @@ function ClaimDetail({ postId, id }) {
       {claim.canReview && <form className="claim-panel claim-form" onSubmit={event => { event.preventDefault(); act('review', event.nativeEvent.submitter?.value || decision); }}>
         <h2>Xét duyệt hồ sơ</h2>{claim.claimType !== 'P2P' && <label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
           <option value="APPROVED">Chấp thuận</option><option value="REJECTED">Từ chối — căn cứ chưa phù hợp hoặc chưa đủ</option></select></label>}
-        <label>Lý do xét duyệt *<textarea required disabled={busy} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label>
+        {claim.claimType !== 'P2P' && <label>Lý do xét duyệt *<textarea required disabled={busy} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label>}
         {claim.claimType === 'P2P' ? <div className="claim-actions">
-          <button type="submit" value="APPROVED" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Chấp thuận nhận đồ'}</button>
+          <button type="button" onClick={() => setApproveOpen(true)} className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Chấp thuận nhận đồ'}</button>
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setRejectOpen(true)}>Từ chối yêu cầu</button>
         </div> : <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu kết quả xét duyệt'}</button>}
       </form>}
-      {claim.canCancel && <section className="claim-panel claim-danger-zone"><h2>Hủy yêu cầu nhận đồ</h2><p>Chỉ hủy được trước khi bàn giao. Lịch sử và bằng chứng của hồ sơ vẫn được giữ lại.</p>
+      {claim.canCancel && claim.claimType === 'P2P' && <section className="claim-panel claim-danger-zone"><h2>Hủy yêu cầu nhận đồ</h2>
+        <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setCancelOpen(true)}>Hủy yêu cầu nhận đồ</button>
+      </section>}
+      {claim.canCancel && claim.claimType !== 'P2P' && <section className="claim-panel claim-danger-zone"><h2>Hủy yêu cầu nhận đồ</h2><p>Chỉ hủy được trước khi bàn giao. Lịch sử và bằng chứng của hồ sơ vẫn được giữ lại.</p>
         {!confirmCancel ? <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setConfirmCancel(true)}>Hủy claim</button>
           : <div className="claim-form"><p>Bạn xác nhận hủy claim này?</p><label>Lý do hủy (không bắt buộc)<textarea disabled={busy} maxLength={2000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label>
             <div className="claim-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('cancel')}>Xác nhận hủy</button>
@@ -145,6 +152,18 @@ function ClaimDetail({ postId, id }) {
       onClose={() => setRejectOpen(false)} onRejected={() => {
         setRejectOpen(false); setReason(''); setError(''); setNotice('Đã từ chối yêu cầu nhận đồ.');
         setClaim(current => ({ ...current, status: 'REJECTED', canReview: false }));
+        getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+      }} />}
+    {cancelOpen && claim?.canCancel && claim.claimType === 'P2P' && <CancelClaimDialog claim={claim}
+      onClose={() => setCancelOpen(false)} onCancelled={() => {
+        setCancelOpen(false); setError(''); setNotice('Đã hủy yêu cầu nhận đồ. Hồ sơ và bằng chứng vẫn được lưu.');
+        setClaim(current => ({ ...current, status: 'CANCELLED', canCancel: false, canOpenChat: false }));
+        getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+      }} />}
+    {approveOpen && claim?.canReview && claim.claimType === 'P2P' && <ApproveClaimDialog claim={claim}
+      onClose={() => setApproveOpen(false)} onApproved={() => {
+        setApproveOpen(false); setError(''); setNotice('Đã chấp thuận yêu cầu. Hai bên có thể trao đổi để nhận đồ.');
+        setClaim(current => ({ ...current, status: 'APPROVED', canReview: false }));
         getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
       }} />}
     {previewImageId !== null && <ClaimEvidencePreview images={previewImages}

@@ -89,7 +89,7 @@ function MyPostList({ page, filter, onPage, onReload }) {
   }, [page, filter]);
 
   async function afterDelete() {
-    setPostToDelete(null); setNotice('Đã xóa bài đăng.');
+    setPostToDelete(null); setNotice('Đã ẩn bài đăng. Dữ liệu lịch sử vẫn được giữ.');
     try {
       const data = await getMyPosts(page, filter);
       if (!data.content.length && page > 1) onPage(page - 1);
@@ -115,8 +115,14 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
-  const firstField = useRef(null);
-  useEffect(() => { firstField.current?.focus(); }, []);
+  const dialog = useRef(null);
+  const [discard, setDiscard] = useState(false);
+  useEffect(() => {
+    const element = dialog.current, focus = document.activeElement, overflow = document.body.style.overflow;
+    element.showModal(); document.body.style.overflow = 'hidden';
+    return () => { element.close(); document.body.style.overflow = overflow; if (focus?.isConnected) focus.focus(); };
+  }, []);
+  const close = () => { if (inFlight.current) return; if (reason.trim()) setDiscard(true); else onCancel(); };
   async function submit(event) {
     event.preventDefault();
     if (inFlight.current) return;
@@ -125,18 +131,19 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
     try { await deletePost(post.id, reason.trim()); await onSuccess(); }
     catch (err) { setError(err.message); setBusy(false); inFlight.current = false; }
   }
-  return <div className="my-post-dialog-backdrop" onKeyDown={e => { if (e.key === 'Escape' && !busy) onCancel(); }}>
-    <section role="dialog" aria-modal="true" aria-labelledby="delete-post-title" className="card my-post-dialog">
-      <h2 id="delete-post-title">Xóa bài: {post.title}</h2>
+  return <dialog ref={dialog} aria-labelledby="delete-post-title" className="card my-post-dialog" onCancel={event => { event.preventDefault(); close(); }}>
+      <h2 id="delete-post-title">Ẩn bài đăng: {post.title}</h2>
       <p>Bài sẽ không còn xuất hiện trong danh sách và trang chi tiết. Hệ thống giữ dữ liệu lịch sử.</p>
       <form onSubmit={submit}>
-        <label htmlFor="deletion-reason" className="input-label">Lý do xóa</label>
-        <textarea ref={firstField} id="deletion-reason" className="input" required maxLength={1000} rows={4}
-          value={reason} disabled={busy} onChange={e => setReason(e.target.value)} />
+        <label htmlFor="deletion-reason" className="input-label">Lý do ẩn bài *</label>
+        <textarea id="deletion-reason" className="input" required maxLength={1000} rows={4}
+          value={reason} disabled={busy} onChange={e => { setReason(e.target.value); setDiscard(false); }} />
         {error && <p role="alert">{error}</p>}
-        <div className="my-post-actions"><button type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}>Hủy</button>
-          <button className="btn btn-primary" disabled={busy}>{busy ? 'Đang xử lý…' : 'Xóa bài'}</button></div>
+        {discard ? <div role="alert"><p>Bỏ lý do đang nhập và giữ bài đăng?</p><div className="my-post-actions">
+          <button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>Bỏ nội dung và đóng</button></div></div> :
+        <div className="my-post-actions"><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ bài</button>
+          <button className="btn btn-primary" disabled={busy}>{busy ? 'Đang xử lý…' : 'Ẩn bài đăng'}</button></div>}
       </form>
-    </section>
-  </div>;
+  </dialog>;
 }

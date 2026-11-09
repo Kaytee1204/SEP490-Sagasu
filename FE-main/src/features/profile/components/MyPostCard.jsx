@@ -26,9 +26,9 @@ export default function MyPostCard({ post, onDelete }) {
       {post.postType === 'FOUND' && <Link className="btn btn-ghost" to={`/bai-dang/${post.id}/claims${post.pendingClaimCount > 0 ? '?claimStatus=PENDING' : ''}`} state={fromState}>{post.pendingClaimCount > 0 ? `${post.pendingClaimCount} yêu cầu chờ duyệt` : 'Xem yêu cầu nhận đồ'}</Link>}
       <details className="workflow-menu"><summary aria-label="Thao tác bài đăng">⋯</summary><div>
       {post.canEdit && <Link className="btn btn-ghost" to={`/sua-tin/${post.id}`} state={fromState}>Sửa bài</Link>}
-      {post.canDelete && <button type="button" className="btn btn-ghost" onClick={() => onDelete(post)}>Xóa bài</button>}
+      {post.canDelete && <button type="button" className="btn btn-ghost" onClick={() => onDelete(post)}>Ẩn bài đăng</button>}
       {post.editBlockedReason && <p className="my-post-note">Sửa bài: {post.editBlockedReason}</p>}
-      {post.deleteBlockedReason && <p className="my-post-note">Xóa bài: {post.deleteBlockedReason}</p>}
+      {post.deleteBlockedReason && <p className="my-post-note">Ẩn bài: {post.deleteBlockedReason}</p>}
       </div></details>
     </div>
   </article>;

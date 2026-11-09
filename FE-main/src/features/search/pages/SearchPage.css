@@ -89,3 +89,11 @@ html:has(.post-search-page), body:has(.post-search-page) { overflow-x: clip; }
   .post-search-bar.search-bar .search-btn { width: 100%; justify-content: center; }
   .post-list-card-body { padding: 14px; }
 }
+
+.post-search-mobile-filters>.btn { display:flex; align-items:center; gap:8px; }
+.post-search-filter-dialog { position:fixed; inset:auto 0 0; margin:0 auto; width:100%; max-width:760px; max-height:85dvh; overflow:auto; padding:0; border:1px solid #cce4e0; border-radius:20px 20px 0 0; background:#fff; color:#173c44; }
+.post-search-filter-dialog::backdrop { background:#10292988; backdrop-filter:blur(4px); }
+.post-search-filter-close { position:absolute; top:8px; right:12px; display:grid; place-items:center; width:44px; height:44px; }
+.post-search-filter-dialog .post-search-filter-panel { padding-top:22px; padding-bottom:calc(20px + env(safe-area-inset-bottom)); }
+.post-search-filter-dialog h2 { padding-right:38px; }
+.post-search-filter-dialog :focus-visible { outline:2px solid #1c7070; outline-offset:3px; }
