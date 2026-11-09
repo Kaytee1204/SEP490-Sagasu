@@ -74,7 +74,9 @@ public class DataInitializer {
             // DaiHV integration: office custody transfer and return, after the shared claim schema.
             "db/migrations/19_office_transfer_and_return.sql",
             // DaiHV: appointment invitations for people bringing found items to the office.
-            "db/migrations/20_office_intake_schedule.sql"
+            "db/migrations/20_office_intake_schedule.sql",
+            // KhanhTB: In-App & Email Notification System with User Preferences.
+            "db/migrations/21_notifications.sql"
     );
 
     @Bean

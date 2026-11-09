@@ -22,6 +22,7 @@ public class OfficeManagementService {
     private final ItemReceiptRepository receipts;
     private final StorageLocationRepository locations;
     private final ImageStorage storage;
+    private final com.example.base.service.notification.NotificationService notifications;
 
     public static PageRequest page(int page) {
         if(page<1) throw bad("Trang không hợp lệ.");
@@ -67,6 +68,19 @@ public class OfficeManagementService {
         if(!Set.of("VISIBLE","HIDDEN").contains(p.getModerationStatus()) || p.getModerationStatus().equals(request.status()))
             throw bad("Chỉ ẩn bài đang hiển thị hoặc gỡ ẩn bài đang bị ẩn.");
         p.moderate(request.status(),request.reason().strip(),actor); posts.flush();
+        if (p.getAccount() != null) {
+            if ("HIDDEN".equals(request.status())) {
+                notifications.notifyUser(p.getAccount().getId(), "POST_HIDDEN",
+                        "Bài đăng \"" + p.getTitle() + "\" đã bị tạm ẩn",
+                        "Quản lý đã tạm ẩn bài đăng của bạn. Lý do: " + request.reason().strip(),
+                        "/bai-dang-cua-toi", true);
+            } else if ("VISIBLE".equals(request.status())) {
+                notifications.notifyUser(p.getAccount().getId(), "POST_VISIBLE",
+                        "Bài đăng \"" + p.getTitle() + "\" đã được khôi phục hiển thị",
+                        "Bài đăng của bạn đã được mở lại trên hệ thống. Ghi chú: " + request.reason().strip(),
+                        "/chi-tiet/" + p.getId(), false);
+            }
+        }
         return postView(p,true);
     }
     private Post post(long id) {

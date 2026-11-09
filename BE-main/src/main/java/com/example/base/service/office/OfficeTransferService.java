@@ -31,6 +31,7 @@ public class OfficeTransferService {
     private final ImageStorage images;
     private final JdbcTemplate jdbc;
     private final EntityManager em;
+    private final com.example.base.service.notification.NotificationService notifications;
 
     private static final String ELIGIBLE = " p.post_type='FOUND' and p.custody_mode='P2P' and p.status in ('OPEN','RESERVED') and p.moderation_status='VISIBLE' and p.deleted_at is null and not exists(select 1 from item_receipt r where r.post_id=p.post_id) and not exists(select 1 from claim c where c.post_id=p.post_id and c.status='COMPLETED') ";
 
@@ -77,6 +78,14 @@ public class OfficeTransferService {
         if (!post.canRequestOfficeHandover() || receipts.existsByPostId(postId)) throw bad("Bài đăng không còn đủ điều kiện chuyển giao.");
         jdbc.update("insert into office_transfer(post_id,requested_by) values(?,?)",postId,actor.getId());
         post.requestOfficeHandover();
+        notifications.notifyRoles(List.of(APPROVER),actor.getId(),"OFFICE_TRANSFER_REQUESTED",
+            "Yêu cầu chuyển giao đồ cho văn phòng mới",
+            actor.getFullName() + " vừa gửi yêu cầu bàn giao đồ vật \"" + post.getTitle() + "\" cho văn phòng lưu giữ.",
+            "/approver/transfers",false);
+        notifications.notifyRoles(List.of(MANAGER),actor.getId(),"OFFICE_TRANSFER_REQUESTED",
+            "Yêu cầu chuyển giao đồ cho văn phòng mới",
+            actor.getFullName() + " vừa gửi yêu cầu bàn giao đồ vật \"" + post.getTitle() + "\" cho văn phòng lưu giữ.",
+            "/admin/transfers",false);
         return post;
     }
 
@@ -126,6 +135,18 @@ public class OfficeTransferService {
         jdbc.update("update office_intake_appointment set status=?,cancellation_reason=?,response_token_hash=null where transfer_id=? and status='SCHEDULED'",
                 "RECEIVED".equals(request.decision())?"COMPLETED":"CANCELLED","RECEIVED".equals(request.decision())?null:request.reason(),id);
         posts.flush();
+        long requestedBy = number(current,"requested_by");
+        if ("RECEIVED".equals(request.decision())) {
+            notifications.notifyUser(requestedBy,"OFFICE_TRANSFER_RECEIVED",
+                "Văn phòng đã tiếp nhận đồ vật từ bài đăng \"" + post.getTitle() + "\"",
+                "Cảm ơn bạn! Văn phòng đã chính thức tiếp nhận và lưu kho đồ vật từ bài đăng của bạn.",
+                "/van-phong/chuyen-giao",true);
+        } else if ("REJECTED".equals(request.decision())) {
+            notifications.notifyUser(requestedBy,"OFFICE_TRANSFER_REJECTED",
+                "Yêu cầu chuyển giao đồ cho văn phòng đã kết thúc",
+                "Yêu cầu chuyển giao bài đăng \"" + post.getTitle() + "\" đã kết thúc. Lý do: " + request.reason(),
+                "/van-phong/chuyen-giao",true);
+        }
         return view(id);
     }
 

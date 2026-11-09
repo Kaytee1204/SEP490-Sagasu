@@ -39,6 +39,7 @@ public class ClaimService {
     private final EntityManager entityManager;
     private final ClaimQuestionnaireService questionnaires;
     private final com.example.base.service.chat.ChatConversationService chatConversations;
+    private final com.example.base.service.notification.NotificationService notifications;
 
     public ClaimResultDto submit(long postId, SubmitClaimRequest request, List<MultipartFile> files, CustomUserDetails user) {
         return create(postId, null, request, files, user);
@@ -89,6 +90,14 @@ public class ClaimService {
                 }
                 claims.saveAndFlush(claim);
                 activities.saveAndFlush(new ClaimActivity(claim, actor, "SUBMIT", null, null));
+                notifications.notifyUser(
+                        post.getAccount().getId(),
+                        "CLAIM_SUBMITTED",
+                        "Có yêu cầu nhận đồ mới (#" + claim.getId() + ")",
+                        name(actor) + " vừa gửi hồ sơ xác minh quyền sở hữu cho bài đăng \"" + post.getTitle() + "\". Vui lòng kiểm tra và xét duyệt.",
+                        "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
+                        true
+                );
                 return result(claim);
             });
         } catch (RuntimeException failure) {
@@ -210,6 +219,25 @@ public class ClaimService {
         activities.save(new ClaimActivity(claim, actor,
                 "APPROVED".equals(request.decision()) ? "APPROVE" : "REJECT", "PENDING", request.reason()));
         claims.flush();
+        if ("APPROVED".equals(request.decision())) {
+            notifications.notifyUser(
+                    claim.getClaimant().getId(),
+                    "CLAIM_APPROVED",
+                    "Yêu cầu nhận đồ #" + claim.getId() + " đã được chấp nhận",
+                    "Chủ bài đăng \"" + post.getTitle() + "\" đã chấp nhận yêu cầu nhận đồ của bạn. Bạn có thể nhắn tin trao đổi trực tiếp để hẹn nhận lại đồ.",
+                    "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
+                    true
+            );
+        } else {
+            notifications.notifyUser(
+                    claim.getClaimant().getId(),
+                    "CLAIM_REJECTED",
+                    "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối",
+                    "Chủ bài đăng \"" + post.getTitle() + "\" đã từ chối yêu cầu nhận đồ của bạn. Lý do: " + request.reason(),
+                    "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
+                    true
+            );
+        }
         return result(claim);
     }
 
@@ -234,6 +262,14 @@ public class ClaimService {
                 && !claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) {
             post.reopenAfterClaimCancellation();
         }
+        notifications.notifyUser(
+                post.getAccount().getId(),
+                "CLAIM_CANCELLED",
+                "Người yêu cầu đã hủy hồ sơ nhận đồ #" + claim.getId(),
+                name(actor) + " đã rút lại yêu cầu nhận đồ cho bài đăng \"" + post.getTitle() + "\".",
+                "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
+                false
+        );
         return result(claim);
     }
 

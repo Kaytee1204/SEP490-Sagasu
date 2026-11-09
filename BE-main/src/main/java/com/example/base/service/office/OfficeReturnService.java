@@ -32,6 +32,7 @@ public class OfficeReturnService {
     private final EntityManager em;
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager transactions;
+    private final com.example.base.service.notification.NotificationService notifications;
 
     @Transactional(readOnly=true)
     public Workflow detail(long id,CustomUserDetails user) {
@@ -50,6 +51,12 @@ public class OfficeReturnService {
             c.touchWorkflow();
             activities.save(new ClaimActivity(c,actor,"RESCHEDULE","APPROVED",request.reason().strip()));
             claims.flush();
+            if(c.getClaimant()!=null) {
+                notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_RESCHEDULED",
+                    "Văn phòng đã đổi lịch hẹn nhận đồ #" + c.getId(),
+                    "Lịch hẹn mới cho \"" + c.getPost().getTitle() + "\" tại " + request.location().strip() + ". Lý do: " + request.reason().strip(),
+                    "/van-phong/claims/" + c.getId(),false);
+            }
         });
         String delivery;
         try { delivery=invitations.send(id)?"SENT":"FAILED"; }
@@ -63,7 +70,14 @@ public class OfficeReturnService {
         scheduled(c).cancelByOffice(request.reason().strip());
         c.review("REJECTED"); c.getPost().reopenAfterClaimCancellation();
         activities.save(new ClaimActivity(c,actor,"OFFICE_CANCEL","APPROVED",request.reason().strip()));
-        claims.flush();return view(c,actor);
+        claims.flush();
+        if(c.getClaimant()!=null) {
+            notifications.notifyUser(c.getClaimant().getId(),"CLAIM_REJECTED",
+                "Văn phòng đã hủy lịch hẹn & hồ sơ nhận đồ #" + c.getId(),
+                "Hồ sơ nhận đồ \"" + c.getPost().getTitle() + "\" đã bị hủy. Lý do: " + request.reason().strip(),
+                "/van-phong/claims/" + c.getId(),true);
+        }
+        return view(c,actor);
     }
 
     @Transactional
@@ -123,6 +137,12 @@ public class OfficeReturnService {
         jdbc.update("update office_handover set status='COMPLETED',confirmed_at=now(),version=version+1 where claim_id=?",c.getId());
         c.completeReceipt(); c.getPost().markReturnedFromOffice();
         activities.save(new ClaimActivity(c,actor,"CONFIRM_RECEIPT","APPROVED","Văn phòng xác nhận đã giao đủ đồ cho người nhận. Hoàn tất trao trả."));
+        if(c.getClaimant()!=null) {
+            notifications.notifyUser(c.getClaimant().getId(),"HANDOVER_COMPLETED",
+                "Hoàn tất bàn giao đồ vật tại văn phòng (#" + c.getId() + ")",
+                "Văn phòng xác nhận đã bàn giao thành công đồ vật \"" + c.getPost().getTitle() + "\" cho bạn.",
+                "/van-phong/claims/" + c.getId(),true);
+        }
         for(Claim other:claims.findAllForOfficeTransfer(c.getPost().getId())) {
             if(!other.getId().equals(c.getId()) && Set.of("PENDING","NEEDS_INFO").contains(other.getStatus())) {
                 String previous=other.getStatus();other.closeAfterReturn();

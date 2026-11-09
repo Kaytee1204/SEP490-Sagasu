@@ -26,6 +26,7 @@ public class OfficeIntakeScheduleService {
     private final EntityManager em;
     private final PlatformTransactionManager transactions;
     private final AppointmentEmailService email;
+    private final com.example.base.service.notification.NotificationService notifications;
 
     public String schedule(long id,IntakeSchedule request,CustomUserDetails user) {
         new TransactionTemplate(transactions).executeWithoutResult(tx->{
@@ -41,6 +42,10 @@ public class OfficeIntakeScheduleService {
             jdbc.update("update office_intake_appointment set response_token_hash=null where transfer_id=?",id);
             jdbc.update("insert into office_intake_appointment(transfer_id,scheduled_at,location,note,created_by) values(?,?,?,?,?)",id,request.scheduledAt(),request.location().strip(),request.note(),actor.getId());
             jdbc.update("update office_transfer set version=version+1 where transfer_id=?",id);
+            notifications.notifyUser(number(t,"requested_by"),"INTAKE_APPOINTMENT_SCHEDULED",
+                "Văn phòng đã xếp lịch hẹn mang đồ đến bàn giao",
+                "Vui lòng kiểm tra và xác nhận lịch mang đồ đến văn phòng tại " + request.location().strip() + " trong vòng 12 giờ.",
+                "/van-phong/chuyen-giao",false);
         });
         try { return send(id,user); }
         catch(RuntimeException failure) {

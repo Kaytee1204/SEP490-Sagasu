@@ -1,8 +1,9 @@
 // src/components/layouts/admin/AdminHeader.jsx
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu, RefreshCw, Bell } from 'lucide-react';
+import { Menu, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import NotificationBell from '@/features/notifications/components/NotificationBell';
 
 export default function AdminHeader({ onMenuClick, pendingReportsCount = 0 }) {
   const location = useLocation();
@@ -42,16 +43,17 @@ export default function AdminHeader({ onMenuClick, pendingReportsCount = 0 }) {
           <span className="font-semibold text-zinc-900">{getBreadcrumb()}</span>
         </div>
       </div>
-      {isApprover ? <span className="hidden shrink-0 rounded-md bg-teal-50 px-2.5 py-1 text-sm font-semibold text-teal-800 sm:inline">Người xét duyệt</span> : <div className="flex items-center gap-2.5">
-        <button type="button" onClick={triggerRefresh} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-zinc-600 text-[13px] font-medium hover:bg-zinc-50 transition-colors">
-          <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
-          <span className="hidden sm:inline">Đồng bộ</span>
-        </button>
-        <button type="button" onClick={() => navigate('/admin/reports')} className="w-8 h-8 rounded-md border border-zinc-200 bg-white flex items-center justify-center text-zinc-600 hover:bg-zinc-50 relative">
-          <Bell size={15} />
-          {pendingReportsCount > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500" />}
-        </button>
-      </div>}
+      <div className="flex items-center gap-2.5">
+        {isApprover ? (
+          <span className="hidden shrink-0 rounded-md bg-teal-50 px-2.5 py-1 text-sm font-semibold text-teal-800 sm:inline">Người xét duyệt</span>
+        ) : (
+          <button type="button" onClick={triggerRefresh} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-zinc-600 text-[13px] font-medium hover:bg-zinc-50 transition-colors">
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Đồng bộ</span>
+          </button>
+        )}
+        <NotificationBell variant="admin" />
+      </div>
     </header>
   );
 }

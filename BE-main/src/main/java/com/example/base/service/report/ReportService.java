@@ -28,6 +28,7 @@ public class ReportService {
     private final JdbcTemplate jdbc;
     private final WorkflowImages images;
     private final PlatformTransactionManager transactions;
+    private final com.example.base.service.notification.NotificationService notifications;
     public record Submit(String targetType,Long targetId,String description,UUID clientRequestId) {}
     public record Evidence(long id,String url,String name) {}
     public record Activity(String action,String status,String note,OffsetDateTime at) {}
@@ -54,7 +55,12 @@ public class ReportService {
                 if(jdbc.queryForObject("select count(*) from report where reporter_id=? and kind='GENERAL' and status in ('OPEN','IN_REVIEW') and "+column+"=?",Long.class,actor,request.targetId())>0)
                     throw new AppException(ErrorCode.REPORT_DUPLICATE);
                 inserted[0]=true;
-                return detail(insert(actor,"GENERAL",request.targetType(),request.targetId(),text,request.clientRequestId(),prepared.hash(),uploaded));
+                Report created = insert(actor,"GENERAL",request.targetType(),request.targetId(),text,request.clientRequestId(),prepared.hash(),uploaded);
+                notifications.notifyRoles(List.of(AccountRole.ADMIN, AccountRole.MANAGER),actor,"REPORT_CREATED",
+                    "Báo cáo vi phạm mới (#" + created.getId() + ")",
+                    "Người dùng vừa gửi báo cáo đối với " + request.targetType() + " #" + request.targetId() + ": " + text,
+                    "/admin/reports",false);
+                return detail(created);
             });
             // A concurrent identical request won after our upload. Delete only our unused objects.
             if(!inserted[0])images.cleanup(uploaded);

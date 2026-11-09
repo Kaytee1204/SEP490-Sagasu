@@ -72,6 +72,7 @@ public class ChatAttachmentService {
                             upload.bytes().length, upload.hash(), i));
                 }
                 attachments.flush(); events.changed(id, "MESSAGE_CREATED");
+                messageService.notifyChatRecipient(conversation, actor, body != null && !body.isBlank() ? body : "Đã gửi hình ảnh/tệp đính kèm trong cuộc trò chuyện.");
                 return new Saved(messageService.dto(message), true);
             });
             if (!saved.created()) cleanup(keys);

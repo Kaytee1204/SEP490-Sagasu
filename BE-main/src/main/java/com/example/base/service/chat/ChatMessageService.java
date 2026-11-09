@@ -27,6 +27,7 @@ public class ChatMessageService {
     private final ChatAttachmentRepository attachments;
     private final com.example.base.storage.ImageStorage storage;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final com.example.base.service.notification.NotificationService notifications;
 
     public ChatMessageDto.Receipts receipts(long id, long after, long through, int limit, CustomUserDetails user) {
         long actor = policy.actor(user).getId(); chats.requireMember(id, actor);
@@ -79,6 +80,7 @@ public class ChatMessageService {
         var message = messages.saveAndFlush(ChatMessage.location(id, actor, conversation.nextMessageSequence(),
                 request.clientMessageId(), latitude, longitude, label));
         events.changed(id, "MESSAGE_CREATED");
+        notifyChatRecipient(conversation, actor, label != null ? "Đã chia sẻ vị trí hẹn gặp: " + label : "Đã chia sẻ vị trí hẹn gặp trên bản đồ.");
         return dto(message);
     }
 
@@ -98,6 +100,7 @@ public class ChatMessageService {
         requireWritable(conversation);
         var message = messages.saveAndFlush(new ChatMessage(id, actor, conversation.nextMessageSequence(), request.clientMessageId(), "TEXT", body));
         events.changed(id, "MESSAGE_CREATED");
+        notifyChatRecipient(conversation, actor, body.length() > 120 ? body.substring(0, 120) + "..." : body);
         return dto(message);
     }
 
@@ -130,4 +133,19 @@ public class ChatMessageService {
                 "LOCATION".equals(message.getMessageType()) ? new ChatMessageDto.Location(message.getLatitude(), message.getLongitude(), message.getLocationLabel()) : null);
     }
     private AppException invalid() { return new AppException(ErrorCode.CHAT_INPUT_INVALID); }
+    public void notifyChatRecipient(ChatConversation conversation, long senderId, String preview) {
+        Long claimantId = conversation.getClaimant() != null ? conversation.getClaimant().getId() : null;
+        Long ownerId = conversation.getPost() != null && conversation.getPost().getAccount() != null ? conversation.getPost().getAccount().getId() : null;
+        Long recipientId = Objects.equals(senderId, claimantId) ? ownerId : claimantId;
+        if (recipientId != null) {
+            notifications.notifyUser(
+                    recipientId,
+                    "CHAT_MESSAGE",
+                    "Tin nhắn mới về \"" + conversation.getPost().getTitle() + "\"",
+                    preview,
+                    "/tin-nhan/" + conversation.getId(),
+                    false
+            );
+        }
+    }
 }
