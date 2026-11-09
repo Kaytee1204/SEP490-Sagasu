@@ -1,6 +1,17 @@
 // src/features/auth/components/LoginForm.jsx
 import React, { useState } from 'react';
-import { ShieldCheck, ArrowLeft, RefreshCw, Eye, EyeOff, KeyRound, CheckCircle2, Lock } from 'lucide-react';
+import {
+  ShieldCheck,
+  ArrowLeft,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  KeyRound,
+  CheckCircle2,
+  Lock,
+  AlertCircle,
+  X,
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { authApi } from '../api/authApi';
@@ -18,6 +29,15 @@ export default function LoginForm({ initialMode = 'login' }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // Popup modal state khi đăng nhập thất bại / tài khoản bị khóa (ngay tại trang login)
+  const [loginModal, setLoginModal] = useState({
+    isOpen: false,
+    type: 'error', // 'error' | 'locked'
+    title: '',
+    message: '',
+    isLocked: false,
+  });
 
   // OTP Login states (nếu luồng đăng nhập yêu cầu OTP)
   const [otpCode, setOtpCode] = useState('');
@@ -68,42 +88,92 @@ export default function LoginForm({ initialMode = 'login' }) {
     setError('');
     setSuccess('');
 
-    const trimmedInput = email.trim();
-    if (!trimmedInput || !password) {
-      setError('Vui lòng nhập đầy đủ Email và mật khẩu');
+    const rawInput = email.trim();
+    if (!rawInput || !password) {
+      const msg = 'Vui lòng nhập đầy đủ Email và mật khẩu';
+      setError(msg);
+      setLoginModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Thiếu thông tin đăng nhập',
+        message: msg,
+        isLocked: false,
+      });
       return;
     }
 
-    if (/\s/.test(trimmedInput)) {
-      setError('Email không được chứa khoảng trắng');
+    if (/\s/.test(rawInput)) {
+      const msg = 'Email không được chứa khoảng trắng';
+      setError(msg);
+      setLoginModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Email không hợp lệ',
+        message: msg,
+        isLocked: false,
+      });
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedInput.toLowerCase() !== 'admin' && trimmedInput.toLowerCase() !== 'user' && !emailRegex.test(trimmedInput)) {
-      setError('Vui lòng nhập địa chỉ Email hợp lệ (VD: example@gmail.com)');
+    // Cho phép nhập cả chữ IN HOA và chữ THƯỜNG cho Email và username đặc biệt (admin, user)
+    const emailRegex = /^[A-Z0-9+_.-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    const isSpecialUser = rawInput.toLowerCase() === 'admin' || rawInput.toLowerCase() === 'user';
+    if (!isSpecialUser && !emailRegex.test(rawInput)) {
+      const msg = 'Vui lòng nhập đúng định dạng Email (VD: example@gmail.com)';
+      setError(msg);
+      setLoginModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Email không đúng định dạng',
+        message: msg,
+        isLocked: false,
+      });
       return;
     }
 
     setLoading(true);
     try {
-      const result = await login(trimmedInput, password);
+      // Gửi rawInput (Backend đã xử lý chuẩn hóa .trim().toLowerCase())
+      const result = await login(rawInput, password);
       handleLoginResult(result);
     } catch (err) {
-      // Khi sai 5 lần liên tiếp: tài khoản bị khóa và BE tự động gửi OTP đến email
-      if (err.code === 'ACC_403_LOCKED' || err.message?.includes('khóa') || err.message?.includes('5 lần')) {
-        setForgotEmail(trimmedInput);
-        setForgotOtp('');
-        setForgotMessage(
+      // Khi sai mật khẩu / tài khoản hoặc bị khóa:
+      // Ở LẠI TRANG LOGIN, KHÔNG TỰ ĐỘNG CHUYỂN TRANG
+      const isLocked =
+        err.code === 'ACC_403_LOCKED' ||
+        err.message?.toLowerCase().includes('khóa') ||
+        err.message?.includes('5 lần');
+
+      if (isLocked) {
+        const lockMsg =
           err.message ||
-            'Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Hệ thống đã gửi mã OTP đặt lại mật khẩu đến email của bạn. Vui lòng kiểm tra email và nhập OTP để mở khóa.'
-        );
-        setError('');
-        setSuccess('');
-        setMode('forgot_otp');
-        return;
+          'Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Hệ thống đã gửi mã OTP đặt lại mật khẩu đến email của bạn.';
+        setForgotEmail(rawInput);
+        setForgotOtp('');
+        setForgotMessage(lockMsg);
+        setError(lockMsg);
+
+        // Hiển thị POPUP thông báo tài khoản bị khóa ngay tại trang Login
+        setLoginModal({
+          isOpen: true,
+          type: 'locked',
+          title: 'Tài khoản đã bị tạm khóa',
+          message: lockMsg,
+          isLocked: true,
+        });
+      } else {
+        const failMsg = err.message || 'Tài khoản hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.';
+        setError(failMsg);
+
+        // Hiển thị POPUP thông báo sai mật khẩu / tài khoản ngay tại trang Login
+        setLoginModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Sai tài khoản hoặc mật khẩu',
+          message: failMsg,
+          isLocked: false,
+        });
       }
-      setError(err.message || 'Email hoặc mật khẩu không chính xác');
     } finally {
       setLoading(false);
     }
@@ -165,7 +235,7 @@ export default function LoginForm({ initialMode = 'login' }) {
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[A-Z0-9+_.-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
     if (trimmedEmail.toLowerCase() !== 'admin' && trimmedEmail.toLowerCase() !== 'user' && !emailRegex.test(trimmedEmail)) {
       setError('Vui lòng nhập đúng định dạng Email (VD: example@gmail.com)');
       return;
@@ -285,6 +355,7 @@ export default function LoginForm({ initialMode = 'login' }) {
     border: '1px solid #f1f5f9',
     padding: '44px 36px',
     boxSizing: 'border-box',
+    position: 'relative',
   };
 
   const notchedLabelStyle = {
@@ -472,8 +543,6 @@ export default function LoginForm({ initialMode = 'login' }) {
 
   // ═════════════════════════════════════════════════════════════════════
   // GIAO DIỆN 2: QUÊN MẬT KHẨU / MỞ KHÓA - BƯỚC 2 (NHẬP MÃ OTP)
-  // "OTP hợp lệ mới được chuyển sang bước đặt mật khẩu mới"
-  // "Nếu OTP sai hoặc hết hạn: không cho phép đặt lại mật khẩu"
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_otp') {
     return (
@@ -608,8 +677,6 @@ export default function LoginForm({ initialMode = 'login' }) {
 
   // ═════════════════════════════════════════════════════════════════════
   // GIAO DIỆN 3: ĐẶT MẬT KHẨU MỚI & MỞ KHÓA TÀI KHOẢN (BƯỚC 3)
-  // "Đặt mật khẩu mới thành công: cập nhật password hash, reset số lần sai về 0 và mở khóa"
-  // "Người dùng quay lại trang Login để đăng nhập bằng mật khẩu mới"
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_new_password') {
     return (
@@ -794,10 +861,7 @@ export default function LoginForm({ initialMode = 'login' }) {
 
         <form onSubmit={handleVerifyLoginOtp} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ position: 'relative' }}>
-            <label
-              htmlFor="login-otp"
-              style={notchedLabelStyle}
-            >
+            <label htmlFor="login-otp" style={notchedLabelStyle}>
               Mã OTP (6 chữ số)
             </label>
             <input
@@ -893,9 +957,162 @@ export default function LoginForm({ initialMode = 'login' }) {
 
   // ═════════════════════════════════════════════════════════════════════
   // GIAO DIỆN 5: ĐĂNG NHẬP CHÍNH (EMAIL + MẬT KHẨU)
+  // Kèm Modal Popup cảnh báo đăng nhập thất bại ngay tại trang Login
   // ═════════════════════════════════════════════════════════════════════
   return (
     <div style={cardContainerStyle}>
+      {/* ── MODAL POPUP THÔNG BÁO ĐĂNG NHẬP THẤT BẠI / TÀI KHOẢN BỊ KHÓA ── */}
+      {loginModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+          onClick={() => setLoginModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '430px',
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '28px 24px 24px',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
+              border: '1px solid #e2e8f0',
+              textAlign: 'center',
+              position: 'relative',
+              animation: 'scaleIn 0.2s ease-out',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Nút X đóng popup */}
+            <button
+              type="button"
+              onClick={() => setLoginModal((prev) => ({ ...prev, isOpen: false }))}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'none',
+                border: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Đóng"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Icon cảnh báo */}
+            <div
+              style={{
+                width: 58,
+                height: 58,
+                borderRadius: '50%',
+                backgroundColor: loginModal.type === 'locked' ? '#fef2f2' : '#fff1f2',
+                border: `1.5px solid ${loginModal.type === 'locked' ? '#fecaca' : '#ffe4e6'}`,
+                color: loginModal.type === 'locked' ? '#ef4444' : '#e11d48',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+              }}
+            >
+              {loginModal.type === 'locked' ? <Lock size={28} /> : <AlertCircle size={28} />}
+            </div>
+
+            {/* Tiêu đề Modal */}
+            <h3
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                color: '#1e293b',
+                margin: '0 0 10px',
+              }}
+            >
+              {loginModal.title}
+            </h3>
+
+            {/* Nội dung thông báo */}
+            <p
+              style={{
+                fontSize: '0.9rem',
+                color: '#64748b',
+                lineHeight: 1.55,
+                margin: '0 0 24px',
+                padding: '0 8px',
+                wordBreak: 'break-word',
+              }}
+            >
+              {loginModal.message}
+            </p>
+
+            {/* Nút bấm hành động */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {loginModal.isLocked ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginModal((prev) => ({ ...prev, isOpen: false }));
+                      setForgotOtp('');
+                      setMode('forgot_otp');
+                    }}
+                    style={{
+                      ...primaryBtnStyle,
+                      padding: '12px 16px',
+                    }}
+                  >
+                    Nhập mã OTP để mở khóa ngay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLoginModal((prev) => ({ ...prev, isOpen: false }))}
+                    style={{
+                      background: '#f1f5f9',
+                      border: 'none',
+                      color: '#475569',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      padding: '11px 16px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Đóng (Ở lại trang đăng nhập)
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setLoginModal((prev) => ({ ...prev, isOpen: false }))}
+                  style={{
+                    ...primaryBtnStyle,
+                    padding: '12px 16px',
+                  }}
+                  autoFocus
+                >
+                  Đã hiểu / Thử lại
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
         <h1
@@ -924,12 +1141,9 @@ export default function LoginForm({ initialMode = 'login' }) {
 
       {/* Form */}
       <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-        {/* Email Field (Notched border label) */}
+        {/* Email Field (Hỗ trợ chữ in hoa và in thường) */}
         <div style={{ position: 'relative' }}>
-          <label
-            htmlFor="login-email"
-            style={notchedLabelStyle}
-          >
+          <label htmlFor="login-email" style={notchedLabelStyle}>
             Email
           </label>
           <input
@@ -951,10 +1165,7 @@ export default function LoginForm({ initialMode = 'login' }) {
 
         {/* Password Field (Notched border label with show/hide toggle) */}
         <div style={{ position: 'relative' }}>
-          <label
-            htmlFor="login-password"
-            style={notchedLabelStyle}
-          >
+          <label htmlFor="login-password" style={notchedLabelStyle}>
             Mật khẩu
           </label>
           <input
