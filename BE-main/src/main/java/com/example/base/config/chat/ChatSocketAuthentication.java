@@ -36,7 +36,10 @@ public class ChatSocketAuthentication implements ChannelInterceptor {
         } else if (headers.getCommand() != StompCommand.DISCONNECT) {
             if (!(headers.getUser() instanceof ChatPrincipal)) throw new MessagingException("Chat authentication required");
             if (headers.getCommand() == StompCommand.SUBSCRIBE) {
-                if (!"/user/queue/chat-events".equals(headers.getDestination())) throw new MessagingException("Subscription denied");
+                if (!"/user/queue/chat-events".equals(headers.getDestination())
+                        && !"/user/queue/notifications".equals(headers.getDestination())) {
+                    throw new MessagingException("Subscription denied");
+                }
             } else if (headers.getCommand() != null && headers.getCommand() != StompCommand.UNSUBSCRIBE) {
                 throw new MessagingException("Use the authenticated REST chat API");
             }

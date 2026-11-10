@@ -1,6 +1,15 @@
 // src/features/auth/components/LoginForm.jsx
 import React, { useState } from 'react';
-import { ShieldCheck, ArrowLeft, RefreshCw, Eye, EyeOff, KeyRound, CheckCircle2, Lock } from 'lucide-react';
+import {
+  ShieldCheck,
+  ArrowLeft,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  KeyRound,
+  CheckCircle2,
+  Lock,
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { authApi } from '../api/authApi';
@@ -33,7 +42,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [forgotMessage, setForgotMessage] = useState('');
 
-  // General feedback states
+  // General feedback states (dòng chữ đỏ/xanh hiển thị trực tiếp trên form)
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -68,42 +77,32 @@ export default function LoginForm({ initialMode = 'login' }) {
     setError('');
     setSuccess('');
 
-    const trimmedInput = email.trim();
-    if (!trimmedInput || !password) {
+    const rawInput = email.trim();
+    if (!rawInput || !password) {
       setError('Vui lòng nhập đầy đủ Email và mật khẩu');
       return;
     }
 
-    if (/\s/.test(trimmedInput)) {
+    if (/\s/.test(rawInput)) {
       setError('Email không được chứa khoảng trắng');
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedInput.toLowerCase() !== 'admin' && trimmedInput.toLowerCase() !== 'user' && !emailRegex.test(trimmedInput)) {
-      setError('Vui lòng nhập địa chỉ Email hợp lệ (VD: example@gmail.com)');
+    // Cho phép nhập cả chữ IN HOA và chữ THƯỜNG cho Email và username đặc biệt (admin, user)
+    const emailRegex = /^[A-Z0-9+_.-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    const isSpecialUser = rawInput.toLowerCase() === 'admin' || rawInput.toLowerCase() === 'user';
+    if (!isSpecialUser && !emailRegex.test(rawInput)) {
+      setError('Vui lòng nhập đúng định dạng Email (VD: example@gmail.com)');
       return;
     }
 
     setLoading(true);
     try {
-      const result = await login(trimmedInput, password);
+      // Gửi rawInput (Backend đã xử lý chuẩn hóa .trim().toLowerCase())
+      const result = await login(rawInput, password);
       handleLoginResult(result);
     } catch (err) {
-      // Khi sai 5 lần liên tiếp: tài khoản bị khóa và BE tự động gửi OTP đến email
-      if (err.code === 'ACC_403_LOCKED' || err.message?.includes('khóa') || err.message?.includes('5 lần')) {
-        setForgotEmail(trimmedInput);
-        setForgotOtp('');
-        setForgotMessage(
-          err.message ||
-            'Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp. Hệ thống đã gửi mã OTP đặt lại mật khẩu đến email của bạn. Vui lòng kiểm tra email và nhập OTP để mở khóa.'
-        );
-        setError('');
-        setSuccess('');
-        setMode('forgot_otp');
-        return;
-      }
-      setError(err.message || 'Email hoặc mật khẩu không chính xác');
+      setError(err.message || 'Tài khoản hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.');
     } finally {
       setLoading(false);
     }
@@ -165,7 +164,7 @@ export default function LoginForm({ initialMode = 'login' }) {
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[A-Z0-9+_.-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
     if (trimmedEmail.toLowerCase() !== 'admin' && trimmedEmail.toLowerCase() !== 'user' && !emailRegex.test(trimmedEmail)) {
       setError('Vui lòng nhập đúng định dạng Email (VD: example@gmail.com)');
       return;
@@ -285,6 +284,7 @@ export default function LoginForm({ initialMode = 'login' }) {
     border: '1px solid #f1f5f9',
     padding: '44px 36px',
     boxSizing: 'border-box',
+    position: 'relative',
   };
 
   const notchedLabelStyle = {
@@ -328,23 +328,23 @@ export default function LoginForm({ initialMode = 'login' }) {
   };
 
   const errorBoxStyle = {
-    padding: '10px 14px',
+    padding: '12px 14px',
     borderRadius: '8px',
     background: '#fef2f2',
     border: '1px solid #fecaca',
     color: '#dc2626',
-    fontSize: '0.82rem',
-    lineHeight: 1.4,
+    fontSize: '0.85rem',
+    lineHeight: 1.45,
   };
 
   const successBoxStyle = {
-    padding: '10px 14px',
+    padding: '12px 14px',
     borderRadius: '8px',
     background: '#ecfdf5',
     border: '1px solid #a7f3d0',
     color: '#065f46',
-    fontSize: '0.82rem',
-    lineHeight: 1.4,
+    fontSize: '0.85rem',
+    lineHeight: 1.45,
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
@@ -472,8 +472,6 @@ export default function LoginForm({ initialMode = 'login' }) {
 
   // ═════════════════════════════════════════════════════════════════════
   // GIAO DIỆN 2: QUÊN MẬT KHẨU / MỞ KHÓA - BƯỚC 2 (NHẬP MÃ OTP)
-  // "OTP hợp lệ mới được chuyển sang bước đặt mật khẩu mới"
-  // "Nếu OTP sai hoặc hết hạn: không cho phép đặt lại mật khẩu"
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_otp') {
     return (
@@ -608,8 +606,6 @@ export default function LoginForm({ initialMode = 'login' }) {
 
   // ═════════════════════════════════════════════════════════════════════
   // GIAO DIỆN 3: ĐẶT MẬT KHẨU MỚI & MỞ KHÓA TÀI KHOẢN (BƯỚC 3)
-  // "Đặt mật khẩu mới thành công: cập nhật password hash, reset số lần sai về 0 và mở khóa"
-  // "Người dùng quay lại trang Login để đăng nhập bằng mật khẩu mới"
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_new_password') {
     return (
@@ -794,10 +790,7 @@ export default function LoginForm({ initialMode = 'login' }) {
 
         <form onSubmit={handleVerifyLoginOtp} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ position: 'relative' }}>
-            <label
-              htmlFor="login-otp"
-              style={notchedLabelStyle}
-            >
+            <label htmlFor="login-otp" style={notchedLabelStyle}>
               Mã OTP (6 chữ số)
             </label>
             <input
@@ -893,6 +886,7 @@ export default function LoginForm({ initialMode = 'login' }) {
 
   // ═════════════════════════════════════════════════════════════════════
   // GIAO DIỆN 5: ĐĂNG NHẬP CHÍNH (EMAIL + MẬT KHẨU)
+  // Chỉ hiển thị hộp thông báo chữ đỏ trực tiếp trên form
   // ═════════════════════════════════════════════════════════════════════
   return (
     <div style={cardContainerStyle}>
@@ -924,12 +918,9 @@ export default function LoginForm({ initialMode = 'login' }) {
 
       {/* Form */}
       <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-        {/* Email Field (Notched border label) */}
+        {/* Email Field (Hỗ trợ chữ in hoa và in thường) */}
         <div style={{ position: 'relative' }}>
-          <label
-            htmlFor="login-email"
-            style={notchedLabelStyle}
-          >
+          <label htmlFor="login-email" style={notchedLabelStyle}>
             Email
           </label>
           <input
@@ -951,10 +942,7 @@ export default function LoginForm({ initialMode = 'login' }) {
 
         {/* Password Field (Notched border label with show/hide toggle) */}
         <div style={{ position: 'relative' }}>
-          <label
-            htmlFor="login-password"
-            style={notchedLabelStyle}
-          >
+          <label htmlFor="login-password" style={notchedLabelStyle}>
             Mật khẩu
           </label>
           <input
@@ -1050,8 +1038,12 @@ export default function LoginForm({ initialMode = 'login' }) {
           </button>
         </div>
 
-        {/* Error message */}
-        {error && <div style={errorBoxStyle}>{error}</div>}
+        {/* Error message (Hiển thị hộp chữ đỏ trực tiếp trên form) */}
+        {error && (
+          <div style={errorBoxStyle}>
+            {error}
+          </div>
+        )}
 
         {/* Success message */}
         {success && (

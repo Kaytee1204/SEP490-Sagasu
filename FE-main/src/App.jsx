@@ -33,6 +33,7 @@ import IntakeFormPage from '@/features/approver/pages/IntakeFormPage';
 import IntakeDetailPage from '@/features/approver/pages/IntakeDetailPage';
 import ChatPage from '@/features/chat/pages/ChatPage';
 import MyReportsPage,{ReportDetailPage} from '@/features/reports/MyReportsPage';
+import NotificationProvider from '@/features/notifications/NotificationProvider';
 
 function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
   const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
@@ -203,7 +204,9 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <NotificationProvider>
+          <AppRoutes />
+        </NotificationProvider>
       </BrowserRouter>
     </AuthProvider>
   );

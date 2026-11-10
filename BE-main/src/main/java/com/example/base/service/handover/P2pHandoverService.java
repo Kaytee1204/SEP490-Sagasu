@@ -33,6 +33,7 @@ public class P2pHandoverService {
     private final EntityManager em;
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager transactions;
+    private final com.example.base.service.notification.NotificationService notifications;
     public record RecordRequest(String note,Long expectedClaimVersion,UUID clientRequestId) {}
     public record ConfirmRequest(Long expectedVersion) {}
     public record IssueRequest(String reason,Long expectedVersion,UUID clientRequestId) {}
@@ -58,6 +59,10 @@ public class P2pHandoverService {
             P2pHandover handover=handovers.saveAndFlush(new P2pHandover(claimId,actor,note,request.clientRequestId(),prepared.hash()));inserted[0]=true;
             for(var image:uploaded)jdbc.update("insert into p2p_handover_evidence(handover_id,storage_key,original_name,mime_type,size_bytes,content_hash,sort_order) values(?,?,?,?,?,?,?)",handover.getId(),image.key(),image.name(),image.mime(),image.size(),image.hash(),image.order());
             c.touchWorkflow();activities.save(new ClaimActivity(c,em.find(Account.class,actor),"HANDOVER","APPROVED",note));claims.flush();conversations.notifyChanged(c);
+            notifications.notifyUser(c.getClaimant().getId(),"HANDOVER_RECORDED",
+                "Người nhặt đã lập biên bản bàn giao đồ (#" + c.getId() + ")",
+                "Người đăng bài \"" + c.getPost().getTitle() + "\" đã ghi nhận bàn giao đồ. Vui lòng kiểm tra và bấm Xác nhận đã nhận đồ (hoặc Báo cáo sự cố).",
+                "/bai-dang/" + c.getPost().getId() + "/claims/" + c.getId(),true);
             return dto(c,handover,actor);
         });if(!inserted[0])images.cleanup(uploaded);return result;}catch(RuntimeException ex){images.cleanup(uploaded);throw ex;}
     }
@@ -81,7 +86,12 @@ public class P2pHandoverService {
         for(Claim other:claims.findWaitingForReturn(c.getPost().getId())) {
             other.closeAfterReturn();activities.save(new ClaimActivity(other,account,"AUTO_CLOSE","PENDING","ITEM_RETURNED"));
         }
-        claims.flush();handovers.flush();conversations.notifyChanged(c);return dto(c,h,actor);
+        claims.flush();handovers.flush();conversations.notifyChanged(c);
+        notifications.notifyUser(c.getPost().getAccount().getId(),"HANDOVER_COMPLETED",
+            "Người nhận đã xác nhận nhận đồ thành công (#" + c.getId() + ")",
+            "Người nhận đã xác nhận nhận đồ từ bài đăng \"" + c.getPost().getTitle() + "\". Quá trình trao trả P2P đã hoàn tất!",
+            "/bai-dang/" + c.getPost().getId() + "/claims/" + c.getId(),true);
+        return dto(c,h,actor);
     }
     public Detail issue(long claimId,IssueRequest request,List<MultipartFile> files,CustomUserDetails user) {
         if(request==null||request.clientRequestId()==null||request.expectedVersion()==null||request.reason()==null||request.reason().isBlank()||request.reason().length()>5000)throw invalid();
@@ -100,7 +110,16 @@ public class P2pHandoverService {
             Report report=reports.insert(actor,"HANDOVER_ISSUE","CLAIM",claimId,reason,request.clientRequestId(),prepared.hash(),uploaded);inserted[0]=true;
             jdbc.update("insert into p2p_handover_issue(report_id,handover_id) values(?,?)",report.getId(),h.getId());
             h.reportIssue();c.touchWorkflow();activities.save(new ClaimActivity(c,em.find(Account.class,actor),"REPORT_ISSUE","APPROVED","Báo cáo sự cố #"+report.getId()));
-            claims.flush();handovers.flush();conversations.notifyChanged(c);return dto(c,h,actor);
+            claims.flush();handovers.flush();conversations.notifyChanged(c);
+            notifications.notifyUser(c.getPost().getAccount().getId(),"HANDOVER_DISPUTED",
+                "Người nhận báo cáo sự cố bàn giao đồ (#" + c.getId() + ")",
+                "Người nhận đã gửi báo cáo sự cố đối với biên bản bàn giao bài đăng \"" + c.getPost().getTitle() + "\". Lý do: " + reason,
+                "/bai-dang/" + c.getPost().getId() + "/claims/" + c.getId(),true);
+            notifications.notifyRoles(List.of(AccountRole.ADMIN, AccountRole.MANAGER),actor,"REPORT_CREATED",
+                "Báo cáo sự cố bàn giao P2P mới (#" + report.getId() + ")",
+                "Có báo cáo sự cố bàn giao cho hồ sơ #" + claimId + ". Lý do: " + reason,
+                "/admin/reports",false);
+            return dto(c,h,actor);
         });if(!inserted[0])images.cleanup(uploaded);return result;}catch(RuntimeException ex){images.cleanup(uploaded);throw ex;}
     }
     private void requireIssue(Claim c,P2pHandover h,long version) {

@@ -42,6 +42,7 @@ public class OfficeClaimService {
     private final Validator validator;
     private final PlatformTransactionManager transactions;
     private final EntityManager em;
+    private final com.example.base.service.notification.NotificationService notifications;
 
     @Transactional(readOnly=true)
     public List<ClaimantOption> findClaimants(String q, CustomUserDetails user) {
@@ -101,7 +102,19 @@ public class OfficeClaimService {
                     if(filename!=null) { filename=filename.replace('\\','/'); filename=filename.substring(filename.lastIndexOf('/')+1); if(filename.length()>255) filename=filename.substring(filename.length()-255); }
                     c.addEvidence(new ClaimEvidence(keys.get(i),filename,image.mime(),image.bytes().length,image.hash(),i));
                 }
-                claims.saveAndFlush(c); activities.save(new ClaimActivity(c,actor,"SUBMIT",null,null)); return c.getId();
+                claims.saveAndFlush(c); activities.save(new ClaimActivity(c,actor,"SUBMIT",null,null));
+                if(counter && claimant!=null) {
+                    notifications.notifyUser(claimant.getId(),"OFFICE_CLAIM_SUBMITTED",
+                        "Văn phòng đã tạo hồ sơ nhận đồ #" + c.getId(),
+                        "Hồ sơ nhận đồ tại quầy cho \"" + post.getTitle() + "\" đã được ghi nhận.",
+                        "/van-phong/claims/" + c.getId(),false);
+                } else if(!counter) {
+                    notifications.notifyRoles(List.of(APPROVER),actor.getId(),"OFFICE_CLAIM_SUBMITTED",
+                        "Hồ sơ nhận đồ văn phòng mới #" + c.getId(),
+                        name + " vừa gửi hồ sơ nhận đồ văn phòng cho \"" + post.getTitle() + "\".",
+                        "/approver/office-claims/" + c.getId(),false);
+                }
+                return c.getId();
             });
         } catch(RuntimeException failure) {
             for(String key:keys) try { storage.delete(key); } catch(RuntimeException ignored) { /* Preserve original failure. */ }
@@ -150,6 +163,24 @@ public class OfficeClaimService {
             c.review(request.decision());
             String action=switch(request.decision()) { case "APPROVED"->"APPROVE"; case "REJECTED"->"REJECT"; default->"REQUEST_INFO"; };
             activities.save(new ClaimActivity(c,actor,action,previous,request.reason())); claims.flush();
+            if(c.getClaimant()!=null) {
+                if("APPROVED".equals(request.decision())) {
+                    notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_SCHEDULED",
+                        "Yêu cầu nhận đồ #" + c.getId() + " được duyệt & có lịch hẹn mới",
+                        "Văn phòng đã duyệt hồ sơ \"" + c.getPost().getTitle() + "\" và gửi lịch hẹn nhận đồ tại " + request.location().strip() + ". Vui lòng xác nhận lịch hẹn trong vòng 12 giờ.",
+                        "/van-phong/claims/" + c.getId(),false);
+                } else if("REJECTED".equals(request.decision())) {
+                    notifications.notifyUser(c.getClaimant().getId(),"CLAIM_REJECTED",
+                        "Hồ sơ nhận đồ văn phòng #" + c.getId() + " bị từ chối",
+                        "Văn phòng đã từ chối hồ sơ nhận đồ \"" + c.getPost().getTitle() + "\". Lý do: " + request.reason(),
+                        "/van-phong/claims/" + c.getId(),true);
+                } else {
+                    notifications.notifyUser(c.getClaimant().getId(),"CLAIM_NEEDS_INFO",
+                        "Văn phòng yêu cầu bổ sung thông tin hồ sơ #" + c.getId(),
+                        "Hồ sơ nhận đồ \"" + c.getPost().getTitle() + "\" cần bổ sung thông tin: " + request.reason(),
+                        "/van-phong/claims/" + c.getId(),true);
+                }
+            }
             return new Committed(c.getId(),c.getStatus(),a!=null);
         });
         String delivery="NOT_REQUIRED";
@@ -177,6 +208,10 @@ public class OfficeClaimService {
         Account actor=access.require(user); Claim c=locked(id); participant(c,actor); version(c,request.expectedVersion()); eligible(c.getPost());
         if(!"NEEDS_INFO".equals(c.getStatus())) throw bad("Hồ sơ không ở bước chờ bổ sung.");
         c.review("PENDING"); activities.save(new ClaimActivity(c,actor,"RESUBMIT","NEEDS_INFO",request.information()));
+        notifications.notifyRoles(List.of(APPROVER),actor.getId(),"OFFICE_CLAIM_SUPPLEMENTED",
+            "Người nhận đã bổ sung thông tin hồ sơ #" + c.getId(),
+            person(actor) + " đã gửi thông tin bổ sung cho hồ sơ \"" + c.getPost().getTitle() + "\".",
+            "/approver/office-claims/" + c.getId(),false);
     }
     private String recipient(Claim c) { return c.getClaimantEmail()!=null?c.getClaimantEmail():c.getClaimant()==null?null:c.getClaimant().getEmail(); }
     private Claim office(long id) { return claims.findById(id).filter(c->"OFFICE".equals(c.getClaimType())).orElseThrow(()->new AppException(ErrorCode.CLAIM_NOT_FOUND)); }

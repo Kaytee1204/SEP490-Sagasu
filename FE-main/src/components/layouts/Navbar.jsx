@@ -4,6 +4,7 @@ import { Bell, Plus, LogOut, User, LayoutDashboard, ChevronDown, Menu, X, Home, 
 import { useAuth } from '@/context/AuthContext';
 import SagasuLogo from '@/assets/Sagasu_logo_color.svg';
 import ChatBadgeLink from '@/features/chat/components/ChatBadgeLink';
+import NotificationBell from '@/features/notifications/components/NotificationBell';
 
 function AvatarDropdown() {
   const [open, setOpen] = useState(false);
@@ -283,10 +284,7 @@ export default function Navbar() {
               <>
                 {/* Notifications */}
                 <ChatBadgeLink />
-                <button className="nav-icon-btn hidden sm:flex" id="nav-notifications" aria-label="Thông báo">
-                  <Bell size={18} />
-                  <span className="nav-badge">1</span>
-                </button>
+                <NotificationBell variant="navbar" />
 
                 <Link to="/dang-tin" className="btn btn-accent btn-sm hidden xs:inline-flex" id="nav-post-btn">
                   <Plus size={15} />
