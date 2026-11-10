@@ -28,6 +28,14 @@ public class ClaimController {
         this.service = service;
     }
 
+    @GetMapping("/claims/grouped")
+    public ResponseEntity<ApiResponse<ClaimPostGroupDto.PageData>> grouped(
+            @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "8") int size,
+            @RequestParam(defaultValue = "ALL") String status, @RequestParam(defaultValue = "false") boolean sent,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return response(200, service.grouped(page, size, status, sent, user));
+    }
+
     @GetMapping("/claims/office")
     @PreAuthorize("hasRole('APPROVER')")
     public ResponseEntity<ApiResponse<ClaimPageDto>> office(@RequestParam(defaultValue = "1") int page,

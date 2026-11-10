@@ -4,8 +4,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
 import { getPostDetail } from '@/features/items/api/postApi';
-import { getMyClaims, getReceivedClaims, getOfficeClaims, getClaimsOnPost } from '../api/claimApi';
-import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath } from '../claimUtils';
+import { getGroupedClaims, getOfficeClaims, getClaimsOnPost } from '../api/claimApi';
+import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath, evidenceUrl } from '../claimUtils';
 import '../Claims.css';
 
 export default function MyClaimsPage({ embedded = false }) {
@@ -81,11 +81,12 @@ function ClaimList({ postId, embedded = false, initialView = 'received' }) {
     setSearchParams(updated, { replace: true });
   };
   const incoming = Boolean(postId) || view !== 'sent';
+  const grouped = !postId && view !== 'office';
   const key = `${postId}:${view}:${page}:${status}:${attempt}`;
   useEffect(() => {
     let cancelled = false;
     const request = postId ? getClaimsOnPost(postId, page, status)
-      : view === 'office' ? getOfficeClaims(page, status) : incoming ? getReceivedClaims(page, status) : getMyClaims(page, status);
+      : view === 'office' ? getOfficeClaims(page, status) : getGroupedClaims(page, status, !incoming);
     request.then(result => { if (!cancelled) setSnapshot({ key, result, error: '' }); })
       .catch(error => { if (!cancelled) setSnapshot({ key, result: null, error: error.message }); });
     return () => { cancelled = true; };
@@ -114,18 +115,68 @@ function ClaimList({ postId, embedded = false, initialView = 'received' }) {
     </div>
     {loading ? <p role="status">Đang tải claim…</p> : snapshot.error ? <div className="claim-alert" role="alert"><p>{snapshot.error}</p>
       <button className="btn btn-ghost" type="button" onClick={() => setAttempt(n => n + 1)}>Thử lại</button></div> : <>
-      <p className="claims-muted" role="status">{snapshot.result.totalElements} hồ sơ</p>
-      {snapshot.result.content.length ? snapshot.result.content.map(claim => <Link className="claim-card" key={claim.id} to={claimDetailPath(claim.postId, claim.id)}>
-        <span className={`claim-status claim-status-${claim.status}`}>{claim.status === 'PENDING' && claim.claimType === 'P2P' ? (incoming ? 'Chờ bạn xét duyệt' : 'Chờ người nhặt phản hồi') : CLAIM_STATUS[claim.status]}</span>
-        {claim.claimType === 'OFFICE' && <span className="claims-muted"> · Phòng ban tiếp nhận</span>}
-        {claim.closeReason==='ITEM_RETURNED'&&<p className="claims-muted">Đã đóng vì bài đã được trao trả.</p>}
-        <h2>{claim.postTitle}</h2><p>{incoming ? `Người yêu cầu: ${claim.claimantName}` : claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : `Người nhặt: ${claim.finderName}`}</p>
-        {claim.descriptionPreview && <p className="workflow-preview">{claim.descriptionPreview}</p>}
-        <p className="claims-muted">Gửi lúc {claimDate(claim.createdAt)}</p><span>{incoming && claim.status === 'PENDING' ? 'Xem căn cứ & xét duyệt →' : 'Xem hồ sơ →'}</span>
-      </Link>) : <div className="claim-panel"><p>{status !== 'ALL' ? 'Không có hồ sơ ở trạng thái này.'
+      <p className="claims-muted" role="status">{snapshot.result.totalElements} {grouped ? 'bài đăng' : 'hồ sơ'}</p>
+      {snapshot.result.content.length ? (grouped
+        ? snapshot.result.content.map(group => <ClaimPostGroup key={`${group.postId}:${status}`} group={group} incoming={incoming} status={status} />)
+        : <ClaimRows claims={snapshot.result.content} showPost={!postId} incoming={incoming} collapseHistory={Boolean(postId) && status === 'ALL'} />) : <div className="claim-panel"><p>{status !== 'ALL' ? 'Không có hồ sơ ở trạng thái này.'
         : view === 'office' ? 'Chưa có claim gửi cho phòng ban.' : incoming ? 'Chưa có claim trên các bài đăng của bạn.' : 'Bạn chưa gửi claim nào.'}</p>
         {page > 1 && <button className="btn btn-ghost" onClick={() => updateClaimState(view, 1, status)}>Về trang đầu</button>}</div>}
       {snapshot.result.totalPages > 1 && <Pagination currentPage={page} totalPages={snapshot.result.totalPages} onPageChange={nextPage => updateClaimState(view, nextPage, status)} />}
     </>}
   </Wrapper>;
+}
+
+function ClaimPostThumbnail({ url, title }) {
+  const [failed, setFailed] = useState(false);
+  const source = evidenceUrl(url);
+  return <div className="claim-post-thumbnail">
+    {source && !failed ? <img src={source} alt={`Ảnh bài đăng: ${title}`} loading="lazy" onError={() => setFailed(true)} />
+      : <span>{failed ? 'Không tải được ảnh' : 'Chưa có ảnh'}</span>}
+  </div>;
+}
+
+function ClaimRow({ claim, incoming, showPost = false }) {
+  return <Link className="claim-group-row" to={claimDetailPath(claim.postId, claim.id)}>
+    {showPost && <div className="workflow-post-context"><ClaimPostThumbnail url={claim.postThumbnailUrl} title={claim.postTitle} /><strong>{claim.postTitle}</strong></div>}
+    <div className="claim-group-row-heading"><strong>{incoming ? claim.claimantName : claim.claimType === 'OFFICE' ? 'Phòng ban tiếp nhận' : `Người nhặt: ${claim.finderName}`}</strong>
+      <span className={`claim-status claim-status-${claim.status}`}>{claim.status === 'PENDING' && claim.claimType === 'P2P' ? (incoming ? 'Chờ bạn xét duyệt' : 'Chờ người nhặt phản hồi') : CLAIM_STATUS[claim.status]}</span></div>
+    {claim.descriptionPreview && <p className="workflow-preview">{claim.descriptionPreview}</p>}
+    {claim.closeReason === 'ITEM_RETURNED' && <p className="claims-muted">Đã đóng vì bài được trao trả.</p>}
+    <p className="claims-muted">Gửi lúc {claimDate(claim.createdAt)}</p>
+    <span>{incoming && claim.status === 'PENDING' ? 'Xem căn cứ & xét duyệt →' : 'Xem hồ sơ →'}</span>
+  </Link>;
+}
+
+function ClaimRows({ claims, incoming, collapseHistory = true, latestOnly = false, showPost = false }) {
+  const sorted = [...claims].sort((a, b) => (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || b.id - a.id);
+  const active = latestOnly ? sorted.slice(0, 1) : sorted.filter(c => !['CANCELLED', 'REJECTED', 'CLOSED'].includes(c.status))
+    .sort((a, b) => Number(b.status === 'PENDING') - Number(a.status === 'PENDING'));
+  const activeIds = new Set(active.map(c => c.id));
+  const history = sorted.filter(c => !activeIds.has(c.id));
+  if (!collapseHistory) return <div>{sorted.map(claim => <ClaimRow key={claim.id} claim={claim} incoming={incoming} showPost={showPost} />)}</div>;
+  return <div>{active.map(claim => <ClaimRow key={claim.id} claim={claim} incoming={incoming} showPost={showPost} />)}
+    {history.length > 0 && <details className="claim-group-history"><summary>Lịch sử yêu cầu · {history.length} hồ sơ</summary>
+      {history.map(claim => <ClaimRow key={claim.id} claim={claim} incoming={incoming} showPost={showPost} />)}
+    </details>}
+  </div>;
+}
+
+function ClaimPostGroup({ group, incoming, status }) {
+  const [expanded, setExpanded] = useState(!incoming);
+  const visible = status === 'ALL' ? group.claims : group.claims.filter(claim => claim.status === status);
+  const listId = `claim-post-group-${group.postId}`;
+  return <article className="claim-panel claim-post-group">
+    <button type="button" className="claim-group-toggle" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded(value => !value)}>
+      <ClaimPostThumbnail url={group.postThumbnailUrl} title={group.postTitle} />
+      <span className="claim-group-heading"><strong>{group.postTitle}</strong>
+        {incoming && group.pendingCount > 0 && <span className="claim-status claim-status-PENDING">{group.pendingCount} yêu cầu chờ duyệt</span>}
+        <span className="claims-muted">{incoming ? `${group.claimantCount} người yêu cầu · ` : ''}{group.claims.length} hồ sơ</span>
+        <span>{expanded ? 'Thu gọn ↑' : 'Xem các yêu cầu ↓'}</span>
+      </span>
+    </button>
+    {expanded && <div id={listId} className="claim-group-expanded">
+      <Link className="claim-group-post-link" to={`/chi-tiet/${group.postId}`}>Xem bài đăng →</Link>
+      <ClaimRows claims={visible} incoming={incoming} collapseHistory={status === 'ALL'} latestOnly={!incoming} />
+    </div>}
+  </article>;
 }
