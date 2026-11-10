@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { getClaim, getClaimOnPost, reviewClaim, cancelClaim } from '../api/claimApi';
-import { CLAIM_STATUS, CLAIM_ACTION, claimDate, evidenceUrl, validClaimId, claimDetailPath } from '../claimUtils';
+import { CLAIM_STATUS, CLAIM_ACTION, claimDate, evidenceUrl, validClaimId, claimDetailPath, postClaimsPath } from '../claimUtils';
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import ClaimAnswerSummary from '../components/ClaimAnswerSummary';
 import RejectClaimDialog from '../components/RejectClaimDialog';
@@ -91,10 +91,14 @@ function ClaimDetail({ postId, id }) {
     } catch (err) { setError(err.message); }
     finally { inFlight.current = false; setBusy(false); }
   }
+  const returnTo = location.state?.claimListReturn;
+  const listPath = typeof returnTo === 'string' && (returnTo === '/claim-cua-toi' || returnTo.startsWith('/claim-cua-toi?'))
+    ? returnTo : claim?.claimType === 'OFFICE' ? `/claim-cua-toi?view=${String(user?.id) === String(claim.claimantId) ? 'sent' : 'office'}`
+      : postClaimsPath(postId, 'ALL', String(user?.id) === String(claim?.claimantId) ? 'sent' : 'received');
   return <main className="container claims-page">
 
     <header className="claims-heading"><div><p className="claims-muted">Yêu cầu nhận đồ</p><h1>{claim?.postTitle || "Đang tải hồ sơ…"}</h1></div><div className="claim-actions">
-      <Link className="btn btn-ghost" to={claim && String(user?.id) === String(claim.claimantId) ? '/claim-cua-toi?view=sent' : claim?.claimType === 'OFFICE' ? '/claim-cua-toi?view=office' : '/claim-cua-toi'}>Claim của tôi</Link>
+      <Link className="btn btn-ghost" to={listPath}>Về danh sách yêu cầu</Link>
       <Link className="btn btn-ghost" to={`/chi-tiet/${postId}`}>Xem bài đăng</Link></div></header>
     {error && <div role="alert" className="claim-alert">{error}</div>}
     {notice && <div role="status" className="claim-notice">{notice}</div>}
@@ -103,7 +107,7 @@ function ClaimDetail({ postId, id }) {
       {claim.canOpenChat && <OpenChatButton postId={claim.postId} />}
       {claim.claimType==='P2P' && ['APPROVED', 'COMPLETED'].includes(claim.status) &&<HandoverPanel claim={claim} onChanged={()=>getClaimOnPost(postId,id).then(setClaim).catch(e=>setError(e.message))}/>}
       <details className="claim-panel workflow-evidence" open={claim.status === 'PENDING'}><summary>Thông tin xác minh</summary>
-        {String(user?.id) !== String(claim.claimantId) && <p><Link to={`/bai-dang/${claim.postId}/claims`}>← Các claim trên bài này</Link></p>}
+
         <h2 className="claim-prose"><Link to={`/chi-tiet/${claim.postId}`}>{claim.postTitle}</Link></h2>
         <p>Người claim: <strong>{claim.claimantName}</strong> · {claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : <>Người nhặt: <strong>{claim.finderName}</strong></>}</p>
         {claim.claimType === 'OFFICE' && <p className="claim-notice">Đồ đã được phòng ban tiếp nhận, xác minh. {claim.storageLocationName && <>Nơi lưu trữ: {claim.storageLocationName}. </>}Hồ sơ do cán bộ tiếp nhận xét duyệt; không có chat P2P.</p>}

@@ -32,8 +32,9 @@ public class ClaimController {
     public ResponseEntity<ApiResponse<ClaimPostGroupDto.PageData>> grouped(
             @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "8") int size,
             @RequestParam(defaultValue = "ALL") String status, @RequestParam(defaultValue = "false") boolean sent,
+            @RequestParam(required = false) Long postId,
             @AuthenticationPrincipal CustomUserDetails user) {
-        return response(200, service.grouped(page, size, status, sent, user));
+        return response(200, service.grouped(page, size, status, sent, postId, user));
     }
 
     @GetMapping("/claims/office")

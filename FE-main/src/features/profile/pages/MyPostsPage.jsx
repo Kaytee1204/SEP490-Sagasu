@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getMyPosts, deletePost } from '@/features/items/api/postApi';
 import Pagination from '@/components/common/Pagination';
 import MyPostCard from '../components/MyPostCard';
+import { EditPostDialog } from '@/features/items/pages/EditPostPage';
 import MyPostsEmptyState from '../components/MyPostsEmptyState';
 import './MyPostsPage.css';
 
@@ -81,6 +82,7 @@ function MyPostList({ page, filter, onPage, onReload }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [postToDelete, setPostToDelete] = useState(null);
+  const [postToEdit, setPostToEdit] = useState(null);
   useEffect(() => {
     let cancelled = false;
     getMyPosts(page, filter).then(data => { if (!cancelled) setResult(data); })
@@ -103,9 +105,13 @@ function MyPostList({ page, filter, onPage, onReload }) {
       : !result ? <p role="status">Đang tải bài đăng…</p> : <>
         <p>{result.totalElements} bài đăng</p>
         {result.content.length ? result.content.map(post => <MyPostCard key={`${post.id}:${post.updatedAt}`} post={post}
-          onDelete={setPostToDelete} />) : <MyPostsEmptyState />}
+          onDelete={setPostToDelete} onEdit={setPostToEdit} />) : <MyPostsEmptyState />}
         <Pagination currentPage={page} totalPages={result.totalPages} onPageChange={onPage} />
       </>}
+    {postToEdit && <EditPostDialog id={postToEdit.id} onClose={() => setPostToEdit(null)} onSaved={() => {
+      setPostToEdit(null); setNotice('Đã cập nhật bài đăng.');
+      getMyPosts(page, filter).then(data => {if (!data.content.length && page > 1) onPage(page - 1); else setResult(data);}).catch(err => setError(err.message));
+    }} />}
     {postToDelete && <DeletePostDialog post={postToDelete} onCancel={() => setPostToDelete(null)} onSuccess={afterDelete} />}
   </>;
 }

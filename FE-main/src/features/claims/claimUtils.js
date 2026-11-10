@@ -16,3 +16,5 @@ export function evidenceUrl(value) {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; }
   catch { return null; }
 }
+
+export const postClaimsPath = (postId, status = 'ALL', view = 'received') => `/claim-cua-toi?${new URLSearchParams({ view, postId: String(postId), claimStatus: status })}`;

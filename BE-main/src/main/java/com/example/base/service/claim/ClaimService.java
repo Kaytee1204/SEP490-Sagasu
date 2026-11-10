@@ -120,19 +120,20 @@ public class ClaimService {
 
     /** Page by posts so a post and its claim history never split across list pages. */
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
-    public ClaimPostGroupDto.PageData grouped(int page, int size, String status, boolean sent, CustomUserDetails user) {
+    public ClaimPostGroupDto.PageData grouped(int page, int size, String status, boolean sent, Long selectedPostId, CustomUserDetails user) {
         Account actor = activeActor(user);
         var paging = pageable(page, size);
         String selectedStatus = filter(status);
         String scope = sent ? "c.claimant.id=:actorId" : "c.post.account.id=:actorId";
-        String where = " from Claim c where c.claimType='P2P' and " + scope;
+        String where = " from Claim c where c.claimType='P2P' and " + scope
+                + " and (:postId is null or c.post.id=:postId)";
         var count = entityManager.createQuery("select count(distinct c.post.id)" + where
                 + " and (:status='ALL' or c.status=:status)", Long.class)
-                .setParameter("actorId", actor.getId()).setParameter("status", selectedStatus).getSingleResult();
+                .setParameter("actorId", actor.getId()).setParameter("postId", selectedPostId).setParameter("status", selectedStatus).getSingleResult();
         var ids = entityManager.createQuery("select c.post.id" + where + " group by c.post.id"
                 + " having (:status='ALL' or sum(case when c.status=:status then 1 else 0 end)>0)"
                 + " order by max(case when c.status='PENDING' then 1 else 0 end) desc, max(c.createdAt) desc, c.post.id desc", Long.class)
-                .setParameter("actorId", actor.getId()).setParameter("status", selectedStatus)
+                .setParameter("actorId", actor.getId()).setParameter("postId", selectedPostId).setParameter("status", selectedStatus)
                 .setFirstResult((int) paging.getOffset()).setMaxResults(size).getResultList();
         if (ids.isEmpty()) return new ClaimPostGroupDto.PageData(List.of(), page, size, count, (int) Math.ceil((double) count / size));
         var records = entityManager.createQuery("select c from Claim c join fetch c.post p join fetch p.account"

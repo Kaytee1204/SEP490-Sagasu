@@ -1,9 +1,11 @@
+import { postClaimsPath } from '@/features/claims/claimUtils';
 import '@/features/workspace/Workspace.css';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
+import { EditPostDialog } from './EditPostPage';
 import { getLatestClaimOnPost } from '@/features/claims/api/claimApi';
 import { claimDetailPath, canSubmitPostClaim, postClaimType } from '@/features/claims/claimUtils';
 import ItemGallery from '../components/detail/ItemGallery';
@@ -45,6 +47,8 @@ function PostDetail({ id, onRetry }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editNotice, setEditNotice] = useState('');
   const [activeImage, setActiveImage] = useState(0);
   const [showSmartMatch, setShowSmartMatch] = useState(false);
   const validId = /^[1-9]\d*$/.test(id);
@@ -209,7 +213,7 @@ function PostDetail({ id, onRetry }) {
             )}
           </div>
 
-          {post.postType === 'FOUND' && ((post.isOwner || post.canEditOwnPost) || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={post.officeReceipt && isApprover ? '/approver/office-claims' : `/bai-dang/${post.id}/claims`}>Xét duyệt yêu cầu nhận đồ</Link>}
+          {post.postType === 'FOUND' && ((post.isOwner || post.canEditOwnPost) || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={post.officeReceipt && isApprover ? '/approver/office-claims' : postClaimsPath(post.id)}>Xét duyệt yêu cầu nhận đồ</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
           {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
             && post.moderationStatus === 'VISIBLE'
@@ -220,7 +224,13 @@ function PostDetail({ id, onRetry }) {
             <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được văn phòng lưu giữ'}</h2>
             <dl className="space-y-3 text-sm leading-6"><div><dt className="text-slate-600">{post.officeReceipt.status === 'RETURNED' ? 'Nơi lưu trữ trước khi trao trả' : 'Nơi lưu trữ'}</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.storageLocationName || 'Liên hệ văn phòng tiếp nhận'}</dd></div><div><dt className="text-slate-600">Cán bộ tiếp nhận</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.receivedBy || 'Chưa cập nhật tên'}</dd></div><div><dt className="text-slate-600">Thời điểm tiếp nhận</dt><dd className="font-semibold text-slate-900">{new Date(post.officeReceipt.receivedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</dd></div></dl>
           </section>}
-          {post.canEditOwnPost ? <Link className="btn btn-ghost" to={`/sua-tin/${post.id}`}>Sửa bài đăng</Link>
+          {editNotice && <p role="status">{editNotice}</p>}
+          {editOpen && <EditPostDialog id={post.id} onClose={() => setEditOpen(false)} onSaved={() => {
+            setEditOpen(false); setEditNotice('Đã lưu thay đổi.');
+            getPostDetail(post.id).then(updated => {setResult(current => ({...current, post:updated}));setActiveImage(0);})
+              .catch(() => setEditNotice('Đã lưu bài. Hãy tải lại trang để xem nội dung mới.'));
+          }} />}
+          {post.canEditOwnPost ? <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(true)}>Sửa bài đăng</button>
             : post.isOwner && <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng của tôi</Link>}
           {post.moderationStatus === 'PENDING' && <p role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
           <div><strong>Trạng thái: </strong>{STATUS_LABELS[post.status] || post.status}</div>

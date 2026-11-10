@@ -43,13 +43,17 @@ html:has(.post-search-page), body:has(.post-search-page) { overflow-x: clip; }
 .post-list-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .post-list-no-image { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted); font-size: .875rem; }
 .post-list-card-body { display: flex; flex-direction: column; gap: 10px; padding: 20px; flex: 1; overflow-wrap: anywhere; }
-.post-list-badges { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
+.post-list-badges { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .post-list-badges .badge, .post-list-category { font-size: .625rem; font-weight: 700; line-height: 1.4; padding: 4px 7px; border-radius: 5px; letter-spacing: .035em; text-transform: uppercase; }
-.post-list-category { color: var(--teal-600); background: rgba(30, 107, 107, .11); }
-.post-list-card h2 { font-size: 1.0625rem; font-weight: 700; line-height: 1.45; }
+.post-list-category { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--teal-600); background: rgba(30, 107, 107, .11); }
+.post-list-card h2 { font-size: 1.0625rem; font-weight: 700; line-height: 1.45; min-height: 2.9em; margin: 0; }
+.post-list-card h2 a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.post-list-location { min-width: 0; }
+.post-list-location span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.post-list-author span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .post-list-card h2 a { color: var(--text-primary); text-decoration: none; }
 .post-list-card h2 a:hover { text-decoration: underline; }
-.post-list-card p { display: flex; gap: 7px; color: var(--text-secondary); font-size: .75rem; line-height: 1.5; }
+.post-list-card p { margin: 0; display: flex; gap: 7px; color: var(--text-secondary); font-size: .75rem; line-height: 1.5; }
 .post-list-card p svg { flex-shrink: 0; margin-top: 1px; width: 14px; height: 14px; }
 .post-list-card .btn { margin-top: auto; min-height: 40px; padding: 8px 12px; border: 1px solid var(--border-strong); font-size: .875rem; }
 .post-list-handling { font-weight: 600; }
