@@ -73,3 +73,6 @@
 .claim-group-history summary { cursor:pointer; padding:16px 4px; color:var(--text-secondary); }
 .claim-group-toggle:focus-visible,.claim-group-row:focus-visible,.claim-group-history summary:focus-visible { outline:2px solid var(--teal-600); outline-offset:-3px; }
 @media(max-width:600px) { .claim-group-toggle { padding:16px; gap:12px; } .claim-group-toggle .claim-post-thumbnail { flex-basis:80px; width:80px; height:80px; } .claim-group-expanded { padding-inline:12px; } }
+
+.claims-history-filter { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px; font-size:.875rem; color:var(--text-secondary); }
+.claims-history-filter select { min-height:40px; padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:var(--bg-surface); color:var(--text-primary); font:inherit; }

@@ -26,6 +26,7 @@ export default function ProfileSidebarCard({
   onCancelEdit,
   saving,
   feedback,
+  showQuickActions = true,
 }) {
   const disabledInputStyle = {
     background: '#f1f5f9',
@@ -337,7 +338,7 @@ export default function ProfileSidebarCard({
       </div>
 
       {/* Quick actions */}
-      <div
+      {showQuickActions && <div
         style={{
           background: 'var(--bg-surface)',
           border: '1px solid #e2e8f0',
@@ -452,7 +453,7 @@ export default function ProfileSidebarCard({
             <ChevronRight size={14} style={{ color: 'rgba(220, 38, 38, 0.45)' }} />
           </Link>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

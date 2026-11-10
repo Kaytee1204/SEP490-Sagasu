@@ -24,7 +24,7 @@ import java.util.*;
 
 @Service @RequiredArgsConstructor @Slf4j
 public class ClaimService {
-    private static final Set<String> FILTERS = Set.of("ALL", "PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "CLOSED");
+    private static final Set<String> FILTERS = Set.of("ALL", "HISTORY", "PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "CLOSED");
     private static final Set<String> ACTIVE_STATUSES = Set.of("PENDING", "APPROVED");
     private static final Set<String> RETRYABLE_STATUSES = Set.of("REJECTED", "CANCELLED");
     private final ClaimRepository claims;
@@ -137,10 +137,10 @@ public class ClaimService {
         String where = " from Claim c where c.claimType='P2P' and " + scope
                 + " and (:postId is null or c.post.id=:postId)";
         var count = entityManager.createQuery("select count(distinct c.post.id)" + where
-                + " and (:status='ALL' or c.status=:status)", Long.class)
+                + " and (:status='ALL' or c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED')))", Long.class)
                 .setParameter("actorId", actor.getId()).setParameter("postId", selectedPostId).setParameter("status", selectedStatus).getSingleResult();
         var ids = entityManager.createQuery("select c.post.id" + where + " group by c.post.id"
-                + " having (:status='ALL' or sum(case when c.status=:status then 1 else 0 end)>0)"
+                + " having (:status='ALL' or sum(case when c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED')) then 1 else 0 end)>0)"
                 + " order by max(case when c.status='PENDING' then 1 else 0 end) desc, max(c.createdAt) desc, c.post.id desc", Long.class)
                 .setParameter("actorId", actor.getId()).setParameter("postId", selectedPostId).setParameter("status", selectedStatus)
                 .setFirstResult((int) paging.getOffset()).setMaxResults(size).getResultList();

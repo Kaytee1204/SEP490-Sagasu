@@ -7,6 +7,8 @@ import { getGroupedClaims, getOfficeClaims } from '../api/claimApi';
 import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath, evidenceUrl } from '../claimUtils';
 import '../Claims.css';
 
+const HISTORY_STATUSES = ['COMPLETED', 'REJECTED', 'CANCELLED', 'CLOSED'];
+
 export default function MyClaimsPage({ embedded = false }) {
   const { user, isApprover } = useAuth();
   const [params] = useSearchParams();
@@ -37,7 +39,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
   });
   const [status, setStatus] = useState(() => {
     const urlStatus = searchParams.get('claimStatus');
-    if (urlStatus && (urlStatus === 'ALL' || CLAIM_STATUS[urlStatus])) return urlStatus;
+    if (urlStatus && (urlStatus === 'ALL' || urlStatus === 'HISTORY' || CLAIM_STATUS[urlStatus])) return urlStatus;
     return 'ALL';
   });
   const [attempt, setAttempt] = useState(0);
@@ -68,6 +70,8 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     return () => { cancelled = true; };
   }, [postId, incoming, view, page, status, key]);
   const loading = snapshot.key !== key;
+  const historySelected = status === 'HISTORY' || HISTORY_STATUSES.includes(status);
+  const activeFilter = historySelected ? 'HISTORY' : status;
   const Wrapper = embedded ? 'section' : 'main';
   const title = 'Yêu cầu nhận đồ';
   return <Wrapper className={`${embedded ? '' : 'container'} claims-page ${embedded ? 'claims-embedded' : ''}`} aria-label={title}>
@@ -82,10 +86,17 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
         onClick={() => updateClaimState(value, 1, 'ALL')}>{label}</button>)}
     </div>}
     <div className="claims-filters" aria-label="Lọc trạng thái claim">
-      {Object.entries({ ALL: 'Tất cả', ...CLAIM_STATUS }).map(([value, label]) => <button key={value} type="button"
-        className={`chip ${status === value ? 'active' : ''}`} aria-pressed={status === value}
+      {Object.entries({ ALL: 'Tất cả', PENDING: incoming ? 'Chờ bạn duyệt' : 'Chờ phản hồi', APPROVED: 'Đang nhận đồ', HISTORY: 'Lịch sử' }).map(([value, label]) => <button key={value} type="button"
+        className={`chip ${activeFilter === value ? 'active' : ''}`} aria-pressed={activeFilter === value}
         onClick={() => updateClaimState(view, 1, value)}>{label}</button>)}
     </div>
+    {historySelected && <div className="claims-history-filter">
+      <label htmlFor="claim-history-status">Trạng thái trong lịch sử</label>
+      <select id="claim-history-status" value={status} onChange={event => updateClaimState(view, 1, event.target.value)}>
+        <option value="HISTORY">Tất cả lịch sử</option>
+        {HISTORY_STATUSES.map(value => <option key={value} value={value}>{CLAIM_STATUS[value]}</option>)}
+      </select>
+    </div>}
     {loading ? <p role="status">Đang tải claim…</p> : snapshot.error ? <div className="claim-alert" role="alert"><p>{snapshot.error}</p>
       <button className="btn btn-ghost" type="button" onClick={() => setAttempt(n => n + 1)}>Thử lại</button></div> : <>
       <p className="claims-muted" role="status">{snapshot.result.totalElements} {grouped ? 'bài đăng' : 'hồ sơ'}</p>
@@ -131,7 +142,7 @@ function ClaimRow({ claim, incoming, showPost = false }) {
 
 function ClaimRows({ claims, incoming, collapseHistory = true, latestOnly = false, showPost = false }) {
   const sorted = [...claims].sort((a, b) => (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || b.id - a.id);
-  const active = latestOnly ? sorted.slice(0, 1) : sorted.filter(c => !['CANCELLED', 'REJECTED', 'CLOSED'].includes(c.status))
+  const active = latestOnly ? sorted.slice(0, 1) : sorted.filter(c => !HISTORY_STATUSES.includes(c.status))
     .sort((a, b) => Number(b.status === 'PENDING') - Number(a.status === 'PENDING'));
   const activeIds = new Set(active.map(c => c.id));
   const history = sorted.filter(c => !activeIds.has(c.id));
@@ -144,14 +155,14 @@ function ClaimRows({ claims, incoming, collapseHistory = true, latestOnly = fals
 }
 
 function ClaimPostGroup({ group, incoming, status, expanded, onToggle }) {
-  const visible = status === 'ALL' ? group.claims : group.claims.filter(claim => claim.status === status);
+  const visible = status === 'ALL' ? group.claims : group.claims.filter(claim => status === 'HISTORY' ? HISTORY_STATUSES.includes(claim.status) : claim.status === status);
   const listId = `claim-post-group-${group.postId}`;
   return <article className="claim-panel claim-post-group">
     <button type="button" className="claim-group-toggle" aria-expanded={expanded} aria-controls={listId} onClick={() => onToggle(!expanded)}>
       <ClaimPostThumbnail url={group.postThumbnailUrl} title={group.postTitle} />
       <span className="claim-group-heading"><strong>{group.postTitle}</strong>
         {incoming && group.pendingCount > 0 && <span className="claim-status claim-status-PENDING">{group.pendingCount} yêu cầu chờ duyệt</span>}
-        <span className="claims-muted">{incoming ? `${group.claimantCount} người yêu cầu · ` : ''}{group.claims.length} hồ sơ</span>
+        <span className="claims-muted">{incoming ? `${group.claimantCount} người yêu cầu · ` : ''}{visible.length} hồ sơ</span>
         <span>{expanded ? 'Thu gọn ↑' : 'Xem các yêu cầu ↓'}</span>
       </span>
     </button>

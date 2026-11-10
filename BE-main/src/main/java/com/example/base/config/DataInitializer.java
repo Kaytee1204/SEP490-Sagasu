@@ -77,7 +77,8 @@ public class DataInitializer {
             // DaiHV: appointment invitations for people bringing found items to the office.
             "db/migrations/20_office_intake_schedule.sql",
             // KhanhTB: In-App & Email Notification System with User Preferences.
-            "db/migrations/21_notifications.sql"
+            "db/migrations/21_notifications.sql",
+            "db/migrations/22_post_creation_requests.sql"
     );
 
     @Bean
