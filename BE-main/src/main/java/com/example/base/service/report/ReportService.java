@@ -28,6 +28,7 @@ public class ReportService {
     private final JdbcTemplate jdbc;
     private final WorkflowImages images;
     private final PlatformTransactionManager transactions;
+    private final ReportContextService context;
     private final com.example.base.service.notification.NotificationService notifications;
     public record Submit(String targetType,Long targetId,String description,UUID clientRequestId) {}
     public record Evidence(long id,String url,String name) {}
@@ -52,11 +53,13 @@ public class ReportService {
                 Detail duplicate=retry(actor,request.clientRequestId(),prepared.hash());
                 if(duplicate!=null)return duplicate;
                 String column=switch(request.targetType()){case "POST"->"post_id";case "CLAIM"->"claim_id";case "MESSAGE"->"message_id";default->"reported_account_id";};
-                if(jdbc.queryForObject("select count(*) from report where reporter_id=? and kind='GENERAL' and status in ('OPEN','IN_REVIEW') and "+column+"=?",Long.class,actor,request.targetId())>0)
+                if(jdbc.queryForObject("select count(*) from report where reporter_id=? and status in ('OPEN','IN_REVIEW') and "+column+"=?",Long.class,actor,request.targetId())>0)
                     throw new AppException(ErrorCode.REPORT_DUPLICATE);
                 inserted[0]=true;
-                Report created = insert(actor,"GENERAL",request.targetType(),request.targetId(),text,request.clientRequestId(),prepared.hash(),uploaded);
-                notifications.notifyRoles(List.of(AccountRole.ADMIN, AccountRole.MANAGER),actor,"REPORT_CREATED",
+                // DaiHV: office handover complaints use the same reporting form and preserve the completed receipt.
+                boolean officeIssue="CLAIM".equals(request.targetType()) && Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from office_handover where claim_id=?)",Boolean.class,request.targetId()));
+                Report created = insert(actor,officeIssue?"HANDOVER_ISSUE":"GENERAL",request.targetType(),request.targetId(),text,request.clientRequestId(),prepared.hash(),uploaded);
+                notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",
                     "Báo cáo vi phạm mới (#" + created.getId() + ")",
                     "Người dùng vừa gửi báo cáo đối với " + request.targetType() + " #" + request.targetId() + ": " + text,
                     "/admin/reports",false);
@@ -72,6 +75,10 @@ public class ReportService {
         Report report=reports.saveAndFlush(new Report(actor,kind,type,target,text,request,hash));
         for(var image:uploaded)jdbc.update("insert into report_evidence(report_id,storage_key,original_name,mime_type,size_bytes,content_hash,sort_order) values(?,?,?,?,?,?,?)",report.getId(),image.key(),image.name(),image.mime(),image.size(),image.hash(),image.order());
         jdbc.update("insert into report_activity(report_id,actor_id,action,to_status) values(?,?,'CREATE','OPEN')",report.getId(),actor);
+        // DaiHV integration: keep the source content before later edits and retain referenced assets.
+        context.capture(report.getId(),"SUBMISSION");
+        if("CLAIM".equals(type) && "HANDOVER_ISSUE".equals(kind))
+            jdbc.update("insert into office_handover_issue(report_id,handover_id) select ?,handover_id from office_handover where claim_id=? on conflict do nothing",report.getId(),target);
         return report;
     }
     public Detail retry(long actor,UUID request,String hash) {
@@ -96,7 +103,7 @@ public class ReportService {
     }
     public Detail detail(Report report) {
         var evidence=jdbc.query("select * from report_evidence where report_id=? order by sort_order",(rs,n)->new Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),report.getId());
-        var activities=jdbc.query("select action,to_status,public_note,created_at from report_activity where report_id=? order by activity_id",(rs,n)->new Activity(rs.getString(1),rs.getString(2),rs.getString(3),rs.getObject(4,OffsetDateTime.class)),report.getId());
+        var activities=jdbc.query("select action,to_status,public_note,created_at from report_activity where report_id=? and (public_note is not null or action='CREATE') order by activity_id",(rs,n)->new Activity(rs.getString(1),rs.getString(2),rs.getString(3),rs.getObject(4,OffsetDateTime.class)),report.getId());
         return new Detail(report.getId(),report.getKind(),report.targetType(),report.targetId(),report.getDescription(),report.getStatus(),report.getResolutionNote(),report.getCreatedAt(),evidence,activities);
     }
     private void validate(Submit r) {
@@ -105,7 +112,7 @@ public class ReportService {
     private void checkTarget(Submit r,long actor) {
         boolean allowed=switch(r.targetType()) {
             case "POST" -> {Post p=em.find(Post.class,r.targetId()); yield p!=null && p.getDeletedAt()==null && ("VISIBLE".equals(p.getModerationStatus()) || p.getAccount().getId()==actor);}
-            case "CLAIM" -> {Claim c=em.find(Claim.class,r.targetId()); yield c!=null && (c.getClaimant().getId()==actor || claimPolicy.reviewer(c,em.find(Account.class,actor)));}
+            case "CLAIM" -> {Claim c=em.find(Claim.class,r.targetId()); yield c!=null && ((c.getClaimant()!=null && c.getClaimant().getId()==actor) || claimPolicy.reviewer(c,em.find(Account.class,actor)));}
             case "MESSAGE" -> {ChatMessage m=em.find(ChatMessage.class,r.targetId()); if(m!=null)chats.requireMember(m.getConversationId(),actor); yield m!=null;}
             case "USER" -> r.targetId()!=actor && em.find(Account.class,r.targetId())!=null && jdbc.queryForObject("select count(*) from post where account_id=? and deleted_at is null and moderation_status='VISIBLE'",Long.class,r.targetId())>0
                 || r.targetId()!=actor && jdbc.queryForObject("select count(*) from chat_participant a join chat_participant b using(conversation_id) where a.account_id=? and b.account_id=?",Long.class,actor,r.targetId())>0;

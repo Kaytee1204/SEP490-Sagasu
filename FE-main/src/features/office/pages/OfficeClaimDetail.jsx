@@ -13,6 +13,8 @@ import LoadState from "../components/LoadState";
 import ReceiptInfo from "../components/ReceiptInfo";
 import OfficeReturnPanel from "../components/OfficeReturnPanel";
 import "../Office.css";
+// DaiHV integration: office complaints enter the shared Manager report workflow.
+import ReportButton from "../../reports/ReportButton";
 
 export default function OfficeClaimDetail({ mine = false }) {
   const { id } = useParams();
@@ -57,6 +59,7 @@ export default function OfficeClaimDetail({ mine = false }) {
             >
               <Badge value={claim.status} />
               <Badge value={claim.channel} />
+              <ReportButton type="CLAIM" id={claim.id} label="Phản ánh về yêu cầu nhận đồ" />
             </Header>
             {!mine && claim.ownRequest && ["PENDING", "NEEDS_INFO"].includes(claim.status) && <Notice>Đây là yêu cầu nhận đồ của bạn. Nhờ một nhân viên khác xét duyệt nhé.</Notice>}
             <div className="of-detail-grid of-claim-grid">

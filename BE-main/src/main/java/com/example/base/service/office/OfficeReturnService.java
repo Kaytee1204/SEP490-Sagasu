@@ -22,6 +22,8 @@ import static com.example.base.service.office.OfficeAccess.bad;
 
 @Service @RequiredArgsConstructor
 public class OfficeReturnService {
+    // DaiHV integration: investigation holds apply to physical handover, not to reading the dossier.
+    private final com.example.base.service.report.ReportHoldGuard reportHolds;
     private final OfficeAccess access;
     private final ClaimRepository claims;
     private final PostRepository posts;
@@ -134,6 +136,7 @@ public class OfficeReturnService {
         finish(c,actor);claims.flush();return view(c,actor);
     }
     private void finish(Claim c,Account actor) {
+        reportHolds.requireAvailable(c.getPost().getId());
         jdbc.update("update office_handover set status='COMPLETED',confirmed_at=now(),version=version+1 where claim_id=?",c.getId());
         c.completeReceipt(); c.getPost().markReturnedFromOffice();
         activities.save(new ClaimActivity(c,actor,"CONFIRM_RECEIPT","APPROVED","Văn phòng xác nhận đã giao đủ đồ cho người nhận. Hoàn tất trao trả."));

@@ -35,10 +35,11 @@ export const ADMIN_NAV_SECTIONS = [
         roles: ['MANAGER'],
       },
       {
-        label: 'Báo cáo vi phạm',
+        // DaiHV: the report investigation queue belongs to Manager.
+        label: 'Báo cáo & phản ánh',
         path: '/admin/reports',
         icon: AlertTriangle,
-        roles: ['ADMIN', 'MANAGER'],
+        roles: ['MANAGER'],
         badgeKey: 'pendingReports',
       },
       {

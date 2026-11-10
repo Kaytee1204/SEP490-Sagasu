@@ -20,6 +20,8 @@ import static com.example.base.service.office.OfficeAccess.bad;
 
 @Service @RequiredArgsConstructor
 public class OfficeTransferService {
+    // DaiHV integration: do not transfer custody while a Manager is verifying a reported incident.
+    private final com.example.base.service.report.ReportHoldGuard reportHolds;
     private final OfficeAccess access;
     private final PostRepository posts;
     private final ClaimRepository claims;
@@ -151,6 +153,7 @@ public class OfficeTransferService {
     }
 
     private Long receive(Post post,Account actor,TransferDecision request) {
+            reportHolds.requireAvailable(post.getId());
             if (actor.getId().equals(post.getAccount().getId())) throw bad("Người giao không được tự xác nhận tiếp nhận đồ của mình.");
             if (post.getDeletedAt()!=null || !Set.of("OPEN","RESERVED").contains(post.getStatus()) || receipts.existsByPostId(post.getId())) throw bad("Đồ vật đã được xử lý hoặc không còn có thể tiếp nhận.");
             String condition=required(request.condition(),"Ghi tình trạng đồ khi nhận.");

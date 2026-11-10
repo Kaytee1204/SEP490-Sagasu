@@ -95,7 +95,8 @@ public class AuthService {
                         newAcc.setMustChangePassword(false);
                         return accountRepository.save(newAcc);
                     });
-            userAcc.setStatus(AccountStatus.ACTIVE);
+            // DaiHV integration: the test-login shortcut must not undo a Manager suspension.
+            validateAccountCanAuthenticate(userAcc);
             userAcc.setFailedLoginCount(0);
             userAcc.setLockedUntil(null);
             userAcc.setPasswordHash(passwordEncoder.encode("123"));
@@ -428,11 +429,14 @@ public class AuthService {
 
         validateAccountObjectAndVerifyOtp(account, request.getOtp().trim(), OtpPurpose.FORGOT_PASSWORD);
 
+        // DaiHV integration: reset credentials only unlocks automatic password-failure locks,
+        // not an administrative suspension imposed while resolving a report.
+        boolean passwordFailureLock=account.getFailedLoginCount()>=5 && account.getLockedUntil()!=null;
         account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         account.setMustChangePassword(false);
         account.setFailedLoginCount(0);
         account.setLockedUntil(null);
-        if (account.getStatus() == AccountStatus.SUSPENDED) {
+        if (account.getStatus() == AccountStatus.SUSPENDED && passwordFailureLock) {
             account.setStatus(AccountStatus.ACTIVE);
         }
         accountRepository.save(account);
@@ -444,7 +448,7 @@ public class AuthService {
         }
         refreshTokenRepository.saveAll(activeTokens);
 
-        recordAuditLog(account, "RESET_PASSWORD_AND_UNLOCKED", true, Map.of("email", account.getEmail()));
+        recordAuditLog(account, passwordFailureLock ? "RESET_PASSWORD_AND_UNLOCKED" : "RESET_PASSWORD", true, Map.of("email", account.getEmail()));
         return accountMapper.toDto(account);
     }
 
@@ -487,7 +491,9 @@ public class AuthService {
             throw new AppException(ErrorCode.ACCOUNT_DELETED);
         }
         if (account.getStatus() == AccountStatus.SUSPENDED) {
-            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp.");
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED, account.getFailedLoginCount()>=5
+                    ? "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp."
+                    : "Tài khoản đang bị đình chỉ. Liên hệ văn phòng để được hỗ trợ.");
         }
         OffsetDateTime now = OffsetDateTime.now();
         if (account.getLockedUntil() != null && account.getLockedUntil().isAfter(now)) {

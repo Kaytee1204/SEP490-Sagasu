@@ -20,6 +20,7 @@ public class R2ImageStorage implements ImageStorage {
     private final S3Client client;
     private final S3Presigner presigner;
     private final R2Properties properties;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Override
     public void put(String key, byte[] bytes, String contentType) {
@@ -34,6 +35,8 @@ public class R2ImageStorage implements ImageStorage {
 
     @Override
     public void delete(String key) {
+        // DaiHV integration: source edits must not delete evidence retained by an investigation.
+        if(Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from report_asset where storage_key=?)",Boolean.class,key)))return;
         client.deleteObject(DeleteObjectRequest.builder().bucket(properties.bucket()).key(key).build());
     }
 

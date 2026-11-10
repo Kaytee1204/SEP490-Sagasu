@@ -3,7 +3,8 @@ import { useChat } from '@/features/chat/ChatProvider';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
 import { getHandover,uploadHandover,confirmHandover } from './handoverApi';
 import './Handover.css';
-const statusLabels={NOT_RECORDED:'Chưa ghi nhận giao đồ',WAITING_CONFIRMATION:'Chờ người nhận xác nhận',COMPLETED:'Đã nhận đồ',DISPUTED:'Có sự cố — chờ Manager xử lý'};
+// DaiHV integration: reflect Manager dispute outcomes without changing the P2P form.
+const statusLabels={NOT_RECORDED:'Chưa ghi nhận giao đồ',WAITING_CONFIRMATION:'Chờ người nhận xác nhận',COMPLETED:'Đã nhận đồ',DISPUTED:'Có sự cố — chờ quản lý xử lý',CANCELLED:'Đã kết thúc bàn giao theo kết luận của quản lý'};
 const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});
 export default function HandoverPanel({claim,onChanged}) {
   const {revision}=useChat();
@@ -40,6 +41,7 @@ export default function HandoverPanel({claim,onChanged}) {
   return <section className="claim-panel handover-panel"><h2>Bàn giao đồ P2P</h2>
     {error&&<p role="alert" className="claim-alert">{error}</p>}{!data&&!error&&<p>Đang tải bàn giao…</p>}
     {data&&<><p className="claim-notice">{statusLabels[data.status]}</p>{data.recordedAt&&<p>Người nhặt ghi nhận giao lúc {date(data.recordedAt)}</p>}{data.note&&<p className="claim-prose">{data.note}</p>}
+    {data.heldForReview&&<p className="claim-alert">Việc giao nhận đang tạm dừng để quản lý đối chiếu báo cáo.</p>}
     <div className="report-evidence">{evidence.map((item,i)=><button key={item.id} type="button" onClick={()=>setImage(i)} aria-label="Xem ảnh giao đồ"><img src={item.url} alt={item.name}/></button>)}</div>
     {data.canRecord&&<form className="claim-form" onSubmit={record}>
       <label>Ghi chú giao đồ (tùy chọn)<textarea maxLength={2000} disabled={busy} value={note} onChange={e=>{setNote(e.target.value);request.current=null;}}/></label>
@@ -59,7 +61,7 @@ export default function HandoverPanel({claim,onChanged}) {
     </form>}
     {data.issue&&<section className="claim-notice"><h3>Báo cáo sự cố #{data.issue.id}</h3><p className="claim-prose">{data.issue.description}</p><p>Đang chờ Manager xử lý. Hai bên vẫn chat được; không thể hoàn tất hoặc hủy claim.</p>
       <div className="report-evidence">{issueEvidence.map((item,i)=><button type="button" key={item.id} onClick={()=>setImage(evidence.length+i)} aria-label="Xem ảnh sự cố"><img src={item.url} alt={item.name}/></button>)}</div></section>}
-    {data.confirmedAt&&<p className="claim-notice">Người nhận xác nhận lúc {date(data.confirmedAt)}. Bài đã trao trả; chat chỉ đọc.</p>}
+    {data.confirmedAt&&<p className="claim-notice">Hoàn tất trao trả lúc {date(data.confirmedAt)}. Hội thoại được giữ lại để đối chiếu.</p>}
     </>}
     {image!==null&&<ClaimEvidencePreview images={gallery} initialIndex={image} onClose={()=>setImage(null)}/>}
   </section>;

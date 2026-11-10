@@ -1,14 +1,22 @@
 // src/components/layouts/admin/AdminLayout.jsx
-import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
-import { INITIAL_REPORTS } from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
+import { reviewApi } from '@/features/report-review/api';
 
 export default function AdminLayout() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [reports] = useState(INITIAL_REPORTS);
-  const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
+  // DaiHV integration: report badges reflect the real queue, only for the responsible role.
+  const {user}=useAuth();const location=useLocation();
+  const [pendingReportsCount,setPendingReportsCount]=useState(0);
+  useEffect(()=>{
+    let active=true;
+    const load=()=>{if(user?.role==='MANAGER')reviewApi.list({status:'OPEN'}).then(r=>{if(active)setPendingReportsCount(r.totalElements);}).catch(()=>{if(active)setPendingReportsCount(0);});else setPendingReportsCount(0);};
+    load();window.addEventListener('report-review-changed',load);
+    return()=>{active=false;window.removeEventListener('report-review-changed',load);};
+  },[user?.role,location.pathname]);
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">

@@ -6,7 +6,7 @@ import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePrev
 import { getMyReports,getReport } from './reportApi';
 import './Reports.css';
 const statuses={OPEN:'Chờ xử lý',IN_REVIEW:'Đang xem xét',RESOLVED:'Đã xử lý',REJECTED:'Bị từ chối'};
-const targets={POST:'Bài đăng',CLAIM:'Hồ sơ claim',MESSAGE:'Tin nhắn',USER:'Tài khoản'};
+const targets={POST:'Bài đăng',CLAIM:'Yêu cầu nhận đồ',MESSAGE:'Tin nhắn',USER:'Tài khoản'};
 const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});
 export default function MyReportsPage() {
   const {user}=useAuth();return <MyReports key={user.id}/>;
@@ -15,6 +15,8 @@ function MyReports() {
   const [page,setPage]=useState(1),[status,setStatus]=useState('ALL'),[result,setResult]=useState(null),[error,setError]=useState('');
   useEffect(()=>{let cancelled=false;setResult(null);setError('');getMyReports(page,status).then(data=>{if(!cancelled)setResult(data);}).catch(e=>{if(!cancelled)setError(e.message);});return()=>{cancelled=true;};},[page,status]);
   return <main className="container reports-page"><h1>Báo cáo của tôi</h1><p>Theo dõi báo cáo và sự cố bàn giao bạn đã gửi.</p>
+    {/* DaiHV integration: participants answer without seeing another person's dossier. */}
+    <Link className="btn btn-ghost" to="/bao-cao-trao-doi">Thông tin cần bổ sung & kết quả xử lý →</Link>
     <div className="claims-filters">{Object.entries({ALL:'Tất cả',...statuses}).map(([value,label])=><button key={value} className={`chip ${status===value?'active':''}`} onClick={()=>{setStatus(value);setPage(1);}}>{label}</button>)}</div>
     {error&&<p role="alert" className="report-error">{error}</p>}{!result&&!error&&<p role="status">Đang tải báo cáo…</p>}
     {result&&<><p>{result.totalElements} báo cáo</p>{result.content.map(report=><Link className="report-card" key={report.id} to={`/bao-cao/${report.id}`}><h2>Báo cáo #{report.id} · {statuses[report.status]}</h2><p>{report.kind==='HANDOVER_ISSUE'?'Sự cố bàn giao':targets[report.targetType]} #{report.targetId}</p><p>{report.description.length>240?report.description.slice(0,240)+'…':report.description}</p><p>{date(report.createdAt)}</p></Link>)}

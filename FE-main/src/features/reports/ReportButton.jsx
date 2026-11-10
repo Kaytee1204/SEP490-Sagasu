@@ -21,7 +21,7 @@ function ReportForm({type,id,close,done}) {
   }
   return <dialog ref={dialog} className="report-dialog" aria-labelledby={title} onCancel={e=>{e.preventDefault();if(!sending.current)close();}}>
     <header><h2 id={title}>Gửi báo cáo</h2><button disabled={busy} type="button" aria-label="Đóng" onClick={close}><X/></button></header>
-    <form onSubmit={send}><p>Báo cáo được gửi đến Manager để xem xét. Nội dung đã gửi được giữ nguyên.</p>
+    <form onSubmit={send}><p>Báo cáo được gửi đến quản lý để xem xét. Nội dung đã gửi được giữ nguyên.</p>
       <label>Lý do báo cáo *<textarea required maxLength={5000} value={reason} disabled={busy} onChange={e=>{setReason(e.target.value);retry.current=null;}}/></label>
       <label>Ảnh bằng chứng (tùy chọn, tối đa 5 ảnh JPG/PNG, 5 MB/ảnh)<input type="file" accept="image/jpeg,image/png" multiple disabled={busy} onChange={e=>{const picked=[...e.target.files];e.target.value='';if(picked.length>5||picked.some(f=>!['image/jpeg','image/png'].includes(f.type)||!f.size||f.size>5242880)){setError('Chọn tối đa 5 ảnh JPG/PNG, mỗi ảnh không quá 5 MB.');return;}setFiles(picked);retry.current=null;setError('');}}/></label>
       {files.map((file,i)=><div key={i}>{file.name}<button type="button" disabled={busy} onClick={()=>{setFiles(old=>old.filter((_,n)=>n!==i));retry.current=null;}}>Bỏ ảnh</button></div>)}

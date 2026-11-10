@@ -33,6 +33,7 @@ import IntakeFormPage from '@/features/approver/pages/IntakeFormPage';
 import IntakeDetailPage from '@/features/approver/pages/IntakeDetailPage';
 import ChatPage from '@/features/chat/pages/ChatPage';
 import MyReportsPage,{ReportDetailPage} from '@/features/reports/MyReportsPage';
+import ReportExchangesPage from '@/features/report-review/ReportExchangesPage';
 import NotificationProvider from '@/features/notifications/NotificationProvider';
 
 function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
@@ -90,6 +91,7 @@ function AppRoutes() {
         <Route path="/tin-nhan/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
         <Route path="/bao-cao-cua-toi" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
+        <Route path="/bao-cao-trao-doi" element={<ProtectedRoute><ReportExchangesPage /></ProtectedRoute>} />
         <Route path="/bao-cao/:id" element={<ProtectedRoute><ReportDetailPage /></ProtectedRoute>} />
         <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />
         <Route path="/bai-dang/:postId/claims/:claimId" element={<ProtectedRoute><ClaimDetailPage /></ProtectedRoute>} />
@@ -173,7 +175,7 @@ function AppRoutes() {
         <Route path="items/:id" element={<ProtectedRoute managerOnly><StaffPostDetail /></ProtectedRoute>} />
         <Route path="storage" element={<ProtectedRoute managerOnly><StoragePage /></ProtectedRoute>} />
         <Route path="transfers" element={<ProtectedRoute managerOnly><OfficeTransfers /></ProtectedRoute>} />
-        <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="reports" element={<ProtectedRoute managerOnly><AdminReportsPage /></ProtectedRoute>} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>
 

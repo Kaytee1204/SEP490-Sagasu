@@ -5,7 +5,9 @@ final class MigrationCompatibility {
     private MigrationCompatibility() {}
 
     static String prepare(String path, String sql) {
-        if (path.endsWith("15_office_email_invitation.sql") || path.endsWith("16_p2p_handover.sql")) {
+        // DaiHV: startup replays old scripts; preserve report-resolution history without editing team SQL.
+        if (path.endsWith("15_office_email_invitation.sql") || path.endsWith("16_p2p_handover.sql")
+                || path.endsWith("19_office_transfer_and_return.sql")) {
             sql = sql.replaceAll("(?s)ALTER TABLE claim_activity ADD CONSTRAINT chk_claim_activity_transition CHECK.*?IS TRUE\\);", TRANSITIONS);
         }
         if (path.endsWith("17_confirm_p2p_receipt.sql")) {
@@ -27,6 +29,7 @@ final class MigrationCompatibility {
           (action='CONFIRM_RECEIPT' AND from_status='APPROVED' AND to_status='COMPLETED') OR
           (action='AUTO_CLOSE' AND from_status IN ('PENDING','NEEDS_INFO') AND to_status='CLOSED') OR
           (action='REPORT_ISSUE' AND from_status='APPROVED' AND to_status='APPROVED' AND nullif(btrim(reason),'') IS NOT NULL) OR
+          (action='DISPUTE_RESOLVE' AND from_status='APPROVED' AND to_status IN ('APPROVED','REJECTED') AND nullif(btrim(reason),'') IS NOT NULL) OR
           (action IN ('INVITE_DECLINE','INVITE_EXPIRE','OFFICE_CANCEL') AND from_status='APPROVED' AND to_status='REJECTED')
          OR (action='TRANSFER_OFFICE' AND ((from_status='APPROVED' AND to_status='PENDING') OR (from_status=to_status AND from_status IN ('PENDING','NEEDS_INFO','REJECTED','CANCELLED','CLOSED'))))
         ) IS TRUE);

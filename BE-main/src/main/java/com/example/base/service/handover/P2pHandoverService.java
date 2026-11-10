@@ -20,6 +20,8 @@ import java.time.OffsetDateTime;
 
 @Service @RequiredArgsConstructor
 public class P2pHandoverService {
+    // DaiHV integration: Manager holds and resolved disputes must be respected by the existing P2P flow.
+    private final ReportHoldGuard reportHolds;
     private final P2pHandoverRepository handovers;
     private final ClaimRepository claims;
     private final PostRepository posts;
@@ -38,7 +40,7 @@ public class P2pHandoverService {
     public record ConfirmRequest(Long expectedVersion) {}
     public record IssueRequest(String reason,Long expectedVersion,UUID clientRequestId) {}
     public record Detail(Long id,long claimId,String status,String note,OffsetDateTime recordedAt,OffsetDateTime confirmedAt,
-        long version,boolean canRecord,boolean canConfirm,boolean canReportIssue,List<ReportService.Evidence> evidence,ReportService.Detail issue) {}
+        long version,boolean canRecord,boolean canConfirm,boolean canReportIssue,List<ReportService.Evidence> evidence,ReportService.Detail issue,boolean heldForReview) {}
     @Transactional(readOnly=true)
     public Detail detail(long claimId,CustomUserDetails user) {
         long actor=actors.actor(user).getId(); Claim claim=claim(claimId); participant(claim,actor);
@@ -79,6 +81,7 @@ public class P2pHandoverService {
         if(c.getClaimant().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
         P2pHandover h=handovers.findByClaimId(claimId).orElseThrow(this::changed);em.refresh(h,LockModeType.PESSIMISTIC_WRITE);
         if("COMPLETED".equals(h.getStatus()))return dto(c,h,actor);
+        reportHolds.requireAvailable(c.getPost().getId());
         if(!ready(c)||!"WAITING_CONFIRMATION".equals(h.getStatus())||h.getVersion()!=request.expectedVersion()||issueId(h.getId())!=null)throw changed();
         h.confirm(actor);c.completeReceipt();c.getPost().markReturnedFromP2pHandover();
         Account account=em.find(Account.class,actor);
@@ -115,7 +118,7 @@ public class P2pHandoverService {
                 "Người nhận báo cáo sự cố bàn giao đồ (#" + c.getId() + ")",
                 "Người nhận đã gửi báo cáo sự cố đối với biên bản bàn giao bài đăng \"" + c.getPost().getTitle() + "\". Lý do: " + reason,
                 "/bai-dang/" + c.getPost().getId() + "/claims/" + c.getId(),true);
-            notifications.notifyRoles(List.of(AccountRole.ADMIN, AccountRole.MANAGER),actor,"REPORT_CREATED",
+            notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",
                 "Báo cáo sự cố bàn giao P2P mới (#" + report.getId() + ")",
                 "Có báo cáo sự cố bàn giao cho hồ sơ #" + claimId + ". Lý do: " + reason,
                 "/admin/reports",false);
@@ -129,13 +132,14 @@ public class P2pHandoverService {
         var old=reports.retry(actor,request,hash);
         if(old==null)return null;
         P2pHandover h=handovers.findByClaimId(c.getId()).orElseThrow(this::changed);
-        if(!"HANDOVER_ISSUE".equals(old.kind())||old.targetId()!=c.getId()||!Objects.equals(issueId(h.getId()),old.id()))throw new AppException(ErrorCode.WORKFLOW_DUPLICATE_PAYLOAD);
+        if(!"HANDOVER_ISSUE".equals(old.kind())||old.targetId()!=c.getId()||!Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from p2p_handover_issue where handover_id=? and report_id=?)",Boolean.class,h.getId(),old.id())))throw new AppException(ErrorCode.WORKFLOW_DUPLICATE_PAYLOAD);
         return dto(c,h,actor);
     }
     private Long issueId(long handover) {
-        return jdbc.query("select report_id from p2p_handover_issue where handover_id=?",(rs,n)->rs.getLong(1),handover).stream().findFirst().orElse(null);
+        return jdbc.query("select i.report_id from p2p_handover_issue i join report r using(report_id) where i.handover_id=? and r.status in ('OPEN','IN_REVIEW') order by i.report_id desc",(rs,n)->rs.getLong(1),handover).stream().findFirst().orElse(null);
     }
     private void requireRecord(Claim c,long actor,long version) {
+        reportHolds.requireAvailable(c.getPost().getId());
         if(c.getPost().getAccount().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
         if(!ready(c)||c.getVersion()!=version||handovers.existsByClaimId(c.getId()))throw changed();
     }
@@ -152,11 +156,11 @@ public class P2pHandoverService {
     private Detail dto(Claim c,P2pHandover h,long actor) {
         Long reportId=h==null?null:issueId(h.getId());
         ReportService.Detail issue=reportId==null?null:reports.detail(reportRepository.findById(reportId).orElseThrow(this::changed));
-        boolean canRespond=h!=null&&"WAITING_CONFIRMATION".equals(h.getStatus())&&ready(c)&&c.getClaimant().getId()==actor&&reportId==null;
+        boolean canRespond=h!=null&&"WAITING_CONFIRMATION".equals(h.getStatus())&&ready(c)&&c.getClaimant().getId()==actor&&reportId==null&&!reportHolds.held(c.getPost().getId());
         var evidence=h==null?List.<ReportService.Evidence>of():jdbc.query("select * from p2p_handover_evidence where handover_id=? order by sort_order",(rs,n)->new ReportService.Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),h.getId());
         return new Detail(h==null?null:h.getId(),c.getId(),h==null?"NOT_RECORDED":h.getStatus(),h==null?null:h.getNote(),h==null?null:h.getRecordedAt(),h==null?null:h.getConfirmedAt(),h==null?0:h.getVersion(),
-            h==null&&ready(c)&&c.getPost().getAccount().getId()==actor,
-            canRespond,canRespond,evidence,issue);
+            h==null&&ready(c)&&c.getPost().getAccount().getId()==actor&&!reportHolds.held(c.getPost().getId()),
+            canRespond,canRespond,evidence,issue,reportHolds.held(c.getPost().getId()));
     }
     private AppException invalid(){return new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);}
     private AppException changed(){return new AppException(ErrorCode.HANDOVER_STATE_CHANGED);}
