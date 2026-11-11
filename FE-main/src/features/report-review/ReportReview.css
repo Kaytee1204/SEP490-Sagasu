@@ -425,6 +425,63 @@
 .rr-dialog > header {
   margin-bottom: 20px;
 }
+.rr-conclusion-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.rr-conclusion-fields legend {
+  font-weight: 650;
+  margin-bottom: 12px;
+}
+.rr-outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rr label.rr-outcome {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid #dce5e9;
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+}
+.rr label.rr-outcome.selected {
+  border-color: #087d79;
+  background: #effaf6;
+}
+.rr .rr-outcome input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: #087d79;
+}
+.rr .rr-outcome small {
+  margin-top: 4px;
+  font-weight: 400;
+}
+.rr-measures {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 12px;
+  background: #f6f9fa;
+}
+.rr-callout ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
 .rr-actions {
   display: flex;
   justify-content: flex-end;

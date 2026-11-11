@@ -36,7 +36,10 @@ public class ReportReviewService {
     @Size(max = 5000) String conclusion,
     @Size(max = 5000) String basis,
     Long targetId,
-    boolean custodyVerified
+    boolean custodyVerified,
+    String outcome,
+    boolean hidePost,
+    Long previousDecisionId
   ) {}
 
   @Transactional(readOnly = true)
@@ -264,6 +267,30 @@ public class ReportReviewService {
     Account actor = access.require(user, AccountRole.MANAGER);
     var r = lock(reportId);
     String action = request.action();
+    // Final outcomes and their measures are committed together. Old standalone close actions are rejected.
+    if ("CONCLUDE".equals(action)) {
+      if (
+        !Set.of(
+          "VIOLATION",
+          "SETTLED",
+          "UNSUBSTANTIATED",
+          "HANDOVER_COMPLETED",
+          "HANDOVER_CONTINUE",
+          "CLAIM_REJECTED"
+        ).contains(Objects.toString(request.outcome(), ""))
+      ) throw bad("Chọn kết quả xử lý trước khi xác nhận kết luận.");
+      action = request.outcome();
+      if (
+        !"VIOLATION".equals(action) &&
+        (request.hidePost() ||
+          request.targetId() != null ||
+          request.previousDecisionId() != null)
+      ) throw bad("Biện pháp xử lý không phù hợp với kết luận đã chọn.");
+    } else if (!Set.of("TAKE", "HOLD", "RELEASE").contains(action)) {
+      throw bad(
+        "Hãy tải lại và dùng form Kết luận báo cáo để chọn kết quả xử lý."
+      );
+    }
     if ("TAKE".equals(action)) {
       if (
         !open(r) ||
@@ -298,23 +325,20 @@ public class ReportReviewService {
     before.put("reportStatus", status);
     String next = status;
     switch (action) {
-      case "NOTE" -> {
-        history(
-          reportId,
-          actor.getId(),
-          action,
-          status,
-          status,
-          null,
-          conclusion + "\n" + basis
-        );
-      }
       case "HOLD", "RELEASE" -> {
         @SuppressWarnings("unchecked")
         var post = (Map<String, Object>) current.get("post");
         if (post == null || post.isEmpty()) throw bad(
           "Báo cáo không có đồ vật để tạm dừng trao trả."
         );
+        if (
+          "HOLD".equals(action) &&
+          (!"FOUND".equals(post.get("post_type")) ||
+            !Set.of("OPEN", "RESERVED").contains(
+              Objects.toString(post.get("status"), "")
+            ) ||
+            post.get("deleted_at") != null)
+        ) throw bad("Đồ vật không còn ở bước có thể tạm dừng giao nhận.");
         if ("HOLD".equals(action)) jdbc.update(
           "insert into report_hold(report_id,post_id,actor_id,reason) values(?,?,?,?) on conflict(report_id) do update set released_at=null,actor_id=excluded.actor_id,reason=excluded.reason,created_at=now()",
           reportId,
@@ -327,53 +351,33 @@ public class ReportReviewService {
           reportId
         );
       }
-      case "HIDE_POST" -> {
-        @SuppressWarnings("unchecked")
-        var post = (Map<String, Object>) current.get("post");
-        if (post == null || post.isEmpty()) throw bad(
-          "Không có bài đăng liên quan."
-        );
-        var p = posts.findById(id(post, "post_id")).orElseThrow();
-        before.put("moderation", p.getModerationStatus());
-        moderation.moderate(
-          p.getId(),
-          new com.example.base.dto.office.OfficeDtos.Moderation(
-            "HIDDEN",
-            conclusion,
-            p.getUpdatedAt()
-          ),
-          user
-        );
-      }
-      case "SUSPEND_ACCOUNT" -> {
+      case "VIOLATION" -> {
+        requireGeneralConclusion(reportId);
         if (
-          request.targetId() == null ||
-          !participants(current).contains(request.targetId()) ||
-          request.targetId().equals(id(r, "reporter_id"))
-        ) throw bad("Chọn đúng tài khoản liên quan bị báo cáo.");
-        var account = context.one(
-          "select status,role from accounts where id=?",
-          request.targetId()
+          !request.hidePost() &&
+          request.targetId() == null &&
+          request.previousDecisionId() == null
+        ) throw bad(
+          "Chọn biện pháp xử lý hoặc biện pháp đã thực hiện cho báo cáo này."
         );
-        before.put("account", account);
-        before.put("targetAccountId", request.targetId());
-        UpdateAccountRequest update = new UpdateAccountRequest();
-        update.setStatus(AccountStatus.SUSPENDED);
-        accounts.updateAccount(request.targetId(), update);
-        // Administrative suspension is distinct from a password-failure lock that OTP can clear.
-        Account suspended = accountRepository
-          .findById(request.targetId())
-          .orElseThrow();
-        suspended.setFailedLoginCount(0);
-        suspended.setLockedUntil(null);
-        accountRepository.flush();
-        basis = "Tài khoản bị đình chỉ: " + suspended.getFullName() + " (#" + suspended.getId() + ").\n" + basis;
+        List<String> measures = new ArrayList<>();
+        if (request.previousDecisionId() != null) measures.add(
+          previousMeasure(reportId, request.previousDecisionId(), current)
+        );
+        if (request.hidePost()) measures.add(
+          hidePost(current, conclusion, user, before)
+        );
+        if (request.targetId() != null) measures.add(
+          suspendAccount(r, current, request.targetId(), before)
+        );
+        basis = String.join("\n", measures) + "\n" + basis;
+        before.put("previousDecisionId", request.previousDecisionId());
+        before.put("measures", measures);
+        next = "RESOLVED";
       }
-      case "DISMISS", "RESOLVE" -> {
-        if (activeP2pDispute(reportId)) throw bad(
-          "Cần chọn kết quả phân xử để kết thúc sự cố bàn giao giữa người dùng."
-        );
-        next = "DISMISS".equals(action) ? "REJECTED" : "RESOLVED";
+      case "SETTLED", "UNSUBSTANTIATED" -> {
+        requireGeneralConclusion(reportId);
+        next = "UNSUBSTANTIATED".equals(action) ? "REJECTED" : "RESOLVED";
       }
       case "HANDOVER_COMPLETED", "HANDOVER_CONTINUE", "CLAIM_REJECTED" -> {
         if (
@@ -386,23 +390,21 @@ public class ReportReviewService {
       }
       default -> throw bad("Thao tác không hợp lệ.");
     }
-    if (!"NOTE".equals(action)) {
-      before.put("context", current);
-      var after = context.context(r);
-      context.retainAssets(reportId, current, "DECISION");
-      context.retainAssets(reportId, after, "DECISION");
-      jdbc.update(
-        "insert into report_decision(report_id,actor_id,action,conclusion,basis,before_state,after_state) values(?,?,?,?,?,?::jsonb,?::jsonb)",
-        reportId,
-        actor.getId(),
-        action,
-        conclusion,
-        basis,
-        context.json(before),
-        context.json(Map.of("reportStatus", next, "context", after))
-      );
-      history(reportId, actor.getId(), action, status, next, conclusion, basis);
-    }
+    before.put("context", current);
+    var after = context.context(r);
+    context.retainAssets(reportId, current, "DECISION");
+    context.retainAssets(reportId, after, "DECISION");
+    jdbc.update(
+      "insert into report_decision(report_id,actor_id,action,conclusion,basis,before_state,after_state) values(?,?,?,?,?,?::jsonb,?::jsonb)",
+      reportId,
+      actor.getId(),
+      action,
+      conclusion,
+      basis,
+      context.json(before),
+      context.json(Map.of("reportStatus", next, "context", after))
+    );
+    history(reportId, actor.getId(), action, status, next, conclusion, basis);
     boolean finished = Set.of("RESOLVED", "REJECTED").contains(next);
     jdbc.update(
       "update report set status=?,resolution_note=case when ? then ? else resolution_note end,resolved_by=case when ? then ? else resolved_by end,resolved_at=case when ? then now() else resolved_at end,version=version+1,updated_at=now() where report_id=?",
@@ -436,6 +438,117 @@ public class ReportReviewService {
       }
     }
     return detail(reportId, user);
+  }
+
+  private void requireGeneralConclusion(long reportId) {
+    if (activeP2pDispute(reportId)) throw bad(
+      "Cần chọn kết quả trao trả để giải quyết tranh chấp này."
+    );
+  }
+
+  @SuppressWarnings("unchecked")
+  private String hidePost(
+    Map<String, Object> current,
+    String conclusion,
+    CustomUserDetails user,
+    Map<String, Object> before
+  ) {
+    var post = (Map<String, Object>) current.get("post");
+    if (post == null || post.isEmpty()) throw bad(
+      "Báo cáo không có bài đăng để ẩn."
+    );
+    var p = posts.findById(id(post, "post_id")).orElseThrow();
+    before.put("moderation", p.getModerationStatus());
+    moderation.moderate(
+      p.getId(),
+      new com.example.base.dto.office.OfficeDtos.Moderation(
+        "HIDDEN",
+        conclusion.substring(0, Math.min(2000, conclusion.length())),
+        p.getUpdatedAt()
+      ),
+      user
+    );
+    return "Đã ẩn bài đăng #" + p.getId() + ".";
+  }
+
+  private String suspendAccount(
+    Map<String, Object> report,
+    Map<String, Object> current,
+    long target,
+    Map<String, Object> before
+  ) {
+    if (
+      !participants(current).contains(target) ||
+      Objects.equals(target, id(report, "reporter_id"))
+    ) throw bad("Chọn đúng tài khoản liên quan bị báo cáo.");
+    var account = context.one(
+      "select status,role from accounts where id=?",
+      target
+    );
+    if (!"ACTIVE".equals(account.get("status"))) throw bad(
+      "Tài khoản không còn hoạt động. Hãy tải lại và kiểm tra biện pháp đã áp dụng."
+    );
+    before.put("account", account);
+    before.put("targetAccountId", target);
+    UpdateAccountRequest update = new UpdateAccountRequest();
+    update.setStatus(AccountStatus.SUSPENDED);
+    accounts.updateAccount(target, update);
+    Account suspended = accountRepository.findById(target).orElseThrow();
+    suspended.setFailedLoginCount(0);
+    suspended.setLockedUntil(null);
+    accountRepository.flush();
+    return (
+      "Đã đình chỉ tài khoản " + suspended.getFullName() + " (#" + target + ")."
+    );
+  }
+
+  @SuppressWarnings("unchecked")
+  private String previousMeasure(
+    long reportId,
+    long decisionId,
+    Map<String, Object> current
+  ) {
+    var decision = context.one(
+      "select action,before_state::text from report_decision where report_id=? and decision_id=? and action in ('HIDE_POST','SUSPEND_ACCOUNT')",
+      reportId,
+      decisionId
+    );
+    if (decision.isEmpty()) throw bad(
+      "Biện pháp đã chọn không thuộc báo cáo này."
+    );
+    if ("HIDE_POST".equals(decision.get("action"))) {
+      var post = (Map<String, Object>) current.get("post");
+      if (
+        post == null || !"HIDDEN".equals(post.get("moderation_status"))
+      ) throw bad(
+        "Bài đăng không còn bị ẩn. Hãy đối chiếu lại trước khi kết luận."
+      );
+      return (
+        "Ghi nhận biện pháp đã thực hiện: ẩn bài đăng #" +
+        post.get("post_id") +
+        " (quyết định #" +
+        decisionId +
+        ")."
+      );
+    }
+    var before = context.parse((String) decision.get("before_state"));
+    Long target = id(before, "targetAccountId");
+    var account = context.one(
+      "select full_name,status from accounts where id=?",
+      target
+    );
+    if (!"SUSPENDED".equals(account.get("status"))) throw bad(
+      "Tài khoản không còn bị đình chỉ. Hãy đối chiếu lại trước khi kết luận."
+    );
+    return (
+      "Ghi nhận biện pháp đã thực hiện: đình chỉ " +
+      account.get("full_name") +
+      " (#" +
+      target +
+      ", quyết định #" +
+      decisionId +
+      ")."
+    );
   }
 
   private void resolveHandover(

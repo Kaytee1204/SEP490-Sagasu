@@ -40,7 +40,6 @@ export const ADMIN_NAV_SECTIONS = [
         path: '/admin/reports',
         icon: AlertTriangle,
         roles: ['MANAGER'],
-        badgeKey: 'pendingReports',
       },
       {
         label: 'Tài khoản thành viên',

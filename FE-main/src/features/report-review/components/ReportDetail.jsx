@@ -4,12 +4,14 @@ import { reviewApi } from "../api";
 import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
 import { date, labels } from "../format";
 import ContextPanel from "./ContextPanel";
-import DecisionDialog from "./DecisionDialog";
+import HoldDialog from "./HoldDialog";
+import ConclusionDialog from "./ConclusionDialog";
 import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
 import useReviewResource from "../hooks/useReviewResource";
 export default function ReportDetail({ id, onBack, onRelated }) {
   const [tab, setTab] = useState("overview"),
+    [inquiryOpen, setInquiryOpen] = useState(false),
     [action, setAction] = useState(null),
     [busy, setBusy] = useState(false),
     [refresh, setRefresh] = useState(0);
@@ -146,7 +148,7 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                 </div>
               )}
               {tab === "inquiries" && (
-                <Inquiries data={data} onSaved={setData} />
+                <Inquiries data={data} onSaved={setData} open={inquiryOpen} setOpen={setInquiryOpen}/>
               )}
               {tab === "history" && (
                 <section className="rr-card">
@@ -191,16 +193,16 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               ) : data.canProcess ? (
                 <>
                   <p className="rr-muted">
-                    Đối chiếu bằng chứng trước khi quyết định. Mỗi thao tác đều
-                    cần ghi căn cứ.
+                    Xem thông tin đối chiếu, hỏi thêm nếu cần rồi đưa ra kết
+                    luận.
                   </p>
-                  <button onClick={() => setTab("inquiries")}>
-                    Yêu cầu thông tin từ các bên
+                  <button onClick={() => {setTab("inquiries");setInquiryOpen(true);}}>
+                    Yêu cầu bổ sung
                   </button>
-                  <button onClick={() => setAction("NOTE")}>
-                    Ghi chú nội bộ
-                  </button>
-                  {data.current.post && (
+                  {(data.hold.reason ||
+                    (data.current.post?.post_type === "FOUND" &&
+                      ["OPEN", "RESERVED"].includes(data.current.post.status) &&
+                      !data.current.post.deleted_at)) && (
                     <>
                       <button
                         onClick={() =>
@@ -211,32 +213,19 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                           ? "Gỡ tạm dừng giao nhận"
                           : "Tạm dừng giao nhận"}
                       </button>
-                      <button onClick={() => setAction("HIDE_POST")}>
-                        Ẩn bài đăng liên quan
-                      </button>
                     </>
                   )}
-                  <button onClick={() => setAction("SUSPEND_ACCOUNT")}>
-                    Đình chỉ tài khoản liên quan
-                  </button>
                   <hr />
-                  <strong>Kết luận vụ việc</strong>
-                  {(data.p2pDispute
-                    ? [
-                        "HANDOVER_COMPLETED",
-                        "HANDOVER_CONTINUE",
-                        "CLAIM_REJECTED",
-                      ]
-                    : ["RESOLVE", "DISMISS"]
-                  ).map((value) => (
-                    <button
-                      key={value}
-                      className={value === "RESOLVE" ? "rr-primary" : ""}
-                      onClick={() => setAction(value)}
-                    >
-                      {labels[value]}
-                    </button>
-                  ))}
+                  <button
+                    className="rr-primary"
+                    onClick={() => setAction("CONCLUDE")}
+                  >
+                    Kết luận báo cáo
+                  </button>
+                  <p className="rr-muted">
+                    Chọn kết quả và biện pháp phù hợp trước khi xác nhận kết
+                    thúc.
+                  </p>
                 </>
               ) : (
                 <p>
@@ -247,8 +236,15 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               )}
             </aside>
           </div>
-          {action && (
-            <DecisionDialog
+          {action === "CONCLUDE" && (
+            <ConclusionDialog
+              data={data}
+              onClose={() => setAction(null)}
+              onSaved={setData}
+            />
+          )}
+          {action && action !== "CONCLUDE" && (
+            <HoldDialog
               key={action}
               action={action}
               data={data}

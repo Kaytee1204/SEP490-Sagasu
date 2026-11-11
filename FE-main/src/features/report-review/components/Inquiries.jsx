@@ -2,9 +2,8 @@ import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox, Gallery, Empty } from "./Shared";
 import { date } from "../format";
-export default function Inquiries({ data, onSaved }) {
-  const [open, setOpen] = useState(false),
-    [recipientId, setRecipient] = useState(""),
+export default function Inquiries({ data, onSaved, open, setOpen }) {
+  const [recipientId, setRecipient] = useState(""),
     [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
