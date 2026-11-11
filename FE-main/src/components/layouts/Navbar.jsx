@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Plus, LogOut, User, LayoutDashboard, ChevronDown, Menu, X, Home, Search, ShieldCheck } from 'lucide-react';
+import { FileText, HandHelping, Flag, MessageCircle, Plus, LogOut, User, LayoutDashboard, ChevronDown, Menu, X, Home, Search } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SagasuLogo from '@/assets/Sagasu_logo_color.svg';
 import ChatBadgeLink from '@/features/chat/components/ChatBadgeLink';
@@ -42,10 +42,10 @@ function AvatarDropdown() {
 
   const menuItems = [
     { icon: User, label: 'Hồ sơ cá nhân', to: '/ho-so' },
-    { icon: Bell, label: 'Bài đăng của tôi', to: '/bai-dang-cua-toi' },
-    { icon: ShieldCheck, label: 'Claim của tôi', to: '/claim-cua-toi' },
-    { icon: ShieldCheck, label: 'Báo cáo của tôi', to: '/bao-cao-cua-toi' },
-    { icon: Bell, label: 'Tin nhắn', to: '/tin-nhan' },
+    { icon: FileText, label: 'Bài đăng của tôi', to: '/bai-dang-cua-toi' },
+    { icon: HandHelping, label: 'Yêu cầu nhận đồ', to: '/claim-cua-toi' },
+    { icon: Flag, label: 'Báo cáo của tôi', to: '/bao-cao-cua-toi' },
+    { icon: MessageCircle, label: 'Tin nhắn', to: '/tin-nhan' },
   ];
 
   if (isAdmin) {
@@ -197,6 +197,7 @@ export default function Navbar() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const lastScrollYRef = useRef(0);
 
+  const keepHeaderVisible = location.pathname === '/tim-kiem';
   const isActive = (path) => location.pathname === path;
 
   // Close mobile drawer on navigation and ensure header is visible
@@ -240,9 +241,9 @@ export default function Navbar() {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    const visible = isHeaderVisible || mobileMenuOpen;
+    const visible = keepHeaderVisible || isHeaderVisible || mobileMenuOpen;
     document.documentElement.style.setProperty('--navbar-offset', visible ? '68px' : '0px');
-  }, [isHeaderVisible, mobileMenuOpen]);
+  }, [keepHeaderVisible, isHeaderVisible, mobileMenuOpen]);
 
   const handleMobileLogout = async () => {
     setMobileMenuOpen(false);
@@ -252,7 +253,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className={`navbar ${!isHeaderVisible && !mobileMenuOpen ? 'navbar--hidden' : ''}`}>
+      <nav className={`navbar ${!keepHeaderVisible && !isHeaderVisible && !mobileMenuOpen ? 'navbar--hidden' : ''}`}>
         <div className="container navbar-inner">
           {/* Logo Sagasu SVG */}
           <Link to="/" className="flex items-center gap-2 flex-shrink-0 group" aria-label="Sagasu">
@@ -397,14 +398,14 @@ export default function Navbar() {
                     onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    <Bell size={16} className="text-slate-400" />
+                    <FileText size={16} className="text-slate-400" />
                     <span>Bài đăng của tôi</span>
                   </Link>
                   <Link to="/claim-cua-toi" onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">
-                    <ShieldCheck size={16} className="text-slate-400" /><span>Claim của tôi</span>
+                    <HandHelping size={16} className="text-slate-400" /><span>Yêu cầu nhận đồ</span>
                   </Link>
-                    <Link to="/bao-cao-cua-toi" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"><ShieldCheck size={16}/><span>Báo cáo của tôi</span></Link>
+                    <Link to="/bao-cao-cua-toi" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"><Flag size={16} className="text-slate-400" /><span>Báo cáo của tôi</span></Link>
                     {isAdmin && (
                     <Link
                       to="/admin"

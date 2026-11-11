@@ -1,3 +1,4 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect,useState } from 'react';
 import { Link,useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -7,7 +8,7 @@ import { getMyReports,getReport } from './reportApi';
 import './Reports.css';
 const statuses={OPEN:'Chờ xử lý',IN_REVIEW:'Đang xem xét',RESOLVED:'Đã xử lý',REJECTED:'Bị từ chối'};
 const targets={POST:'Bài đăng',CLAIM:'Yêu cầu nhận đồ',MESSAGE:'Tin nhắn',USER:'Tài khoản'};
-const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});
+const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 export default function MyReportsPage() {
   const {user}=useAuth();return <MyReports key={user.id}/>;
 }
@@ -19,7 +20,7 @@ function MyReports() {
     <Link className="btn btn-ghost" to="/bao-cao-trao-doi">Thông tin cần bổ sung & kết quả xử lý →</Link>
     <div className="claims-filters">{Object.entries({ALL:'Tất cả',...statuses}).map(([value,label])=><button key={value} className={`chip ${status===value?'active':''}`} onClick={()=>{setStatus(value);setPage(1);}}>{label}</button>)}</div>
     {error&&<p role="alert" className="report-error">{error}</p>}{!result&&!error&&<p role="status">Đang tải báo cáo…</p>}
-    {result&&<><p>{result.totalElements} báo cáo</p>{result.content.map(report=><Link className="report-card" key={report.id} to={`/bao-cao/${report.id}`}><h2>Báo cáo #{report.id} · {statuses[report.status]}</h2><p>{report.kind==='HANDOVER_ISSUE'?'Sự cố bàn giao':targets[report.targetType]} #{report.targetId}</p><p>{report.description.length>240?report.description.slice(0,240)+'…':report.description}</p><p>{date(report.createdAt)}</p></Link>)}
+    {result&&<><p>{result.totalElements} báo cáo</p>{result.content.map(report=><Link className="report-card" key={report.id} to={`/bao-cao/${report.id}`}><span className="claim-status">{statuses[report.status]}</span><h2>{report.targetLabel || `Báo cáo #${report.id}`}</h2><p>{report.kind==='HANDOVER_ISSUE'?'Sự cố bàn giao':targets[report.targetType]} #{report.targetId}</p><p>{report.description.length>240?report.description.slice(0,240)+'…':report.description}</p><p>{date(report.createdAt)}</p></Link>)}
     {!result.content.length&&<p className="report-card">Chưa có báo cáo ở trạng thái này.</p>}<Pagination currentPage={page} totalPages={result.totalPages} onPageChange={setPage}/></>}
   </main>;
 }
@@ -30,12 +31,12 @@ function ReportDetail({id}) {
   const [report,setReport]=useState(null),[error,setError]=useState(''),[image,setImage]=useState(null);
   useEffect(()=>{let cancelled=false;if(!/^[1-9]\d*$/.test(id)){setError('Mã báo cáo không hợp lệ.');return;}getReport(id).then(data=>{if(!cancelled)setReport(data);}).catch(e=>{if(!cancelled)setError(e.message);});return()=>{cancelled=true;};},[id]);
   const evidence=(report?.evidence||[]).map(item=>({...item,name:item.name||'Ảnh bằng chứng'}));
-  return <main className="container reports-page"><Link className="btn btn-ghost" to="/bao-cao-cua-toi">Báo cáo của tôi</Link><h1>Báo cáo #{id}</h1>
+  return <main className="container reports-page"><Link className="btn btn-ghost" to="/bao-cao-cua-toi">Báo cáo của tôi</Link><h1>{report?.targetLabel || "Chi tiết báo cáo"}</h1>
     {error&&<p role="alert" className="report-error">{error}</p>}{!report&&!error&&<p role="status">Đang tải…</p>}
-    {report&&<><section className="report-card"><h2>{statuses[report.status]}</h2><p>{report.kind==='HANDOVER_ISSUE'?'Sự cố bàn giao':targets[report.targetType]} #{report.targetId}</p><p>{report.description}</p><p>Gửi lúc {date(report.createdAt)}</p>
+    {report&&<><section className="report-card"><h2>{statuses[report.status]}</h2>{report.resolutionNote&&<><h2>Kết luận xử lý</h2><p>{report.resolutionNote}</p></>}<p>{report.kind==='HANDOVER_ISSUE'?'Sự cố bàn giao':targets[report.targetType]} #{report.targetId}</p><p>{report.description}</p><p>Gửi lúc {date(report.createdAt)}</p>
     <div className="report-evidence">{evidence.map((item,i)=><button key={item.id} onClick={()=>setImage(i)} aria-label="Xem ảnh bằng chứng"><img src={item.url} alt={item.name}/></button>)}</div>
-    {report.resolutionNote&&<><h2>Kết luận xử lý</h2><p>{report.resolutionNote}</p></>}</section>
-    <section className="report-card"><h2>Lịch sử xử lý</h2>{report.activities.map((item,i)=><p key={i}>{date(item.at)} · {statuses[item.status]}{item.note&&` · ${item.note}`}</p>)}</section></>}
+    </section>
+    <details className="report-card"><summary>Lịch sử xử lý</summary>{report.activities.map((item,i)=><p key={i}>{date(item.at)} · {statuses[item.status]}{item.note&&` · ${item.note}`}</p>)}</details></>}
     {image!==null&&<ClaimEvidencePreview images={evidence} initialIndex={image} onClose={()=>setImage(null)}/>}
   </main>;
 }

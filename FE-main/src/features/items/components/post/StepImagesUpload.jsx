@@ -1,7 +1,18 @@
 import React from 'react';
 import { Camera, X } from 'lucide-react';
 
-export default function StepImagesUpload({ images, fileInputRef, onUpload, onRemove }) {
+export default function StepImagesUpload({ images, fileInputRef, onUpload, onRemove, compact = false }) {
+  if (compact) return <div className="post-upload-compact">
+    <div className="post-upload-heading"><span>Hình ảnh ({images.length}/5)</span><small>JPG/PNG · tối đa 5 MB/ảnh</small></div>
+    <div className="post-upload-strip">
+      {images.map((src, index) => <div className="post-upload-thumb" key={src}>
+        <img src={src} alt={`Ảnh đã chọn ${index + 1}`} />
+        <button type="button" aria-label={`Xóa ảnh ${index + 1}`} onClick={event => onRemove(index, event)}><X size={12} /></button>
+      </div>)}
+      {images.length < 5 && <button type="button" className="post-upload-add" onClick={() => fileInputRef.current?.click()}><Camera size={18} /><span>Thêm ảnh</span></button>}
+    </div>
+    <input type="file" ref={fileInputRef} onChange={onUpload} accept="image/jpeg,image/png" multiple hidden />
+  </div>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       <div>
@@ -17,8 +28,8 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
                 key={idx}
                 style={{
                   position: 'relative',
-                  width: '100px',
-                  height: '100px',
+                  width: compact ? '72px' : '100px',
+                  height: compact ? '72px' : '100px',
                   borderRadius: 'var(--radius-lg)',
                   overflow: 'hidden',
                   border: '1px solid var(--border)',
@@ -63,7 +74,7 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
             style={{
               border: '2px dashed var(--accent)',
               borderRadius: 'var(--radius-xl)',
-              padding: images.length === 0 ? '48px 24px' : '24px',
+              padding: compact ? '20px 12px' : images.length === 0 ? '48px 24px' : '24px',
               textAlign: 'center',
               cursor: 'pointer',
               background: 'var(--teal-50)',

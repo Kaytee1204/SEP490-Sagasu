@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 import java.time.OffsetDateTime;
 
 public record CreateFoundPostRequest(
+                java.util.UUID requestId,
                 @NotBlank @Size(max = 200) String title,
                 @NotBlank @Size(max = 10000) String description,
                 @NotNull @Positive Long categoryId,

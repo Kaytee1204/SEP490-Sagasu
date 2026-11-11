@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import '@/features/workspace/Workspace.css';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { getChat } from '../api/chatApi';
 import { useChat } from '../ChatProvider';
 import ChatList from '../components/ChatList';
 import ChatThread from '../components/ChatThread';
+import ChatItemPanel from '../components/ChatItemPanel';
 import '../Chat.css';
 import ReportButton from '@/features/reports/ReportButton';
 
@@ -21,6 +23,9 @@ export default function ChatPage() {
 function ChatPanel({ id }) {
   const { revision, online } = useChat();
   const [chat, setChat] = useState(null);
+  const [itemOpen, setItemOpen] = useState(false);
+  const itemButton = useRef(null);
+  const closeItem = () => { setItemOpen(false); itemButton.current?.focus(); };
   const [error, setError] = useState('');
   useEffect(() => {
     let cancelled = false;
@@ -34,10 +39,14 @@ function ChatPanel({ id }) {
     {!chat && !error && <p className="chat-empty">Đang tải cuộc trò chuyện…</p>}
     {chat && <><header className="chat-header"><Link className="chat-back" to="/tin-nhan">← Danh sách</Link>
       <h2>{chat.otherName || 'Thành viên'}</h2>
-      <ReportButton type="USER" id={chat.otherAccountId} label="Báo cáo tài khoản"/>
-      <Link to={`/chi-tiet/${chat.postId}`}>{chat.postTitle}</Link>
-      <div className="chat-row-title"><Link to={`/bai-dang/${chat.postId}/claims/${chat.claimId}`}>Xem hồ sơ claim</Link>
-        <small className="chat-muted">{online ? 'Đã kết nối' : 'Đang kết nối lại…'}</small></div>
-    </header><ChatThread chat={chat} /></>}
+      <details className="workflow-menu"><summary aria-label="Thao tác cuộc trò chuyện">⋯</summary><div><ReportButton type="USER" id={chat.otherAccountId} targetLabel={chat.otherName} label="Báo cáo tài khoản"/></div></details>
+      <button ref={itemButton} type="button" className="chat-item-toggle" aria-expanded={itemOpen} aria-controls="chat-item-panel"
+        onClick={() => setItemOpen(value => !value)}>{chat.postTitle} · {itemOpen ? 'Ẩn thông tin' : 'Xem thông tin món đồ'}</button>
+      <div className="chat-row-title"><Link to={`/bai-dang/${chat.postId}/claims/${chat.claimId}#handover`}>Tiến trình nhận đồ</Link>
+        {!online && <small role="status" className="chat-muted">Đang kết nối lại…</small>}</div>
+    </header><div className={`chat-conversation-body ${itemOpen ? 'with-item' : ''}`}>
+      <div className="chat-thread-area"><ChatThread chat={chat} /></div>
+      {itemOpen && <ChatItemPanel key={`${chat.id}:${chat.claimId}`} chat={chat} onClose={closeItem} />}
+    </div></>}
   </section>;
 }

@@ -24,7 +24,7 @@ import java.util.*;
 
 @Service @RequiredArgsConstructor @Slf4j
 public class ClaimService {
-    private static final Set<String> FILTERS = Set.of("ALL", "PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "CLOSED");
+    private static final Set<String> FILTERS = Set.of("ALL", "HISTORY", "PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "CLOSED");
     private static final Set<String> ACTIVE_STATUSES = Set.of("PENDING", "APPROVED");
     private static final Set<String> RETRYABLE_STATUSES = Set.of("REJECTED", "CANCELLED");
     private final ClaimRepository claims;
@@ -125,6 +125,40 @@ public class ClaimService {
         Post post = post(postId);
         return claims.findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(postId, actor.getId(), post.getCustodyMode())
                 .map(this::result).orElse(null);
+    }
+
+    /** Page by posts so a post and its claim history never split across list pages. */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public ClaimPostGroupDto.PageData grouped(int page, int size, String status, boolean sent, Long selectedPostId, CustomUserDetails user) {
+        Account actor = activeActor(user);
+        var paging = pageable(page, size);
+        String selectedStatus = filter(status);
+        String scope = sent ? "c.claimant.id=:actorId" : "c.post.account.id=:actorId";
+        String where = " from Claim c where c.claimType='P2P' and " + scope
+                + " and (:postId is null or c.post.id=:postId)";
+        var count = entityManager.createQuery("select count(distinct c.post.id)" + where
+                + " and (:status='ALL' or c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED')))", Long.class)
+                .setParameter("actorId", actor.getId()).setParameter("postId", selectedPostId).setParameter("status", selectedStatus).getSingleResult();
+        var ids = entityManager.createQuery("select c.post.id" + where + " group by c.post.id"
+                + " having (:status='ALL' or sum(case when c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED')) then 1 else 0 end)>0)"
+                + " order by max(case when c.status='PENDING' then 1 else 0 end) desc, max(c.createdAt) desc, c.post.id desc", Long.class)
+                .setParameter("actorId", actor.getId()).setParameter("postId", selectedPostId).setParameter("status", selectedStatus)
+                .setFirstResult((int) paging.getOffset()).setMaxResults(size).getResultList();
+        if (ids.isEmpty()) return new ClaimPostGroupDto.PageData(List.of(), page, size, count, (int) Math.ceil((double) count / size));
+        var records = entityManager.createQuery("select c from Claim c join fetch c.post p join fetch p.account"
+                + " join fetch c.claimant where c.claimType='P2P' and " + scope
+                + " and c.post.id in :ids order by c.createdAt desc, c.id desc", Claim.class)
+                .setParameter("actorId", actor.getId()).setParameter("ids", ids).getResultList();
+        var summaries = page(new org.springframework.data.domain.PageImpl<>(records), 1, records.size()).content();
+        var groups = ids.stream().map(postId -> {
+            var items = summaries.stream().filter(c -> c.postId().equals(postId)).toList();
+            var first = items.getFirst();
+            long people = records.stream().filter(c -> c.getPost().getId().equals(postId))
+                    .map(c -> c.getClaimant().getId()).distinct().count();
+            return new ClaimPostGroupDto(postId, first.postTitle(), first.postThumbnailUrl(), people,
+                    items.stream().filter(c -> "PENDING".equals(c.status())).count(), items);
+        }).toList();
+        return new ClaimPostGroupDto.PageData(groups, page, size, count, (int) Math.ceil((double) count / size));
     }
 
     @Transactional(readOnly = true)
@@ -351,9 +385,22 @@ public class ClaimService {
         return PageRequest.of(page - 1, size);
     }
     private ClaimPageDto page(Page<Claim> result, int page, int size) {
+        Map<Long, String> thumbnails = new HashMap<>();
+        var postIds = result.getContent().stream().map(c -> c.getPost().getId()).distinct().toList();
+        if (!postIds.isEmpty()) {
+            // Load cover images together instead of querying each card separately.
+            var images = entityManager.createQuery("""
+                    select i from PostImage i where i.post.id in :postIds
+                    and not exists (select earlier.id from PostImage earlier
+                        where earlier.post.id=i.post.id and earlier.sortOrder < i.sortOrder)
+                    """, PostImage.class).setParameter("postIds", postIds).getResultList();
+            for (var image : images) {
+                thumbnails.put(image.getPost().getId(), storage.readUrl(image.getStorageKey(), image.getImageUrl()));
+            }
+        }
         return new ClaimPageDto(result.getContent().stream().map(c -> new ClaimSummaryDto(c.getId(), c.getPost().getId(),
                 c.getPost().getTitle(), name(c.getClaimant()), name(c.getPost().getAccount()), c.getStatus(),
-                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType(),c.getCloseReason())).toList(), page, size, result.getTotalElements(), result.getTotalPages());
+                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType(),c.getCloseReason(), c.getDescription().substring(0, Math.min(c.getDescription().length(), 180)), thumbnails.get(c.getPost().getId()))).toList(), page, size, result.getTotalElements(), result.getTotalPages());
     }
     private String name(Account account) { return account.getFullName() == null || account.getFullName().isBlank() ? "Thành viên" : account.getFullName(); }
     private ClaimResultDto result(Claim claim) { return new ClaimResultDto(claim.getId(), claim.getPost().getId(), claim.getStatus(), claim.getVersion()); }

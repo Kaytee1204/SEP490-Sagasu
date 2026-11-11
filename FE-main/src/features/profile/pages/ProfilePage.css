@@ -1,0 +1,12 @@
+.profile-account-page { background:var(--bg-canvas); padding:28px 0 48px; min-height:70vh; }
+.profile-account-container { max-width:1080px; }
+.profile-account-heading { display:flex; align-items:center; gap:16px; margin-bottom:24px; }
+.profile-account-heading img { width:56px; height:56px; border-radius:50%; object-fit:cover; border:2px solid var(--border); }
+.profile-account-heading h1 { margin:0 0 4px; font-size:1.65rem; font-weight:750; }
+.profile-account-heading p { margin:0; color:var(--text-secondary); font-size:.875rem; }
+.profile-account-grid { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.2fr); gap:24px; align-items:start; }
+.profile-account-grid > section { min-width:0; }
+.profile-security-card { background:var(--bg-surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+.profile-security-card > h2 { font-size:1rem; font-weight:700; margin:0 0 18px; }
+.profile-account-page :focus-visible { outline:2px solid var(--teal-600); outline-offset:3px; }
+@media(max-width:760px) { .profile-account-grid { grid-template-columns:minmax(0,1fr); gap:18px; } .profile-account-page { padding-top:20px; } .profile-security-card { padding:16px; } }

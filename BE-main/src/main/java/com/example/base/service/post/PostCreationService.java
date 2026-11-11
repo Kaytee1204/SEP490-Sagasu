@@ -31,6 +31,7 @@ import java.util.UUID;
 @Slf4j
 public class PostCreationService {
     private final PostRepository posts;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final CategoryRepository categories;
     private final AccountRepository accounts;
     private final ImageStorage storage;
@@ -40,7 +41,7 @@ public class PostCreationService {
     /** UC15: a Lost post always uses P2P. */
     public CreatedPostDto createLost(CreateLostPostRequest request, List<MultipartFile> files, CustomUserDetails user) {
         PostDraft draft = new PostDraft("LOST", request.title(), request.description(), request.categoryId(),
-                request.locationText(), request.eventAt(), request.privateIdentifiers());
+                request.locationText(), request.eventAt(), request.privateIdentifiers(), request.requestId());
         return create(draft, files, user);
     }
 
@@ -48,12 +49,16 @@ public class PostCreationService {
     public CreatedPostDto createFound(CreateFoundPostRequest request, List<MultipartFile> files, CustomUserDetails user) {
         PostHandoverPolicy.validateCreation(request.custodyMode(), request.handoverRequestedAt());
         PostDraft draft = new PostDraft("FOUND", request.title(), request.description(), request.categoryId(),
-                request.locationText(), request.eventAt(), request.privateIdentifiers());
+                request.locationText(), request.eventAt(), request.privateIdentifiers(), request.requestId());
         return create(draft, files, user);
     }
 
     private CreatedPostDto create(PostDraft draft, List<MultipartFile> files, CustomUserDetails user) {
         long authorId = PostAccessPolicy.requireAuthor(user);
+        if (draft.requestId() != null) {
+            var existing = findRequest(authorId, draft.requestId());
+            if (existing != null) return existing;
+        }
         if (!categories.existsByCategoryIdAndActiveTrue(draft.categoryId())) {
             throw new AppException(ErrorCode.POST_CATEGORY_UNAVAILABLE);
         }
@@ -63,8 +68,22 @@ public class PostCreationService {
         try {
             // Do not hold database locks while waiting for R2 uploads.
             uploadImages(authorId, images, uploadedKeys);
-            return new TransactionTemplate(transactionManager).execute(transaction ->
-                    savePost(draft, authorId, images, uploadedKeys));
+            var reused = new boolean[]{false};
+            var result = new TransactionTemplate(transactionManager).execute(transaction -> {
+                if (draft.requestId() != null) {
+                    jdbc.query("select pg_advisory_xact_lock(hashtextextended(?, 0))",
+                            rs -> { }, authorId + ":" + draft.requestId());
+                    var existing = findRequest(authorId, draft.requestId());
+                    if (existing != null) { reused[0] = true; return existing; }
+                }
+                var saved = savePost(draft, authorId, images, uploadedKeys);
+                if (draft.requestId() != null) jdbc.update(
+                        "insert into post_creation_request(account_id, request_id, post_id) values (?, ?, ?)",
+                        authorId, draft.requestId(), saved.id());
+                return saved;
+            });
+            if (reused[0]) deleteUploadedImages(uploadedKeys);
+            return result;
         } catch (RuntimeException ex) {
             deleteUploadedImages(uploadedKeys);
             throw ex;
@@ -91,6 +110,14 @@ public class PostCreationService {
         attachImages(post, images, uploadedKeys);
         posts.saveAndFlush(post);
         return new CreatedPostDto(post.getId(), post.getPostType(), post.getStatus(), post.getModerationStatus());
+    }
+
+    private CreatedPostDto findRequest(long authorId, UUID requestId) {
+        return jdbc.query("select p.post_id, p.post_type, p.status, p.moderation_status "
+                        + "from post_creation_request r join post p on p.post_id=r.post_id "
+                        + "where r.account_id=? and r.request_id=?",
+                (rs, row) -> new CreatedPostDto(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4)),
+                authorId, requestId).stream().findFirst().orElse(null);
     }
 
     private void uploadImages(long authorId, List<ValidatedImage> images, List<String> uploadedKeys) {
@@ -121,5 +148,5 @@ public class PostCreationService {
 
     /** Common internal input for Lost/Found; never used as a public response. */
     private record PostDraft(String postType, String title, String description, Long categoryId,
-                             String locationText, OffsetDateTime eventAt, String privateIdentifiers) {}
+                             String locationText, OffsetDateTime eventAt, String privateIdentifiers, UUID requestId) {}
 }

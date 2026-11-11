@@ -34,7 +34,7 @@ public class ReportService {
     public record Evidence(long id,String url,String name) {}
     public record Activity(String action,String status,String note,OffsetDateTime at) {}
     public record Detail(long id,String kind,String targetType,long targetId,String description,String status,
-            String resolutionNote,OffsetDateTime createdAt,List<Evidence> evidence,List<Activity> activities) {}
+            String resolutionNote,OffsetDateTime createdAt,List<Evidence> evidence,List<Activity> activities,String targetLabel) {}
     public record Page(List<Detail> content,int totalPages,long totalElements) {}
 
     public Detail create(Submit request,List<MultipartFile> files,CustomUserDetails user) {
@@ -104,8 +104,19 @@ public class ReportService {
     public Detail detail(Report report) {
         var evidence=jdbc.query("select * from report_evidence where report_id=? order by sort_order",(rs,n)->new Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),report.getId());
         var activities=jdbc.query("select action,to_status,public_note,created_at from report_activity where report_id=? and (public_note is not null or action='CREATE') order by activity_id",(rs,n)->new Activity(rs.getString(1),rs.getString(2),rs.getString(3),rs.getObject(4,OffsetDateTime.class)),report.getId());
-        return new Detail(report.getId(),report.getKind(),report.targetType(),report.targetId(),report.getDescription(),report.getStatus(),report.getResolutionNote(),report.getCreatedAt(),evidence,activities);
+        return new Detail(report.getId(),report.getKind(),report.targetType(),report.targetId(),report.getDescription(),report.getStatus(),report.getResolutionNote(),report.getCreatedAt(),evidence,activities,targetLabel(report));
     }
+    private String targetLabel(Report report) {
+        String sql = switch (report.targetType()) {
+            case "POST" -> "select title from post where post_id=?";
+            case "CLAIM" -> "select p.title from claim c join post p on p.post_id=c.post_id where c.claim_id=?";
+            case "MESSAGE" -> "select p.title from chat_message m join chat_conversation c on c.conversation_id=m.conversation_id join post p on p.post_id=c.post_id where m.message_id=?";
+            default -> "select full_name from accounts where id=?";
+        };
+        return jdbc.query(sql, (rs, row) -> rs.getString(1), report.targetId()).stream()
+                .filter(Objects::nonNull).findFirst().orElse("Đối tượng #" + report.targetId());
+    }
+
     private void validate(Submit r) {
         if(r==null || r.clientRequestId()==null || r.targetId()==null || r.targetId()<1 || !Set.of("POST","CLAIM","MESSAGE","USER").contains(Objects.toString(r.targetType(),"")) || r.description()==null || r.description().isBlank() || r.description().length()>5000)throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
     }

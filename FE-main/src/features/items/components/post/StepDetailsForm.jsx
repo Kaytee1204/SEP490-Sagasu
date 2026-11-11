@@ -5,7 +5,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div className="input-group">
-        <label className="input-label" htmlFor="itemName">Tên / Tiêu đề ngắn gọn</label>
+        <label className="input-label" htmlFor="itemName">Tên / Tiêu đề ngắn gọn *</label>
         <input
           id="itemName"
           type="text"
@@ -19,7 +19,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
       </div>
 
       <div className="input-group">
-        <label className="input-label" htmlFor="categoryId">Danh mục</label>
+        <label className="input-label" htmlFor="categoryId">Danh mục *</label>
         <select id="categoryId" className="input" required value={formData.categoryId || ''}
           onChange={e => onChange({ ...formData, categoryId: e.target.value })}>
           <option value="">Chọn danh mục</option>
@@ -29,7 +29,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <div className="input-group">
-          <label className="input-label" htmlFor="date">{postType === 'lost' ? 'Ngày mất' : 'Ngày nhặt được'}</label>
+          <label className="input-label" htmlFor="date">{postType === 'lost' ? 'Ngày mất' : 'Ngày nhặt được'} *</label>
           <div className="input-icon-wrap">
             <span className="input-icon"><Calendar size={15} /></span>
             <input
@@ -43,7 +43,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
           </div>
         </div>
         <div className="input-group">
-          <label className="input-label" htmlFor="time">Khoảng thời gian</label>
+          <label className="input-label" htmlFor="time">Khoảng thời gian *</label>
           <div className="input-icon-wrap">
             <span className="input-icon"><Clock size={15} /></span>
             <input
@@ -59,7 +59,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
       </div>
 
       <div className="input-group">
-        <label className="input-label" htmlFor="location">Địa điểm (Vị trí)</label>
+        <label className="input-label" htmlFor="location">Địa điểm (Vị trí) *</label>
         <div className="input-icon-wrap">
           <span className="input-icon"><MapPin size={15} /></span>
           <input
@@ -76,7 +76,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
       </div>
 
       <div className="input-group">
-        <label className="input-label" htmlFor="desc">Mô tả công khai</label>
+        <label className="input-label" htmlFor="desc">Mô tả công khai *</label>
         <textarea
           id="desc"
           className="input"

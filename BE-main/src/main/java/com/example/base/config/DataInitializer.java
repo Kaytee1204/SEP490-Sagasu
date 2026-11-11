@@ -71,6 +71,7 @@ public class DataInitializer {
             "db/migrations/16_p2p_handover.sql",
             "db/migrations/17_confirm_p2p_receipt.sql",
             "db/migrations/18_handover_reports.sql",
+            "db/migrations/19_claim_author_compatibility.sql",
             // DaiHV integration: office custody transfer and return, after the shared claim schema.
             "db/migrations/19_office_transfer_and_return.sql",
             // DaiHV: appointment invitations for people bringing found items to the office.
@@ -78,7 +79,8 @@ public class DataInitializer {
             // KhanhTB: In-App & Email Notification System with User Preferences.
             "db/migrations/21_notifications.sql",
             // DaiHV: investigation and resolution of reports; existing team scripts stay intact.
-            "db/migrations/22_report_review.sql"
+            "db/migrations/22_report_review.sql",
+            "db/migrations/22_post_creation_requests.sql"
     );
 
     @Bean

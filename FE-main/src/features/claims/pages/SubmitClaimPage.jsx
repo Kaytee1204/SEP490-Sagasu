@@ -1,3 +1,4 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -79,11 +80,12 @@ function ClaimForm({ postId, retryId }) {
     <p className="claims-muted">Tối đa 5 ảnh JPG/PNG, mỗi ảnh tối đa 5 MB. Có thể gửi căn cứ bằng chữ mà không đính kèm ảnh.</p>
     <div className="claim-evidence">{files.map(entry => <div key={entry.id}><img src={entry.url} alt={entry.file.name} /><small>{entry.file.name}</small>
       <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => remove(entry)} aria-label={`Xóa ảnh ${entry.file.name}`}>Xóa ảnh</button></div>)}</div>
-    <label>Ghi chú bằng chứng (không bắt buộc)<textarea maxLength={5000} value={evidenceNote} disabled={busy}
-      onChange={event => setEvidenceNote(event.target.value)} placeholder="Ghi chú về ảnh cũ, hóa đơn hoặc tài liệu đính kèm…" /></label>
+    <details className="workflow-disclosure"><summary>Thêm ghi chú về bằng chứng</summary><label>Ghi chú (không bắt buộc)<textarea maxLength={5000} value={evidenceNote} disabled={busy}
+      onChange={event => setEvidenceNote(event.target.value)} placeholder="Ghi chú về ảnh cũ, hóa đơn hoặc tài liệu đính kèm…" /></label></details>
   </>;
   return <main className="container claims-page">
-    <header className="claims-heading"><h1>{retryId ? 'Gửi claim mới' : 'Xác minh quyền sở hữu'}</h1><Link className="btn btn-ghost" to={`/chi-tiet/${postId}`}>Về bài đăng</Link></header>
+
+    <header className="claims-heading"><h1>{retryId ? 'Gửi claim mới' : 'Yêu cầu nhận lại đồ'}</h1><Link className="btn btn-ghost" to={`/chi-tiet/${postId}`}>Về bài đăng</Link></header>
     {error && <div className="claim-alert" role="alert">{error}</div>}
     {!loaded ? <p role="status">{error ? 'Không tải được thông tin bài đăng. Vui lòng mở lại trang.' : 'Đang tải bài đăng…'}</p>
       : loaded.problem ? <div className="claim-panel" role="alert">{loaded.problem}</div> : <>
@@ -97,7 +99,7 @@ function ClaimForm({ postId, retryId }) {
           <ClaimQuestionnaireFields questionnaire={loaded.questionnaire} answers={answers}
             onAnswer={(code, value) => setAnswers(current => ({ ...current, [code]: value }))}
             description={description} onDescription={setDescription} evidenceField={evidenceField} disabled={busy} />
-          <button className="btn btn-accent" disabled={busy} type="submit">{busy ? 'Đang gửi…' : postClaimType(loaded.post) === 'OFFICE' ? 'Gửi claim cho phòng ban' : 'Gửi claim'}</button>
+          <button className="btn btn-accent" disabled={busy} type="submit">{busy ? 'Đang gửi…' : postClaimType(loaded.post) === 'OFFICE' ? 'Gửi claim cho phòng ban' : 'Gửi yêu cầu nhận đồ'}</button>
         </form>
       </>}
   </main>;

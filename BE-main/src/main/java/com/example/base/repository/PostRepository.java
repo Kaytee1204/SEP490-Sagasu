@@ -19,7 +19,7 @@ public interface PostRepository extends JpaRepository<Post, Long>, org.springfra
 
     // Reuse the generated public-text tsvector and its GIN index. Private clues are excluded.
     String VISIBLE_SEARCH = """
-            from post p where p.moderation_status='VISIBLE' and p.deleted_at is null
+            from post p where p.moderation_status='VISIBLE' and p.deleted_at is null and p.status <> 'RETURNED'
               and (:keyword='' or p.search_document @@ plainto_tsquery('simple', :keyword))
               and (cast(:categoryId as bigint) is null or p.category_id=cast(:categoryId as bigint))
               and (:postType='' or p.post_type=:postType)
@@ -63,10 +63,10 @@ public interface PostRepository extends JpaRepository<Post, Long>, org.springfra
 
     // Page IDs before joining images so each page counts posts, not image rows.
     @Query(value = """
-            select p.id from Post p where p.moderationStatus='VISIBLE' and p.deletedAt is null
+            select p.id from Post p where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status <> 'RETURNED'
             order by p.createdAt desc, p.id desc
             """, countQuery = """
-            select count(p) from Post p where p.moderationStatus='VISIBLE' and p.deletedAt is null
+            select count(p) from Post p where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status <> 'RETURNED'
             """)
     Page<Long> findVisibleIds(Pageable pageable);
 

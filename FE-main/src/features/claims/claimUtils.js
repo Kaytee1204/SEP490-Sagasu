@@ -1,6 +1,6 @@
 export const CLAIM_STATUS = { PENDING: 'Chờ xét duyệt', APPROVED: 'Đã chấp thuận', REJECTED: 'Bị từ chối', CANCELLED: 'Đã hủy', COMPLETED:'Đã nhận đồ',CLOSED:'Đã đóng' };
 export const CLAIM_ACTION = { SUBMIT: 'Gửi claim', APPROVE: 'Chấp thuận', REJECT: 'Từ chối', CANCEL: 'Hủy claim',HANDOVER:'Người nhặt ghi nhận đã giao',CONFIRM_RECEIPT:'Người nhận xác nhận đã nhận đồ',AUTO_CLOSE:'Hệ thống đóng do bài đã trao trả',REPORT_ISSUE:'Báo sự cố bàn giao' };
-export const claimDate = value => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+export const claimDate = value => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 export const validClaimId = value => /^[1-9]\d*$/.test(String(value || ''));
 export const claimDetailPath = (postId, claimId) => `/bai-dang/${encodeURIComponent(postId)}/claims/${encodeURIComponent(claimId)}`;
 export function postClaimType(post) {
@@ -16,3 +16,5 @@ export function evidenceUrl(value) {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; }
   catch { return null; }
 }
+
+export const postClaimsPath = (postId, status = 'ALL', view = 'received') => `/claim-cua-toi?${new URLSearchParams({ view, postId: String(postId), claimStatus: status })}`;

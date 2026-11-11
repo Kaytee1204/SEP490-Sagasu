@@ -1,63 +1,24 @@
 import { useState, useEffect, useEffectEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { getMyPosts } from '@/features/items/api/postApi';
-import { FileText, CheckCircle, Award } from 'lucide-react';
-import ProfileHeader from '../components/ProfileHeader';
-import ProfileStatCard from '../components/ProfileStatCard';
 import ProfileSidebarCard from '../components/ProfileSidebarCard';
-import PostsTab from '../components/PostsTab';
 import SecurityTab from '../components/SecurityTab';
-import MyClaimsPage from '@/features/claims/pages/MyClaimsPage';
-
-const TABS = [
-  { key: 'posts', label: 'Tin đăng của tôi' },
-  { key: 'claims', label: 'Claim của tôi' },
-  { key: 'security', label: 'Bảo mật & Quyền riêng tư' },
-];
-
-async function loadPostCounts() {
-  const [allRes, visibleRes] = await Promise.allSettled([
-    getMyPosts(1, 'ALL'),
-    getMyPosts(1, 'VISIBLE'),
-  ]);
-  return {
-    total: allRes.status === 'fulfilled' ? (allRes.value?.totalElements ?? 0) : 0,
-    visible: visibleRes.status === 'fulfilled' ? (visibleRes.value?.totalElements ?? 0) : 0,
-  };
-}
+import './ProfilePage.css';
 
 export default function ProfilePage() {
   const { user, isPureAdmin, refreshProfile, updateUser } = useAuth();
-  const [activeTab, setActiveTabState] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('sagasu_profile_tab');
-      if (saved && TABS.some(t => t.key === saved)) return saved;
-    } catch { /* ignore */ }
-    return 'posts';
-  });
-  const setActiveTab = (tabKey) => {
-    setActiveTabState(tabKey);
-    try {
-      sessionStorage.setItem('sagasu_profile_tab', tabKey);
-    } catch { /* ignore */ }
-  };
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const [postCounts, setPostCounts] = useState({ total: 0, visible: 0 });
 
   // Read the latest context callback without reloading when its reference changes.
   const loadAccountDataOnOpen = useEffectEvent(async () => {
     await refreshProfile();
-    return loadPostCounts();
   });
 
   useEffect(() => {
     let cancelled = false;
-    loadAccountDataOnOpen().then((counts) => {
-      if (!cancelled) setPostCounts(counts);
-    }).catch(() => {
-      if (!cancelled) setPostCounts({ total: 0, visible: 0 });
+    loadAccountDataOnOpen().catch(() => {
+      if (!cancelled) setFeedback({ type: 'error', message: 'Không tải được thông tin mới nhất. Vui lòng thử lại.' });
     });
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -104,26 +65,7 @@ export default function ProfilePage() {
     status: displayStatus,
     securityLabel,
     avatar: avatarUrl,
-    stats: [
-      {
-        label: 'Số lượng bài đăng',
-        value: String(postCounts.total),
-        sub: 'Tổng số tin đã đăng của bạn',
-        icon: FileText,
-      },
-      {
-        label: 'Bài đăng đang hiển thị',
-        value: String(postCounts.visible),
-        sub: 'Đang hiển thị trên hệ thống',
-        icon: CheckCircle,
-      },
-      {
-        label: 'Vai trò (Role)',
-        value: displayRole,
-        sub: displayStatus === 'ACTIVE' ? 'Trạng thái: Đang hoạt động' : `Trạng thái: ${displayStatus}`,
-        icon: Award,
-      },
-    ],
+
   };
 
   const handleSaveEdit = async () => {
@@ -167,7 +109,6 @@ export default function ProfilePage() {
 
       await updateUser(payload);
       await refreshProfile();
-      setPostCounts(await loadPostCounts());
       setFormValues((prev) => ({ ...prev, newPassword: '', confirmPassword: '' }));
       setEditMode(false);
       setFeedback({ type: 'success', message: 'Đã cập nhật thông tin cá nhân thành công!' });
@@ -182,111 +123,34 @@ export default function ProfilePage() {
   };
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--bg-canvas)' }}>
-      {/* ── PAGE HERO / HEADER ── */}
-      <ProfileHeader
-        user={profileUser}
-        editMode={editMode}
-        onToggleEdit={() => {
-          setFeedback(null);
-          setEditMode(!editMode);
-        }}
-      />
-
-      {/* ── MAIN CONTENT ── */}
-      <div style={{ flex: 1, padding: '24px 0 48px' }}>
-        <div className="container">
-          <div
-            className="grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-6 items-start"
-          >
-            {/* ── LEFT: Main column ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Stats grid */}
-              <div
-                className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-              >
-                {profileUser.stats.map((s, i) => (
-                  <ProfileStatCard key={i} stat={s} index={i} />
-                ))}
-              </div>
-
-              {/* Tabs + content card */}
-              <div
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  overflow: 'hidden',
-                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
-                }}
-              >
-                {/* Tab bar */}
-                <div
-                  style={{
-                    display: 'flex',
-                    borderBottom: '1px solid #e2e8f0',
-                    background: '#f8fafc',
-                    padding: '0 20px',
-                    gap: '8px',
-                  }}
-                >
-                  {TABS.map((tab) => (
-                    <button
-                      key={tab.key}
-                      id={`tab-profile-${tab.key}`}
-                      type="button"
-                      onClick={() => setActiveTab(tab.key)}
-                      style={{
-                        padding: '13px 14px',
-                        background: 'none',
-                        border: 'none',
-                        borderBottom: `2px solid ${activeTab === tab.key ? 'var(--accent)' : 'transparent'}`,
-                        color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-secondary)',
-                        fontSize: '0.85rem',
-                        fontWeight: activeTab === tab.key ? 700 : 500,
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-body)',
-                        transition: 'color 150ms ease, border-color 150ms ease',
-                        whiteSpace: 'nowrap',
-                        marginBottom: '-1px',
-                      }}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Tab content */}
-                <div style={{ padding: '22px' }}>
-                  {activeTab === 'posts' && <PostsTab />}
-                  {activeTab === 'claims' && <MyClaimsPage embedded />}
-                  {activeTab === 'security' && <SecurityTab />}
-                </div>
-              </div>
-            </div>
-
-            {/* ── RIGHT: Sidebar ── */}
+    <main className="profile-account-page">
+      <div className="container profile-account-container">
+        <header className="profile-account-heading">
+          <img src={avatarUrl} alt="" />
+          <div><h1>Hồ sơ cá nhân</h1><p>Quản lý thông tin và bảo mật tài khoản của bạn.</p></div>
+        </header>
+        <div className="profile-account-grid">
+          <section aria-label="Thông tin cá nhân">
             <ProfileSidebarCard
               user={profileUser}
+              showQuickActions={false}
               isPureAdmin={isPureAdmin}
               editMode={editMode}
-              onStartEdit={() => {
-                setFeedback(null);
-                setEditMode(true);
-              }}
+              onStartEdit={() => { setFeedback(null); setEditMode(true); }}
               formValues={formValues}
               onChangeForm={setFormValues}
               onSaveEdit={handleSaveEdit}
-              onCancelEdit={() => {
-                setFeedback(null);
-                setEditMode(false);
-              }}
+              onCancelEdit={() => { setFeedback(null); setEditMode(false); }}
               saving={saving}
               feedback={feedback}
             />
-          </div>
+          </section>
+          <section className="profile-security-card" aria-labelledby="profile-security-title">
+            <h2 id="profile-security-title">Bảo mật & Quyền riêng tư</h2>
+            <SecurityTab />
+          </section>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

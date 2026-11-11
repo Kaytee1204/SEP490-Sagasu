@@ -19,3 +19,6 @@ export async function submitClaim(postId, request, images, retryId) {
   const path = retryId ? `/claims/${encodeURIComponent(retryId)}/retry` : `/posts/${encodeURIComponent(postId)}/claims`;
   return data(apiClient.upload(path, form));
 }
+
+export const getGroupedClaims = (page = 1, status = 'ALL', sent = false, postId = null) =>
+  data(apiClient.get(`/claims/grouped?${new URLSearchParams({page: String(page), size: '8', status, sent: String(sent), ...(postId ? { postId } : {})})}`));

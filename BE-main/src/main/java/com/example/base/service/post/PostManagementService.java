@@ -73,9 +73,15 @@ public class PostManagementService {
             }
         }
 
+        Map<Long, Long> pendingCounts = new HashMap<>();
+        if (!pageOfIds.isEmpty()) {
+            entityManager.createQuery("select c.post.id, count(c) from Claim c where c.post.id in :ids and c.claimType='P2P' and c.status='PENDING' group by c.post.id", jakarta.persistence.Tuple.class)
+                    .setParameter("ids", pageOfIds.getContent()).getResultList()
+                    .forEach(row -> pendingCounts.put(row.get(0, Long.class), row.get(1, Long.class)));
+        }
         List<MyPostDto> result = new ArrayList<>();
         for (Long postId : pageOfIds.getContent()) {
-            result.add(toMyPostDto(postsById.get(postId), authorId));
+            result.add(toMyPostDto(postsById.get(postId), authorId, pendingCounts.getOrDefault(postId, 0L)));
         }
         return new MyPostPageDto(result, page, size, pageOfIds.getTotalElements(),
                 pageOfIds.getTotalPages(), pageOfIds.isFirst(), pageOfIds.isLast());
@@ -268,7 +274,7 @@ public class PostManagementService {
         }
     }
 
-    private MyPostDto toMyPostDto(Post post, long viewerId) {
+    private MyPostDto toMyPostDto(Post post, long viewerId, long pendingClaimCount) {
         String editReason = getEditBlockedReason(post, viewerId);
         String deleteReason = getDeleteBlockedReason(post, viewerId);
         String thumbnail = null;
@@ -280,7 +286,7 @@ public class PostManagementService {
                 post.getLocationText(), post.getStatus(), post.getModerationStatus(), post.getCreatedAt(),
                 post.getUpdatedAt(), thumbnail, editReason == null,
                 deleteReason == null,
-                editReason, deleteReason);
+                editReason, deleteReason, pendingClaimCount);
     }
 
     private String getEditBlockedReason(Post post, long viewerId) {

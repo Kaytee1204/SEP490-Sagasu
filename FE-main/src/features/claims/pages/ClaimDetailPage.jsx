@@ -1,10 +1,14 @@
+import '@/features/workspace/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { getClaim, getClaimOnPost, reviewClaim, cancelClaim } from '../api/claimApi';
-import { CLAIM_STATUS, CLAIM_ACTION, claimDate, evidenceUrl, validClaimId, claimDetailPath } from '../claimUtils';
+import { CLAIM_STATUS, CLAIM_ACTION, claimDate, evidenceUrl, validClaimId, claimDetailPath, postClaimsPath } from '../claimUtils';
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import ClaimAnswerSummary from '../components/ClaimAnswerSummary';
+import RejectClaimDialog from '../components/RejectClaimDialog';
+import CancelClaimDialog from '../components/CancelClaimDialog';
+import ApproveClaimDialog from '../components/ApproveClaimDialog';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import ReportButton from '@/features/reports/ReportButton';
 import HandoverPanel from '@/features/handover/HandoverPanel';
@@ -51,6 +55,9 @@ function ClaimDetail({ postId, id }) {
   const [reason, setReason] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
   const [focusRevision,setFocusRevision]=useState(0);
@@ -69,27 +76,38 @@ function ClaimDetail({ postId, id }) {
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
   }, [postId, id,revision,focusRevision]);
-  async function act(action) {
+  useEffect(() => {
+    if (claim && location.hash === '#handover') document.getElementById('handover')?.scrollIntoView({ block: 'start' });
+  }, [claim?.id, location.hash]);
+  async function act(action, reviewDecision = decision) {
     if (inFlight.current) return;
     if (action === 'review' && !reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; }
     inFlight.current = true; setBusy(true); setError(''); setNotice('');
     try {
-      if (action === 'review') await reviewClaim(id, { decision, reason: reason.trim(), expectedVersion: claim.version });
+      if (action === 'review') await reviewClaim(id, { decision: reviewDecision, reason: reason.trim(), expectedVersion: claim.version });
       else await cancelClaim(id, { reason: cancelReason.trim() || null, expectedVersion: claim.version });
       setNotice(action === 'review' ? 'Đã lưu kết quả xét duyệt.' : 'Đã hủy claim. Hồ sơ và bằng chứng vẫn được lưu.');
       setClaim(await getClaimOnPost(postId, id)); setReason(''); setCancelReason(''); setConfirmCancel(false);
     } catch (err) { setError(err.message); }
     finally { inFlight.current = false; setBusy(false); }
   }
+  const returnTo = location.state?.claimListReturn;
+  const listPath = typeof returnTo === 'string' && (returnTo === '/claim-cua-toi' || returnTo.startsWith('/claim-cua-toi?'))
+    ? returnTo : claim?.claimType === 'OFFICE' ? `/claim-cua-toi?view=${String(user?.id) === String(claim.claimantId) ? 'sent' : 'office'}`
+      : postClaimsPath(postId, 'ALL', String(user?.id) === String(claim?.claimantId) ? 'sent' : 'received');
   return <main className="container claims-page">
-    <header className="claims-heading"><h1>Hồ sơ claim #{id}</h1><div className="claim-actions">
-      <Link className="btn btn-ghost" to={claim && String(user?.id) === String(claim.claimantId) ? '/claim-cua-toi?view=sent' : claim?.claimType === 'OFFICE' ? '/claim-cua-toi?view=office' : '/claim-cua-toi'}>Claim của tôi</Link>
+
+    <header className="claims-heading"><div><p className="claims-muted">Yêu cầu nhận đồ</p><h1>{claim?.postTitle || "Đang tải hồ sơ…"}</h1></div><div className="claim-actions">
+      <Link className="btn btn-ghost" to={listPath}>Về danh sách yêu cầu</Link>
       <Link className="btn btn-ghost" to={`/chi-tiet/${postId}`}>Xem bài đăng</Link></div></header>
     {error && <div role="alert" className="claim-alert">{error}</div>}
     {notice && <div role="status" className="claim-notice">{notice}</div>}
     {!claim ? <p role="status">{error ? 'Bạn có thể xem bài đăng hoặc trở về danh sách claim.' : 'Đang tải hồ sơ…'}</p> : <>
-      <section className="claim-panel"><span className={`claim-status claim-status-${claim.status}`}>{CLAIM_STATUS[claim.status]}</span>
-        {String(user?.id) !== String(claim.claimantId) && <p><Link to={`/bai-dang/${claim.postId}/claims`}>← Các claim trên bài này</Link></p>}
+      <span className={`claim-status claim-status-${claim.status}`}>{CLAIM_STATUS[claim.status]}</span>
+      {claim.canOpenChat && <OpenChatButton postId={claim.postId} />}
+      {claim.claimType==='P2P' && ['APPROVED', 'COMPLETED'].includes(claim.status) &&<HandoverPanel claim={claim} onChanged={()=>getClaimOnPost(postId,id).then(setClaim).catch(e=>setError(e.message))}/>}
+      <details className="claim-panel workflow-evidence" open={claim.status === 'PENDING'}><summary>Thông tin xác minh</summary>
+
         <h2 className="claim-prose"><Link to={`/chi-tiet/${claim.postId}`}>{claim.postTitle}</Link></h2>
         <p>Người claim: <strong>{claim.claimantName}</strong> · {claim.claimType === 'OFFICE' ? 'Xét duyệt bởi phòng ban tiếp nhận' : <>Người nhặt: <strong>{claim.finderName}</strong></>}</p>
         {claim.claimType === 'OFFICE' && <p className="claim-notice">Đồ đã được phòng ban tiếp nhận, xác minh. {claim.storageLocationName && <>Nơi lưu trữ: {claim.storageLocationName}. </>}Hồ sơ do cán bộ tiếp nhận xét duyệt; không có chat P2P.</p>}
@@ -105,19 +123,21 @@ function ClaimDetail({ postId, id }) {
             onClick={() => setPreviewImageId(image.id)}><img src={url} alt={name} /></button> : <p>Ảnh tạm thời chưa sẵn sàng.</p>}
             <small>{image.originalName || 'Ảnh bằng chứng'}</small></div>;
         })}</div>{!claim.evidence.length && <p className="claims-muted">Hồ sơ không đính kèm ảnh.</p>}
-      </section>
-      {claim.canOpenChat && <OpenChatButton postId={claim.postId} />}
       <ClaimAnswerSummary answers={claim.answers} />
-      {claim.claimType==='P2P'&&<HandoverPanel claim={claim} onChanged={()=>getClaimOnPost(postId,id).then(setClaim).catch(e=>setError(e.message))}/>}
-      <ReportButton type="CLAIM" id={claim.id} label="Báo cáo hồ sơ claim" />
-      {claim.canReview && <form className="claim-panel claim-form" onSubmit={event => { event.preventDefault(); act('review'); }}>
-        <h2>Xét duyệt hồ sơ</h2><label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
-          <option value="APPROVED">Chấp thuận</option><option value="REJECTED">Từ chối — căn cứ chưa phù hợp hoặc chưa đủ</option></select></label>
-        <label>Lý do xét duyệt *<textarea required disabled={busy} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label>
-        <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu kết quả xét duyệt'}</button>
-        <Link to={`/bai-dang/${claim.postId}/claims`}>Xem các claim trên bài này</Link>
+      </details>
+      {claim.canReview && <form className="claim-panel claim-form" onSubmit={event => { event.preventDefault(); act('review', event.nativeEvent.submitter?.value || decision); }}>
+        <h2>Xét duyệt hồ sơ</h2>{claim.claimType !== 'P2P' && <label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
+          <option value="APPROVED">Chấp thuận</option><option value="REJECTED">Từ chối — căn cứ chưa phù hợp hoặc chưa đủ</option></select></label>}
+        {claim.claimType !== 'P2P' && <label>Lý do xét duyệt *<textarea required disabled={busy} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label>}
+        {claim.claimType === 'P2P' ? <div className="claim-actions">
+          <button type="button" onClick={() => setApproveOpen(true)} className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Chấp thuận nhận đồ'}</button>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setRejectOpen(true)}>Từ chối yêu cầu</button>
+        </div> : <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu kết quả xét duyệt'}</button>}
       </form>}
-      {claim.canCancel && <section className="claim-panel"><h2>Hủy yêu cầu nhận đồ</h2><p>Chỉ hủy được trước khi bàn giao. Lịch sử và bằng chứng của hồ sơ vẫn được giữ lại.</p>
+      {claim.canCancel && claim.claimType === 'P2P' && <section className="claim-panel claim-danger-zone"><h2>Hủy yêu cầu nhận đồ</h2>
+        <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setCancelOpen(true)}>Hủy yêu cầu nhận đồ</button>
+      </section>}
+      {claim.canCancel && claim.claimType !== 'P2P' && <section className="claim-panel claim-danger-zone"><h2>Hủy yêu cầu nhận đồ</h2><p>Chỉ hủy được trước khi bàn giao. Lịch sử và bằng chứng của hồ sơ vẫn được giữ lại.</p>
         {!confirmCancel ? <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setConfirmCancel(true)}>Hủy claim</button>
           : <div className="claim-form"><p>Bạn xác nhận hủy claim này?</p><label>Lý do hủy (không bắt buộc)<textarea disabled={busy} maxLength={2000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label>
             <div className="claim-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('cancel')}>Xác nhận hủy</button>
@@ -125,11 +145,31 @@ function ClaimDetail({ postId, id }) {
       </section>}
       {claim.canRetry && <section className="claim-panel"><h2>Gửi hồ sơ mới</h2><p>Bạn có thể tạo claim mới. Hồ sơ này giữ nguyên trạng thái {claim.status === 'CANCELLED' ? 'đã hủy' : 'bị từ chối'} và lịch sử xử lý.</p>
         <Link className="btn btn-accent" to={`/xac-minh/${claim.postId}?retryOf=${claim.id}`}>Tạo claim mới</Link></section>}
-      <section className="claim-panel"><h2>Lịch sử xử lý</h2><ol className="claim-timeline">{claim.activities.map(event => <li key={event.id}>
+      <details className="claim-panel claim-history"><summary>Lịch sử xử lý</summary><ol className="claim-timeline">{claim.activities.map(event => <li key={event.id}>
         <strong>{CLAIM_ACTION[event.action] || event.action}</strong> · {event.actorName}
         <p className="claims-muted">{claimDate(event.createdAt)}</p>{event.reason && <p className="claim-prose">{event.reason}</p>}
-      </li>)}</ol></section>
+      </li>)}</ol></details>
+      <ReportButton type="CLAIM" id={claim.id} targetLabel={claim.postTitle} label="Báo cáo hồ sơ claim" />
+
     </>}
+    {rejectOpen && claim?.canReview && claim.claimType === 'P2P' && <RejectClaimDialog claim={claim}
+      onClose={() => setRejectOpen(false)} onRejected={() => {
+        setRejectOpen(false); setReason(''); setError(''); setNotice('Đã từ chối yêu cầu nhận đồ.');
+        setClaim(current => ({ ...current, status: 'REJECTED', canReview: false }));
+        getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+      }} />}
+    {cancelOpen && claim?.canCancel && claim.claimType === 'P2P' && <CancelClaimDialog claim={claim}
+      onClose={() => setCancelOpen(false)} onCancelled={() => {
+        setCancelOpen(false); setError(''); setNotice('Đã hủy yêu cầu nhận đồ. Hồ sơ và bằng chứng vẫn được lưu.');
+        setClaim(current => ({ ...current, status: 'CANCELLED', canCancel: false, canOpenChat: false }));
+        getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+      }} />}
+    {approveOpen && claim?.canReview && claim.claimType === 'P2P' && <ApproveClaimDialog claim={claim}
+      onClose={() => setApproveOpen(false)} onApproved={() => {
+        setApproveOpen(false); setError(''); setNotice('Đã chấp thuận yêu cầu. Hai bên có thể trao đổi để nhận đồ.');
+        setClaim(current => ({ ...current, status: 'APPROVED', canReview: false }));
+        getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+      }} />}
     {previewImageId !== null && <ClaimEvidencePreview images={previewImages}
       initialIndex={previewImages.findIndex(image => image.id === previewImageId)} onClose={() => setPreviewImageId(null)} />}
   </main>;

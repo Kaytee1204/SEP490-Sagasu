@@ -1,1 +1,22 @@
 .handover-panel h2{font-size:1.2rem;font-weight:700;margin-bottom:12px}.handover-panel>p{margin-block:10px}.handover-panel .claim-form{margin-top:18px}.handover-actions{display:flex;flex-wrap:wrap;gap:10px;margin-block:16px}.handover-panel input[type=file]{font-weight:400}.handover-panel .report-evidence button{background:white;border:0;padding:0}
+
+.handover-record-dialog { position:fixed; inset:0; margin:auto; width:min(580px,calc(100vw - 24px)); max-height:calc(100dvh - 24px); overflow:auto; padding:0; border:1px solid #cce4e0; border-radius:18px; background:white; color:#173c44; box-shadow:0 20px 60px #0003; }
+.handover-record-dialog::backdrop { background:#10292988; backdrop-filter:blur(5px); }
+.handover-record-dialog header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; background:#eef8f7; }
+.handover-record-dialog header h2 { margin:0; }
+.handover-record-dialog header button { display:grid; place-items:center; min-width:44px; min-height:44px; }
+.handover-record-dialog form { display:flex; flex-direction:column; gap:16px; padding:20px; overflow-wrap:anywhere; }
+.handover-record-context { padding:12px; background:#f2f8f7; border-radius:10px; }
+.handover-record-field { display:grid; gap:8px; }
+.handover-record-dialog textarea { min-height:100px; padding:12px; border:1px solid #b9cfd2; border-radius:10px; resize:vertical; }
+.handover-record-confirm { display:flex; align-items:flex-start; gap:10px; padding:12px; border:1px solid #b9cfd2; border-radius:10px; }
+.handover-record-confirm input { margin-top:4px; accent-color:#1e6b6b; }
+.handover-record-dialog footer { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; }
+.handover-record-files li { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.handover-record-files button { min-height:44px; flex-shrink:0; text-decoration:underline; }
+.handover-record-discard { display:grid; gap:12px; padding:14px; background:#fff7ed; border-radius:10px; }
+.handover-record-dialog :focus-visible { outline:2px solid #1e6b6b; outline-offset:3px; }
+.handover-record-dialog button:disabled { opacity:.55; cursor:not-allowed; }
+@media(max-width:480px) { .handover-record-dialog footer { flex-direction:column-reverse; } .handover-record-dialog footer .btn { width:100%; } }
+
+.handover-confirm-effects { list-style:disc; padding-left:22px; display:grid; gap:10px; line-height:1.6; }
