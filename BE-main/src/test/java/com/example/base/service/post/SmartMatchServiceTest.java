@@ -73,6 +73,7 @@ class SmartMatchServiceTest {
         }
     }
 
+    // UTC001 - Owner views smart matches and maps AI matches into SmartMatchItemDto list
     @Test
     void findSmartMatches_whenOwnerAndAiReturnsMatches_mapsDtosFromAiResponse() throws IOException {
         Account owner = account(5L, "Owner Five", AccountRole.USER);
@@ -134,12 +135,15 @@ class SmartMatchServiceTest {
         assertEquals(102L, result.get(1).getId());
     }
 
+    // UTC008, UTC007, UTC002, UTC005 - Rejects invalid postId, invisible post, non-owner, and null viewer
     @Test
     void findSmartMatches_whenUnauthorizedOrInvalidPostOrNotVisible_throwsExpectedError() {
+        // UTC008 - postId <= 0 throws POST_ID_INVALID
         AppException invalidId = assertThrows(AppException.class,
                 () -> service.findSmartMatches(0L, 5L, AccountRole.USER));
         assertEquals(ErrorCode.POST_ID_INVALID, invalidId.getErrorCode());
 
+        // UTC007 - Post not visible and not owned throws POST_NOT_VISIBLE
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.empty());
         when(postRepository.findOwnDetail(10L, 6L)).thenReturn(Optional.empty());
         AppException notVisible = assertThrows(AppException.class,
@@ -150,15 +154,18 @@ class SmartMatchServiceTest {
         Post source = lostPost(10L, owner, owner, category(1L, "Wallet"), "Lost", "Desc", "Hall A", baseTime);
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.of(source));
 
+        // UTC002 - Non-owner USER throws FORBIDDEN
         AppException outsider = assertThrows(AppException.class,
                 () -> service.findSmartMatches(10L, 6L, AccountRole.USER));
         assertEquals(ErrorCode.FORBIDDEN, outsider.getErrorCode());
 
+        // UTC005 - Null viewerId & null role throws FORBIDDEN
         AppException nullViewer = assertThrows(AppException.class,
                 () -> service.findSmartMatches(10L, null, null));
         assertEquals(ErrorCode.FORBIDDEN, nullViewer.getErrorCode());
     }
 
+    // UTC003, UTC004, UTC006 - Allows ADMIN, MANAGER, and post creator (createdBy)
     @Test
     void findSmartMatches_whenAdminManagerOrCreatedByOwner_allowsAccess() {
         Account accountOwner = account(5L, "Account Owner", AccountRole.USER);
@@ -168,11 +175,15 @@ class SmartMatchServiceTest {
         when(postRepository.findCandidateIdsForMatching("FOUND", 1L, 10L, PageRequest.of(0, 20)))
                 .thenReturn(List.of());
 
+        // UTC003 - ADMIN allowed
         assertTrue(service.findSmartMatches(10L, 1L, AccountRole.ADMIN).isEmpty());
+        // UTC004 - MANAGER allowed
         assertTrue(service.findSmartMatches(10L, 2L, AccountRole.MANAGER).isEmpty());
+        // UTC006 - createdBy user allowed as owner
         assertTrue(service.findSmartMatches(10L, 8L).isEmpty());
     }
 
+    // UTC009, UTC010, UTC011, UTC012 - Queries opposite post type and handles empty candidates or empty batch lookup
     @Test
     void findSmartMatches_whenSourceLostOrFound_queriesOppositeTypeAndHandlesEmptyCandidates() {
         Account owner = account(5L, "Owner", AccountRole.USER);
@@ -180,12 +191,14 @@ class SmartMatchServiceTest {
         Post lost = lostPost(10L, owner, owner, cat, "Phone", "Black", "Hall A", baseTime);
         Post found = foundPost(11L, owner, cat, "Phone", "Black", "Hall A", baseTime);
 
+        // UTC009 & UTC011 - LOST queries FOUND; empty candidate ids return [] without calling findVisibleByIds
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.of(lost));
         when(postRepository.findCandidateIdsForMatching("FOUND", 3L, 10L, PageRequest.of(0, 20)))
                 .thenReturn(List.of());
         assertTrue(service.findSmartMatches(10L, 5L).isEmpty());
         verify(postRepository, never()).findVisibleByIds(any());
 
+        // UTC010 & UTC012 - FOUND queries LOST; empty findVisibleByIds returns []
         when(postRepository.findVisibleDetail(11L)).thenReturn(Optional.of(found));
         when(postRepository.findCandidateIdsForMatching("LOST", 3L, 11L, PageRequest.of(0, 20)))
                 .thenReturn(List.of(99L));
@@ -194,6 +207,7 @@ class SmartMatchServiceTest {
         verify(postRepository).findCandidateIdsForMatching("LOST", 3L, 11L, PageRequest.of(0, 20));
     }
 
+    // UTC014, UTC015, UTC016 - Strips trailing slashes in AI URL, applies score/reason defaults, and falls back on empty AI matches
     @Test
     void findSmartMatches_whenAiTrailingSlashesMissingDefaultsOrEmptyMatches_handlesAiResponses() throws IOException {
         Account owner = account(5L, "Owner", AccountRole.USER);
@@ -201,6 +215,7 @@ class SmartMatchServiceTest {
         Post source = lostPost(10L, owner, owner, cat, "Black wallet", "Leather", "Hall A", baseTime);
         Post cand = foundPost(20L, owner, cat, "Black wallet", "Leather", "Hall A", baseTime);
 
+        // UTC016 & UTC015 - Trailing slashes removed on POST /api/match; missing score/reason default to 50.0 / "Trùng khớp đặc điểm"
         AtomicReference<String> pathWithSlashes = new AtomicReference<>();
         int port = startAiServer("""
                 {
@@ -224,6 +239,7 @@ class SmartMatchServiceTest {
         assertEquals(50.0, defaultsResult.get(0).getMatchScore());
         assertEquals("Trùng khớp đặc điểm", defaultsResult.get(0).getMatchReason());
 
+        // UTC014 - Empty AI matches triggers native fallback scoring
         aiServer.stop(0);
         aiServer = null;
         startAiServer("{\"matches\": []}", new AtomicReference<>());
@@ -235,6 +251,7 @@ class SmartMatchServiceTest {
         assertTrue(fallbackFromEmptyAi.get(0).getMatchScore() >= 45.0);
     }
 
+    // UTC013 - ResourceAccessException timeout from AI service falls back to native scoring
     @Test
     void findSmartMatches_whenAiThrowsResourceAccessException_fallsBackToNativeScoring() {
         Account owner = account(5L, "Owner", AccountRole.USER);
@@ -257,6 +274,7 @@ class SmartMatchServiceTest {
         }
     }
 
+    // UTC017 - Native fallback with same category, location, day, text & no images scores <= 97.5 with reasons
     @Test
     void nativeFallback_whenSameCategoryLocationDayTextNoImages_scoresUpToMax97_5WithReasons() {
         Account owner = account(5L, "Owner", AccountRole.USER);
@@ -274,14 +292,17 @@ class SmartMatchServiceTest {
         assertTrue(dto.getMatchReason().contains("Mô tả khớp"));
     }
 
+    // UTC018, UTC019 - Filters out candidates with score < 45 or both-images visual similarity < 0.55
     @Test
     void nativeFallback_whenLowScoreOrBothImagesVisualMismatch_filtersOutCandidates() {
+        // UTC018 - Score < 45 filtered out
         Account owner = account(5L, "Owner", AccountRole.USER);
         Post sourceNoImg = lostPost(10L, owner, owner, category(1L, "Wallet"), "brown coin pouch", "leather", "North Gate", baseTime);
         Post farDiffCand = foundPost(31L, owner, category(2L, "Bottle"), "stainless thermo flask", "blue cap", "South Canteen",
                 baseTime.minusDays(60));
         assertTrue(invokeFallbackWithMockedTimeout(sourceNoImg, List.of(farDiffCand)).isEmpty());
 
+        // UTC019 - Both posts have images with visual similarity < 0.55 skipped
         when(imageStorage.readUrl(any(), any())).thenAnswer(inv -> "https://cdn/" + inv.getArgument(0));
         Post sourceWithImg = lostPost(12L, owner, owner, category(1L, "Wallet"), "silver watch", "metal band", "Hall A", baseTime);
         ReflectionTestUtils.setField(sourceWithImg, "images", List.of(new PostImage("src.jpg", 0, "image/jpeg", 100, 10, 10, "h1")));
@@ -291,18 +312,21 @@ class SmartMatchServiceTest {
         assertTrue(invokeFallbackWithMockedTimeout(sourceWithImg, List.of(candWithImg)).isEmpty());
     }
 
+    // UTC020, UTC021, UTC023, UTC024 - Handles shared location tokens, null eventAt, null author, and punctuation-only text
     @Test
     void nativeFallback_whenSharedLocationTokensNullEventAtNullAuthorOrPunctuationOnly_handlesBoundaries() {
         Account owner = account(5L, "Owner", AccountRole.USER);
         Category wallet = category(1L, "Wallet");
         Category phone = category(2L, "Phone");
 
+        // UTC020 - Shared location tokens ("Library floor 2" vs "Library floor 3") use spaceSim=0.78 -> spatioTemporal=89.0
         Post sourceTokenLoc = lostPost(10L, owner, owner, wallet, "Leather wallet", "Brown color", "Library floor 2", baseTime);
         Post candTokenLoc = foundPost(40L, owner, wallet, "Leather wallet", "Brown color", "Library floor 3", baseTime);
         List<SmartMatchItemDto> tokenLocRes = invokeFallbackWithMockedTimeout(sourceTokenLoc, List.of(candTokenLoc));
         assertEquals(1, tokenLocRes.size());
         assertEquals(89.0, ((Number) tokenLocRes.get(0).getMatchBreakdown().get("spatioTemporal")).doubleValue());
 
+        // UTC021 & UTC023 - Null source eventAt uses timeSim=0.5 (spatioTemporal=75.0); null createdBy defaults authorName="Người dùng"
         Post sourceNullTime = lostPost(10L, owner, owner, wallet, "Leather wallet", "Brown color", "Hall A", null);
         Post candNoAuthor = foundPost(41L, null, wallet, "Leather wallet", "Brown color", "Hall A", baseTime);
         List<SmartMatchItemDto> nullTimeRes = invokeFallbackWithMockedTimeout(sourceNullTime, List.of(candNoAuthor));
@@ -310,6 +334,7 @@ class SmartMatchServiceTest {
         assertEquals("Người dùng", nullTimeRes.get(0).getAuthorName());
         assertEquals(75.0, ((Number) nullTimeRes.get(0).getMatchBreakdown().get("spatioTemporal")).doubleValue());
 
+        // UTC024 - 1-char words and punctuation produce empty token set and textSim=0.35 (35.0)
         Post punctSource = lostPost(10L, owner, owner, wallet, "a ! ?", "b . ,", "Hall A", baseTime);
         Post punctCand = foundPost(42L, owner, phone, "x ; :", "y / -", "Hall A", baseTime);
         List<SmartMatchItemDto> punctRes = invokeFallbackWithMockedTimeout(punctSource, List.of(punctCand));
@@ -318,6 +343,7 @@ class SmartMatchServiceTest {
         assertNotNull(punctRes.get(0).getMatchBreakdown());
     }
 
+    // UTC022 - Multiple candidates sorted by matchScore descending
     @Test
     void nativeFallback_whenMultipleCandidates_sortsDescendingByMatchScore() {
         Account owner = account(5L, "Owner", AccountRole.USER);

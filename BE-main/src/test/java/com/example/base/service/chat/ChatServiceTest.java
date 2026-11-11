@@ -106,6 +106,7 @@ class ChatServiceTest {
         ReflectionTestUtils.setField(conversation, "lastMessageSequence", 12L);
     }
 
+    // UTC012 - list slices results to size and computes nextCursor when more rows exist
     @Test
     void list_whenMoreThanSizeReturned_setsNextCursorAndSlicesToSize() {
         OffsetDateTime t1 = OffsetDateTime.now().minusMinutes(1);
@@ -125,18 +126,23 @@ class ChatServiceTest {
         assertNotNull(page.nextCursor());
     }
 
+    // UTC014, UTC015, UTC018 - list throws CHAT_INPUT_INVALID for size<=0, size>50, or malformed cursor
     @Test
     void list_whenInvalidSizeOrMalformedCursor_throwsChatInputInvalid() {
         when(policy.actor(claimantUser)).thenReturn(claimant);
 
+        // UTC014 - size=0 throws CHAT_INPUT_INVALID
         assertEquals(ErrorCode.CHAT_INPUT_INVALID,
                 assertThrows(AppException.class, () -> service.list(null, 0, claimantUser)).getErrorCode());
+        // UTC015 - size=51 throws CHAT_INPUT_INVALID
         assertEquals(ErrorCode.CHAT_INPUT_INVALID,
                 assertThrows(AppException.class, () -> service.list(null, 51, claimantUser)).getErrorCode());
+        // UTC018 - malformed cursor throws CHAT_INPUT_INVALID
         assertEquals(ErrorCode.CHAT_INPUT_INVALID,
                 assertThrows(AppException.class, () -> service.list("not-base64!!!", 20, claimantUser)).getErrorCode());
     }
 
+    // UTC025, UTC026 - detail and requireMember return ChatDto for participant and throw CHAT_NOT_FOUND for outsider
     @Test
     void detail_and_requireMember_verifyMembershipAndReadOnlyState() {
         ChatParticipant me = new ChatParticipant(800L, 20L, "CLAIMANT");
@@ -144,6 +150,7 @@ class ChatServiceTest {
         ChatParticipant other = new ChatParticipant(800L, 10L, "FINDER");
         ReflectionTestUtils.setField(other, "lastReadSequence", 12L);
 
+        // UTC025 - participant views detail with other party name, canSend, and read watermarks
         when(policy.actor(claimantUser)).thenReturn(claimant);
         when(participants.existsById(new ChatParticipantId(800L, 20L))).thenReturn(true);
         when(conversations.findById(800L)).thenReturn(Optional.of(conversation));
@@ -160,11 +167,13 @@ class ChatServiceTest {
         assertEquals(5L, dto.lastReadSequence());
         assertEquals(12L, dto.otherReadSequence());
 
+        // UTC026 - non-participant throws CHAT_NOT_FOUND
         when(policy.actor(outsiderUser)).thenReturn(outsider);
         assertEquals(ErrorCode.CHAT_NOT_FOUND,
                 assertThrows(AppException.class, () -> service.detail(800L, outsiderUser)).getErrorCode());
     }
 
+    // UTC021 - open as claimant opens or creates conversation and returns ChatDto
     @Test
     void open_whenParticipantAndApprovedClaim_opensOrCreatesConversationAndEmitsChatDto() {
         ChatParticipant me = new ChatParticipant(800L, 20L, "CLAIMANT");
@@ -189,6 +198,7 @@ class ChatServiceTest {
         verify(em).refresh(claim, LockModeType.PESSIMISTIC_WRITE);
     }
 
+    // UTC022 - open throws CHAT_NOT_FOUND when actor is neither post owner nor claimant
     @Test
     void open_whenNonParticipant_throwsChatNotFound() {
         when(policy.actor(outsiderUser)).thenReturn(outsider);
@@ -210,6 +220,7 @@ class ChatServiceTest {
         return a;
     }
 
+    // UTC013, UTC016, UTC017, UTC019 - list handles last page without nextCursor, boundary size=50, valid cursor, and cursor with id=0
     @Test
     void list_whenNoMoreOrBoundarySize50OrValidCursor_pagesWithoutExtraNextCursor() {
         when(policy.actor(claimantUser)).thenReturn(claimant);
@@ -219,21 +230,26 @@ class ChatServiceTest {
                 .toList();
         when(queries.list(20L, null, 0L, 21)).thenReturn(five);
 
+        // UTC013 - 5 items returned with size=20 yields nextCursor=null
         ChatPageDto exact = service.list(null, 20, claimantUser);
         assertEquals(5, exact.items().size());
         assertNull(exact.nextCursor());
 
+        // UTC016 - boundary size=50 accepted
         when(queries.list(20L, null, 0L, 51)).thenReturn(five);
         assertEquals(5, service.list(null, 50, claimantUser).items().size());
 
+        // UTC017 - valid cursor forwards timestamp and id=15 to repository
         when(queries.list(20L, ts, 15L, 21)).thenReturn(List.of());
         assertTrue(service.list("2026-11-10T10:00:00Z|15", 20, claimantUser).items().isEmpty());
         verify(queries).list(20L, ts, 15L, 21);
 
+        // UTC019 - cursor with beforeId=0 throws CHAT_INPUT_INVALID
         assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.list("2026-11-10T10:00:00Z|0", 20, claimantUser)).getErrorCode());
     }
 
+    // UTC020, UTC023, UTC024 - open succeeds for post owner and throws CHAT_UNAVAILABLE when unapproved or ineligible
     @Test
     void open_whenOwnerOrNoApprovedOrIneligible_handlesAccessAndAvailability() {
         when(policy.actor(finderUser)).thenReturn(finder);
@@ -247,15 +263,18 @@ class ChatServiceTest {
         ChatParticipant otherClaimant = new ChatParticipant(800L, 20L, "CLAIMANT");
         when(participants.findByConversationId(800L)).thenReturn(List.of(meFinder, otherClaimant));
 
+        // UTC020 - post owner opens conversation on approved P2P claim
         ChatDto opened = service.open(100L, finderUser);
         assertEquals(800L, opened.id());
         assertEquals(20L, opened.otherAccountId());
 
+        // UTC023 - no APPROVED claim throws CHAT_UNAVAILABLE
         when(claims.findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(100L, "APPROVED"))
                 .thenReturn(Optional.empty());
         assertEquals(ErrorCode.CHAT_UNAVAILABLE, assertThrows(AppException.class,
                 () -> service.open(100L, finderUser)).getErrorCode());
 
+        // UTC024 - approved claim ineligible due to receipt/state throws CHAT_UNAVAILABLE
         when(claims.findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(100L, "APPROVED"))
                 .thenReturn(Optional.of(claim));
         when(policy.eligible(claim)).thenReturn(false);
@@ -263,6 +282,7 @@ class ChatServiceTest {
                 () -> service.open(100L, finderUser)).getErrorCode());
     }
 
+    // UTC027 - requireMember throws CHAT_NOT_FOUND when conversationId <= 0
     @Test
     void requireMember_whenConversationIdNonPositive_throwsChatNotFound() {
         assertEquals(ErrorCode.CHAT_NOT_FOUND, assertThrows(AppException.class,
