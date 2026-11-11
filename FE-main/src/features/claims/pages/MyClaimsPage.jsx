@@ -24,6 +24,7 @@ export function PostClaimsPage() {
 }
 function ClaimList({ embedded = false, initialView = 'received' }) {
   const { isApprover } = useAuth();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const postId = validClaimId(searchParams.get('postId')) ? searchParams.get('postId') : null;
   const [expandedGroups, setExpandedGroups] = useState(() => new Set((searchParams.get('expanded') || '').split(',').filter(Boolean)));
@@ -80,11 +81,14 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
       <p className="claims-muted">{view === 'office' ? 'Xét duyệt yêu cầu nhận đồ đã được phòng ban tiếp nhận, xác minh.' : incoming ? 'Đọc căn cứ để xác định đúng chủ sở hữu. Yêu cầu chờ bạn duyệt được ưu tiên.' : 'Theo dõi những yêu cầu nhận đồ bạn đã gửi.'}</p></div>
       <div className="claims-filters"><Link className="btn btn-ghost" to={postId ? `/chi-tiet/${postId}` : '/tim-kiem'}>{postId ? 'Về bài đăng' : 'Tìm đồ thất lạc'}</Link></div></header>}
     {postId && <p><Link className="btn btn-ghost" to={`/claim-cua-toi?view=${view}&claimStatus=ALL`}>Xem tất cả bài đăng</Link></p>}
-    {<div className="claims-filters" role="tablist" aria-label="Loại danh sách claim">
+    <div className="claims-filters claims-navigation">
+    <div className="claims-tabs" role="tablist" aria-label="Loại danh sách claim">
       {[['received', 'Người khác yêu cầu'], ['sent', 'Tôi yêu cầu'], ...(isApprover ? [['office', 'Claim gửi phòng ban']] : [])].map(([value, label]) => <button type="button" key={value}
         role="tab" aria-selected={view === value} className={`chip ${view === value ? 'active' : ''}`}
         onClick={() => updateClaimState(value, 1, 'ALL')}>{label}</button>)}
-    </div>}
+    </div>
+      <Link className="chip claims-office-link" to="/van-phong/claims" state={{ officeClaimReturn: location.pathname + location.search }}>Nhận đồ tại văn phòng</Link>
+    </div>
     <div className="claims-filters" aria-label="Lọc trạng thái claim">
       {Object.entries({ ALL: 'Tất cả', PENDING: incoming ? 'Chờ bạn duyệt' : 'Chờ phản hồi', APPROVED: 'Đang nhận đồ', HISTORY: 'Lịch sử' }).map(([value, label]) => <button key={value} type="button"
         className={`chip ${activeFilter === value ? 'active' : ''}`} aria-pressed={activeFilter === value}

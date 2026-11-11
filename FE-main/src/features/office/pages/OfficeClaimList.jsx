@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowLeft, Plus } from "lucide-react";
 import { officeApi } from "../api/officeApi";
 import { date, labels, progressLabels } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
@@ -16,6 +16,10 @@ import ClaimProgress from "../components/ClaimProgress";
 import "../Office.css";
 
 export default function OfficeClaimList({ mine = false }) {
+  const location = useLocation();
+  const returnTo = location.state?.officeClaimReturn;
+  const backPath = typeof returnTo === "string" && (returnTo === "/claim-cua-toi" || returnTo.startsWith("/claim-cua-toi?"))
+    ? returnTo : "/claim-cua-toi?view=sent";
   const [filters, setFilters] = useState({ page: 1, q: "", status: "ALL", stage: "ALL" });
   const [reviewError, setReviewError] = useState("");
   const [reviewErrorId, setReviewErrorId] = useState(null);
@@ -49,8 +53,9 @@ export default function OfficeClaimList({ mine = false }) {
           <Link className="of-button" to="/van-phong/chuyen-giao">Theo dõi giao đồ cho văn phòng</Link>
         )}
         {mine && (
-          <Link className="of-button" to="/claim-cua-toi?view=sent">
-            Yêu cầu gửi người nhặt
+          <Link className="of-button" to={backPath}>
+            <ArrowLeft size={18} />
+            Quay lại
           </Link>
         )}
       </Header>

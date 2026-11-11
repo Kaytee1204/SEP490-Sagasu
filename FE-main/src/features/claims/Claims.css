@@ -5,6 +5,11 @@
 .claims-heading h1, .claims-heading h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.9rem); }
 .claims-muted { color: var(--text-secondary); font-size: .9rem; }
 .claims-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.claims-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.claims-navigation { padding: 6px; border-radius: 14px; background: #eaf1f0; width: fit-content; }
+.claims-navigation .chip { border: 0; border-radius: 10px; background: transparent; min-height: 44px; }
+.claims-navigation .chip.active { background: white; color: #176e68; box-shadow: 0 2px 6px #163d3512; }
+.claims-office-link { display: inline-flex; align-items: center; text-decoration: none; }
 .claim-card, .claim-panel { border: 1px solid var(--border); border-radius: 16px; background: var(--bg-surface); padding: 22px; margin-bottom: 16px; }
 .claim-card { display: block; color: inherit; text-decoration: none; transition: border-color .15s; }
 .claim-card:hover { border-color: var(--accent); }
