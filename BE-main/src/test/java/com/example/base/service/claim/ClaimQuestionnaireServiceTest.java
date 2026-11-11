@@ -95,6 +95,7 @@ class ClaimQuestionnaireServiceTest {
         );
     }
 
+    // UTC081 - forCategory returns ordered questionnaire DTO with computed version string
     @Test
     void forCategory_whenTemplatesValid_returnsOrderedQuestionnaireWithComputedVersion() {
         stubActiveQuestionnaire();
@@ -108,8 +109,10 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(2, dto.categoryQuestions().size());
     }
 
+    // UTC084 - forCategory throws CLAIM_QUESTIONNAIRE_UNAVAILABLE when category template missing or COMMON has fewer than 4 questions
     @Test
     void forCategory_whenCategoryTemplateMissingOrCommonCountInvalid_throwsUnavailable() {
+        // Supplementary (ClaimQuestionnaireService.forCategory): missing category and OTHER fallback throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
         when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
                 .thenReturn(Optional.of(commonTemplate));
         when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
@@ -118,6 +121,7 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE,
                 assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
 
+        // UTC084 - COMMON template having only 3 questions throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
         when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
                 .thenReturn(Optional.of(categoryTemplate));
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L))
@@ -129,6 +133,7 @@ class ClaimQuestionnaireServiceTest {
                 assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
     }
 
+    // UTC087 - validateAndSnapshot throws CLAIM_QUESTIONNAIRE_STALE on outdated questionnaireVersion
     @Test
     void validateAndSnapshot_whenVersionStale_throwsClaimQuestionnaireStale() {
         stubActiveQuestionnaire();
@@ -138,15 +143,19 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_STALE, ex.getErrorCode());
     }
 
+    // UTC086, UTC101, UTC107 - validateAndSnapshot produces ordered snapshots for TEXT, CHOICE with details, and EXACT LOST_DATE
     @Test
     void validateAndSnapshot_whenValidVisibleAndConditionalAnswers_createsOrderedSnapshots() {
         stubActiveQuestionnaire();
+        // UTC101 - CHOICE option with allowed/required details formats "<label>\n<details>"
         ObjectNode selectWithDetails = choice("Có", "Bao da đen");
+        // UTC107 - LOST_DATE with EXACT precision formats VN date and time
         ObjectNode lostDate = mapper.createObjectNode();
         lostDate.put("precision", "EXACT");
         lostDate.put("date", "2026-01-15");
         lostDate.put("time", "14:30");
 
+        // UTC086 - matching version and valid answers yield ordered ClaimAnswer snapshots
         SubmitClaimRequest req = new SubmitClaimRequest(
                 "desc", "note", "COMMON:2/CAT_ELECTRONICS:4",
                 List.of(
@@ -167,9 +176,11 @@ class ClaimQuestionnaireServiceTest {
         assertEquals("Ngày 15/01/2026, lúc 14:30 (giờ Việt Nam)", snapshots.get(4).getAnswerText());
     }
 
+    // UTC098, UTC115 - validateAndSnapshot accepts CHOICE without details and skips hidden conditional required questions
     @Test
     void validateAndSnapshot_whenConditionalHiddenQuestionAnsweredOrRequiredMissing_handlesVisibility() {
         stubActiveQuestionnaire();
+        // UTC098, UTC115 - CHOICE "Không" hides required Q_COMMON_3 so omitting it succeeds
         SubmitClaimRequest hiddenSkipped = new SubmitClaimRequest(
                 "desc", null, "COMMON:2/CAT_ELECTRONICS:4",
                 List.of(
@@ -181,6 +192,7 @@ class ClaimQuestionnaireServiceTest {
         List<ClaimAnswer> ok = service.validateAndSnapshot(post, hiddenSkipped);
         assertEquals(3, ok.size());
 
+        // Supplementary (ClaimQuestionnaireService.validateAndSnapshot): visible conditional required question missing throws CLAIM_QUESTIONNAIRE_INVALID
         SubmitClaimRequest visibleMissing = new SubmitClaimRequest(
                 "desc", null, "COMMON:2/CAT_ELECTRONICS:4",
                 List.of(
@@ -193,6 +205,7 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, ex.getErrorCode());
     }
 
+    // UTC099 - validateAndSnapshot rejects invalid CHOICE option
     @Test
     void validateAndSnapshot_whenInvalidOptionOrUnknownCodeOrDuplicate_throwsInvalid() {
         stubActiveQuestionnaire();
@@ -208,6 +221,7 @@ class ClaimQuestionnaireServiceTest {
                 assertThrows(AppException.class, () -> service.validateAndSnapshot(post, badOption)).getErrorCode());
     }
 
+    // UTC082 - forCategory falls back to OTHER template when category-specific template is missing
     @Test
     void forCategory_whenCategoryTemplateMissing_fallsBackToOtherTemplate() {
         ClaimQuestionTemplate otherTemplate = template(9L, "OTHER", "Khác", null, 1);
@@ -229,13 +243,16 @@ class ClaimQuestionnaireServiceTest {
         assertEquals("Q_OTHER_1", dto.categoryQuestions().get(0).code());
     }
 
+    // UTC083, UTC085 - forCategory throws CLAIM_QUESTIONNAIRE_UNAVAILABLE when COMMON missing or specific questions empty
     @Test
     void forCategory_whenCommonMissingOrCategoryQuestionsEmpty_throwsUnavailable() {
+        // UTC083 - no active COMMON template throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
         when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
                 .thenReturn(Optional.empty());
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE,
                 assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
 
+        // UTC085 - category template with 0 questions throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
         when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
                 .thenReturn(Optional.of(commonTemplate));
         when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
@@ -246,14 +263,17 @@ class ClaimQuestionnaireServiceTest {
                 assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
     }
 
+    // UTC088, UTC089 - validateAndSnapshot rejects null answers list or more than 24 answers
     @Test
     void validateAndSnapshot_whenAnswersNullOrExceedMax24_throwsInvalid() {
         stubActiveQuestionnaire();
+        // UTC088 - null answers throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post,
                         new SubmitClaimRequest("desc", null, "COMMON:2/CAT_ELECTRONICS:4", null)))
                 .getErrorCode());
 
+        // UTC089 - 25 answers exceeds max 24 and throws CLAIM_QUESTIONNAIRE_INVALID
         List<ClaimAnswerRequest> tooMany = new ArrayList<>();
         for (int i = 0; i < 25; i++) {
             tooMany.add(new ClaimAnswerRequest("Q_" + i, TextNode.valueOf("val")));
@@ -264,6 +284,7 @@ class ClaimQuestionnaireServiceTest {
                 .getErrorCode());
     }
 
+    // UTC090 - validateAndSnapshot accepts boundary size of 24 valid answers
     @Test
     void validateAndSnapshot_when24AnswersSubmitted_acceptsBoundary() {
         when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
@@ -292,6 +313,7 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(24, snapshots.size());
     }
 
+    // UTC091, UTC092, UTC093 - validateAndSnapshot rejects unknown codes, duplicates, and DESCRIPTION inputType answers
     @Test
     void validateAndSnapshot_whenUnknownDuplicateOrExistingFieldAnswered_throwsInvalid() {
         List<ClaimQuestion> withExisting = new ArrayList<>(categoryQuestions);
@@ -304,11 +326,13 @@ class ClaimQuestionnaireServiceTest {
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(withExisting);
 
+        // UTC091 - unknown questionCode throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("UNKNOWN_CODE", TextNode.valueOf("x")))))
                 .getErrorCode());
 
+        // UTC092 - duplicate questionCode throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -317,6 +341,7 @@ class ClaimQuestionnaireServiceTest {
                         new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
                 .getErrorCode());
 
+        // UTC093 - answering DESCRIPTION question throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -326,10 +351,12 @@ class ClaimQuestionnaireServiceTest {
                 .getErrorCode());
     }
 
+    // UTC094, UTC095 - validateAndSnapshot requires non-blank required TEXT and skips omitted optional questions
     @Test
     void validateAndSnapshot_whenRequiredMissingOrOptionalOmitted_handlesValidation() {
         stubActiveQuestionnaire();
 
+        // UTC094 - blank required TEXT throws CLAIM_QUESTIONNAIRE_INVALID with question label
         AppException missingRequired = assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("   ")),
@@ -338,6 +365,7 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, missingRequired.getErrorCode());
         assertEquals("Vui lòng trả lời: Mô tả màu sắc", missingRequired.getMessage());
 
+        // UTC095 - omitted optional questions are skipped without error
         List<ClaimAnswer> snapshots = service.validateAndSnapshot(post, submitWith(
                 new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
                 new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
@@ -345,10 +373,12 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(3, snapshots.size());
     }
 
+    // UTC096, UTC097 - validateAndSnapshot rejects TEXT answers exceeding 2000 chars or non-textual values
     @Test
     void validateAndSnapshot_whenTextTooLongOrNonTextual_throwsInvalid() {
         stubActiveQuestionnaire();
 
+        // UTC096 - 2001-char TEXT exceeds max 2000 and throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("a".repeat(2001))),
@@ -356,6 +386,7 @@ class ClaimQuestionnaireServiceTest {
                         new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
                 .getErrorCode());
 
+        // UTC097 - numeric IntNode for TEXT question throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", IntNode.valueOf(123)),
@@ -364,6 +395,7 @@ class ClaimQuestionnaireServiceTest {
                 .getErrorCode());
     }
 
+    // UTC100, UTC102, UTC103, UTC104 - validateAndSnapshot validates CHOICE details, unexpected fields, and object format
     @Test
     void validateAndSnapshot_whenChoiceDetailsInvalid_throwsInvalid() {
         ArrayNode withReqDetails = options(option("Khác", "Khác", true), option("Không", "Không", false));
@@ -379,6 +411,7 @@ class ClaimQuestionnaireServiceTest {
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(customCommon);
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(categoryQuestions);
 
+        // UTC100 - detailsRequired option missing details throws CLAIM_QUESTIONNAIRE_INVALID
         AppException missingDetails = assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -386,6 +419,7 @@ class ClaimQuestionnaireServiceTest {
                         new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))));
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, missingDetails.getErrorCode());
 
+        // UTC102 - details passed when not allowed throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -393,6 +427,7 @@ class ClaimQuestionnaireServiceTest {
                         new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
                 .getErrorCode());
 
+        // UTC103 - unknown property inside CHOICE object throws CLAIM_QUESTIONNAIRE_INVALID
         ObjectNode extraFieldChoice = choice("Không", null);
         extraFieldChoice.put("extra", "bad");
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
@@ -402,6 +437,7 @@ class ClaimQuestionnaireServiceTest {
                         new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
                 .getErrorCode());
 
+        // UTC104 - string value instead of CHOICE object throws CLAIM_QUESTIONNAIRE_INVALID
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith(
                         new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -410,10 +446,12 @@ class ClaimQuestionnaireServiceTest {
                 .getErrorCode());
     }
 
+    // UTC105, UTC108 - validateAndSnapshot formats LOST_DATE for UNKNOWN and APPROXIMATE precisions
     @Test
     void validateAndSnapshot_whenLostDateUnknownOrApproximate_createsExpectedSnapshots() {
         stubActiveQuestionnaire();
 
+        // UTC105 - UNKNOWN precision snapshot text
         ObjectNode unknownDate = mapper.createObjectNode().put("precision", "UNKNOWN");
         List<ClaimAnswer> unknownRes = service.validateAndSnapshot(post, submitWith(
                 new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -422,6 +460,7 @@ class ClaimQuestionnaireServiceTest {
                 new ClaimAnswerRequest("Q_CAT_2", unknownDate)));
         assertFalse(unknownRes.get(3).getAnswerText().isBlank());
 
+        // UTC108 - APPROXIMATE precision snapshot text
         ObjectNode approxDate = mapper.createObjectNode().put("precision", "APPROXIMATE").put("date", "2026-01-15");
         List<ClaimAnswer> approxRes = service.validateAndSnapshot(post, submitWith(
                 new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -431,6 +470,7 @@ class ClaimQuestionnaireServiceTest {
         assertEquals("Khoảng ngày 15/01/2026 (giờ Việt Nam)", approxRes.get(3).getAnswerText());
     }
 
+    // UTC106, UTC109, UTC110, UTC111, UTC112, UTC113 - validateAndSnapshot rejects invalid or future LOST_DATE values
     @Test
     void validateAndSnapshot_whenLostDateInvalidOrInFuture_throwsInvalid() {
         stubActiveQuestionnaire();
@@ -443,11 +483,17 @@ class ClaimQuestionnaireServiceTest {
                 : LocalTime.of(23, 59, 59);
 
         List<ObjectNode> badDates = List.of(
+                // UTC106 - UNKNOWN precision with date field rejected
                 mapper.createObjectNode().put("precision", "UNKNOWN").put("date", "2026-01-15"),
+                // UTC109 - unsupported precision value rejected
                 mapper.createObjectNode().put("precision", "APPROX"),
+                // UTC110 - wrong date format dd/MM/yyyy rejected
                 mapper.createObjectNode().put("precision", "EXACT").put("date", "15/01/2026"),
+                // UTC111 - non-existent calendar date 2026-02-30 rejected
                 mapper.createObjectNode().put("precision", "EXACT").put("date", "2026-02-30"),
+                // UTC112 - future date tomorrow (VN) rejected
                 mapper.createObjectNode().put("precision", "EXACT").put("date", tomorrow),
+                // UTC113 - future time today (VN) rejected
                 mapper.createObjectNode().put("precision", "EXACT").put("date", today)
                         .put("time", futureTime.toString().substring(0, 5)));
 
@@ -462,6 +508,7 @@ class ClaimQuestionnaireServiceTest {
         }
     }
 
+    // UTC114 - validateAndSnapshot rejects answers submitted for hidden conditional questions
     @Test
     void validateAndSnapshot_whenHiddenQuestionAnswered_throwsInvalid() {
         stubActiveQuestionnaire();
@@ -475,8 +522,10 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, ex.getErrorCode());
     }
 
+    // UTC116, UTC117 - validateAndSnapshot throws CLAIM_QUESTIONNAIRE_UNAVAILABLE on visibility cycles or unsupported inputType
     @Test
     void validateAndSnapshot_whenVisibilityCycleOrUnsupportedInputType_throwsUnavailable() {
+        // UTC116 - visibility cycle A <-> B throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
         ClaimQuestion qA = question(11L, commonTemplate, "Q_A", "A", "TEXT", false, 1, null, visibility("Q_B", "x"),
                 false);
         ClaimQuestion qB = question(12L, commonTemplate, "Q_B", "B", "TEXT", false, 2, null, visibility("Q_A", "x"),
@@ -492,6 +541,7 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, assertThrows(AppException.class,
                 () -> service.validateAndSnapshot(post, submitWith())).getErrorCode());
 
+        // UTC117 - unsupported inputType "FILE" throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(List.of(
                 question(30L, categoryTemplate, "Q_FILE", "Ảnh", "FILE", true, 1, null, null, false)));

@@ -34,6 +34,7 @@ class PostPrivateIdentifiersServiceTest {
     @InjectMocks
     private PostPrivateIdentifiersService service;
 
+    // UTC074 - read: post owner receives stored privateIdentifiers value
     @Test
     void read_whenOwnerWithValue_returnsValue() {
         Account owner = account(5L, AccountStatus.ACTIVE);
@@ -46,6 +47,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals("IMEI 123", dto.privateIdentifiers());
     }
 
+    // UTC075 - read: null privateIdentifiers returns empty string
     @Test
     void read_whenOwnerWithNullIdentifiers_returnsEmptyString() {
         Account owner = account(5L, AccountStatus.ACTIVE);
@@ -57,6 +59,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals("", dto.privateIdentifiers());
     }
 
+    // UTC076 - read: non-owner throws POST_OWNER_REQUIRED
     @Test
     void read_whenNotOwner_throwsPostOwnerRequired() {
         Account other = account(6L, AccountStatus.ACTIVE);
@@ -68,6 +71,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals(ErrorCode.POST_OWNER_REQUIRED, ex.getErrorCode());
     }
 
+    // UTC079 - read: SUSPENDED account throws FORBIDDEN
     @Test
     void read_whenUserSuspended_throwsForbidden() {
         Account suspended = account(5L, AccountStatus.SUSPENDED);
@@ -78,6 +82,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
     }
 
+    // UTC077 - update: post owner updates trimmed privateIdentifiers and flushes
     @Test
     void update_whenOwner_updatesIdentifiersAndFlushes() {
         Account owner = account(5L, AccountStatus.ACTIVE);
@@ -90,6 +95,7 @@ class PostPrivateIdentifiersServiceTest {
         verify(posts).flush();
     }
 
+    // UTC078 - update: non-owner throws POST_OWNER_REQUIRED
     @Test
     void update_whenNotOwner_throwsPostOwnerRequired() {
         Account other = account(6L, AccountStatus.ACTIVE);
@@ -101,6 +107,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals(ErrorCode.POST_OWNER_REQUIRED, ex.getErrorCode());
     }
 
+    // Supplementary (PostPrivateIdentifiersService.update): non-positive postId throws POST_ID_INVALID
     @Test
     void update_whenInvalidPostId_throwsPostIdInvalid() {
         Account owner = account(5L, AccountStatus.ACTIVE);

@@ -40,6 +40,7 @@ class ChatEventsTest {
         }
     }
 
+    // UTC089 - changed sends to all participants immediately when no transaction is active
     @Test
     void changed_withoutActiveTransaction_sendsToEachParticipantImmediately() {
         when(participants.findByConversationId(55L)).thenReturn(List.of(
@@ -54,6 +55,7 @@ class ChatEventsTest {
         verify(messaging).convertAndSendToUser(eq("20"), eq("/queue/chat-events"), eq(expected));
     }
 
+    // UTC090 - changed defers sending events until TransactionSynchronization.afterCommit
     @Test
     void changed_insideActiveTransaction_defersDispatchUntilAfterCommit() {
         TransactionSynchronizationManager.initSynchronization();
@@ -71,6 +73,7 @@ class ChatEventsTest {
         verify(messaging).convertAndSendToUser(eq("10"), eq("/queue/chat-events"), eq(new ChatEvents.Event("READ_UPDATED", 55L)));
     }
 
+    // UTC091 - changed continues notifying second recipient when messaging fails for first
     @Test
     void changed_whenMessagingThrowsForFirstRecipient_stillNotifiesSecondRecipient() {
         when(participants.findByConversationId(55L)).thenReturn(List.of(

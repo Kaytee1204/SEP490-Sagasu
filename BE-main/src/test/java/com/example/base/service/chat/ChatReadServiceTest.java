@@ -83,18 +83,22 @@ class ChatReadServiceTest {
         ReflectionTestUtils.setField(conversation, "lastMessageSequence", 10L);
     }
 
+    // UTC082 - read throws CHAT_INPUT_INVALID when sequence is negative or exceeds lastMessageSequence
     @Test
     void read_whenNegativeOrExceedsLastSequence_throwsChatInputInvalid() {
         when(policy.actor(user)).thenReturn(actor);
         when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
 
+        // UTC082 - sequence=-1 throws CHAT_INPUT_INVALID
         assertEquals(ErrorCode.CHAT_INPUT_INVALID,
                 assertThrows(AppException.class, () -> service.read(800L, -1L, user)).getErrorCode());
 
+        // Supplementary (ChatReadService.read): sequence exceeding lastMessageSequence throws CHAT_INPUT_INVALID
         assertEquals(ErrorCode.CHAT_INPUT_INVALID,
                 assertThrows(AppException.class, () -> service.read(800L, 11L, user)).getErrorCode());
     }
 
+    // UTC081 - read returns current sequence without updates or events when target <= lastReadSequence
     @Test
     void read_whenAlreadyAtOrBeyondTargetSequence_returnsCurrentWithoutUpdatesOrEvents() {
         when(policy.actor(user)).thenReturn(actor);
@@ -108,6 +112,7 @@ class ChatReadServiceTest {
         verifyNoInteractions(events);
     }
 
+    // UTC080 - read marks messages read, updates participant watermark, and emits READ_UPDATED event
     @Test
     void read_whenNewWatermarkHigher_updatesParticipantMessagesAndEmitsEvent() {
         when(policy.actor(user)).thenReturn(actor);
@@ -123,15 +128,18 @@ class ChatReadServiceTest {
         verify(events).changed(800L, "READ_UPDATED");
     }
 
+    // UTC083, UTC084 - read rejects non-existent sequence and skips existence check for sequence=0
     @Test
     void read_whenTargetSequenceMissingOrZero_throwsOrSkipsExistenceCheck() {
         when(policy.actor(user)).thenReturn(actor);
         when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
+        // UTC083 - non-existent message sequence 99 throws CHAT_INPUT_INVALID
         when(messages.existsByConversationIdAndSequenceNo(800L, 99L)).thenReturn(false);
 
         AppException ex = assertThrows(AppException.class, () -> service.read(800L, 99L, user));
         assertEquals(ErrorCode.CHAT_INPUT_INVALID, ex.getErrorCode());
 
+        // UTC084 - sequence=0 returns 0 without querying message existence or emitting events
         when(jdbc.queryForObject(anyString(), eq(Long.class), eq(800L), eq(20L))).thenReturn(0L);
         assertEquals(0L, service.read(800L, 0L, user));
         verify(messages, never()).existsByConversationIdAndSequenceNo(800L, 0L);

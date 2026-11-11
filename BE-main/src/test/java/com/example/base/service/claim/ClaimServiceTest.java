@@ -144,6 +144,7 @@ class ClaimServiceTest {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
 
+    // UTC001 - submit valid P2P claim saves Claim, answers, evidence in R2, SUBMIT activity, and notifies owner
     @Test
     void submit_whenValidP2pClaimWithEvidence_savesClaimAnswersActivityAndNotifiesFinder() {
         SubmitClaimRequest req = new SubmitClaimRequest(" My brown wallet ", " Has student ID ", "v1", List.of());
@@ -177,16 +178,19 @@ class ClaimServiceTest {
         verify(notifications).notifyUser(eq(10L), anyString(), anyString(), anyString(), anyString(), eq(true));
     }
 
+    // UTC007, UTC010 - submit throws CLAIM_SELF_NOT_ALLOWED for owner self-claim and CLAIM_DUPLICATE for active duplicate
     @Test
     void submit_whenOwnerClaimsOwnPostOrDuplicateClaim_throwsExpectedError() {
         SubmitClaimRequest req = new SubmitClaimRequest("desc", null, "v1", List.of());
 
+        // UTC007 - post owner attempting self-claim throws CLAIM_SELF_NOT_ALLOWED
         when(accounts.findById(10L)).thenReturn(Optional.of(finder));
         when(posts.findById(100L)).thenReturn(Optional.of(p2pPost));
         assertEquals(ErrorCode.CLAIM_SELF_NOT_ALLOWED,
                 assertThrows(AppException.class, () -> service.submit(100L, req, List.of(), finderUser))
                         .getErrorCode());
 
+        // UTC010 - claimant with existing PENDING claim on post throws CLAIM_DUPLICATE
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
         when(posts.findById(100L)).thenReturn(Optional.of(p2pPost));
         when(routing.canSubmit(p2pPost)).thenReturn(true);
@@ -196,6 +200,7 @@ class ClaimServiceTest {
                         .getErrorCode());
     }
 
+    // Supplementary (ClaimService.submit): deletes uploaded evidence keys when transaction save fails
     @Test
     void submit_whenTransactionThrowsAfterUpload_deletesUploadedKeys() {
         SubmitClaimRequest req = new SubmitClaimRequest("desc", null, "v1", List.of());
@@ -218,6 +223,7 @@ class ClaimServiceTest {
         verify(storage, times(1)).delete(anyString());
     }
 
+    // UTC019 - retry creates new PENDING claim when previous owned claim is REJECTED
     @Test
     void retry_whenRejectedOwnedClaim_resubmitsNewClaim() {
         Claim previous = Claim.submit(p2pPost, claimant, "Old desc", null);
@@ -244,6 +250,7 @@ class ClaimServiceTest {
         assertEquals("PENDING", result.status());
     }
 
+    // UTC021 - retry throws CLAIM_STATE_INVALID when previous claim is PENDING
     @Test
     void retry_whenPreviousNotRejected_throwsClaimStateInvalid() {
         Claim pending = Claim.submit(p2pPost, claimant, "desc", null);
@@ -258,6 +265,7 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_STATE_INVALID, ex.getErrorCode());
     }
 
+    // UTC025, UTC027 - questionnaire returns category DTO and latestOnPost returns most recent ClaimResultDto
     @Test
     void questionnaire_and_latestOnPost_returnExpectedDtos() {
         ClaimQuestionnaireDto qDto = new ClaimQuestionnaireDto("v1", 3L, "Wallet", List.of(), List.of());
@@ -269,14 +277,17 @@ class ClaimServiceTest {
         when(routing.canSubmit(p2pPost)).thenReturn(true);
         when(questionnaires.forCategory(p2pPost.getCategory())).thenReturn(qDto);
 
+        // UTC025 - questionnaire returns active questionnaire DTO for claimable post
         assertEquals(qDto, service.questionnaire(100L, claimantUser));
 
+        // UTC027 - latestOnPost returns most recent claim on post
         when(claims.findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(100L, 20L, "P2P"))
                 .thenReturn(Optional.of(latest));
         ClaimResultDto res = service.latestOnPost(100L, claimantUser);
         assertEquals(510L, res.id());
     }
 
+    // UTC030 - mine maps summary DTO fields with thumbnails (plus empty received check)
     @Test
     @SuppressWarnings("unchecked")
     void mine_and_received_whenHistoryFilterAndThumbnailsPresent_mapTwelveFieldSummary() {
@@ -311,6 +322,7 @@ class ClaimServiceTest {
         assertTrue(service.received(1, 10, "ALL", finderUser).content().isEmpty());
     }
 
+    // Supplementary (ClaimService.grouped): returns post-grouped claim summaries with matching posts
     @Test
     @SuppressWarnings("unchecked")
     void grouped_whenMatchingPostsExist_returnsGroupedClaims() {
@@ -348,17 +360,21 @@ class ClaimServiceTest {
         assertEquals(1, grouped.content().get(0).claims().size());
     }
 
+    // UTC036, UTC037, UTC039 - office and onPost enforce APPROVER role and post ownership
     @Test
     void office_and_onPost_enforceRoleAndOwnership() {
+        // UTC036 - USER calling office throws FORBIDDEN
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
         assertEquals(ErrorCode.FORBIDDEN,
                 assertThrows(AppException.class, () -> service.office(1, 10, "ALL", claimantUser)).getErrorCode());
 
+        // UTC037 - APPROVER calling office queries findOffice
         when(accounts.findById(30L)).thenReturn(Optional.of(staff));
         when(claims.findOffice(eq("PENDING"), any(PageRequest.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
         assertTrue(service.office(1, 10, "PENDING", staffUser).content().isEmpty());
 
+        // UTC039 - post owner calling onPost queries findOnPost(approver=false)
         when(accounts.findById(10L)).thenReturn(Optional.of(finder));
         when(posts.findById(100L)).thenReturn(Optional.of(p2pPost));
         when(claims.findOnPost(eq(100L), eq(10L), eq(false), eq("ALL"), any(PageRequest.class)))
@@ -366,12 +382,14 @@ class ClaimServiceTest {
         assertTrue(service.onPost(100L, 1, 10, "ALL", finderUser).content().isEmpty());
     }
 
+    // UTC040, UTC042 - detail and detailOnPost return details to participant and block third parties
     @Test
     void detail_and_detailOnPost_allowParticipantsAndBlockOutsiders() {
         Claim c = Claim.submit(p2pPost, claimant, "My wallet", "ID card");
         ReflectionTestUtils.setField(c, "id", 540L);
         c.addEvidence(new ClaimEvidence("claims/540/1.jpg", "1.jpg", "image/jpeg", 5L, "h", 0));
 
+        // UTC040 - claimant views own PENDING claim detail and detailOnPost with evidence URL and canCancel=true
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
         when(claims.findById(540L)).thenReturn(Optional.of(c));
         when(routing.reviewer(c, claimant)).thenReturn(false);
@@ -387,12 +405,14 @@ class ClaimServiceTest {
 
         assertEquals(540L, service.detailOnPost(100L, 540L, claimantUser).id());
 
+        // UTC042 - third party throws CLAIM_NOT_FOUND
         when(accounts.findById(40L)).thenReturn(Optional.of(outsider));
         when(routing.reviewer(c, outsider)).thenReturn(false);
         assertEquals(ErrorCode.CLAIM_NOT_FOUND,
                 assertThrows(AppException.class, () -> service.detail(540L, outsiderUser)).getErrorCode());
     }
 
+    // UTC047 - review APPROVED reserves post, creates chat conversation, saves APPROVE activity, and notifies claimant
     @Test
     void review_whenApproved_approvesClaimOpensChatAndNotifies() {
         Claim c = Claim.submit(p2pPost, claimant, "My wallet", null);
@@ -415,6 +435,7 @@ class ClaimServiceTest {
         verify(notifications).notifyUser(eq(20L), anyString(), anyString(), anyString(), anyString(), eq(true));
     }
 
+    // UTC049 - review on OFFICE claim (DEF-CLAIM-001: lockClaim runs before office branch and throws CLAIM_NOT_FOUND)
     @Test
     void review_whenOfficeClaimPassedToP2pEndpoint_throwsClaimNotFoundInLockClaim() {
         Claim officeClaim = BeanUtils.instantiateClass(Claim.class);
@@ -434,6 +455,7 @@ class ClaimServiceTest {
         verifyNoInteractions(chatConversations);
     }
 
+    // UTC056 - review throws CLAIM_STALE when expectedVersion mismatches claim.version
     @Test
     void review_whenVersionMismatch_throwsClaimStale() {
         Claim c = Claim.submit(p2pPost, claimant, "My wallet", null);
@@ -451,6 +473,7 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_STALE, ex.getErrorCode());
     }
 
+    // UTC061 - cancel PENDING claim by claimant updates status, notifies chat and owner
     @Test
     void cancel_whenPendingByClaimant_cancelsClaimAndNotifiesFinder() {
         Claim c = Claim.submit(p2pPost, claimant, "My wallet", null);
@@ -471,6 +494,7 @@ class ClaimServiceTest {
         verify(notifications).notifyUser(eq(10L), anyString(), anyString(), anyString(), anyString(), eq(false));
     }
 
+    // UTC063 - cancel throws CLAIM_STATE_INVALID when claim is APPROVED and handover already exists
     @Test
     void cancel_whenApprovedWithHandoverRecorded_throwsClaimStateInvalid() {
         Claim c = Claim.submit(p2pPost, claimant, "My wallet", null);
@@ -489,21 +513,27 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_STATE_INVALID, ex.getErrorCode());
     }
 
+    // UTC002, UTC003, UTC005, UTC006 - submit rejects null request, blank description, >5000 char description/evidenceNote
     @Test
     void submit_whenInvalidPayload_throwsClaimInputInvalid() {
+        // UTC002 - request=null throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.submit(100L, null, List.of(), claimantUser)).getErrorCode());
+        // UTC003 - blank description throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.submit(100L, new SubmitClaimRequest("   ", null, "v1", List.of()), List.of(),
                         claimantUser)).getErrorCode());
+        // UTC005 - description length 5001 exceeds max 5000
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.submit(100L, new SubmitClaimRequest("a".repeat(5001), null, "v1", List.of()), List.of(),
                         claimantUser)).getErrorCode());
+        // UTC006 - evidenceNote length 5001 exceeds max 5000
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.submit(100L, new SubmitClaimRequest("valid", "b".repeat(5001), "v1", List.of()),
                         List.of(), claimantUser)).getErrorCode());
     }
 
+    // UTC004 - submit accepts boundary 5000-character description
     @Test
     void submit_whenDescriptionAtMaxLength5000_succeeds() {
         stubSubmittablePost(p2pPost, claimant);
@@ -522,25 +552,31 @@ class ClaimServiceTest {
         assertEquals("PENDING", result.status());
     }
 
+    // UTC008, UTC009, UTC011, UTC012, UTC013, UTC014 - submit validates actor state, post existence, createdBy self-claim, and FOUND post type
     @Test
     void submit_whenActorPostOrPostTypeInvalid_throwsExpectedError() {
+        // UTC013 - user=null throws UNAUTHORIZED
         assertEquals(ErrorCode.UNAUTHORIZED, assertThrows(AppException.class,
                 () -> service.submit(100L, validSubmitReq(), List.of(), null)).getErrorCode());
 
+        // UTC011 - postId=0 throws CLAIM_INPUT_INVALID
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.submit(0L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
 
+        // UTC012 - non-existent post 999 throws CLAIM_NOT_FOUND
         when(posts.findById(999L)).thenReturn(Optional.empty());
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
                 () -> service.submit(999L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
 
+        // UTC008 - post createdBy=claimant throws CLAIM_SELF_NOT_ALLOWED
         ReflectionTestUtils.setField(p2pPost, "createdBy", claimant);
         when(posts.findById(100L)).thenReturn(Optional.of(p2pPost));
         assertEquals(ErrorCode.CLAIM_SELF_NOT_ALLOWED, assertThrows(AppException.class,
                 () -> service.submit(100L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
         ReflectionTestUtils.setField(p2pPost, "createdBy", finder);
 
+        // UTC009 - LOST post throws CLAIM_POST_UNAVAILABLE
         Post lostPost = Post.lost(finder, p2pPost.getCategory(), "Lost", "Desc", "Hall A",
                 OffsetDateTime.now().minusDays(1));
         ReflectionTestUtils.setField(lostPost, "id", 101L);
@@ -549,6 +585,7 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_POST_UNAVAILABLE, assertThrows(AppException.class,
                 () -> service.submit(101L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
 
+        // UTC014 - claimant SUSPENDED after lock refresh throws FORBIDDEN
         doAnswer(inv -> {
             ReflectionTestUtils.setField(claimant, "status", AccountStatus.SUSPENDED);
             return null;
@@ -557,11 +594,13 @@ class ClaimServiceTest {
                 () -> service.submit(100L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
     }
 
+    // UTC015, UTC016 - submit maps DataIntegrityViolationException to CLAIM_DUPLICATE and cleans up uploads on failure
     @Test
     void submit_whenDataIntegrityViolationOrStoragePutFails_deletesUploadedKeys() {
         MockMultipartFile file = new MockMultipartFile("files", "proof.jpg", "image/jpeg", new byte[] { 1, 2 });
         ValidatedImage img = new ValidatedImage(new byte[] { 1, 2 }, "image/jpeg", "jpg", 10, 10, "h1");
 
+        // UTC015 - unique constraint violation translates to CLAIM_DUPLICATE and deletes uploaded evidence
         stubSubmittablePost(p2pPost, claimant);
         when(validator.validate(List.of(file))).thenReturn(List.of(img));
         when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(p2pPost));
@@ -572,15 +611,18 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_DUPLICATE, dupEx.getErrorCode());
         verify(storage).delete(anyString());
 
+        // UTC016 - storage.put failure cleans up key and rethrows RuntimeException
         doThrow(new RuntimeException("S3 put failed")).when(storage).put(anyString(), any(), anyString());
         assertThrows(RuntimeException.class,
                 () -> service.submit(100L, validSubmitReq(), List.of(file), claimantUser));
         verify(storage, times(2)).delete(anyString());
     }
 
+    // UTC017, UTC018 - submit strips Windows path from filename and uses "Thành viên" when claimant fullName is blank
     @Test
     void submit_whenWindowsPathFilenameAndBlankFullName_sanitizesFilenameAndUsesFallbackSenderName() {
         ReflectionTestUtils.setField(claimant, "fullName", "   ");
+        // UTC017 - strip Windows folder path from uploaded evidence filename
         MockMultipartFile file = new MockMultipartFile("files", "C:\\Users\\a\\pic.jpg", "image/jpeg",
                 new byte[] { 7, 8 });
         ValidatedImage img = new ValidatedImage(new byte[] { 7, 8 }, "image/jpeg", "jpg", 10, 10, "h2");
@@ -600,14 +642,17 @@ class ClaimServiceTest {
         verify(claims).saveAndFlush(claimCaptor.capture());
         assertEquals("pic.jpg", claimCaptor.getValue().getEvidence().get(0).getOriginalName());
 
+        // UTC018 - blank claimant fullName falls back to "Thành viên" in notification body
         ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
         verify(notifications).notifyUser(eq(10L), eq("CLAIM_SUBMITTED"), anyString(), bodyCaptor.capture(), anyString(),
                 eq(true));
         assertTrue(bodyCaptor.getValue().startsWith("Thành viên "));
     }
 
+    // UTC020, UTC022, UTC023, UTC024 - retry allows CANCELLED claims and rejects foreign, OFFICE, or custody-changed claims
     @Test
     void retry_whenCancelledOrInvalidPreviousOrChangedCustody_handlesAllBranches() {
+        // UTC020 - CANCELLED previous claim can be retried
         Claim cancelled = p2pClaim(480L, "CANCELLED", 1L);
         when(claims.findById(480L)).thenReturn(Optional.of(cancelled));
         stubSubmittablePost(p2pPost, claimant);
@@ -622,6 +667,7 @@ class ClaimServiceTest {
         ClaimResultDto retried = service.retry(480L, validSubmitReq(), List.of(), claimantUser);
         assertEquals(481L, retried.id());
 
+        // UTC022 - previous claim owned by another user throws CLAIM_NOT_FOUND
         Claim othersClaim = Claim.submit(p2pPost, outsider, "Other", null);
         ReflectionTestUtils.setField(othersClaim, "id", 482L);
         ReflectionTestUtils.setField(othersClaim, "status", "REJECTED");
@@ -629,6 +675,7 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
                 () -> service.retry(482L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
 
+        // UTC023 - OFFICE previous claim throws CLAIM_NOT_FOUND
         Claim officeClaim = BeanUtils.instantiateClass(Claim.class);
         ReflectionTestUtils.setField(officeClaim, "id", 483L);
         ReflectionTestUtils.setField(officeClaim, "post", p2pPost);
@@ -639,6 +686,7 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
                 () -> service.retry(483L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
 
+        // UTC024 - post custodyMode changed to OFFICE rejects retry with CLAIM_POST_UNAVAILABLE / CLAIM_STATE_INVALID
         Claim rejected = p2pClaim(484L, "REJECTED", 1L);
         ReflectionTestUtils.setField(p2pPost, "custodyMode", "OFFICE");
         when(claims.findById(484L)).thenReturn(Optional.of(rejected));
@@ -651,34 +699,44 @@ class ClaimServiceTest {
                 () -> service.retry(484L, validSubmitReq(), List.of(), claimantUser)).getErrorCode());
     }
 
+    // UTC026, UTC028, UTC029 - questionnaire rejects post owner and latestOnPost handles absent claims and postId<=0
     @Test
     void questionnaire_and_latestOnPost_coverOwnerNoneAndInvalidPostId() {
+        // UTC026 - post owner requesting questionnaire throws CLAIM_SELF_NOT_ALLOWED
         when(accounts.findById(10L)).thenReturn(Optional.of(finder));
         when(posts.findById(100L)).thenReturn(Optional.of(p2pPost));
         assertEquals(ErrorCode.CLAIM_SELF_NOT_ALLOWED, assertThrows(AppException.class,
                 () -> service.questionnaire(100L, finderUser)).getErrorCode());
 
+        // UTC028 - no prior claim returns null from latestOnPost
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
         when(claims.findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(100L, 20L, "P2P"))
                 .thenReturn(Optional.empty());
         assertEquals(null, service.latestOnPost(100L, claimantUser));
 
+        // UTC029 - postId=0 throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.latestOnPost(0L, claimantUser)).getErrorCode());
     }
 
+    // UTC031, UTC032, UTC033, UTC034, UTC035, UTC038 - listing endpoints enforce status, pagination, and post ownership
     @Test
     void mine_received_and_onPost_enforceValidationPaginationAndAccess() {
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
+        // UTC031 - mine(status="UNKNOWN") throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.mine(1, 10, "UNKNOWN", claimantUser)).getErrorCode());
+        // UTC032 - mine(status=null) throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.mine(1, 10, null, claimantUser)).getErrorCode());
+        // UTC033 - mine(page=0) throws POST_PAGINATION_INVALID
         assertEquals(ErrorCode.POST_PAGINATION_INVALID, assertThrows(AppException.class,
                 () -> service.mine(0, 10, "ALL", claimantUser)).getErrorCode());
+        // UTC034 - mine(size=101) throws POST_PAGINATION_INVALID
         assertEquals(ErrorCode.POST_PAGINATION_INVALID, assertThrows(AppException.class,
                 () -> service.mine(1, 101, "ALL", claimantUser)).getErrorCode());
 
+        // UTC035 - received returns matching PENDING claims for post owner
         when(accounts.findById(10L)).thenReturn(Optional.of(finder));
         Claim c1 = p2pClaim(521L, "PENDING", 0L);
         Claim c2 = p2pClaim(522L, "PENDING", 0L);
@@ -692,14 +750,17 @@ class ClaimServiceTest {
         ClaimPageDto receivedPage = service.received(1, 10, "PENDING", finderUser);
         assertEquals(2, receivedPage.content().size());
 
+        // UTC038 - non-owner non-approver calling onPost throws CLAIM_NOT_FOUND
         when(accounts.findById(40L)).thenReturn(Optional.of(outsider));
         when(posts.findById(100L)).thenReturn(Optional.of(p2pPost));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
                 () -> service.onPost(100L, 1, 10, "ALL", outsiderUser)).getErrorCode());
     }
 
+    // UTC041, UTC043, UTC044, UTC045, UTC046 - detail and detailOnPost set canReview/canRetry and block mismatches or OFFICE claims
     @Test
     void detail_and_detailOnPost_handleReviewerRetryabilityMismatchAndOfficeClaim() {
+        // UTC041 - post owner viewing PENDING claim sees canReview=true
         Claim pending = p2pClaim(541L, "PENDING", 0L);
         when(accounts.findById(10L)).thenReturn(Optional.of(finder));
         when(claims.findById(541L)).thenReturn(Optional.of(pending));
@@ -708,6 +769,7 @@ class ClaimServiceTest {
         when(activities.findByClaim_IdOrderByCreatedAtAscIdAsc(541L)).thenReturn(List.of());
         assertTrue(service.detail(541L, finderUser).canReview());
 
+        // UTC043, UTC044 - REJECTED claim sets canRetry=true only when no other active claim exists
         Claim rejected = p2pClaim(542L, "REJECTED", 0L);
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
         when(claims.findById(542L)).thenReturn(Optional.of(rejected));
@@ -715,12 +777,16 @@ class ClaimServiceTest {
         when(activities.findByClaim_IdOrderByCreatedAtAscIdAsc(542L)).thenReturn(List.of());
         when(claims.existsByPost_IdAndClaimant_IdAndStatusIn(eq(100L), eq(20L), any()))
                 .thenReturn(false, true);
+        // UTC043 - no other active claim -> canRetry=true
         assertTrue(service.detail(542L, claimantUser).canRetry());
+        // UTC044 - active claim exists -> canRetry=false
         assertFalse(service.detail(542L, claimantUser).canRetry());
 
+        // UTC045 - detailOnPost with mismatched postId throws CLAIM_NOT_FOUND
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
                 () -> service.detailOnPost(101L, 542L, claimantUser)).getErrorCode());
 
+        // UTC046 - OFFICE claim passed to P2P detail throws CLAIM_NOT_FOUND
         Claim office = BeanUtils.instantiateClass(Claim.class);
         ReflectionTestUtils.setField(office, "id", 543L);
         ReflectionTestUtils.setField(office, "claimType", "OFFICE");
@@ -731,6 +797,7 @@ class ClaimServiceTest {
                 () -> service.detail(543L, claimantUser)).getErrorCode());
     }
 
+    // UTC048 - review REJECTED updates status, saves REJECT activity, and notifies claimant with reason
     @Test
     void review_whenRejected_updatesStatusSavesActivityAndNotifiesWithReason() {
         Claim c = p2pClaim(553L, "PENDING", 0L);
@@ -751,17 +818,20 @@ class ClaimServiceTest {
         assertTrue(msgCaptor.getValue().contains("Wrong colour"));
     }
 
+    // UTC050, UTC051, UTC052, UTC053, UTC054, UTC055, UTC057, UTC058, UTC059, UTC060 - review validates authorization, inputs, and conflicts
     @Test
     void review_whenUnauthorizedOrInvalidInputOrStateConflict_throwsExpectedErrors() {
         Claim pending = p2pClaim(554L, "PENDING", 0L);
         stubLockForAction(554L, pending, p2pPost);
 
+        // UTC050 - actor not post owner throws CLAIM_NOT_FOUND
         when(accounts.findById(40L)).thenReturn(Optional.of(outsider));
         when(routing.reviewer(pending, outsider)).thenReturn(false);
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
                 () -> service.review(554L, new ReviewClaimRequest("APPROVED", "ok", 0L), outsiderUser))
                 .getErrorCode());
 
+        // UTC051 - claimant reviewing own claim throws CLAIM_NOT_FOUND
         when(accounts.findById(20L)).thenReturn(Optional.of(claimant));
         when(routing.reviewer(pending, claimant)).thenReturn(false);
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
@@ -770,28 +840,35 @@ class ClaimServiceTest {
 
         when(accounts.findById(10L)).thenReturn(Optional.of(finder));
         when(routing.reviewer(pending, finder)).thenReturn(true);
+        // UTC052 - unsupported decision "MAYBE" throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.review(554L, new ReviewClaimRequest("MAYBE", "Reason", 0L), finderUser))
                 .getErrorCode());
+        // UTC053 - empty reason throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.review(554L, new ReviewClaimRequest("APPROVED", "", 0L), finderUser))
                 .getErrorCode());
+        // UTC054 - reason > 2000 chars throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.review(554L, new ReviewClaimRequest("APPROVED", "x".repeat(2001), 0L), finderUser))
                 .getErrorCode());
+        // UTC057 - expectedVersion=null throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", null), finderUser))
                 .getErrorCode());
+        // UTC058 - expectedVersion=-1 throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", -1L), finderUser))
                 .getErrorCode());
 
+        // UTC060 - another claim on post already APPROVED throws CLAIM_STATE_INVALID
         when(routing.matches(pending, Set.of("OPEN"))).thenReturn(true);
         when(claims.existsByPost_IdAndStatusIn(100L, Set.of("APPROVED"))).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_STATE_INVALID, assertThrows(AppException.class,
                 () -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", 0L), finderUser))
                 .getErrorCode());
 
+        // UTC059 - reviewing already APPROVED claim throws CLAIM_STATE_INVALID
         Claim alreadyApproved = p2pClaim(555L, "APPROVED", 0L);
         stubLockForAction(555L, alreadyApproved, p2pPost);
         when(routing.reviewer(alreadyApproved, finder)).thenReturn(true);
@@ -800,6 +877,7 @@ class ClaimServiceTest {
                 () -> service.review(555L, new ReviewClaimRequest("REJECTED", "Late", 0L), finderUser))
                 .getErrorCode());
 
+        // UTC055 - boundary 2000-character reason accepted
         Claim maxReasonClaim = p2pClaim(556L, "PENDING", 0L);
         stubLockForAction(556L, maxReasonClaim, p2pPost);
         when(routing.reviewer(maxReasonClaim, finder)).thenReturn(true);
@@ -810,8 +888,10 @@ class ClaimServiceTest {
         assertEquals("APPROVED", approvedMaxReason.status());
     }
 
+    // UTC062, UTC064, UTC065, UTC066, UTC067, UTC068 - cancel reopens post for APPROVED claim and validates actor/inputs/state
     @Test
     void cancel_whenApprovedReopensPost_andHandlesNullReasonOrInvalidStates() {
+        // UTC062, UTC067 - cancelling APPROVED claim with optional null reason reopens post to OPEN
         p2pPost.reserveForClaim();
         Claim approved = p2pClaim(562L, "APPROVED", 1L);
         stubLockForAction(562L, approved, p2pPost);
@@ -823,18 +903,22 @@ class ClaimServiceTest {
         assertEquals("CANCELLED", cancelledApproved.status());
         assertEquals("OPEN", p2pPost.getStatus());
 
+        // UTC064 - cancelling REJECTED claim throws CLAIM_STATE_INVALID
         Claim rejected = p2pClaim(563L, "REJECTED", 1L);
         stubLockForAction(563L, rejected, p2pPost);
         assertEquals(ErrorCode.CLAIM_STATE_INVALID, assertThrows(AppException.class,
                 () -> service.cancel(563L, new CancelClaimRequest(1L, "No longer needed"), claimantUser))
                 .getErrorCode());
 
+        // UTC066 - request=null throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.cancel(563L, null, claimantUser)).getErrorCode());
+        // UTC068 - reason > 2000 chars throws CLAIM_INPUT_INVALID
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, assertThrows(AppException.class,
                 () -> service.cancel(563L, new CancelClaimRequest(1L, "z".repeat(2001)), claimantUser))
                 .getErrorCode());
 
+        // UTC065 - non-claimant cancelling throws CLAIM_NOT_FOUND
         when(accounts.findById(40L)).thenReturn(Optional.of(outsider));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, assertThrows(AppException.class,
                 () -> service.cancel(563L, new CancelClaimRequest(1L, "No"), outsiderUser)).getErrorCode());
