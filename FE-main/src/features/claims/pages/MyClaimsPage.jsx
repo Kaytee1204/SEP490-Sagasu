@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
-import { getGroupedClaims, getOfficeClaims } from '../api/claimApi';
+import { getGroupedClaims } from '../api/claimApi';
 import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath, evidenceUrl } from '../claimUtils';
 import '../Claims.css';
 
@@ -12,7 +12,9 @@ const HISTORY_STATUSES = ['COMPLETED', 'REJECTED', 'CANCELLED', 'CLOSED'];
 export default function MyClaimsPage({ embedded = false }) {
   const { user, isApprover } = useAuth();
   const [params] = useSearchParams();
-  const initialView = params.get('view') === 'sent' ? 'sent' : params.get('view') === 'office' && isApprover ? 'office' : 'received';
+  const initialView = params.get('view') === 'sent' ? 'sent' : 'received';
+  // Existing staff bookmarks belong to the Approver workspace.
+  if (params.get('view') === 'office' && isApprover) return <Navigate replace to="/approver/office-claims" />;
   return <ClaimList key={`${user?.id}:${initialView}:${params.get("postId") || ""}`} initialView={initialView} embedded={embedded} />;
 }
 export function PostClaimsPage() {
@@ -23,14 +25,13 @@ export function PostClaimsPage() {
   return <Navigate replace to={`/claim-cua-toi?${target}`} />;
 }
 function ClaimList({ embedded = false, initialView = 'received' }) {
-  const { isApprover } = useAuth();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const postId = validClaimId(searchParams.get('postId')) ? searchParams.get('postId') : null;
   const [expandedGroups, setExpandedGroups] = useState(() => new Set((searchParams.get('expanded') || '').split(',').filter(Boolean)));
   const [view, setView] = useState(() => {
     const urlView = searchParams.get('view');
-    if (urlView === 'sent' || (urlView === 'office' && isApprover) || urlView === 'received') return urlView;
+    if (urlView === 'sent' || urlView === 'received') return urlView;
     return initialView;
   });
   const [page, setPage] = useState(() => {
@@ -61,11 +62,10 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     setSearchParams(updated, { replace: true });
   };
   const incoming = view !== 'sent';
-  const grouped = view !== 'office';
   const key = `${postId}:${view}:${page}:${status}:${attempt}`;
   useEffect(() => {
     let cancelled = false;
-    const request = view === 'office' ? getOfficeClaims(page, status) : getGroupedClaims(page, status, !incoming, postId);
+    const request = getGroupedClaims(page, status, !incoming, postId);
     request.then(result => { if (!cancelled) setSnapshot({ key, result, error: '' }); })
       .catch(error => { if (!cancelled) setSnapshot({ key, result: null, error: error.message }); });
     return () => { cancelled = true; };
@@ -78,12 +78,12 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
   return <Wrapper className={`${embedded ? '' : 'container'} claims-page ${embedded ? 'claims-embedded' : ''}`} aria-label={title}>
 
     {!embedded && <header className="claims-heading"><div><h1>{title}</h1>
-      <p className="claims-muted">{view === 'office' ? 'Xét duyệt yêu cầu nhận đồ đã được phòng ban tiếp nhận, xác minh.' : incoming ? 'Đọc căn cứ để xác định đúng chủ sở hữu. Yêu cầu chờ bạn duyệt được ưu tiên.' : 'Theo dõi những yêu cầu nhận đồ bạn đã gửi.'}</p></div>
+      <p className="claims-muted">{incoming ? 'Đọc căn cứ để xác định đúng chủ sở hữu. Yêu cầu chờ bạn duyệt được ưu tiên.' : 'Theo dõi những yêu cầu nhận đồ bạn đã gửi.'}</p></div>
       <div className="claims-filters"><Link className="btn btn-ghost" to={postId ? `/chi-tiet/${postId}` : '/tim-kiem'}>{postId ? 'Về bài đăng' : 'Tìm đồ thất lạc'}</Link></div></header>}
     {postId && <p><Link className="btn btn-ghost" to={`/claim-cua-toi?view=${view}&claimStatus=ALL`}>Xem tất cả bài đăng</Link></p>}
     <div className="claims-filters claims-navigation">
     <div className="claims-tabs" role="tablist" aria-label="Loại danh sách claim">
-      {[['received', 'Người khác yêu cầu'], ['sent', 'Tôi yêu cầu'], ...(isApprover ? [['office', 'Claim gửi phòng ban']] : [])].map(([value, label]) => <button type="button" key={value}
+      {[['received', 'Người khác yêu cầu'], ['sent', 'Tôi yêu cầu']].map(([value, label]) => <button type="button" key={value}
         role="tab" aria-selected={view === value} className={`chip ${view === value ? 'active' : ''}`}
         onClick={() => updateClaimState(value, 1, 'ALL')}>{label}</button>)}
     </div>
@@ -103,9 +103,8 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     </div>}
     {loading ? <p role="status">Đang tải claim…</p> : snapshot.error ? <div className="claim-alert" role="alert"><p>{snapshot.error}</p>
       <button className="btn btn-ghost" type="button" onClick={() => setAttempt(n => n + 1)}>Thử lại</button></div> : <>
-      <p className="claims-muted" role="status">{snapshot.result.totalElements} {grouped ? 'bài đăng' : 'hồ sơ'}</p>
-      {snapshot.result.content.length ? (grouped
-        ? snapshot.result.content.map(group => <ClaimPostGroup key={`${group.postId}:${status}`} group={group} incoming={incoming} status={status}
+      <p className="claims-muted" role="status">{snapshot.result.totalElements} bài đăng</p>
+      {snapshot.result.content.length ? snapshot.result.content.map(group => <ClaimPostGroup key={`${group.postId}:${status}`} group={group} incoming={incoming} status={status}
           expanded={expandedGroups.has(String(group.postId)) || (postId === String(group.postId) && !searchParams.has('expanded')) || (!incoming && !searchParams.has('expanded'))}
           onToggle={value => {
             const next = new Set(snapshot.result.content.filter(g => expandedGroups.has(String(g.postId)) || (!searchParams.has('expanded') && (!incoming || postId === String(g.postId)))).map(g => String(g.postId)));
@@ -113,9 +112,8 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
             setExpandedGroups(next);
             const updated = new URLSearchParams(searchParams); updated.set('expanded', [...next].join(','));
             setSearchParams(updated, { replace: true });
-          }} />)
-        : <ClaimRows claims={snapshot.result.content} showPost={!postId} incoming={incoming} collapseHistory={Boolean(postId) && status === 'ALL'} />) : <div className="claim-panel"><p>{status !== 'ALL' ? 'Không có hồ sơ ở trạng thái này.'
-        : view === 'office' ? 'Chưa có claim gửi cho phòng ban.' : incoming ? 'Chưa có claim trên các bài đăng của bạn.' : 'Bạn chưa gửi claim nào.'}</p>
+          }} />) : <div className="claim-panel"><p>{status !== 'ALL' ? 'Không có hồ sơ ở trạng thái này.'
+        : incoming ? 'Chưa có claim trên các bài đăng của bạn.' : 'Bạn chưa gửi claim nào.'}</p>
         {page > 1 && <button className="btn btn-ghost" onClick={() => updateClaimState(view, 1, status)}>Về trang đầu</button>}</div>}
       {snapshot.result.totalPages > 1 && <Pagination currentPage={page} totalPages={snapshot.result.totalPages} onPageChange={nextPage => updateClaimState(view, nextPage, status)} />}
     </>}

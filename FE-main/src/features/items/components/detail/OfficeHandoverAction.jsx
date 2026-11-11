@@ -31,6 +31,7 @@ export default function OfficeHandoverAction({ post, onTransferred }) {
     }
   }
 
+  if (post.postType !== 'FOUND') return null;
   if (!post.canRequestOfficeHandover) return (post.isOwner || post.canEditOwnPost) ? <Link to="/van-phong/chuyen-giao" className="btn btn-ghost">Theo dõi giao đồ cho văn phòng</Link> : null;
   // DaiHV integration: explain and confirm the request at the post action itself.
   return <section aria-label="Gửi đồ cho văn phòng" className="space-y-3">
