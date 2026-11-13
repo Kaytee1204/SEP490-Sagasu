@@ -13,14 +13,17 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/categories")
 @PreAuthorize("hasRole('MANAGER')")
-@Tag(name = "7. Category Management", description = "Quản lý danh mục đồ thất lạc (Chỉ dành cho role MANAGER)")
+@Tag(
+        name = "03. Category Management - Quản lý danh mục đồ vật",
+        description = "Tra cứu, Tạo mới, Đổi tên và Bật/Tắt trạng thái hoạt động của danh mục đồ thất lạc (MANAGER)"
+)
 public class CategoryController {
     private final CategoryService service;
     public CategoryController(CategoryService service) { this.service = service; }
 
     @GetMapping
     @Operation(
-            summary = "Danh sách danh mục có phân trang và tìm kiếm",
+            summary = "[3.1] Danh sách danh mục đồ vật có phân trang và tìm kiếm (MANAGER)",
             description = "Lọc danh mục theo từ khóa (keyword) và trạng thái hoạt động (active = true/false)."
     )
     public ApiResponse<PageResponse<CategoryResponse>> list(
@@ -32,19 +35,28 @@ public class CategoryController {
     }
 
     @PostMapping
-    @Operation(summary = "Tạo danh mục đồ thất lạc mới (Chỉ MANAGER)")
+    @Operation(
+            summary = "[3.2] Tạo danh mục đồ thất lạc mới (MANAGER)",
+            description = "Tạo mới một danh mục đồ vật với tên duy nhất (không trùng lặp)."
+    )
     public ApiResponse<CategoryResponse> create(@Valid @RequestBody CreateCategoryRequest request) {
         return ApiResponse.ok("Tạo danh mục thành công", service.createCategory(request.name()));
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Đổi tên danh mục theo ID (Chỉ MANAGER)")
+    @Operation(
+            summary = "[3.3] Đổi tên danh mục đồ vật theo ID (MANAGER)",
+            description = "Cập nhật tên danh mục theo ID."
+    )
     public ApiResponse<CategoryResponse> update(@PathVariable Long id, @Valid @RequestBody UpdateCategoryRequest request) {
         return ApiResponse.ok("Đổi tên danh mục thành công", service.updateCategory(id, request.name()));
     }
 
     @PatchMapping("/{id}/status")
-    @Operation(summary = "Bật / Tắt trạng thái hoạt động của danh mục (Chỉ MANAGER)")
+    @Operation(
+            summary = "[3.4] Bật / Tắt trạng thái hoạt động của danh mục (MANAGER)",
+            description = "Kích hoạt hoặc vô hiệu hóa danh mục đồ vật (active = true / false)."
+    )
     public ApiResponse<CategoryResponse> status(@PathVariable Long id, @Valid @RequestBody UpdateCategoryStatusRequest request) {
         return ApiResponse.ok("Cập nhật trạng thái thành công", service.updateCategoryStatus(id, request.active()));
     }

@@ -1577,6 +1577,10 @@ img, video, iframe {
   .navbar-inner {
     gap: var(--space-3);
   }
+
+  .admin-page-container {
+    padding: 16px 14px !important;
+  }
 }
 
 /* 3. Phablet & Large Mobile (640px) */
@@ -1615,6 +1619,14 @@ img, video, iframe {
 
   .auth-panel-right {
     padding: var(--space-6) var(--space-4);
+  }
+
+  .auth-card-container {
+    padding: 28px 20px !important;
+  }
+
+  .admin-page-container {
+    padding: 12px 10px !important;
   }
 
   .card-body {

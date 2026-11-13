@@ -48,7 +48,7 @@ export default function AccountDashboardPage() {
   } = useAccountDashboard();
 
   return (
-    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="admin-page-container" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Toast Notification */}
       {toast && (
         <div
@@ -144,7 +144,7 @@ export default function AccountDashboardPage() {
           }}
         >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <h2
                 style={{
                   fontFamily: 'var(--font-display)',
@@ -174,7 +174,7 @@ export default function AccountDashboardPage() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <button
               type="button"
               onClick={() => {
