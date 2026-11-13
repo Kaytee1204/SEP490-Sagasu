@@ -114,6 +114,7 @@ function PostDetail({ id, onRetry }) {
     time: event.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }),
   };
   const images = (post.images || []).map(image => imageUrl(image.url)).filter(Boolean);
+  const canUseSmartMatch = post.postType === 'LOST' && (post.canEditOwnPost || isAdmin || isManager);
 
   return (
     <main className="post-detail-page">
@@ -139,7 +140,7 @@ function PostDetail({ id, onRetry }) {
 
           {/* Action & Smart Match Buttons */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '14px', marginBottom: '14px' }}>
-            {(post.canEditOwnPost || isAdmin || isManager) && (
+            {canUseSmartMatch && (
             <button
               type="button"
               onClick={() => setShowSmartMatch(true)}
@@ -241,17 +242,17 @@ function PostDetail({ id, onRetry }) {
               : 'Người nhặt chọn tự giữ để trao trả.'}
           </div>}
           <ItemCharacteristics description={post.description} />
-          <ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" />
+          {!post.isOwner && !post.canEditOwnPost && <ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" />}
           {post.canEditOwnPost && <details className="workflow-disclosure"><summary>Ghi chú xác minh riêng tư</summary><PrivateIdentifiersEditor key={post.id} postId={post.id} /></details>}
         </section>
       </div>
 
       {/* Smart Match Modal */}
-      <SmartMatchModal
+      {canUseSmartMatch && <SmartMatchModal
         isOpen={showSmartMatch}
         onClose={() => setShowSmartMatch(false)}
         post={post}
-      />
+      />}
     </main>
   );
 }

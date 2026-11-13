@@ -57,7 +57,9 @@ export default function OfficeClaimForm({ counter = false }) {
       claimantEmail: account?.email || "",
     }));
   }
-  const [busy, setBusy] = useState(false);
+  const [saving, setBusy] = useState(false);
+  const [imagesProcessing, setImagesProcessing] = useState(false);
+  const busy = saving || imagesProcessing;
   const [error, setError] = useState("");
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const back = counter ? "/approver/office-claims" : "/van-phong/claims";
@@ -250,7 +252,7 @@ export default function OfficeClaimForm({ counter = false }) {
                 onChange={(e) => change("evidenceNote", e.target.value)}
               />
             </label>
-            <EvidencePicker files={files} setFiles={setFiles} disabled={busy} />
+            <EvidencePicker files={files} setFiles={setFiles} disabled={busy} onProcessing={setImagesProcessing} />
             <div className="of-actions">
               <button
                 className="of-button of-primary"

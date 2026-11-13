@@ -8,6 +8,9 @@ import { validClaimId, claimDetailPath, canSubmitPostClaim, postClaimType } from
 import { serializeQuestionnaireAnswers } from '../questionnaireUtils';
 import ClaimQuestionnaireFields from '../components/ClaimQuestionnaireFields';
 import '../Claims.css';
+import useImageUploads from '@/hooks/useImageUploads';
+import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 
 export default function SubmitClaimPage() {
   const { id } = useParams();
@@ -25,7 +28,9 @@ function ClaimForm({ postId, retryId }) {
   const [answers, setAnswers] = useState({});
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [sending, setBusy] = useState(false);
+  const { prepare, processing } = useImageUploads();
+  const busy = sending || processing;
   const inFlight = useRef(false);
   const previews = useRef([]);
   useEffect(() => {
@@ -49,14 +54,19 @@ function ClaimForm({ postId, retryId }) {
     return () => { cancelled = true; };
   }, [postId, retryId, navigate]);
   useEffect(() => () => previews.current.forEach(url => URL.revokeObjectURL(url)), []);
-  function upload(event) {
+  async function upload(event) {
     const added = Array.from(event.target.files || []); event.target.value = '';
+    if (busy) return;
     if (files.length + added.length > 5) { setError('Mỗi hồ sơ tối đa 5 ảnh.'); return; }
-    if (added.some(file => !['image/jpeg', 'image/png'].includes(file.type) || file.size === 0 || file.size > 5 * 1024 * 1024)) {
-      setError('Chỉ chọn ảnh JPG/PNG từ 1 byte đến 5 MB.'); return;
+    setError('');
+    try {
+      const prepared = await prepare(added);
+      if (!prepared) return;
+      const entries = prepared.map(file => { const url = URL.createObjectURL(file); previews.current.push(url); return { id: crypto.randomUUID(), file, url }; });
+      setFiles(current => [...current, ...entries]);
+    } catch (problem) {
+      setError(problem.message);
     }
-    const entries = added.map(file => { const url = URL.createObjectURL(file); previews.current.push(url); return { id: crypto.randomUUID(), file, url }; });
-    setFiles(current => [...current, ...entries]); setError('');
   }
   function remove(entry) {
     URL.revokeObjectURL(entry.url); previews.current = previews.current.filter(url => url !== entry.url);
@@ -64,7 +74,7 @@ function ClaimForm({ postId, retryId }) {
   }
   async function send(event) {
     event.preventDefault();
-    if (inFlight.current || !loaded || loaded.problem) return;
+    if (busy || inFlight.current || !loaded || loaded.problem) return;
     if (!description.trim()) { setError('Vui lòng mô tả căn cứ nhận đồ.'); return; }
     inFlight.current = true; setBusy(true); setError('');
     try {
@@ -76,8 +86,9 @@ function ClaimForm({ postId, retryId }) {
     finally { inFlight.current = false; setBusy(false); }
   }
   const evidenceField = <>
-    <label>Ảnh bằng chứng<input type="file" multiple accept="image/jpeg,image/png" disabled={busy} onChange={upload} /></label>
-    <p className="claims-muted">Tối đa 5 ảnh JPG/PNG, mỗi ảnh tối đa 5 MB. Có thể gửi căn cứ bằng chữ mà không đính kèm ảnh.</p>
+    <label>Ảnh bằng chứng<input type="file" multiple accept={IMAGE_ACCEPT} disabled={busy} onChange={upload} /></label>
+    <p className="claims-muted">Tối đa 5 ảnh {IMAGE_FORMATS}, mỗi ảnh tối đa 5 MB. Có thể gửi căn cứ bằng chữ mà không đính kèm ảnh.</p>
+    <ImageProcessingStatus active={processing} />
     <div className="claim-evidence">{files.map(entry => <div key={entry.id}><img src={entry.url} alt={entry.file.name} /><small>{entry.file.name}</small>
       <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => remove(entry)} aria-label={`Xóa ảnh ${entry.file.name}`}>Xóa ảnh</button></div>)}</div>
     <details className="workflow-disclosure"><summary>Thêm ghi chú về bằng chứng</summary><label>Ghi chú (không bắt buộc)<textarea maxLength={5000} value={evidenceNote} disabled={busy}
@@ -99,7 +110,7 @@ function ClaimForm({ postId, retryId }) {
           <ClaimQuestionnaireFields questionnaire={loaded.questionnaire} answers={answers}
             onAnswer={(code, value) => setAnswers(current => ({ ...current, [code]: value }))}
             description={description} onDescription={setDescription} evidenceField={evidenceField} disabled={busy} />
-          <button className="btn btn-accent" disabled={busy} type="submit">{busy ? 'Đang gửi…' : postClaimType(loaded.post) === 'OFFICE' ? 'Gửi claim cho phòng ban' : 'Gửi yêu cầu nhận đồ'}</button>
+          <button className="btn btn-accent" disabled={busy} type="submit">{processing ? 'Đang xử lý ảnh…' : sending ? 'Đang gửi…' : postClaimType(loaded.post) === 'OFFICE' ? 'Gửi claim cho phòng ban' : 'Gửi yêu cầu nhận đồ'}</button>
         </form>
       </>}
   </main>;

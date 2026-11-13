@@ -1,0 +1,25 @@
+.post-submit-dialog {
+  position:fixed;
+  inset:0;
+  margin:auto;
+  width:min(420px,calc(100vw - 32px));
+  max-height:calc(100dvh - 32px);
+  overflow:auto;
+  border:1px solid #d6e7e4;
+  border-radius:20px;
+  padding:32px 28px 28px;
+  background:#fff;
+  color:#173c44;
+  text-align:center;
+  box-shadow:0 24px 64px #123b3b30;
+}
+.post-submit-dialog::backdrop { background:#10292970; backdrop-filter:blur(4px); }
+.post-submit-close { position:absolute; top:10px; right:10px; display:grid; place-items:center; width:40px; height:40px; border-radius:10px; color:#58747b; }
+.post-submit-close:hover { background:#edf6f4; }
+.post-submit-icon { display:grid; place-items:center; width:64px; height:64px; margin:0 auto 18px; border-radius:50%; background:#e6f6ef; color:#18735a; }
+.post-submit-failure .post-submit-icon { background:#fff0ed; color:#b74b37; }
+.post-submit-dialog h2 { margin:0 0 10px; font-size:1.4rem; font-weight:750; line-height:1.35; }
+.post-submit-dialog p { margin:0 0 24px; color:#58747b; line-height:1.6; overflow-wrap:anywhere; white-space:pre-wrap; }
+.post-submit-dialog > .btn { width:100%; justify-content:center; }
+.post-submit-dialog :focus-visible { outline:3px solid #259d90; outline-offset:3px; }
+@media(max-width:480px) { .post-submit-dialog { padding:28px 22px 22px; } }

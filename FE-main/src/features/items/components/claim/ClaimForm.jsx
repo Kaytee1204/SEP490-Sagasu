@@ -1,7 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Lock, FileText, Image as ImageIcon, Camera, X, ArrowRight } from 'lucide-react';
+import useImageUploads from '@/hooks/useImageUploads';
+import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 
 export default function ClaimForm({ item, formData, onChange, onUpload, onSubmit }) {
+  const { prepare, processing } = useImageUploads();
+  const [imageError, setImageError] = useState('');
+  async function upload(event) {
+    const input = event.target;
+    const selected = [...(input.files || [])]; input.value = '';
+    if (!selected.length || processing) return;
+    setImageError('');
+    try {
+      const prepared = await prepare(selected);
+      if (!prepared) return;
+      const transfer = new DataTransfer();
+      prepared.forEach(file => transfer.items.add(file));
+      input.files = transfer.files;
+      await onUpload(event);
+    } catch (problem) { setImageError(problem.message); }
+  }
   return (
     <div className="card animate-fadeInUp" style={{ padding: '40px', boxShadow: 'var(--shadow-lg)' }}>
       <div style={{
@@ -17,7 +36,7 @@ export default function ClaimForm({ item, formData, onChange, onUpload, onSubmit
         </div>
       </div>
 
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <form onSubmit={event => { if (processing) event.preventDefault(); else onSubmit(event); }} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
         {/* 1. Secret Detail */}
         <div className="input-group">
           <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -61,6 +80,7 @@ export default function ClaimForm({ item, formData, onChange, onUpload, onSubmit
                 />
                 <button
                   type="button"
+                  disabled={processing}
                   onClick={(e) => { e.stopPropagation(); onChange({ ...formData, proofImage: null }); }}
                   style={{
                     position: 'absolute', top: 8, right: 8, width: 32, height: 32,
@@ -80,11 +100,15 @@ export default function ClaimForm({ item, formData, onChange, onUpload, onSubmit
             <input
               id="proof-upload"
               type="file"
-              onChange={onUpload}
-              accept="image/*"
+              onChange={upload}
+              accept={IMAGE_ACCEPT}
+              disabled={processing}
               style={{ display: 'none' }}
             />
           </div>
+          <p className="text-sm text-slate-600">{IMAGE_FORMATS} · tối đa 5 MB/ảnh.</p>
+          <ImageProcessingStatus active={processing} />
+          {imageError && <p role="alert">{imageError}</p>}
         </div>
 
         {/* 3. Contact Info */}
@@ -114,7 +138,7 @@ export default function ClaimForm({ item, formData, onChange, onUpload, onSubmit
         </div>
 
         <div style={{ paddingTop: '24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="submit" className="btn btn-primary btn-lg" style={{ background: 'var(--accent)' }}>
+          <button type="submit" disabled={processing} className="btn btn-primary btn-lg" style={{ background: 'var(--accent)' }}>
             Gửi yêu cầu xác minh <ArrowRight size={16} />
           </button>
         </div>

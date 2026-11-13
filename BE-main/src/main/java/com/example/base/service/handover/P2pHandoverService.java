@@ -38,7 +38,11 @@ public class P2pHandoverService {
     private final com.example.base.service.notification.NotificationService notifications;
     public record RecordRequest(String note,Long expectedClaimVersion,UUID clientRequestId) {}
     public record ConfirmRequest(Long expectedVersion) {}
-    public record IssueRequest(String reason,Long expectedVersion,UUID clientRequestId) {}
+    public record IssueRequest(String reason,Long expectedVersion,UUID clientRequestId,String reasonCode) {
+        public IssueRequest(String reason,Long expectedVersion,UUID clientRequestId) {
+            this(reason,expectedVersion,clientRequestId,null);
+        }
+    }
     public record Detail(Long id,long claimId,String status,String note,OffsetDateTime recordedAt,OffsetDateTime confirmedAt,
         long version,boolean canRecord,boolean canConfirm,boolean canReportIssue,List<ReportService.Evidence> evidence,ReportService.Detail issue,boolean heldForReview) {}
     @Transactional(readOnly=true)
@@ -97,12 +101,14 @@ public class P2pHandoverService {
         return dto(c,h,actor);
     }
     public Detail issue(long claimId,IssueRequest request,List<MultipartFile> files,CustomUserDetails user) {
-        if(request==null||request.clientRequestId()==null||request.expectedVersion()==null||request.reason()==null||request.reason().isBlank()||request.reason().length()>5000)throw invalid();
+        if(request==null||request.clientRequestId()==null||request.expectedVersion()==null||request.reason()==null||request.reason().isBlank()||request.reason().length()>4800)throw invalid();
+        if(request.reasonCode()==null||request.reasonCode().isBlank()||request.reasonCode().length()>64)throw new AppException(ErrorCode.REPORT_REASON_INVALID);
         long actor=actors.actor(user).getId();String reason=request.reason().strip();
-        var prepared=images.prepare("ISSUE:"+claimId+":"+reason,files);var tx=new TransactionTemplate(transactions);
+        var prepared=images.prepare("ISSUE:"+claimId+":"+request.reasonCode()+":"+reason,files);var tx=new TransactionTemplate(transactions);
         Detail old=tx.execute(status->{Claim c=claim(claimId);participant(c,actor);if(c.getClaimant().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
             Detail retry=issueRetry(c,actor,request.clientRequestId(),prepared.hash());if(retry!=null)return retry;
-            requireIssue(c,handovers.findByClaimId(claimId).orElseThrow(this::changed),request.expectedVersion());return null;});
+            requireIssue(c,handovers.findByClaimId(claimId).orElseThrow(this::changed),request.expectedVersion());
+            reports.validateReason("HANDOVER_ISSUE",request.reasonCode(),reason);return null;});
         if(old!=null)return old;
         var uploaded=images.upload("handover-reports/"+claimId,prepared);boolean[] inserted={false};
         try {Detail result=tx.execute(status->{
@@ -110,7 +116,7 @@ public class P2pHandoverService {
             P2pHandover h=handovers.findByClaimId(claimId).orElseThrow(this::changed);em.refresh(h,LockModeType.PESSIMISTIC_WRITE);
             Detail retry=issueRetry(c,actor,request.clientRequestId(),prepared.hash());if(retry!=null)return retry;
             requireIssue(c,h,request.expectedVersion());
-            Report report=reports.insert(actor,"HANDOVER_ISSUE","CLAIM",claimId,reason,request.clientRequestId(),prepared.hash(),uploaded);inserted[0]=true;
+            Report report=reports.insert(actor,"HANDOVER_ISSUE","CLAIM",claimId,reason,request.reasonCode(),request.clientRequestId(),prepared.hash(),uploaded);inserted[0]=true;
             jdbc.update("insert into p2p_handover_issue(report_id,handover_id) values(?,?)",report.getId(),h.getId());
             h.reportIssue();c.touchWorkflow();activities.save(new ClaimActivity(c,em.find(Account.class,actor),"REPORT_ISSUE","APPROVED","Báo cáo sự cố #"+report.getId()));
             claims.flush();handovers.flush();conversations.notifyChanged(c);

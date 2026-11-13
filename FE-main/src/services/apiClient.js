@@ -1,4 +1,5 @@
 // src/services/apiClient.js
+import { prepareImageFormData } from '@/utils/imageUploads';
 const BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8080/api';
 
 class ApiClient {
@@ -37,6 +38,7 @@ class ApiClient {
     };
 
     try {
+      if (isMultipart) config.body = await prepareImageFormData(options.body);
       const response = await fetch(url, config);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

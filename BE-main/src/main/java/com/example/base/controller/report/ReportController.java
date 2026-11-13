@@ -12,8 +12,14 @@ import java.util.List;
 public class ReportController {
     private final ReportService service;
     @GetMapping("/mine")
-    public ResponseEntity<?> mine(@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="ALL") String status,@AuthenticationPrincipal CustomUserDetails user) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.mine(page,status,user)));
+    public ResponseEntity<?> mine(@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="ALL") String status,
+            @RequestParam(defaultValue="ALL") String type,@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.mine(page,status,type,user)));
+    }
+    @GetMapping("/reasons")
+    public ResponseEntity<?> reasons(@RequestParam String targetType,@RequestParam long targetId,
+            @RequestParam(defaultValue="false") boolean handoverIssue,@AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.reasonOptions(targetType,targetId,handoverIssue,user)));
     }
     @PostMapping(consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> create(@RequestPart("data") ReportService.Submit data,@RequestPart(value="images",required=false) List<MultipartFile> images,@AuthenticationPrincipal CustomUserDetails user) {

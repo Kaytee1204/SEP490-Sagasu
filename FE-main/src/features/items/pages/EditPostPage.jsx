@@ -5,6 +5,9 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { getPostForEdit, getPostCategories, updatePost } from '../api/postApi';
 import StepDetailsForm from '../components/post/StepDetailsForm';
 import '../../profile/pages/MyPostsPage.css';
+import useImageUploads from '@/hooks/useImageUploads';
+import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 
 function toVietnamInputs(value) {
   if (!value) return {date:'', time:''};
@@ -29,6 +32,7 @@ function Editor({ id, onReload, embedded = false, onClose, onSaved, onDirty, onB
   const [files,setFiles]=useState([]);
   const [error,setError]=useState('');
   const [saving,setSaving]=useState(false);
+  const {prepare,processing}=useImageUploads();
   const [saved,setSaved]=useState(null);
   const previews=useRef([]);
   const initialForm=useRef(null);
@@ -49,16 +53,21 @@ function Editor({ id, onReload, embedded = false, onClose, onSaved, onDirty, onB
   useEffect(()=>()=>previews.current.forEach(url=>URL.revokeObjectURL(url)),[]);
 
   useEffect(()=>{onDirty?.(Boolean(loaded && (JSON.stringify(form)!==initialForm.current || files.length || kept.length!==loaded.post.images.length)));},[form,files,kept,loaded,onDirty]);
-  useEffect(()=>{onBusy?.(saving);},[saving,onBusy]);
+  useEffect(()=>{onBusy?.(saving||processing);},[saving,processing,onBusy]);
   const Wrapper=embedded?'div':'main';
-  function upload(event) {
+  async function upload(event) {
     const added=Array.from(event.target.files||[]); event.target.value='';
+    if(saving||processing)return;
     if(kept.length+files.length+added.length>5){setError('Tổng ảnh cũ và mới tối đa 5 ảnh.');return;}
-    if(added.some(file=>!['image/jpeg','image/png'].includes(file.type)||!file.size||file.size>5*1024*1024)){
-      setError('Ảnh phải là JPG hoặc PNG, tối đa 5 MB/ảnh.');return;
+    setError('');
+    try {
+      const prepared=await prepare(added);
+      if(!prepared)return;
+      const next=prepared.map(file=>({file,preview:URL.createObjectURL(file)}));
+      previews.current.push(...next.map(item=>item.preview)); setFiles(current=>[...current,...next]);
+    } catch(problem) {
+      setError(problem.message);
     }
-    const next=added.map(file=>({file,preview:URL.createObjectURL(file)}));
-    previews.current.push(...next.map(item=>item.preview)); setFiles(current=>[...current,...next]); setError('');
   }
   function removeNew(index){
     URL.revokeObjectURL(files[index].preview);
@@ -66,7 +75,7 @@ function Editor({ id, onReload, embedded = false, onClose, onSaved, onDirty, onB
     setFiles(current=>current.filter((_,i)=>i!==index));
   }
   async function submit(event){
-    event.preventDefault(); if(inFlight.current)return;
+    event.preventDefault(); if(inFlight.current||processing)return;
     if(!form.itemName.trim()||!form.description.trim()||!form.location.trim()){
       setError('Vui lòng nhập đầy đủ thông tin.');return;
     }
@@ -93,7 +102,7 @@ function Editor({ id, onReload, embedded = false, onClose, onSaved, onDirty, onB
     {!embedded && <header className="my-posts-heading"><h1>Sửa bài đăng</h1><Link to={backUrl}>Về tin đăng của tôi</Link></header>}
     {error&&<div role="alert"><p>{error}</p>{!loaded && <button type="button" className="btn btn-ghost" disabled={saving} onClick={onReload}>Tải lại bài đăng</button>}</div>}
     {!loaded?!error&&<p role="status">Đang tải bài đăng…</p>:<form onSubmit={submit}>
-      <fieldset disabled={saving} style={{border:0,padding:0,minWidth:0}}>
+      <fieldset disabled={saving||processing} style={{border:0,padding:0,minWidth:0}}>
         <p>Bài phải còn mở và chưa bị ẩn để chỉnh sửa. Bài Found giao văn phòng trường và bài bị từ chối sẽ cần duyệt lại.</p>
         <div className="card" style={{padding:24,marginBlock:20}}>
           <StepDetailsForm formData={form} onChange={setForm} postType={loaded.post.postType.toLowerCase()}
@@ -102,7 +111,7 @@ function Editor({ id, onReload, embedded = false, onClose, onSaved, onDirty, onB
             <p role="alert">Danh mục cũ đã ngừng hoạt động. Vui lòng chọn danh mục khác.</p>}
         </div>
         <section className="card" style={{padding:24,marginBlock:20}}><h2>Ảnh bài đăng ({kept.length+files.length}/5)</h2>
-          <p>Có thể xóa ảnh cũ và thêm ảnh mới. Thay đổi chỉ áp dụng khi bấm “Lưu thay đổi”. JPG/PNG, tối đa 5 MB/ảnh.</p>
+          <p>Có thể xóa ảnh cũ và thêm ảnh mới. Thay đổi chỉ áp dụng khi bấm “Lưu thay đổi”. {IMAGE_FORMATS}, tối đa 5 MB/ảnh.</p>
           <div className="edit-post-images">
             {kept.map(image=><figure key={image.id}>{image.url?<img src={image.url} alt="Ảnh hiện có"/>:<span>Không tải được ảnh</span>}
               <button type="button" className="btn btn-ghost" onClick={()=>setKept(current=>current.filter(item=>item.id!==image.id))}>Xóa ảnh này</button></figure>)}
@@ -110,10 +119,11 @@ function Editor({ id, onReload, embedded = false, onClose, onSaved, onDirty, onB
               <button type="button" className="btn btn-ghost" onClick={()=>removeNew(index)}>Xóa ảnh mới {index+1}</button></figure>)}
           </div>
           <label className="input-label" htmlFor="edit-post-files">Thêm ảnh mới</label>
-          <input id="edit-post-files" type="file" accept="image/jpeg,image/png" multiple onChange={upload}/>
+          <input id="edit-post-files" type="file" accept={IMAGE_ACCEPT} disabled={saving||processing} multiple onChange={upload}/>
+          <ImageProcessingStatus active={processing}/>
         </section>
         {!embedded && <p>Ghi chú xác minh riêng tư (không bắt buộc) được quản lý tại <Link to={`/chi-tiet/${id}`}>trang chi tiết của bạn</Link>.</p>}
-        <div className="my-post-actions post-editor-actions"><button className="btn btn-primary" disabled={saving}>{saving?'Đang lưu…':'Lưu thay đổi'}</button>
+        <div className="my-post-actions post-editor-actions"><button className="btn btn-primary" disabled={saving||processing}>{processing?'Đang xử lý ảnh…':saving?'Đang lưu…':'Lưu thay đổi'}</button>
           {!saving&&(embedded ? <button type="button" className="btn btn-ghost" onClick={onClose}>Hủy</button> : <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Hủy</Link>)}</div>
       </fieldset>
     </form>}
