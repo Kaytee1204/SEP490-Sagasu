@@ -13,7 +13,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/storage-locations")
 @PreAuthorize("hasRole('APPROVER')")
-@Tag(name = "6. Receipt Storage Locations", description = "Danh mục kho và vị trí lưu trữ tài sản tiếp nhận")
+@Tag(
+        name = "09. Office Intake & Storage - Tiếp nhận tại quầy & Kho lưu trữ",
+        description = "Lập phiếu nháp biên bản tiếp nhận tại quầy (Walk-in), Cập nhật, Hoàn tất lưu kho & đăng bài Found, Tra cứu vị trí kho (APPROVER)"
+)
 public class ReceiptLocationController {
     private final ReceiptLocationService service;
 
@@ -22,8 +25,10 @@ public class ReceiptLocationController {
     }
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách các kho / vị trí lưu trữ đang hoạt động",
-            description = "Dành cho Cán bộ tiếp nhận (APPROVER) lựa chọn vị trí kho lưu đồ khi lập hoặc cập nhật biên bản tiếp nhận.")
+    @Operation(
+            summary = "[9.6] Lấy danh sách các kho / kệ lưu trữ đang hoạt động (is_active = true)",
+            description = "Dành cho Cán bộ tiếp nhận (APPROVER) lựa chọn vị trí kho lưu đồ khi lập hoặc hoàn tất biên bản tiếp nhận."
+    )
     public ResponseEntity<ApiResponse<List<ReceiptLocationService.Option>>> options() {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.options()));
     }

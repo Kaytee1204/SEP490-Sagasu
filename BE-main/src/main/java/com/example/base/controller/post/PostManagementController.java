@@ -21,7 +21,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/posts")
 @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-@Tag(name = "4. My Posts & Post Management", description = "Quản lý bài viết của tôi (Danh sách bài của tôi, Lấy form sửa, Cập nhật bài, Xóa mềm bài)")
+@Tag(
+        name = "05. My Posts - Quản lý bài đăng cá nhân",
+        description = "Danh sách bài đăng của tôi, Lấy dữ liệu sửa bài, Cập nhật bài đăng, Gửi yêu cầu giao đồ cho văn phòng và Xóa mềm bài đăng"
+)
 public class PostManagementController {
     private final PostManagementService management;
 
@@ -30,8 +33,10 @@ public class PostManagementController {
     }
 
     @GetMapping("/mine")
-    @Operation(summary = "UC18: Bài do tài khoản hiện tại đăng, kèm trạng thái và quyền thao tác",
-            description = "Trả về danh sách bài đăng của chính tài khoản hiện tại, có phân trang và lọc (ALL, LOST, FOUND, PENDING, REJECTED...).")
+    @Operation(
+            summary = "[5.1] UC18: Danh sách bài đăng của tôi (kèm trạng thái và quyền thao tác)",
+            description = "Trả về danh sách bài đăng do tài khoản hiện tại tạo, hỗ trợ phân trang và lọc (ALL, LOST, FOUND, PENDING, REJECTED...)."
+    )
     public ResponseEntity<ApiResponse<MyPostPageDto>> mine(
             @RequestParam(defaultValue="1") String page,
             @RequestParam(defaultValue="12") String size,
@@ -42,7 +47,10 @@ public class PostManagementController {
     }
 
     @GetMapping("/{id}/edit")
-    @Operation(summary = "UC19: Lấy dữ liệu cho form sửa bài của chính mình")
+    @Operation(
+            summary = "[5.2] UC19: Lấy dữ liệu chi tiết để hiển thị lên form Sửa bài đăng của tôi",
+            description = "Chỉ chủ sở hữu bài đăng mới được lấy dữ liệu sửa bài."
+    )
     public ResponseEntity<ApiResponse<EditPostDto>> edit(
             @PathVariable long id,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
@@ -50,7 +58,10 @@ public class PostManagementController {
     }
 
     @PutMapping(value="/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "UC19: Sửa bài của chính mình; kiểm tra lại sau khi khóa bản ghi")
+    @Operation(
+            summary = "[5.3] UC19: Cập nhật nội dung và hình ảnh bài đăng của chính mình",
+            description = "Cập nhật thông tin bài đăng (data dạng JSON) và danh sách ảnh mới (images, tùy chọn)."
+    )
     public ResponseEntity<ApiResponse<CreatedPostDto>> update(
             @PathVariable long id,
             @Parameter(description = "Dữ liệu cập nhật bài đăng dạng JSON") @Valid @RequestPart("data") UpdatePostRequest request,
@@ -60,14 +71,21 @@ public class PostManagementController {
     }
 
     @PostMapping("/{id}/office-handover")
-    @Operation(summary = "Chủ bài gửi yêu cầu giao đồ cho bên tiếp nhận sau khi đăng Found P2P; không đặt lịch")
-    public ResponseEntity<ApiResponse<CreatedPostDto>> requestOfficeHandover(@PathVariable long id,
-            @AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[5.4] Chủ bài gửi yêu cầu bàn giao đồ nhặt được (Found P2P) cho Văn phòng lưu giữ",
+            description = "Tạo yêu cầu chuyển giao tài sản (office_transfer = PENDING) từ người nhặt sang Văn phòng tiếp nhận."
+    )
+    public ResponseEntity<ApiResponse<CreatedPostDto>> requestOfficeHandover(
+            @PathVariable long id,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return noStore(management.requestOfficeHandover(id, user));
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "UC20: Xóa mềm bài, giữ lịch sử và lý do")
+    @Operation(
+            summary = "[5.5] UC20: Xóa mềm bài đăng của tôi kèm lý do xóa",
+            description = "Đánh dấu xóa mềm bài đăng (deleted_at) và lưu lại lý do xóa (deletion_reason)."
+    )
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable long id,
             @Valid @RequestBody DeletePostRequest request,

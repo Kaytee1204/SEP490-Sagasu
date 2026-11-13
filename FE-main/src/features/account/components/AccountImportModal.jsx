@@ -82,6 +82,8 @@ export default function AccountImportModal({
             background: '#f0fdfa',
             border: '1px solid #ccfbf1',
             display: 'flex',
+            flexWrap: 'wrap',
+            gap: '10px',
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '16px',

@@ -370,7 +370,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_email') {
     return (
-      <div style={cardContainerStyle}>
+      <div className="auth-card-container" style={cardContainerStyle}>
         <div style={{ textAlign: 'center', marginBottom: '26px' }}>
           <div
             style={{
@@ -475,7 +475,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_otp') {
     return (
-      <div style={cardContainerStyle}>
+      <div className="auth-card-container" style={cardContainerStyle}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <div
             style={{
@@ -609,7 +609,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'forgot_new_password') {
     return (
-      <div style={cardContainerStyle}>
+      <div className="auth-card-container" style={cardContainerStyle}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <div
             style={{
@@ -754,7 +754,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   // ═════════════════════════════════════════════════════════════════════
   if (mode === 'otp') {
     return (
-      <div style={cardContainerStyle}>
+      <div className="auth-card-container" style={cardContainerStyle}>
         <div style={{ textAlign: 'center', marginBottom: '26px' }}>
           <div
             style={{
@@ -889,7 +889,7 @@ export default function LoginForm({ initialMode = 'login' }) {
   // Chỉ hiển thị hộp thông báo chữ đỏ trực tiếp trên form
   // ═════════════════════════════════════════════════════════════════════
   return (
-    <div style={cardContainerStyle}>
+    <div className="auth-card-container" style={cardContainerStyle}>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
         <h1

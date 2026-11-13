@@ -25,9 +25,9 @@ export default function AccountFilterBar({
         justifyContent: 'space-between',
       }}
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', flex: 1 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', flex: 1, minWidth: 0 }}>
         {/* Search by Email or Name */}
-        <div style={{ position: 'relative', minWidth: '280px', flex: '1 1 280px', maxWidth: '380px' }}>
+        <div style={{ position: 'relative', minWidth: 'min(260px, 100%)', flex: '1 1 240px', maxWidth: '380px' }}>
           <Search
             size={15}
             style={{
