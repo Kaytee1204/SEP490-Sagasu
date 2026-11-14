@@ -1,38 +1,27 @@
-import React from 'react';
-import { Search } from 'lucide-react';
-
-export default function MyPostsFilterBar({ query, onChangeQuery, filter, onSelectFilter, filters }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: '16px', flexWrap: 'wrap', marginBottom: '24px',
-    }}>
-      {/* Filter chips */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        {filters.map(f => (
-          <button
-            key={f.key}
-            type="button"
-            className={`chip ${filter === f.key ? 'active' : ''}`}
-            onClick={() => onSelectFilter(f.key)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Search box */}
-      <div style={{ position: 'relative', minWidth: '220px' }}>
-        <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-        <input
-          type="text"
-          className="input"
-          placeholder="Tìm bài đăng..."
-          value={query}
-          onChange={e => onChangeQuery(e.target.value)}
-          style={{ paddingLeft: '34px', height: '36px', fontSize: '0.8125rem' }}
-        />
+export default function MyPostsFilterBar({ filter, onSelectFilter, filters, postType, postTypes, onSelectPostType }) {
+  return <div className="my-posts-filter-panel">
+    <div className="my-posts-filter-row my-posts-type-row">
+      <span className="my-posts-filter-label">Loại bài</span>
+      <div className="my-post-type-tabs" role="group" aria-label="Lọc loại bài đăng">
+        {postTypes.map(option => {
+          const Icon = option.icon;
+          return <button key={option.key} type="button" data-type={option.key}
+            className={postType === option.key ? 'active' : ''} aria-pressed={postType === option.key}
+            onClick={() => onSelectPostType(option.key)}><Icon size={16} aria-hidden="true" />{option.label}</button>;
+        })}
       </div>
     </div>
-  );
+    <div className="my-posts-filter-row">
+      <span className="my-posts-filter-label">Trạng thái</span>
+      <div className="my-posts-filters" role="group" aria-label="Lọc trạng thái bài đăng">
+        {filters.map(option => {
+          const Icon = option.icon;
+          return <button key={option.key} type="button" className={filter === option.key ? 'active' : ''}
+            aria-pressed={filter === option.key} onClick={() => onSelectFilter(option.key)}>
+            <Icon size={16} aria-hidden="true" />{option.label}
+          </button>;
+        })}
+      </div>
+    </div>
+  </div>;
 }

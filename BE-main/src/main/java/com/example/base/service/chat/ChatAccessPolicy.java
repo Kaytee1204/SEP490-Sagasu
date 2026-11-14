@@ -36,7 +36,7 @@ public class ChatAccessPolicy {
         Claim claim = conversation.getLatestClaim();
         if (!Objects.equals(claim.getPost().getId(), conversation.getPost().getId())
                 || !Objects.equals(claim.getClaimant().getId(), conversation.getClaimant().getId())
-                || !eligible(claim)) return "Claim hoặc bài đăng không còn cho phép gửi tin. Bạn vẫn có thể xem lịch sử.";
+                || !eligible(claim)) return "Yêu cầu nhận đồ hoặc bài đăng không còn cho phép gửi tin. Bạn vẫn có thể xem lịch sử.";
         if (!active(conversation.getClaimant()) || !active(conversation.getPost().getAccount()))
             return "Một tài khoản hiện không thể tham gia trò chuyện. Lịch sử vẫn được giữ.";
         return null;

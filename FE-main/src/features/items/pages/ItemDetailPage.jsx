@@ -2,7 +2,7 @@ import { postClaimsPath } from '@/features/claims/claimUtils';
 import '@/features/workspace/Workspace.css';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, UserRound, MapPin, SearchCheck, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronRight, CircleCheck, ClipboardList, MapPin, Pencil, SearchCheck, UserRound } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
 import { EditPostDialog } from './EditPostPage';
@@ -11,7 +11,6 @@ import { claimDetailPath, canSubmitPostClaim, postClaimType } from '@/features/c
 import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
-import PrivateIdentifiersEditor from '../components/detail/PrivateIdentifiersEditor';
 import OfficeHandoverAction from '../components/detail/OfficeHandoverAction';
 import SmartMatchModal from '../components/detail/SmartMatchModal';
 import { useAuth } from '@/context/AuthContext';
@@ -20,7 +19,6 @@ import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import ReportButton from '@/features/reports/ReportButton';
 
 const STATUS_LABELS = {
-  OPEN: 'Đang tìm / chờ nhận',
   RESERVED: 'Đang xử lý nhận đồ',
   RETURNED: 'Đã trao trả',
   CLOSED: 'Đã đóng',
@@ -115,6 +113,16 @@ function PostDetail({ id, onRetry }) {
   };
   const images = (post.images || []).map(image => imageUrl(image.url)).filter(Boolean);
   const canUseSmartMatch = post.postType === 'LOST' && (post.canEditOwnPost || isAdmin || isManager);
+  const isOwnPost = post.isOwner || post.canEditOwnPost;
+  const isFinished = ['RETURNED', 'CLOSED'].includes(post.status);
+  const canViewClaims = post.postType === 'FOUND' && (isOwnPost || (isApprover && post.officeReceipt));
+  const canChat = post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
+    && post.moderationStatus === 'VISIBLE' && post.status === 'RESERVED'
+    && (post.canEditOwnPost || current.myClaim?.status === 'APPROVED');
+  const openStatusLabel = post.postType === 'LOST' ? 'Đang tìm đồ' : 'Đang chờ chủ sở hữu';
+  const statusLabel = post.status === 'OPEN'
+    ? openStatusLabel
+    : STATUS_LABELS[post.status] || post.status;
 
   return (
     <main className="post-detail-page">
@@ -127,123 +135,90 @@ function PostDetail({ id, onRetry }) {
         <span>{post.title}</span>
       </nav>
       <div className="container post-detail-grid">
-        <ItemGallery images={images} title={item.title} type={item.type}
-          activeImage={activeImage} onSelectImage={setActiveImage} />
+        <div className="post-detail-media">
+          <ItemGallery images={images} title={item.title}
+            activeImage={activeImage} onSelectImage={setActiveImage} />
+          <ItemCharacteristics description={post.description} />
+        </div>
         <section className="post-detail-info" aria-label="Thông tin bài đăng">
-          <ItemInfoSection item={item} />
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="flex items-center gap-2 text-sm text-slate-600">
-              <UserRound size={17} aria-hidden="true" />Người đăng: <strong className="text-slate-800">{post.authorName || 'Chưa cập nhật tên'}</strong>
-            </p>
-            <OfficeReceiptBadge receipt={post.officeReceipt} />
+          <div className="post-detail-card post-detail-summary">
+            <ItemInfoSection item={item} />
+            <div className="post-detail-author">
+              <span className="post-detail-author-icon"><UserRound size={19} aria-hidden="true" /></span>
+              <div><span>Người đăng</span><strong>{post.authorName || 'Chưa cập nhật tên'}</strong></div>
+              <OfficeReceiptBadge receipt={post.officeReceipt} />
+            </div>
+
+            <div className="post-detail-state" data-status={post.status}>
+              <span>{post.status === 'RETURNED' && <CircleCheck size={17} aria-hidden="true" />}{statusLabel}</span>
+              {isFinished && <p>{post.status === 'RETURNED' ? 'Món đồ đã được trao trả.' : 'Bài đăng đã ngừng nhận yêu cầu mới.'}</p>}
+              {post.postType === 'FOUND' && !post.officeReceipt && !isFinished && <p>
+                {post.custodyMode === 'OFFICE'
+                  ? 'Đang chờ văn phòng xác nhận tiếp nhận đồ.'
+                  : 'Người nhặt đang giữ đồ và trực tiếp trao trả.'}
+              </p>}
+            </div>
+
+            {post.moderationStatus === 'PENDING' && <p className="post-detail-notice" role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
+            {editNotice && <p className="post-detail-notice" role="status">{editNotice}</p>}
+
+            <div className="post-detail-actions">
+              {canUseSmartMatch && (
+                <button type="button" className="btn btn-accent" onClick={() => setShowSmartMatch(true)}>
+                  <SearchCheck size={18} aria-hidden="true" />
+                  <span>Tìm đồ vật trùng khớp</span>
+                </button>
+              )}
+
+              {!isOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
+                <Link to={`/van-phong/xac-minh/${post.id}`} className="btn btn-accent">
+                  <span>Xác minh nhận đồ tại văn phòng</span>
+                  <ArrowRight size={17} aria-hidden="true" />
+                </Link>
+              )}
+
+              {!isOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
+                <Link
+                  to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
+                  className="btn btn-accent"
+                >
+                  <span>{current.myClaim ? 'Theo dõi yêu cầu của tôi' : postClaimType(post) === 'OFFICE' ? 'Gửi yêu cầu nhận đồ cho phòng ban' : 'Đây là đồ của tôi'}</span>
+                  <ArrowRight size={17} aria-hidden="true" />
+                </Link>
+              )}
+              {canViewClaims && <Link className={`btn ${isFinished ? 'btn-ghost' : 'btn-accent'}`}
+                to={post.officeReceipt && isApprover ? '/approver/office-claims' : postClaimsPath(post.id)}>
+                <ClipboardList size={18} aria-hidden="true" />{isFinished ? 'Xem yêu cầu nhận đồ' : 'Xét duyệt yêu cầu nhận đồ'}
+              </Link>}
+              {canChat && <OpenChatButton postId={post.id} className="btn btn-ghost" />}
+            </div>
+
+            {isOwnPost && <div className="post-detail-manage-actions">
+              {post.canEditOwnPost ? <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(true)}>
+                <Pencil size={16} aria-hidden="true" />Sửa bài đăng
+              </button> : <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng</Link>}
+              {post.postType === 'FOUND' && <div className="post-detail-office-action">
+                <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
+              </div>}
+            </div>}
           </div>
 
-          {/* Action & Smart Match Buttons */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '14px', marginBottom: '14px' }}>
-            {canUseSmartMatch && (
-            <button
-              type="button"
-              onClick={() => setShowSmartMatch(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '9.5px 18px',
-                borderRadius: '8px',
-                border: '1px solid #0d9488',
-                background: '#f0fdfa',
-                color: '#0f766e',
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                transition: 'background 150ms',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = '#e6fffa')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = '#f0fdfa')}
-            >
-              <SearchCheck size={18} />
-              <span>Tìm đồ vật trùng khớp</span>
-            </button>
-            )}
-
-            {!post.isOwner && !post.canEditOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
-              <Link
-                to={`/van-phong/xac-minh/${post.id}`}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '9.5px 18px',
-                  borderRadius: '8px',
-                  border: '1px solid #0d9488',
-                  background: '#0d9488',
-                  color: '#ffffff',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  textDecoration: 'none',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                }}
-              >
-                <span>Xác minh nhận đồ tại văn phòng</span>
-                <ArrowRight size={15} />
-              </Link>
-            )}
-
-            {!post.isOwner && !post.canEditOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
-              <Link
-                to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '9.5px 18px',
-                  borderRadius: '8px',
-                  border: '1px solid #2563eb',
-                  background: '#2563eb',
-                  color: '#ffffff',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  textDecoration: 'none',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                }}
-              >
-                <span>{current.myClaim ? 'Theo dõi yêu cầu của tôi' : postClaimType(post) === 'OFFICE' ? 'Gửi yêu cầu nhận đồ cho phòng ban' : 'Đây là đồ của tôi'}</span>
-                <ArrowRight size={15} />
-              </Link>
-            )}
-          </div>
-
-          {post.postType === 'FOUND' && ((post.isOwner || post.canEditOwnPost) || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={post.officeReceipt && isApprover ? '/approver/office-claims' : postClaimsPath(post.id)}>Xét duyệt yêu cầu nhận đồ</Link>}
-          <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
-          {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
-            && post.moderationStatus === 'VISIBLE'
-            && post.status === 'RESERVED' && (post.canEditOwnPost || current.myClaim?.status === 'APPROVED')
-            && <OpenChatButton postId={post.id} />}
-
-          {post.officeReceipt && <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-label="Thông tin văn phòng tiếp nhận">
-            <h2 className="flex items-center gap-2 font-semibold text-blue-950"><MapPin size={19} />{post.officeReceipt.status === 'RETURNED' ? 'Tài sản đã được trao trả' : 'Tài sản đang được văn phòng lưu giữ'}</h2>
-            <dl className="space-y-3 text-sm leading-6"><div><dt className="text-slate-600">{post.officeReceipt.status === 'RETURNED' ? 'Nơi lưu trữ trước khi trao trả' : 'Nơi lưu trữ'}</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.storageLocationName || 'Liên hệ văn phòng tiếp nhận'}</dd></div><div><dt className="text-slate-600">Cán bộ tiếp nhận</dt><dd className="font-semibold text-slate-900">{post.officeReceipt.receivedBy || 'Chưa cập nhật tên'}</dd></div><div><dt className="text-slate-600">Thời điểm tiếp nhận</dt><dd className="font-semibold text-slate-900">{new Date(post.officeReceipt.receivedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</dd></div></dl>
+          {post.officeReceipt && <section className="post-detail-card post-detail-office" aria-label="Thông tin văn phòng tiếp nhận">
+            <h2><MapPin size={19} aria-hidden="true" />{post.officeReceipt.status === 'RETURNED' ? 'Văn phòng đã trao trả đồ' : 'Đồ đang được văn phòng lưu giữ'}</h2>
+            <dl>
+              <div><dt>{post.officeReceipt.status === 'RETURNED' ? 'Nơi lưu trữ trước khi trao trả' : 'Nơi lưu trữ'}</dt><dd>{post.officeReceipt.storageLocationName || 'Liên hệ văn phòng tiếp nhận'}</dd></div>
+              <div><dt>Cán bộ tiếp nhận</dt><dd>{post.officeReceipt.receivedBy || 'Chưa cập nhật tên'}</dd></div>
+              <div><dt>Thời điểm văn phòng nhận đồ</dt><dd>{new Date(post.officeReceipt.receivedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</dd></div>
+            </dl>
           </section>}
-          {editNotice && <p role="status">{editNotice}</p>}
+
+          {!isOwnPost && <div className="post-detail-report"><ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" /></div>}
+
           {editOpen && <EditPostDialog id={post.id} onClose={() => setEditOpen(false)} onSaved={() => {
             setEditOpen(false); setEditNotice('Đã lưu thay đổi.');
             getPostDetail(post.id).then(updated => {setResult(current => ({...current, post:updated}));setActiveImage(0);})
               .catch(() => setEditNotice('Đã lưu bài. Hãy tải lại trang để xem nội dung mới.'));
           }} />}
-          {post.canEditOwnPost ? <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(true)}>Sửa bài đăng</button>
-            : post.isOwner && <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng của tôi</Link>}
-          {post.moderationStatus === 'PENDING' && <p role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
-          <div><strong>Trạng thái: </strong>{STATUS_LABELS[post.status] || post.status}</div>
-          {post.postType === 'FOUND' && !post.officeReceipt && <div>
-            <strong>Hình thức trao trả: </strong>
-            {post.custodyMode === 'OFFICE'
-              ? 'Đã gửi yêu cầu giao cho bên tiếp nhận; chưa xác nhận đã bàn giao đồ.'
-              : 'Người nhặt chọn tự giữ để trao trả.'}
-          </div>}
-          <ItemCharacteristics description={post.description} />
-          {!post.isOwner && !post.canEditOwnPost && <ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" />}
-          {post.canEditOwnPost && <details className="workflow-disclosure"><summary>Ghi chú xác minh riêng tư</summary><PrivateIdentifiersEditor key={post.id} postId={post.id} /></details>}
         </section>
       </div>
 

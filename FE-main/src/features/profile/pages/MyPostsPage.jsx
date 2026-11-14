@@ -1,83 +1,93 @@
 import '@/features/workspace/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ArrowDownWideNarrow, CircleCheck, CircleX, Clock3, Eye, EyeOff, Layers3, ListFilter, PackageOpen, Search, TriangleAlert, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getMyPosts, deletePost } from '@/features/items/api/postApi';
 import Pagination from '@/components/common/Pagination';
 import MyPostCard from '../components/MyPostCard';
 import { EditPostDialog } from '@/features/items/pages/EditPostPage';
 import MyPostsEmptyState from '../components/MyPostsEmptyState';
+import MyPostsFilterBar from '../components/MyPostsFilterBar';
 import './MyPostsPage.css';
 
-const FILTERS = [['ALL', 'Tất cả'], ['VISIBLE', 'Đang hiển thị'], ['PENDING', 'Chờ duyệt'],
-['REJECTED', 'Bị từ chối'], ['HIDDEN', 'Bị ẩn']];
-const VALID_FILTERS = new Set(FILTERS.map(([key]) => key));
+const FILTERS = [
+  { key: 'ALL', label: 'Tất cả', icon: ListFilter },
+  { key: 'VISIBLE', label: 'Đang hiển thị', icon: Eye },
+  { key: 'PENDING', label: 'Chờ duyệt', icon: Clock3 },
+  { key: 'REJECTED', label: 'Bị từ chối', icon: CircleX },
+  { key: 'HIDDEN', label: 'Bị ẩn', icon: EyeOff },
+];
+const VALID_FILTERS = new Set(FILTERS.map(option => option.key));
+const POST_TYPES = [
+  { key: 'ALL', label: 'Tất cả', icon: Layers3 },
+  { key: 'LOST', label: 'Mất đồ', icon: Search },
+  { key: 'FOUND', label: 'Nhặt được', icon: PackageOpen },
+];
+const VALID_POST_TYPES = new Set(POST_TYPES.map(option => option.key));
 const STORAGE_KEY = 'sagasu_my_posts_state';
 
 function readSavedMyPostsState() {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return { page: 1, filter: 'ALL' };
+    if (!raw) return { page: 1, filter: 'ALL', postType: 'ALL' };
     const parsed = JSON.parse(raw);
     const page = Number.isInteger(parsed?.page) && parsed.page >= 1 ? parsed.page : 1;
     const filter = VALID_FILTERS.has(parsed?.filter) ? parsed.filter : 'ALL';
-    return { page, filter };
+    const postType = VALID_POST_TYPES.has(parsed?.postType) ? parsed.postType : 'ALL';
+    return { page, filter, postType };
   } catch {
-    return { page: 1, filter: 'ALL' };
+    return { page: 1, filter: 'ALL', postType: 'ALL' };
   }
 }
 
 export default function MyPostsPage({ embedded = false }) {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const saved = readSavedMyPostsState();
+  const [saved] = useState(readSavedMyPostsState);
+  const [attempt, setAttempt] = useState(0);
+  const hasUrlState = ['page', 'filter', 'postType'].some(key => searchParams.has(key));
+  const defaults = hasUrlState ? { page: 1, filter: 'ALL', postType: 'ALL' } : saved;
 
   const rawUrlPage = searchParams.get('page');
-  const urlPage = rawUrlPage && /^[1-9]\d*$/.test(rawUrlPage) ? Number(rawUrlPage) : null;
+  const page = rawUrlPage && /^[1-9]\d*$/.test(rawUrlPage) && Number.isSafeInteger(Number(rawUrlPage))
+    ? Number(rawUrlPage) : defaults.page;
   const rawUrlFilter = searchParams.get('filter');
-  const urlFilter = rawUrlFilter && VALID_FILTERS.has(rawUrlFilter) ? rawUrlFilter : null;
+  const filter = VALID_FILTERS.has(rawUrlFilter) ? rawUrlFilter : defaults.filter;
+  const rawUrlPostType = searchParams.get('postType');
+  const postType = VALID_POST_TYPES.has(rawUrlPostType) ? rawUrlPostType : defaults.postType;
 
-  const [page, setPageState] = useState(() => urlPage ?? saved.page);
-  const [filter, setFilterState] = useState(() => urlFilter ?? saved.filter);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    if (urlPage !== null) setPageState(urlPage);
-    if (urlFilter !== null) setFilterState(urlFilter);
-  }, [urlPage, urlFilter]);
-
-  const syncState = (nextPage, nextFilter) => {
-    setPageState(nextPage);
-    setFilterState(nextFilter);
+  const syncState = (nextPage, nextFilter, nextPostType) => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ page: nextPage, filter: nextFilter }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ page: nextPage, filter: nextFilter, postType: nextPostType }));
     } catch { /* ignore storage quota errors */ }
     const updated = new URLSearchParams(searchParams);
     if (nextPage <= 1) updated.delete('page');
     else updated.set('page', String(nextPage));
     if (nextFilter === 'ALL') updated.delete('filter');
     else updated.set('filter', nextFilter);
+    // Keep the type explicit so selecting "Tất cả" overrides a saved filter on reload.
+    updated.set('postType', nextPostType);
     setSearchParams(updated, { replace: true });
   };
 
-  const handlePageChange = (nextPage) => syncState(nextPage, filter);
-  const handleFilterChange = (nextFilter) => syncState(1, nextFilter);
+  const handlePageChange = (nextPage) => syncState(nextPage, filter, postType);
+  const handleFilterChange = (nextFilter) => syncState(1, nextFilter, postType);
+  const handlePostTypeChange = (nextPostType) => syncState(1, filter, nextPostType);
 
   const Wrapper = embedded ? 'section' : 'main';
-  return <Wrapper className={`my-posts-page ${embedded ? 'my-posts-embedded' : 'container'}`}
+  return <Wrapper className={`my-posts-page my-posts-dashboard ${embedded ? 'my-posts-embedded' : 'container'}`}
     aria-label={embedded ? 'Tin đăng của tôi' : undefined}>
 
     {!embedded && <header className="my-posts-heading"><h1>Tin đăng của tôi</h1></header>}
-    <div className="my-posts-filters" aria-label="Lọc trạng thái bài đăng">
-      {FILTERS.map(([key, label]) => <button key={key} className={`chip ${filter === key ? 'active' : ''}`}
-        aria-pressed={filter === key} onClick={() => handleFilterChange(key)}>{label}</button>)}
-    </div>
-    <MyPostList key={`${user?.id}:${page}:${filter}:${attempt}`} page={page} filter={filter} onPage={handlePageChange}
-      onReload={() => setAttempt(n => n + 1)} />
+    <MyPostsFilterBar filter={filter} filters={FILTERS} onSelectFilter={handleFilterChange}
+      postType={postType} postTypes={POST_TYPES} onSelectPostType={handlePostTypeChange} />
+    <MyPostList key={`${user?.id}:${page}:${filter}:${postType}:${attempt}`} page={page} filter={filter} postType={postType} onPage={handlePageChange}
+      onReload={() => setAttempt(n => n + 1)} onResetFilter={() => syncState(1, 'ALL', 'ALL')} />
   </Wrapper>;
 }
 
-function MyPostList({ page, filter, onPage, onReload }) {
+function MyPostList({ page, filter, postType, onPage, onReload, onResetFilter }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -85,32 +95,39 @@ function MyPostList({ page, filter, onPage, onReload }) {
   const [postToEdit, setPostToEdit] = useState(null);
   useEffect(() => {
     let cancelled = false;
-    getMyPosts(page, filter).then(data => { if (!cancelled) setResult(data); })
+    getMyPosts(page, filter, postType).then(data => { if (!cancelled) setResult(data); })
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [page, filter]);
+  }, [page, filter, postType]);
 
   async function afterDelete() {
-    setPostToDelete(null); setNotice('Đã ẩn bài đăng. Dữ liệu lịch sử vẫn được giữ.');
+    setPostToDelete(null); setNotice('Đã ẩn bài đăng.');
     try {
-      const data = await getMyPosts(page, filter);
+      const data = await getMyPosts(page, filter, postType);
       if (!data.content.length && page > 1) onPage(page - 1);
       else setResult(data);
     } catch (err) { setError(err.message); }
   }
 
   return <>
-    {notice && <p role="status">{notice}</p>}
-    {error ? <div role="alert"><p>{error}</p><button className="btn btn-ghost" onClick={onReload}>Tải lại</button></div>
-      : !result ? <p role="status">Đang tải bài đăng…</p> : <>
-        <p>{result.totalElements} bài đăng</p>
-        {result.content.length ? result.content.map(post => <MyPostCard key={`${post.id}:${post.updatedAt}`} post={post}
-          onDelete={setPostToDelete} onEdit={setPostToEdit} />) : <MyPostsEmptyState />}
-        <Pagination currentPage={page} totalPages={result.totalPages} onPageChange={onPage} />
+    {notice && <div className="my-posts-notice" role="status"><CircleCheck size={18} aria-hidden="true" /><span>{notice}</span>
+      <button type="button" aria-label="Đóng thông báo" onClick={() => setNotice('')}><X size={17} aria-hidden="true" /></button>
+    </div>}
+    {error ? <div className="my-posts-error" role="alert"><TriangleAlert size={24} aria-hidden="true" /><div><h2>Chưa tải được bài đăng</h2><p>{error}</p></div>
+      <button type="button" className="btn btn-ghost" onClick={onReload}>Thử lại</button></div>
+      : !result ? <div className="my-posts-loading" role="status"><span>Đang tải bài đăng…</span>
+        {[0, 1, 2].map(index => <div className="my-post-skeleton" key={index} aria-hidden="true"><span /><div><i /><i /><i /></div></div>)}
+      </div> : <>
+        <div className="my-posts-results-heading"><h2 aria-live="polite">{result.totalElements} {postType === 'LOST' ? 'bài mất đồ' : postType === 'FOUND' ? 'bài nhặt được' : 'bài đăng'}</h2>
+          <span><ArrowDownWideNarrow size={15} aria-hidden="true" />Mới nhất trước</span>
+        </div>
+        {result.content.length ? <div className="my-post-list">{result.content.map(post => <MyPostCard key={`${post.id}:${post.updatedAt}`} post={post}
+          onDelete={setPostToDelete} onEdit={setPostToEdit} />)}</div> : <MyPostsEmptyState filter={filter} postType={postType} onReset={onResetFilter} />}
+        <Pagination className="my-posts-pagination" currentPage={page} totalPages={result.totalPages} onPageChange={onPage} />
       </>}
     {postToEdit && <EditPostDialog id={postToEdit.id} onClose={() => setPostToEdit(null)} onSaved={() => {
       setPostToEdit(null); setNotice('Đã cập nhật bài đăng.');
-      getMyPosts(page, filter).then(data => {if (!data.content.length && page > 1) onPage(page - 1); else setResult(data);}).catch(err => setError(err.message));
+      getMyPosts(page, filter, postType).then(data => {if (!data.content.length && page > 1) onPage(page - 1); else setResult(data);}).catch(err => setError(err.message));
     }} />}
     {postToDelete && <DeletePostDialog post={postToDelete} onCancel={() => setPostToDelete(null)} onSuccess={afterDelete} />}
   </>;
@@ -138,18 +155,22 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
     catch (err) { setError(err.message); setBusy(false); inFlight.current = false; }
   }
   return <dialog ref={dialog} aria-labelledby="delete-post-title" className="card my-post-dialog" onCancel={event => { event.preventDefault(); close(); }}>
-      <h2 id="delete-post-title">Ẩn bài đăng: {post.title}</h2>
-      <p>Bài sẽ không còn xuất hiện trong danh sách và trang chi tiết. Hệ thống giữ dữ liệu lịch sử.</p>
-      <form onSubmit={submit}>
+      <header className="my-post-hide-heading"><span><EyeOff size={21} aria-hidden="true" /></span><h2 id="delete-post-title">Ẩn bài đăng?</h2>
+        <button type="button" aria-label="Đóng cửa sổ ẩn bài đăng" disabled={busy} onClick={close}><X size={20} aria-hidden="true" /></button>
+      </header>
+      <div className="my-post-hide-context"><strong>{post.title}</strong><span>{post.categoryName}</span></div>
+      <p>Bài đăng sẽ ngừng hiển thị công khai. Dữ liệu và lịch sử xử lý vẫn được giữ.</p>
+      <form className="my-post-hide-form" onSubmit={submit}>
         <label htmlFor="deletion-reason" className="input-label">Lý do ẩn bài *</label>
         <textarea id="deletion-reason" className="input" required maxLength={1000} rows={4}
+          placeholder="Nhập lý do bạn muốn ẩn bài đăng…"
           value={reason} disabled={busy} onChange={e => { setReason(e.target.value); setDiscard(false); }} />
-        {error && <p role="alert">{error}</p>}
-        {discard ? <div role="alert"><p>Bỏ lý do đang nhập và giữ bài đăng?</p><div className="my-post-actions">
-          <button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>Bỏ nội dung và đóng</button></div></div> :
-        <div className="my-post-actions"><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ bài</button>
-          <button className="btn btn-primary" disabled={busy}>{busy ? 'Đang xử lý…' : 'Ẩn bài đăng'}</button></div>}
+        {error && <p className="my-post-hide-error" role="alert">{error}</p>}
+        {discard ? <div className="my-post-hide-discard" role="alert"><p>Bỏ lý do đang nhập và giữ bài đăng?</p><footer>
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>Bỏ nội dung và đóng</button>
+          <button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button></footer></div> :
+        <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ bài đăng</button>
+          <button className="btn btn-primary" disabled={busy}><EyeOff size={16} aria-hidden="true" />{busy ? 'Đang ẩn…' : 'Ẩn bài đăng'}</button></footer>}
       </form>
   </dialog>;
 }

@@ -38,12 +38,19 @@ public interface PostRepository extends JpaRepository<Post, Long>, org.springfra
     @Query(value = """
             select p.id from Post p where p.createdBy.id=:authorId and p.deletedAt is null
               and (:filter='ALL' or p.moderationStatus=:filter)
+              and (:postType='ALL' or p.postType=:postType)
             order by p.createdAt desc, p.id desc
             """, countQuery = """
             select count(p) from Post p where p.createdBy.id=:authorId and p.deletedAt is null
               and (:filter='ALL' or p.moderationStatus=:filter)
+              and (:postType='ALL' or p.postType=:postType)
             """)
-    Page<Long> findMyIds(@Param("authorId") long authorId, @Param("filter") String filter, Pageable pageable);
+    Page<Long> findMyIds(@Param("authorId") long authorId, @Param("filter") String filter,
+                         @Param("postType") String postType, Pageable pageable);
+
+    default Page<Long> findMyIds(long authorId, String filter, Pageable pageable) {
+        return findMyIds(authorId, filter, "ALL", pageable);
+    }
 
     @Query("select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images where p.id in :ids and p.createdBy.id=:authorId and p.deletedAt is null")
     List<Post> findMyByIds(@Param("ids") List<Long> ids, @Param("authorId") long authorId);

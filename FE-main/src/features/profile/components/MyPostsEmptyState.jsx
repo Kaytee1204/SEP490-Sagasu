@@ -1,32 +1,13 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Package, Plus } from 'lucide-react';
 
-export default function MyPostsEmptyState() {
-  return (
-    <div style={{
-      textAlign: 'center', padding: '80px 24px',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px',
-    }}>
-      <div style={{
-        width: 80, height: 80, borderRadius: '50%',
-        background: 'rgba(30,107,107,0.06)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'var(--teal-300)',
-      }}>
-        <Package size={36} strokeWidth={1.4} />
-      </div>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: '1.0625rem', color: 'var(--text-primary)', marginBottom: '6px' }}>
-          Không tìm thấy bài đăng nào
-        </div>
-        <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: '32ch', margin: '0 auto' }}>
-          Thử đổi bộ lọc hoặc đăng tin mới để bắt đầu.
-        </div>
-      </div>
-      <Link to="/dang-tin" className="btn btn-accent" style={{ marginTop: '8px' }}>
-        <Plus size={16} /> Đăng tin mới
-      </Link>
-    </div>
-  );
+export default function MyPostsEmptyState({ filter = 'ALL', postType = 'ALL', onReset }) {
+  const filtered = filter !== 'ALL' || postType !== 'ALL';
+  return <div className="my-posts-empty">
+    <span className="my-posts-empty-icon"><Package size={30} strokeWidth={1.5} aria-hidden="true" /></span>
+    <h3>{filtered ? 'Không có bài đăng phù hợp' : 'Bạn chưa có bài đăng nào'}</h3>
+    <p>{filtered ? 'Thử đổi loại bài hoặc trạng thái để xem các bài đăng còn lại.' : 'Đăng tin mất đồ hoặc nhặt được để bắt đầu.'}</p>
+    {filtered ? <button type="button" className="btn btn-ghost" onClick={onReset}>Xem tất cả bài đăng</button>
+      : <Link to="/dang-tin" className="btn btn-accent"><Plus size={16} aria-hidden="true" />Đăng tin mới</Link>}
+  </div>;
 }

@@ -50,13 +50,14 @@ public class ChatController {
     @GetMapping("/chats")
     @Operation(
             summary = "[7.2] Danh sách các cuộc hội thoại P2P của tôi (Cursor Pagination)",
-            description = "Trả về danh sách phòng chat kèm tin nhắn cuối cùng, số tin chưa đọc và trạng thái bài đăng."
+            description = "Danh sách trò chuyện kèm tin cuối, số tin chưa đọc và quyền gửi tin. Lọc view=ACTIVE cho cuộc đang trao đổi, HISTORY cho lịch sử chỉ đọc; mỗi nhóm được phân trang theo hoạt động mới nhất."
     )
     public ResponseEntity<ApiResponse<ChatPageDto>> list(
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "ALL") String view,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.list(cursor, size, user)));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.list(cursor, size, view, user)));
     }
 
     @GetMapping("/chats/{id}")

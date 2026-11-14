@@ -46,6 +46,7 @@ import java.util.UUID;
 public class PostManagementService {
     private static final Set<String> MY_POST_FILTERS = Set.of(
             "ALL", "PENDING", "VISIBLE", "REJECTED", "HIDDEN");
+    private static final Set<String> MY_POST_TYPES = Set.of("ALL", "LOST", "FOUND");
 
     private final PostRepository posts;
     private final AccountRepository accounts;
@@ -62,10 +63,20 @@ public class PostManagementService {
     /** UC18: page IDs first, then load images/category without collection-fetch pagination. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public MyPostPageDto listMine(int page, int size, String filter, CustomUserDetails user) {
+        return listMine(page, size, filter, "ALL", user);
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public MyPostPageDto listMine(int page, int size, String filter, String postType, CustomUserDetails user) {
         long authorId = PostAccessPolicy.requireAuthor(user);
         validateListRequest(page, size, filter);
+        if (postType == null || !MY_POST_TYPES.contains(postType)) {
+            throw new AppException(ErrorCode.POST_FILTER_INVALID);
+        }
 
-        var pageOfIds = posts.findMyIds(authorId, filter, PageRequest.of(page - 1, size));
+        var pageable = PageRequest.of(page - 1, size);
+        var pageOfIds = "ALL".equals(postType) ? posts.findMyIds(authorId, filter, pageable)
+                : posts.findMyIds(authorId, filter, postType, pageable);
         Map<Long, Post> postsById = new HashMap<>();
         if (!pageOfIds.isEmpty()) {
             for (Post post : posts.findMyByIds(pageOfIds.getContent(), authorId)) {
@@ -291,7 +302,7 @@ public class PostManagementService {
 
     private String getEditBlockedReason(Post post, long viewerId) {
         if (!Objects.equals(post.getAccount().getId(), viewerId)) return "Bài được đăng hộ tài khoản khác";
-        if (claims.existsByPost_Id(post.getId())) return "Bài đã có hồ sơ claim";
+        if (claims.existsByPost_Id(post.getId())) return "Bài đã có yêu cầu nhận đồ";
         if (!"OPEN".equals(post.getStatus())) return "Bài không còn ở trạng thái mở";
         if ("HIDDEN".equals(post.getModerationStatus())) return "Bài đã bị ẩn bởi kiểm duyệt";
         return null;
@@ -299,7 +310,7 @@ public class PostManagementService {
 
     private String getDeleteBlockedReason(Post post, long viewerId) {
         if (!Objects.equals(post.getAccount().getId(), viewerId)) return "Bài được đăng hộ tài khoản khác";
-        if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("PENDING", "NEEDS_INFO", "APPROVED"))) return "Bài còn claim đang chờ hoặc đã được chấp thuận";
+        if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("PENDING", "NEEDS_INFO", "APPROVED"))) return "Bài còn yêu cầu nhận đồ đang chờ duyệt hoặc đã được chấp thuận";
         return null;
     }
 
