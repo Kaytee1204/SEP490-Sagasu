@@ -27,6 +27,11 @@ public class ItemReceiptImage {
         storageKey = key; sortOrder = order; mimeType = mime; sizeBytes = size;
         createdAt = OffsetDateTime.now();
     }
+    public static ItemReceiptImage intakeEvidence(String key,int order,String mime,long size) {
+        ItemReceiptImage image=new ItemReceiptImage(key,order,mime,size);
+        image.sensitive=true;
+        return image;
+    }
     void attachTo(ItemReceipt receipt) { this.receipt = receipt; }
     // DaiHV integration: retain existing public photos in the transfer receipt without re-uploading.
     public static ItemReceiptImage fromTransferredPost(PostImage image) {

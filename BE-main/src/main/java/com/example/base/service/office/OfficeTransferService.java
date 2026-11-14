@@ -6,6 +6,10 @@ import com.example.base.entity.*;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.storage.ImageStorage;
+import com.example.base.storage.ImageValidator;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.example.base.service.chat.ChatConversationService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -31,6 +35,7 @@ public class OfficeTransferService {
     private final AppointmentRepository appointments;
     private final ChatConversationService conversations;
     private final ImageStorage images;
+    private final ImageValidator imageValidator;
     private final JdbcTemplate jdbc;
     private final EntityManager em;
     private final com.example.base.service.notification.NotificationService notifications;
@@ -56,12 +61,16 @@ public class OfficeTransferService {
 
     @Transactional
     public Long receiveAtCounter(CounterIntake request,CustomUserDetails user) {
+        return receiveAtCounter(request,user,List.of());
+    }
+    @Transactional
+    public Long receiveAtCounter(CounterIntake request,CustomUserDetails user,List<MultipartFile> files) {
         Account actor=access.require(user,APPROVER);Post post=lock(request.postId());
         if(!post.getAccount().getId().equals(request.accountId()))throw bad("Bài đăng không thuộc người giao đã chọn.");
         if(!request.physicallyReceived())throw bad("Cần xác nhận đã trực tiếp nhận và kiểm tra đồ.");
         if(!Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from post p where p.post_id=? and "+ELIGIBLE+")",Boolean.class,post.getId())))throw bad("Bài đăng không còn đủ điều kiện tiếp nhận. Hãy tải lại danh sách.");
         TransferDecision decision=new TransferDecision(0L,"RECEIVED",request.locationId(),request.condition(),null,request.reconciliationNote());
-        Long receiptId=receive(post,actor,decision);
+        Long receiptId=receive(post,actor,decision,files);
         jdbc.update("update item_receipt set note=? where item_receipt_id=?","Tiếp nhận trực tiếp tại quầy từ bài đăng có sẵn."+(request.reconciliationNote()==null?"":" Đối chiếu: "+request.reconciliationNote()),receiptId);
         List<Long> pendingIds=jdbc.queryForList("select transfer_id from office_transfer where post_id=? and status='PENDING' for update",Long.class,post.getId());
         for(Long id:pendingIds) {
@@ -117,6 +126,10 @@ public class OfficeTransferService {
 
     @Transactional
     public TransferView decide(long id,TransferDecision request,CustomUserDetails user) {
+        return decide(id,request,user,List.of());
+    }
+    @Transactional
+    public TransferView decide(long id,TransferDecision request,CustomUserDetails user,List<MultipartFile> files) {
         Account actor=access.require(user);
         Map<String,Object> initial=row(id);
         Post post=lock(number(initial,"post_id"));
@@ -127,7 +140,7 @@ public class OfficeTransferService {
         } else if(actor.getRole()!=APPROVER) throw bad("Chỉ nhân viên tiếp nhận được xử lý việc nhận đồ.");
         Long receiptId=null;
         if ("RECEIVED".equals(request.decision())) {
-            receiptId=receive(post,actor,request);
+            receiptId=receive(post,actor,request,files);
         } else {
             required(request.reason(),"Nhập lý do kết thúc yêu cầu chuyển giao.");
             post.cancelOfficeRequest();
@@ -152,7 +165,7 @@ public class OfficeTransferService {
         return view(id);
     }
 
-    private Long receive(Post post,Account actor,TransferDecision request) {
+    private Long receive(Post post,Account actor,TransferDecision request,List<MultipartFile> files) {
             reportHolds.requireAvailable(post.getId());
             if (actor.getId().equals(post.getAccount().getId())) throw bad("Người giao không được tự xác nhận tiếp nhận đồ của mình.");
             if (post.getDeletedAt()!=null || !Set.of("OPEN","RESERVED").contains(post.getStatus()) || receipts.existsByPostId(post.getId())) throw bad("Đồ vật đã được xử lý hoặc không còn có thể tiếp nhận.");
@@ -165,7 +178,9 @@ public class OfficeTransferService {
             StorageLocation location=locations.findById(Objects.requireNonNullElse(request.locationId(),-1L)).orElseThrow(()->bad("Chọn vị trí lưu kho."));
             em.refresh(location,LockModeType.PESSIMISTIC_WRITE);
             if(!location.isActive()) throw bad("Vị trí lưu kho đã ngừng sử dụng.");
-            ItemReceipt receipt=receipts.saveAndFlush(ItemReceipt.transferred("VP-"+UUID.randomUUID().toString().substring(0,18),actor,post,condition,location));
+            ItemReceipt receipt=ItemReceipt.transferred("VP-"+UUID.randomUUID().toString().substring(0,18),actor,post,condition,location);
+            attachReceiptEvidence(receipt,files);
+            receipts.saveAndFlush(receipt);
             Long receiptId=receipt.getId();
             jdbc.update("update item_receipt set finder_name=?,finder_contact=? where item_receipt_id=?",
                     post.getAccount().getFullName(),post.getAccount().getEmail(),receiptId);
@@ -182,6 +197,28 @@ public class OfficeTransferService {
             return receiptId;
     }
 
+    private void attachReceiptEvidence(ItemReceipt receipt,List<MultipartFile> files) {
+        if(files==null || files.isEmpty()) throw bad("Cần thêm ít nhất một ảnh chụp đồ vật khi văn phòng tiếp nhận.");
+        var validated=imageValidator.validate(files);
+        var keys=new ArrayList<String>();
+        // Receipt evidence belongs to the transaction; remove uploads even on commit-time rollback.
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
+                @Override public void afterCompletion(int status) {
+                    if(status!=STATUS_COMMITTED) for(String key:keys) {
+                        try { images.delete(key); } catch(RuntimeException failure) {
+                            org.slf4j.LoggerFactory.getLogger(OfficeTransferService.class).warn("Receipt evidence cleanup failed for {}",key);
+                        }
+                    }
+                }
+            });
+        for(var image:validated) {
+            String key="receipts/intake/"+UUID.randomUUID()+"."+image.extension();
+            keys.add(key); images.put(key,image.bytes(),image.mime());
+            receipt.addImage(ItemReceiptImage.intakeEvidence(key,keys.size()-1,image.mime(),image.bytes().length));
+        }
+    }
+
     private boolean pending(long postId) { return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from office_transfer where post_id=? and status='PENDING')",Boolean.class,postId)); }
     private Map<String,Object> row(long id) { return jdbc.queryForList("select * from office_transfer where transfer_id=?",id).stream().findFirst().orElseThrow(()->bad("Không tìm thấy yêu cầu chuyển giao.")); }
     private Post lock(long id) { Post p=posts.findForClaimUpdate(id).orElseThrow(()->bad("Không tìm thấy bài đăng.")); em.refresh(p,LockModeType.PESSIMISTIC_WRITE);return p; }
@@ -192,7 +229,10 @@ public class OfficeTransferService {
                 time(t.get("requested_at")),time(t.get("processed_at")),(String)t.get("reason"),(String)t.get("reconciliation_note"),
                 t.get("item_receipt_id")==null?null:number(t,"item_receipt_id"),number(t,"version"),
                 jdbc.queryForObject("select count(*) from claim where post_id=? and status in ('PENDING','NEEDS_INFO','APPROVED')",Long.class,p.getId()),
-                handoverCount(p.getId()),p.getImages().stream().map(i->images.readUrl(i.getStorageKey(),i.getImageUrl())).toList(),intakeAppointment(id),number(t,"requested_by"));
+                handoverCount(p.getId()),p.getImages().stream().map(i->images.readUrl(i.getStorageKey(),i.getImageUrl())).toList(),intakeAppointment(id),number(t,"requested_by"),
+                t.get("item_receipt_id")==null ? List.of() : receipts.findById(number(t,"item_receipt_id"))
+                    .map(r->r.getImages().stream().filter(i->i.getStorageKey()!=null && i.getStorageKey().startsWith("receipts/intake/"))
+                        .map(i->images.readUrl(i.getStorageKey(),i.getImageUrl())).toList()).orElse(List.of()));
     }
     private IntakeAppointment intakeAppointment(long id) {
         return jdbc.query("select * from office_intake_appointment where transfer_id=? order by appointment_id desc limit 1",(rs,n)->{

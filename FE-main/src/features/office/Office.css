@@ -827,3 +827,15 @@
     animation: none;
   }
 }
+
+/* Office claims reuse the P2P questionnaire with office-scoped layout. */
+.office-page .claim-questionnaire { display:flex; flex-direction:column; gap:28px; min-width:0; margin:0; padding:0; border:0; }
+.office-page .claim-question-group { display:flex; flex-direction:column; gap:20px; }
+.office-page .claim-question-group + .claim-question-group { padding-top:24px; border-top:1px solid var(--border, #dbe4e8); }
+.office-page .claim-question { display:flex; flex-direction:column; gap:12px; min-width:0; margin:0; padding:16px; border:1px solid var(--border, #dbe4e8); border-radius:12px; }
+.office-page .claim-question legend { max-width:100%; padding-inline:6px; font-weight:600; overflow-wrap:anywhere; }
+.office-page .claim-question-date { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
+.office-page .claim-question-evidence { display:flex; flex-direction:column; gap:12px; }
+.office-page .workflow-options { display:flex; flex-wrap:wrap; gap:12px; }
+.office-page .workflow-options label { display:flex; flex-direction:row; align-items:center; gap:8px; }
+.office-page .workflow-options input[type=radio] { width:auto; flex:none; }

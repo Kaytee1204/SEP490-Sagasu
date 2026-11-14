@@ -26,6 +26,14 @@ public class OfficeClaimController {
 
     private final OfficeClaimService service;
 
+    @GetMapping("/questionnaire")
+    public ApiResponse<com.example.base.dto.claim.ClaimQuestionnaireDto> questionnaire(
+            @RequestParam(name="postId") long postId,
+            @RequestParam(name="counter",defaultValue="false") boolean counter,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(service.questionnaire(postId,counter,user));
+    }
+
     @GetMapping("/claimants")
     @PreAuthorize("hasRole('APPROVER')")
     @Operation(

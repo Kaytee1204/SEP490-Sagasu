@@ -2,6 +2,8 @@ package com.example.base.service.claim;
 
 import com.example.base.dto.office.OfficeDtos.*;
 import com.example.base.dto.claim.ClaimDetailDto;
+import com.example.base.dto.claim.ClaimQuestionnaireDto;
+import com.example.base.dto.claim.SubmitClaimRequest;
 import com.example.base.entity.*;
 import com.example.base.exception.*;
 import com.example.base.repository.*;
@@ -28,6 +30,7 @@ import static com.example.base.entity.AccountRole.APPROVER;
 @Service @RequiredArgsConstructor
 public class OfficeClaimService {
     private final ClaimRepository claims;
+    private final ClaimQuestionnaireService questionnaires;
     private final OfficeClaimProgress progress;
     private final PostRepository posts;
     private final AccountRepository accounts;
@@ -77,7 +80,7 @@ public class OfficeClaimService {
         return view(c,true,actor.getRole()==APPROVER,actor.getId(),progress.of(c.getId()));
     }
     public Long submit(Submission request,List<MultipartFile> files,boolean counter,CustomUserDetails user) {
-        new TransactionTemplate(transactions).executeWithoutResult(tx->validateSubmission(request,counter,user,false));
+        new TransactionTemplate(transactions).executeWithoutResult(tx->questionnaires.validateAndSnapshot(validateSubmission(request,counter,user,false), questionnaireRequest(request)));
         var validated=images.validate(files); var keys=new ArrayList<String>();
         try {
             for(var image:validated) {
@@ -86,6 +89,7 @@ public class OfficeClaimService {
             }
             return new TransactionTemplate(transactions).execute(tx->{
                 Post post=validateSubmission(request,counter,user,true);
+                var answers=questionnaires.validateAndSnapshot(post,questionnaireRequest(request));
                 Account actor=counter?access.require(user,APPROVER):access.require(user);
                 String contact=clean(request.claimantEmail());
                 Account claimant=counter?counterClaimant(request):actor;
@@ -97,6 +101,7 @@ public class OfficeClaimService {
                 if(contact==null&&claimant!=null) contact=claimant.getEmail();
                 Claim c=Claim.office(post,claimant,actor,counter?"COUNTER":"ONLINE",name,
                     contact==null?null:contact.toLowerCase(Locale.ROOT),clean(request.claimantPhone()),request.description(),request.evidenceNote(),receipts.findByPostId(post.getId()).orElseThrow());
+                answers.forEach(c::addAnswer);
                 for(int i=0;i<validated.size();i++) {
                     var image=validated.get(i); String filename=files.get(i).getOriginalFilename();
                     if(filename!=null) { filename=filename.replace('\\','/'); filename=filename.substring(filename.lastIndexOf('/')+1); if(filename.length()>255) filename=filename.substring(filename.length()-255); }
@@ -120,6 +125,17 @@ public class OfficeClaimService {
             for(String key:keys) try { storage.delete(key); } catch(RuntimeException ignored) { /* Preserve original failure. */ }
             throw failure;
         }
+    }
+    private SubmitClaimRequest questionnaireRequest(Submission r) {
+        return new SubmitClaimRequest(r.description(),r.evidenceNote(),r.questionnaireVersion(),r.answers());
+    }
+    @Transactional(readOnly=true)
+    public ClaimQuestionnaireDto questionnaire(long postId,boolean counter,CustomUserDetails user) {
+        if(counter) access.require(user,APPROVER); else access.require(user);
+        Post post=posts.findById(postId).orElseThrow(()->bad("Không tìm thấy bài đăng."));
+        eligible(post);
+        // Office integration: share the P2P template and snapshot rules without changing P2P authorization.
+        return questionnaires.forCategory(post.getCategory());
     }
     private Post validateSubmission(Submission r,boolean counter,CustomUserDetails user,boolean lock) {
         Account actor=counter?access.require(user,APPROVER):access.require(user);

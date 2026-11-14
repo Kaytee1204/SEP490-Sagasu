@@ -50,15 +50,26 @@ public class OfficeWorkflowController {
         return ApiResponse.ok(transfers.counterPosts(id, user));
     }
 
-    @PostMapping("/counter/receive")
+    @PostMapping(value="/counter/receive",consumes="multipart/form-data")
     @Operation(
             summary = "[11.3] Tiếp nhận ngay tại quầy vật phẩm từ bài đăng FOUND có sẵn vào kho Văn phòng",
             description = "Tạo biên nhận lưu kho (item_receipt) và chuyển bài đăng sang custody_mode = OFFICE."
     )
     public ApiResponse<Long> counterReceive(
-            @Valid @RequestBody CounterIntake request,
+            @Valid @RequestPart("data") CounterIntake request,
+            @RequestPart("images") List<MultipartFile> files,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(transfers.receiveAtCounter(request, user));
+        return ApiResponse.ok(transfers.receiveAtCounter(request, user, files));
+    }
+
+    @PostMapping(value="/transfers/{id}/receive",consumes="multipart/form-data")
+    public ApiResponse<TransferView> receive(
+            @PathVariable("id") long id,
+            @Valid @RequestPart("data") TransferDecision request,
+            @RequestPart("images") List<MultipartFile> files,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        if(!"RECEIVED".equals(request.decision())) throw OfficeAccess.bad("Thao tác tiếp nhận không hợp lệ.");
+        return ApiResponse.ok(transfers.decide(id,request,user,files));
     }
 
     @GetMapping("/transfers")

@@ -21,6 +21,7 @@ export default function ReceiptEvidence({ receipt }) {
       <p className="mt-3 text-sm leading-5 text-slate-600">Nếu ảnh hết hạn hiển thị, dùng nút tải lại phiếu để xem tiếp.</p>
     </section>
     {(receipt.privateIdentifiers || receipt.note) && <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><h2 className="flex items-center gap-2 font-semibold text-slate-800"><ShieldCheck size={18} className="text-teal-600" />Thông tin nội bộ</h2>{receipt.privateIdentifiers && <ReceiptText title="Đặc điểm nhận dạng riêng tư">{receipt.privateIdentifiers}</ReceiptText>}{receipt.note && <ReceiptText title="Ghi chú">{receipt.note}</ReceiptText>}</section>}
-    {receipt.source === 'WALK_IN' && (receipt.finderName || receipt.finderContact) && <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5"><h2 className="font-semibold text-slate-800">Người mang đồ đến</h2><ReceiptText title="Họ tên">{receipt.finderName}</ReceiptText><ReceiptText title="Thông tin liên hệ">{receipt.finderContact}</ReceiptText></section>}
+    {/* Office integration: transferred receipts also retain the original finder identity. */}
+    {['WALK_IN', 'EXISTING_POST'].includes(receipt.source) && (receipt.finderName || receipt.finderContact) && <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5"><h2 className="font-semibold text-slate-800">Người mang đồ đến</h2><ReceiptText title="Họ tên">{receipt.finderName}</ReceiptText><ReceiptText title="Thông tin liên hệ">{receipt.finderContact}</ReceiptText></section>}
   </div>;
 }

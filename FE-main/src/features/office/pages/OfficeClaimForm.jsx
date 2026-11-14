@@ -17,6 +17,8 @@ import Header from "../components/Header";
 import Notice from "../components/Notice";
 import LoadState from "../components/LoadState";
 import SearchBox from "../components/SearchBox";
+import ClaimQuestionnaireFields from "@/features/claims/components/ClaimQuestionnaireFields";
+import { serializeQuestionnaireAnswers } from "@/features/claims/questionnaireUtils";
 import "../Office.css";
 
 export default function OfficeClaimForm({ counter = false }) {
@@ -47,6 +49,13 @@ export default function OfficeClaimForm({ counter = false }) {
     description: "",
     evidenceNote: "",
   });
+  const questionnaire = useLoad(() => postId ? officeApi.questionnaire(postId,counter) : Promise.resolve(null), `questionnaire:${postId}:${counter}`);
+  const [answers,setAnswers] = useState({});
+  function selectPost(value) {
+    if(String(value) === String(postId)) return;
+    setPostId(value); setAnswers({}); setFiles([]);
+    setForm(current => ({...current,description:"",evidenceNote:""})); setError("");
+  }
   const [files, setFiles] = useState([]);
   const [claimant, setClaimant] = useState(null);
   function selectClaimant(account) {
@@ -64,13 +73,13 @@ export default function OfficeClaimForm({ counter = false }) {
   const isOwner = Boolean(selected.data?.isOwner || selected.data?.canEditOwnPost);
   const valid =
     selected.data &&
-    ["OPEN", "RESERVED"].includes(selected.data.status) &&
+    selected.data.status === "OPEN" &&
     selected.data.moderationStatus === "VISIBLE" &&
     selected.data.custodyMode === "OFFICE" &&
     (counter || !isOwner);
   async function submit(e) {
     e.preventDefault();
-    if (busy || !valid) return;
+    if (busy || !valid || !questionnaire.data) return;
     if (counter && !claimant) {
       setError("Chọn tài khoản người yêu cầu nhận đồ từ kết quả tìm kiếm.");
       return;
@@ -81,6 +90,8 @@ export default function OfficeClaimForm({ counter = false }) {
       const claimId = await officeApi.submit(
         {
           ...form,
+          questionnaireVersion: questionnaire.data.version,
+          answers: serializeQuestionnaireAnswers(questionnaire.data,answers),
           postId: Number(postId),
           claimantId: counter ? claimant?.id : null,
           claimantName: form.claimantName.trim() || null,
@@ -95,6 +106,11 @@ export default function OfficeClaimForm({ counter = false }) {
       navigate(`${back}/${claimId}`, { replace: true });
     } catch (err) {
       setError(err.message);
+      if (err.code === "CLAIM_409_QUESTIONS") {
+        setAnswers({});
+        questionnaire.reload();
+        setError("Bộ câu hỏi đã thay đổi. Vui lòng trả lời lại các câu hỏi xác minh; mô tả và ảnh bạn đã nhập vẫn được giữ.");
+      }
     } finally {
       setBusy(false);
     }
@@ -137,7 +153,7 @@ export default function OfficeClaimForm({ counter = false }) {
                           type="button"
                           disabled={busy}
                           key={r.id}
-                          onClick={() => setPostId(r.postId)}
+                          onClick={() => selectPost(r.postId)}
                         >
                           {r.code} · {r.title}
                         </button>
@@ -230,17 +246,12 @@ export default function OfficeClaimForm({ counter = false }) {
             <div className="of-step">
               <span>3</span>Căn cứ sở hữu
             </div>
-            <label>
-              Mô tả xác minh *
-              <textarea
-                required
-                maxLength={5000}
-                disabled={busy}
-                value={form.description}
-                onChange={(e) => change("description", e.target.value)}
-                placeholder="Đặc điểm riêng, thời gian làm mất, thông tin chỉ người sở hữu biết…"
-              />
-            </label>
+            <LoadState state={questionnaire}>
+              {questionnaire.data && <ClaimQuestionnaireFields
+                questionnaire={questionnaire.data} answers={answers}
+                onAnswer={(code,value) => setAnswers(current => ({...current,[code]:value}))}
+                description={form.description} onDescription={value => change("description",value)}
+                disabled={busy} evidenceField={<>
             <label>
               Ghi chú bằng chứng
               <textarea
@@ -251,10 +262,12 @@ export default function OfficeClaimForm({ counter = false }) {
               />
             </label>
             <EvidencePicker files={files} setFiles={setFiles} disabled={busy} />
+              </>} />}
+            </LoadState>
             <div className="of-actions">
               <button
                 className="of-button of-primary"
-                disabled={busy || !valid || !form.description.trim()}
+                disabled={busy || !valid || !questionnaire.data || !form.description.trim()}
               >
                 {busy
                   ? "Đang lưu hồ sơ…"

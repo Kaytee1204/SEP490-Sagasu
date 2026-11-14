@@ -8,6 +8,7 @@ import { date } from "../officeUtils";
 import Dialog from "./Dialog";
 import LoadState from "./LoadState";
 import Notice from "./Notice";
+import IntakeEvidencePicker from "./IntakeEvidencePicker";
 import IntakeScheduleForm from "./IntakeScheduleForm";
 import AppointmentReply from "./AppointmentReply";
 
@@ -20,6 +21,7 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
   const [mode, setMode] = useState(null);
   const [form, setForm] = useState({ locationId: "", condition: "", reason: "", reconciliationNote: "" });
   const [checked, setChecked] = useState(false);
+  const [files,setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(null);
@@ -31,7 +33,7 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
   const receiving = mode === "receive";
   const change = (key, value) => setForm((old) => ({ ...old, [key]: value }));
   function updated(result) {
-    setMode(null); setError("");setChecked(false);
+    setMode(null); setError("");setChecked(false);setFiles([]);
     setNotice(result === "FAILED" ? { error: true, text: "Đã lưu lịch nhưng chưa gửi được email. Bạn có thể gửi lại bên dưới." } : result === "EXPIRED" ? { text: "Lịch này đã hết hạn phản hồi. Hãy hẹn lại thời gian phù hợp." } : result === "SENT" ? { text: "Đã gửi lịch mang đồ đến qua email." } : { text: "Đã cập nhật yêu cầu." });
     state.reload();onDone();
   }
@@ -40,9 +42,9 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
     try { updated(await workflowApi.resendIntake(id)); } catch (failure) { setError(failure.message); } finally { setBusy(false); }
   }
   async function submit(event) {
-    event.preventDefault(); if (busy) return;
+    event.preventDefault(); if (busy || (receiving && (!files.length || !checked))) return;
     setBusy(true);setError("");
-    try { await workflowApi.decide(id, { ...form, decision: receiving ? "RECEIVED" : mine ? "CANCELLED" : "REJECTED", locationId: form.locationId ? Number(form.locationId) : null, expectedVersion: transfer.version });updated(); }
+    try { await workflowApi.decide(id, { ...form, decision: receiving ? "RECEIVED" : mine ? "CANCELLED" : "REJECTED", locationId: form.locationId ? Number(form.locationId) : null, expectedVersion: transfer.version },files);updated(); }
     catch (failure) {setError(failure.message);}finally {setBusy(false);}
   }
   return <Dialog title="Yêu cầu tiếp nhận đồ" onClose={onClose} busy={busy}>
@@ -60,6 +62,9 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
         {transfer.reason && <div className="of-reason"><strong>Lý do:</strong><p className="of-prose">{transfer.reason}</p></div>}
         {transfer.reconciliationNote && <p className="of-prose">{transfer.reconciliationNote}</p>}
         {transfer.receiptId && <p>Phiếu tiếp nhận #{transfer.receiptId} · Văn phòng đang phụ trách đồ vật này.</p>}
+        {transfer.receiptId && <section><h3>Ảnh khi văn phòng tiếp nhận</h3>
+          {transfer.receiptEvidence?.length ? <div className="of-gallery">{transfer.receiptEvidence.map((url,i)=><a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Ảnh tiếp nhận ${i+1}`} /></a>)}</div> : <p className="of-muted">Phiếu cũ chưa lưu ảnh tiếp nhận riêng.</p>}
+        </section>}
         <div className="of-actions"><button className="of-button" onClick={onClose}>Đóng</button></div>
       </> : <>
         {transfer.activeClaims > 0 && <p className="of-muted">Đồ vật này có {transfer.activeClaims} yêu cầu nhận lại đồ.</p>}
@@ -90,9 +95,10 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
             <Notice error>{locations.error}</Notice>
             <label>Tình trạng đồ khi nhận *<textarea required maxLength={2000} value={form.condition} disabled={busy} onChange={(e) => change("condition", e.target.value)} /></label>
             {transfer.previousHandovers > 0 && <label>Đối chiếu việc giao lại đồ *<small>Đã có biên bản giao đồ trước đó. Ghi rõ người giao lại và tình trạng đồ thực tế.</small><textarea required maxLength={2000} value={form.reconciliationNote} disabled={busy} onChange={(e) => change("reconciliationNote", e.target.value)} /></label>}
-            <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi đã trực tiếp nhận và kiểm tra đúng đồ.</span></label>
+            <IntakeEvidencePicker files={files} setFiles={setFiles} disabled={busy} />
+          <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi đã trực tiếp nhận và kiểm tra đúng đồ.</span></label>
           </> : <label>Lý do *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} placeholder={mine ? "Vì sao bạn muốn hủy yêu cầu?" : "Giải thích ngắn gọn để người giao biết…"} /></label>}
-          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => setMode(null)}>Quay lại</button><button className={`of-button ${receiving ? "of-primary" : "of-danger"}`} disabled={busy}>{busy ? "Đang lưu…" : receiving ? "Xác nhận đã nhận đồ" : mine ? "Xác nhận hủy yêu cầu" : "Từ chối yêu cầu"}</button></div>
+          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => setMode(null)}>Quay lại</button><button className={`of-button ${receiving ? "of-primary" : "of-danger"}`} disabled={busy || (receiving && (!files.length || !checked))}>{busy ? "Đang lưu…" : receiving ? "Xác nhận đã nhận đồ" : mine ? "Xác nhận hủy yêu cầu" : "Từ chối yêu cầu"}</button></div>
         </form>}
       </>}
     </>}</LoadState>

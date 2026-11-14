@@ -5,6 +5,7 @@ const query = (values) =>
     Object.entries(values).filter(([, v]) => v !== "" && v != null),
   );
 export const officeApi = {
+  questionnaire: (postId,counter) => data(api.get(`/office-claims/questionnaire?${query({postId,counter})}`)),
   claimants: (q) => data(api.get(`/office-claims/claimants?${query({ q })}`)),
   posts: (filters) => data(api.get(`/office/posts?${query(filters)}`)),
   post: (id) => data(api.get(`/office/posts/${id}`)),

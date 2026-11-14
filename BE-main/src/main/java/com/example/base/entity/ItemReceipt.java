@@ -70,7 +70,7 @@ public class ItemReceipt {
         receipt.edit(post.getCategory(), post.getTitle(), post.getDescription(), condition,
                 post.getLocationText(), post.getEventAt(), post.getPrivateIdentifiers(), null);
         receipt.assignLocation(location);
-        post.getImages().forEach(image -> receipt.addImage(ItemReceiptImage.fromTransferredPost(image)));
+        // Office integration: actual receipt photos are attached by OfficeTransferService; original post photos stay on the post.
         receipt.receiveAndPublish(officer, post.getId());
         return receipt;
     }

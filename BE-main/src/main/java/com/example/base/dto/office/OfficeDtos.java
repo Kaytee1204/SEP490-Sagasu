@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 import java.time.OffsetDateTime;
 import java.util.List;
 import com.example.base.dto.claim.ClaimDetailDto;
+import com.example.base.dto.claim.ClaimAnswerRequest;
 
 public final class OfficeDtos {
     private OfficeDtos() {}
@@ -23,7 +24,14 @@ public final class OfficeDtos {
     public record Submission(@NotNull @Positive Long postId, @Positive Long claimantId,
         @Size(max=150) String claimantName, @Email @Size(max=255) String claimantEmail,
         @Size(max=40) String claimantPhone, @NotBlank @Size(max=5000) String description,
-        @Size(max=5000) String evidenceNote) {}
+        @Size(max=5000) String evidenceNote,
+        @NotBlank @Size(max=160) String questionnaireVersion,
+        @NotNull @Size(max=24) List<@jakarta.validation.Valid ClaimAnswerRequest> answers) {
+        public Submission(Long postId, Long claimantId, String claimantName, String claimantEmail,
+                String claimantPhone, String description, String evidenceNote) {
+            this(postId,claimantId,claimantName,claimantEmail,claimantPhone,description,evidenceNote,null,null);
+        }
+    }
     public record Decision(@NotBlank @Pattern(regexp="APPROVED|REJECTED|NEEDS_INFO") String decision,
         @NotBlank @Size(max=2000) String reason, @NotNull @PositiveOrZero Long expectedVersion,
         OffsetDateTime scheduledAt, @Size(max=1000) String location,

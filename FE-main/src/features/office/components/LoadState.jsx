@@ -13,7 +13,7 @@ export default function LoadState({ state, children }) {
     return (
       <Notice error>
         {state.error}{" "}
-        <button className="of-button" onClick={state.reload}>
+        <button type="button" className="of-button" onClick={state.reload}>
           Thử lại
         </button>
       </Notice>

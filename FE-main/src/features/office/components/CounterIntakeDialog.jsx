@@ -6,6 +6,7 @@ import { officeApi } from "../api/officeApi";
 import useLoad from "../hooks/useLoad";
 import Dialog from "./Dialog";
 import Notice from "./Notice";
+import IntakeEvidencePicker from "./IntakeEvidencePicker";
 import LoadState from "./LoadState";
 
 export default function CounterIntakeDialog({ onClose, onDone }) {
@@ -16,6 +17,7 @@ export default function CounterIntakeDialog({ onClose, onDone }) {
   const [person, setPerson] = useState(null);
   const [post, setPost] = useState(null);
   const [form, setForm] = useState({ locationId: "", condition: "", reconciliationNote: "", physicallyReceived: false });
+  const [files,setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [receiptId, setReceiptId] = useState(null);
@@ -34,10 +36,10 @@ export default function CounterIntakeDialog({ onClose, onDone }) {
   function search(value) { setQuery(value); setPeople([]); setSearchError(""); setSearching(value.trim().length >= 2); }
   const change = (key, value) => setForm(old => ({ ...old, [key]: value }));
   async function submit(e) {
-    e.preventDefault(); if (busy) return;
+    e.preventDefault(); if (busy || !files.length) return;
     setBusy(true); setError("");
     try {
-      const id = await workflowApi.counterReceive({ ...form, locationId: Number(form.locationId), accountId: person.id, postId: post.id });
+      const id = await workflowApi.counterReceive({ ...form, locationId: Number(form.locationId), accountId: person.id, postId: post.id },files);
       setReceiptId(id); onDone();
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
@@ -53,14 +55,15 @@ export default function CounterIntakeDialog({ onClose, onDone }) {
         <div className="of-counter-options">{people.map(p => <button className="of-counter-option" key={p.id} onClick={() => { setPerson(p); setPost(null); }}><strong>{p.name}</strong><span>{p.email}</span></button>)}</div>
       </div> : <>
         <div className="of-counter-person"><div><strong>{person.name}</strong><p>{person.email}</p></div><button className="of-button" disabled={busy} onClick={() => { setPerson(null); setPost(null); search(query); }}>Đổi người</button></div>
-        {!post ? <LoadState state={posts}><h3>Chọn bài đăng của người giao</h3>{!posts.loading && !posts.data?.length && <p>Người này không còn bài đăng đủ điều kiện tiếp nhận.</p>}<div className="of-counter-options">{posts.data?.map(p => <button className="of-counter-option of-counter-post" key={p.id} onClick={() => { setPost(p); setError(""); setForm({ locationId: "", condition: "", reconciliationNote: "", physicallyReceived: false }); }}>{p.images[0] ? <img src={p.images[0]} alt="" /> : <Package size={32} />}<span><strong>{p.title}</strong><small>Bài #{p.id}</small></span></button>)}</div></LoadState> : <form className="of-form" onSubmit={submit}>
+        {!post ? <LoadState state={posts}><h3>Chọn bài đăng của người giao</h3>{!posts.loading && !posts.data?.length && <p>Người này không còn bài đăng đủ điều kiện tiếp nhận.</p>}<div className="of-counter-options">{posts.data?.map(p => <button className="of-counter-option of-counter-post" key={p.id} onClick={() => { setPost(p); setFiles([]); setError(""); setForm({ locationId: "", condition: "", reconciliationNote: "", physicallyReceived: false }); }}>{p.images[0] ? <img src={p.images[0]} alt="" /> : <Package size={32} />}<span><strong>{p.title}</strong><small>Bài #{p.id}</small></span></button>)}</div></LoadState> : <form className="of-form" onSubmit={submit}>
           <div className="of-counter-selected"><h3>{post.title}</h3><small>Bài #{post.id}</small><p className="of-prose">{post.description}</p><div className="of-gallery">{post.images.map(url => <a href={url} target="_blank" rel="noreferrer" key={url}><img src={url} alt={post.title} /></a>)}</div><button type="button" className="of-button" disabled={busy} onClick={() => setPost(null)}>Chọn bài khác</button></div>
           <Notice error>{error || locations.error}</Notice>
           <label>Vị trí lưu kho *<select required disabled={busy || locations.loading} value={form.locationId} onChange={e => change("locationId", e.target.value)}><option value="">Chọn vị trí</option>{locations.data?.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</select></label>
           <label>Tình trạng đồ khi nhận *<textarea required maxLength={2000} disabled={busy} value={form.condition} onChange={e => change("condition", e.target.value)} placeholder="Tình trạng thực tế, phụ kiện đi kèm…" /></label>
           {post.previousHandovers > 0 && <label>Đối chiếu lần giao đồ trước *<small>Bài đăng đã có biên bản giao đồ. Ghi rõ người giao lại và kết quả kiểm tra đồ thực tế.</small><textarea required maxLength={2000} disabled={busy} value={form.reconciliationNote} onChange={e => change("reconciliationNote", e.target.value)} /></label>}
+          <IntakeEvidencePicker files={files} setFiles={setFiles} disabled={busy} />
           <label className="of-check"><input type="checkbox" required disabled={busy} checked={form.physicallyReceived} onChange={e => change("physicallyReceived", e.target.checked)} /><span>Tôi đã đối chiếu người giao với tài khoản trên và trực tiếp nhận, kiểm tra đúng đồ vật.</span></label>
-          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Để sau</button><button className="of-button of-primary" disabled={busy || !form.physicallyReceived}>{busy ? "Đang tiếp nhận…" : "Xác nhận đã nhận đồ"}</button></div>
+          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Để sau</button><button className="of-button of-primary" disabled={busy || !form.physicallyReceived || !files.length}>{busy ? "Đang tiếp nhận…" : "Xác nhận đã nhận đồ"}</button></div>
         </form>}
       </>}
     </>}

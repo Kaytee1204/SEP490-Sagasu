@@ -21,7 +21,7 @@ public final class OfficeWorkflowDtos {
     public record TransferView(long id, long postId, String title, String description, String finder,
             String status, OffsetDateTime requestedAt, OffsetDateTime processedAt,
             String reason, String reconciliationNote, Long receiptId, long version,
-            long activeClaims, long previousHandovers, List<String> images, IntakeAppointment appointment, long requestedBy) {}
+            long activeClaims, long previousHandovers, List<String> images, IntakeAppointment appointment, long requestedBy, List<String> receiptEvidence) {}
     public record IntakeAppointment(long id, OffsetDateTime scheduledAt, String location, String note,
             String status, String emailStatus, String responseStatus, OffsetDateTime responseDeadline,String cancellationReason) {}
     public record IntakeSchedule(@NotNull @PositiveOrZero Long expectedVersion,
