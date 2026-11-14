@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Camera, MapPin, Paperclip } from 'lucide-react';
+import { Camera, CheckCheck, FileText, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '../ChatProvider';
 import { getMessages, sendMessage, sendAttachments, markChatRead, getReadReceipts } from '../api/chatApi';
@@ -195,31 +195,41 @@ export default function ChatThread({ chat }) {
         {row.body && <p>{row.body}</p>}
         {row.location && <ChatLocation location={row.location} />}
         {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
-        <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
-        {String(row.senderId)!==String(user.id)&&<details className="workflow-menu"><summary aria-label="Thao tác tin nhắn">⋯</summary><div><ReportButton type="MESSAGE" id={row.id} targetLabel={row.body?.slice(0, 120) || "Tin nhắn đính kèm"} label="Báo cáo tin nhắn"/></div></details>}
-        {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
-          && <small>{row.readAt ? `Đã xem lúc ${receiptTime(row.readAt)}` : 'Đã xem'}</small>}
+        <div className="chat-message-footer">
+          <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
+          {String(row.senderId)!==String(user.id)&&<ReportButton type="MESSAGE" id={row.id} targetLabel={row.body?.slice(0, 120) || "Tin nhắn đính kèm"} label="Báo cáo tin nhắn"/>}
+          {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
+            && <small className="chat-read-receipt"><CheckCheck size={14} aria-hidden="true" />{row.readAt ? `Đã xem lúc ${receiptTime(row.readAt)}` : 'Đã xem'}</small>}
+        </div>
       </article>)}
     </div>
     {error && <p role="alert" className="chat-error">{error}</p>}
     <ImageProcessingStatus active={processing} />
-    {chat.canSend ? <><div className="chat-selected-files">{files.map((file, index) => <span key={`${file.name}:${index}`}>{file.name}
-      <button type="button" disabled={busy} aria-label={`Bỏ tệp ${file.name}`} onClick={() => { setFiles(old => old.filter((_, n) => n !== index)); retry.current = null; }}>×</button></span>)}</div>
-    <form className="chat-composer" onSubmit={send}>
-      <div className="chat-composer-tools">
-        <button type="button" className="chat-tool-button" aria-label="Đính kèm ảnh hoặc PDF" title="Đính kèm ảnh hoặc PDF" disabled={busy} onClick={() => fileInput.current?.click()}><Paperclip size={21} /></button>
-        <button type="button" className="chat-tool-button" aria-label="Chụp ảnh" title="Chụp ảnh" disabled={busy} onClick={() => setCameraOpen(true)}><Camera size={21} /></button>
-        <button type="button" className="chat-tool-button" aria-label="Chia sẻ vị trí" title="Chia sẻ vị trí" disabled={busy} onClick={() => setLocationOpen(true)}><MapPin size={21} /></button>
-      </div>
+    {chat.canSend ? <><form className="chat-composer" onSubmit={send}>
+      {files.length > 0 && <section className="chat-attachment-preview" aria-label="Tệp chờ gửi">
+        <p>Đính kèm ({files.length}/{limits.attachmentMaxCount})</p>
+        <ul className="chat-selected-files">{files.map((file, index) => <li key={`${file.name}:${index}`}>
+          {/\.pdf$/i.test(file.name) ? <FileText size={18} aria-hidden="true" /> : <ImageIcon size={18} aria-hidden="true" />}
+          <span className="chat-selected-name" title={file.name}>{file.name}</span>
+          <button type="button" disabled={busy} aria-label={`Bỏ tệp ${file.name}`} onClick={() => { setFiles(old => old.filter((_, n) => n !== index)); retry.current = null; }}><X size={14} aria-hidden="true" />Bỏ</button>
+        </li>)}</ul>
+      </section>}
       <label className="sr-only" htmlFor="chat-message">Nội dung tin nhắn</label>
       <input ref={fileInput} className="chat-file-input" type="file" multiple accept={`${IMAGE_ACCEPT},.pdf,application/pdf`} disabled={busy} aria-label="Chọn ảnh hoặc PDF đính kèm" onChange={event => {
           const picked = [...event.target.files]; event.target.value = '';
           attachFiles(picked);
         }} />
-      <textarea id="chat-message" maxLength={limits.messageMaxLength} disabled={busy} placeholder="Nhập tin nhắn…" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => {
+      <div className="chat-composer-message">
+      <textarea id="chat-message" rows={2} maxLength={limits.messageMaxLength} disabled={busy} placeholder="Nhập nội dung trao đổi về việc nhận đồ…" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
       }} />
-      <button className="btn btn-accent" type="submit" disabled={busy || (!body.trim() && !files.length)}>{processing ? 'Đang xử lý ảnh…' : sending ? 'Đang gửi…' : 'Gửi'}</button>
+      <button className="btn chat-send-button" type="submit" disabled={busy || (!body.trim() && !files.length)}><SendHorizontal size={19} aria-hidden="true" /><span>{processing ? 'Đang xử lý ảnh…' : sending ? 'Đang gửi…' : files.length && !body.trim() ? 'Gửi tệp đính kèm' : 'Gửi tin nhắn'}</span></button>
+      </div>
+      <div className="chat-composer-tools" role="group" aria-label="Thêm nội dung vào cuộc trò chuyện">
+        <button type="button" className="chat-tool-button" disabled={busy || files.length >= limits.attachmentMaxCount} onClick={() => fileInput.current?.click()}><Paperclip size={18} aria-hidden="true" /><span>Thêm ảnh / PDF</span></button>
+        <button type="button" className="chat-tool-button" disabled={busy || files.length >= limits.attachmentMaxCount} onClick={() => setCameraOpen(true)}><Camera size={18} aria-hidden="true" /><span>Chụp ảnh</span></button>
+        <button type="button" className="chat-tool-button" disabled={busy} onClick={() => setLocationOpen(true)}><MapPin size={18} aria-hidden="true" /><span>Chia sẻ vị trí</span></button>
+      </div>
     </form>{cameraOpen && <CameraCapture maxImageBytes={limits.imageMaxBytes} onClose={() => setCameraOpen(false)} onAttach={async file => {
       if (await attachFiles([file])) { setCameraOpen(false); return true; }
       return false;

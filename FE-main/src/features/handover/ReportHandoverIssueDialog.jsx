@@ -4,8 +4,9 @@ import { uploadHandover } from './handoverApi';
 import ReportReasonPicker from '@/features/reports/ReportReasonPicker';
 import useReportReasons from '@/features/reports/useReportReasons';
 import useImageUploads from '@/hooks/useImageUploads';
-import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
+import ImageUploadButton from '@/components/common/ImageUploadButton';
 
 export default function ReportHandoverIssueDialog({ claim, handover, onClose, onReported }) {
   const dialog = useRef(null);
@@ -89,9 +90,9 @@ export default function ReportHandoverIssueDialog({ claim, handover, onClose, on
       <label className="handover-record-field">Mô tả chi tiết sự cố *
         <textarea required maxLength={4800} value={reason} disabled={busy} placeholder="Mô tả điều đã xảy ra, ví dụ: chưa nhận được đồ hoặc nhận sai món đồ…"
           onChange={event => { setReason(event.target.value); request.current = null; setDiscard(false); }} /></label>
-      <label className="handover-record-field">Ảnh bằng chứng (tùy chọn)
+      <div className="handover-record-field"><span>Ảnh bằng chứng (tùy chọn)</span>
         <span className="claims-muted">{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
-        <input type="file" accept={IMAGE_ACCEPT} multiple disabled={busy} onChange={pickImages} /></label>
+        <ImageUploadButton label="Thêm ảnh bằng chứng" disabled={busy||files.length>=5} onChange={pickImages} /></div>
       <ImageProcessingStatus active={processing} />
       {files.length > 0 && <ul className="handover-record-files">{files.map((file, index) => <li key={`${file.name}:${index}`}>
         <span>{file.name}</span><button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {

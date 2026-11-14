@@ -1,33 +1,29 @@
-import React from 'react';
 import { MapPin, Clock } from 'lucide-react';
 
 export default function ItemInfoSection({ item }) {
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        <span className="badge badge-accent">{item.category}</span>
-        <span className="badge" style={{ background: 'white', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-          ID: #{item.id}
-        </span>
-      </div>
-      <h1 className="text-display-md" style={{ marginBottom: '20px' }}>{item.title}</h1>
+  const isLost = item.type === 'lost';
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '24px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', color: 'var(--text-secondary)' }}>
-          <MapPin size={16} style={{ marginTop: 2, flexShrink: 0, color: 'var(--text-muted)' }} />
-          <div>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Địa điểm</div>
-            <div style={{ fontSize: '0.9375rem' }}>{item.location}</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', color: 'var(--text-secondary)' }}>
-          <Clock size={16} style={{ marginTop: 2, flexShrink: 0, color: 'var(--text-muted)' }} />
-          <div>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Thời gian</div>
-            <div style={{ fontSize: '0.9375rem' }}>{item.time} ngày {item.date}</div>
-          </div>
-        </div>
+  return (
+    <div className="post-detail-overview">
+      <div className="post-detail-tags">
+        <span className={`badge ${isLost ? 'badge-lost' : 'badge-found'}`}>
+          {isLost ? 'Cần tìm đồ mất' : 'Đồ nhặt được'}
+        </span>
+        <span className="badge badge-accent">{item.category}</span>
+        <span className="post-detail-id">#{item.id}</span>
       </div>
+      <h1>{item.title}</h1>
+
+      <dl className="post-detail-event">
+        <div>
+          <dt><MapPin size={17} aria-hidden="true" />{isLost ? 'Địa điểm mất đồ' : 'Địa điểm nhặt được'}</dt>
+          <dd>{item.location || 'Chưa cập nhật địa điểm'}</dd>
+        </div>
+        <div>
+          <dt><Clock size={17} aria-hidden="true" />{isLost ? 'Thời gian mất đồ' : 'Thời gian nhặt được'}</dt>
+          <dd>{item.time} · {item.date}</dd>
+        </div>
+      </dl>
     </div>
   );
 }

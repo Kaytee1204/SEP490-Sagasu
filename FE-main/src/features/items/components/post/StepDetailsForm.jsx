@@ -2,6 +2,7 @@ import React from 'react';
 import { Calendar, Clock, MapPin } from 'lucide-react';
 
 export default function StepDetailsForm({ formData, postType, onChange, categories = [] }) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div className="input-group">
@@ -36,6 +37,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
               id="date"
               type="date"
               required
+              max={today}
               className="input"
               value={formData.date}
               onChange={e => onChange({ ...formData, date: e.target.value })}
