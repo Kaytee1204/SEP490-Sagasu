@@ -24,7 +24,10 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/accounts")
 @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-@Tag(name = "2. Account Management", description = "Quản lý tài khoản (CRUD, Xóa mềm, Import/Export Excel), Lịch sử đăng nhập & Hồ sơ cá nhân (ADMIN & MANAGER)")
+@Tag(
+        name = "02. Account Management - Quản lý tài khoản & Hồ sơ",
+        description = "Hồ sơ cá nhân (/me), Lịch sử đăng nhập (audit-logs), CRUD tài khoản, Xóa mềm và Import/Export Excel (ADMIN & MANAGER)"
+)
 public class AccountController {
 
     private final AccountService accountService;
@@ -35,23 +38,29 @@ public class AccountController {
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Lấy thông tin hồ sơ cá nhân của tài khoản đang đăng nhập")
+    @Operation(
+            summary = "[2.1] Lấy thông tin hồ sơ cá nhân của tài khoản đang đăng nhập",
+            description = "Dành cho mọi tài khoản đã xác thực JWT. Trả về thông tin chi tiết của chính người dùng đang đăng nhập."
+    )
     public ResponseEntity<ApiResponse<AccountDto>> getMyProfile() {
         return ResponseEntity.ok(ApiResponse.ok(accountService.getMyProfile()));
     }
 
     @GetMapping("/me/audit-logs")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Lấy lịch sử hoạt động (login_audit_logs) của tài khoản đang đăng nhập từ DB")
-    public ResponseEntity<ApiResponse< java.util.List<java.util.Map<String, Object>> >> getMyAuditLogs() {
+    @Operation(
+            summary = "[2.2] Lấy lịch sử hoạt động & đăng nhập (login_audit_logs) của tôi",
+            description = "Trả về danh sách lịch sử đăng nhập, đổi mật khẩu và hoạt động bảo mật gần nhất của tài khoản hiện tại."
+    )
+    public ResponseEntity<ApiResponse<java.util.List<java.util.Map<String, Object>>>> getMyAuditLogs() {
         return ResponseEntity.ok(ApiResponse.ok(accountService.getMyAuditLogs()));
     }
 
     @PutMapping("/me")
     @PreAuthorize("isAuthenticated()")
     @Operation(
-            summary = "Cập nhật hồ sơ cá nhân (Chỉ cho phép đổi số điện thoại, mật khẩu; chỉ ADMIN mới được đổi role)",
-            description = "Người dùng thường chỉ được cập nhật phone và newPassword. Không được phép đổi email hoặc role."
+            summary = "[2.3] Cập nhật hồ sơ cá nhân (Số điện thoại, Mật khẩu mới)",
+            description = "Người dùng cập nhật số điện thoại (phone) và mật khẩu mới (newPassword). Chỉ ADMIN mới được phép đổi role."
     )
     public ResponseEntity<ApiResponse<AccountDto>> updateMyProfile(@Valid @RequestBody UpdateProfileRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật hồ sơ cá nhân thành công", accountService.updateMyProfile(request)));
@@ -59,7 +68,7 @@ public class AccountController {
 
     @GetMapping
     @Operation(
-            summary = "Danh sách tài khoản có phân trang ở Backend (hỗ trợ tìm kiếm, lọc theo role/status)",
+            summary = "[2.4] Danh sách tài khoản có phân trang, tìm kiếm và lọc theo Role / Status (ADMIN & MANAGER)",
             description = "Trả về PageResponse gồm content, page, size, totalElements, totalPages."
     )
     public ResponseEntity<ApiResponse<PageResponse<AccountDto>>> getAllAccounts(
@@ -76,15 +85,18 @@ public class AccountController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Xem chi tiết tài khoản theo ID")
+    @Operation(
+            summary = "[2.5] Xem chi tiết một tài khoản theo ID (ADMIN & MANAGER)",
+            description = "Trả về thông tin chi tiết của tài khoản theo ID."
+    )
     public ResponseEntity<ApiResponse<AccountDto>> getAccountById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(accountService.getAccountById(id)));
     }
 
     @PostMapping
     @Operation(
-            summary = "Tạo tài khoản bằng tay (dành cho cả ADMIN và MANAGER)",
-            description = "Validate tại DTO: fullName, email, password, role. ID tự động tăng trong DB. Chỉ ADMIN được set role khác USER."
+            summary = "[2.6] Tạo mới tài khoản thủ công (ADMIN & MANAGER)",
+            description = "Validate tại DTO: fullName, email, password, role. Chỉ ADMIN được phép gán role khác USER."
     )
     public ResponseEntity<ApiResponse<AccountDto>> createAccount(@Valid @RequestBody CreateAccountRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Tạo tài khoản thành công", accountService.createAccount(request)));
@@ -92,8 +104,8 @@ public class AccountController {
 
     @PutMapping("/{id}")
     @Operation(
-            summary = "Update thông tin tài khoản (fullName, email, phone, password, role, status...)",
-            description = "Chỉ ADMIN mới được phép thay đổi Role. MANAGER được sửa các thông tin khác của tài khoản thuộc role USER, APPROVER."
+            summary = "[2.7] Cập nhật thông tin tài khoản theo ID (fullName, email, phone, password, role, status...)",
+            description = "Chỉ ADMIN mới được phép thay đổi Role. MANAGER được sửa thông tin của các tài khoản thuộc role USER, APPROVER."
     )
     public ResponseEntity<ApiResponse<AccountDto>> updateAccount(
             @PathVariable Long id,
@@ -104,7 +116,7 @@ public class AccountController {
 
     @DeleteMapping("/{id}")
     @Operation(
-            summary = "Xóa mềm tài khoản (Soft Delete)",
+            summary = "[2.8] Xóa mềm tài khoản (Soft Delete)",
             description = "Chuyển trạng thái tài khoản sang DELETED và thu hồi toàn bộ Refresh Token đang hoạt động."
     )
     public ResponseEntity<ApiResponse<AccountDto>> softDeleteAccount(@PathVariable Long id) {
@@ -113,8 +125,8 @@ public class AccountController {
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
-            summary = "Import file Excel chứa Gmail và Mật khẩu người dùng vào DB",
-            description = "Dành cho cả ADMIN và MANAGER. File Excel gồm Cột A = email (gmail), Cột B = password (mật khẩu), tùy chọn Cột C = full_name, Cột D = role."
+            summary = "[2.9] Import danh sách tài khoản từ file Excel (.xlsx / .xls)",
+            description = "Dành cho cả ADMIN và MANAGER. File Excel gồm Cột A = email, Cột B = password, tùy chọn Cột C = full_name, Cột D = role."
     )
     public ResponseEntity<ApiResponse<ExcelImportResponse>> importAccountsFromExcel(
             @Parameter(description = "File Excel (.xlsx hoặc .xls) chứa cột email và password")
@@ -129,8 +141,8 @@ public class AccountController {
     @GetMapping("/import/template")
     @PreAuthorize("permitAll()")
     @Operation(
-            summary = "Tải file Excel mẫu (email + password + full_name + role) để Import tài khoản",
-            description = "Trả về file accounts_import_template.xlsx có sẵn cột tiêu đề và dữ liệu mẫu."
+            summary = "[2.10] Tải file Excel mẫu (accounts_import_template.xlsx) để Import tài khoản",
+            description = "Trả về file Excel mẫu có sẵn cột tiêu đề (email, password, full_name, role) và dòng dữ liệu minh họa."
     )
     public ResponseEntity<byte[]> downloadExcelTemplate() {
         byte[] bytes = accountService.generateExcelTemplate();

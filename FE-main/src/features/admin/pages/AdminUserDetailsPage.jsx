@@ -29,7 +29,7 @@ export default function AdminUserDetailsPage() {
   }
 
   return (
-    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="admin-page-container" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div style={{

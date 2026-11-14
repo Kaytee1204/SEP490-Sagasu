@@ -59,7 +59,7 @@ export default function SmartMatchPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '32px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: '24px' }}>
             {AI_MATCHES.map((item, i) => (
               <div key={item.id} style={{ animationDelay: `${i * 0.1}s` }}>
                 <SmartMatchCard item={item} />

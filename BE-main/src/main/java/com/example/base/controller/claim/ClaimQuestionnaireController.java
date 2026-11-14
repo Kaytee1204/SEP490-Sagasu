@@ -4,6 +4,8 @@ import com.example.base.dto.ApiResponse;
 import com.example.base.dto.claim.ClaimQuestionnaireDto;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.claim.ClaimService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -19,14 +21,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-@Tag(name = "Claims", description = "Bộ câu hỏi xác minh nhận đồ theo danh mục")
+@Tag(
+        name = "06. Claims (P2P) - Yêu cầu nhận đồ & Bộ câu hỏi xác minh",
+        description = "Lấy bộ câu hỏi xác minh theo danh mục, Gửi/Gửi lại Claim, Gom nhóm Claim theo bài đăng, Duyệt/Từ chối/Yêu cầu bổ sung và Hủy Claim"
+)
 public class ClaimQuestionnaireController {
     private final ClaimService service;
 
     @GetMapping("/posts/{postId}/claims/questions")
+    @Operation(
+            summary = "[6.1] Lấy bộ câu hỏi xác minh quyền sở hữu theo Danh mục của bài đăng",
+            description = "Trả về mẫu câu hỏi xác minh (claim_question_template & claim_question) tương ứng với danh mục của bài đăng FOUND."
+    )
     public ResponseEntity<ApiResponse<ClaimQuestionnaireDto>> questions(
             @PathVariable long postId,
-            @AuthenticationPrincipal CustomUserDetails user) {
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(ApiResponse.ok(service.questionnaire(postId, user)));

@@ -37,6 +37,8 @@ export default function AccountCrudModal({
           borderRadius: '12px',
           width: '100%',
           maxWidth: '500px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           padding: '24px',
           boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
           border: '1px solid rgba(0,0,0,0.08)',
@@ -150,7 +152,7 @@ export default function AccountCrudModal({
           </div>
 
           {/* Role & Status */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
             <div>
               <label
                 style={{

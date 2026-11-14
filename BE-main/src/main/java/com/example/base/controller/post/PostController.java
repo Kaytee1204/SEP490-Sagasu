@@ -33,7 +33,10 @@ import com.example.base.dto.post.PostSearchFilter;
 
 @RestController
 @RequestMapping("/api/posts")
-@Tag(name = "3. Posts - Lost & Found", description = "Tra cứu, Lọc bài đăng công khai, Chi tiết bài đăng, AI Smart Matching và Đăng bài Lost / Found")
+@Tag(
+        name = "04. Posts (Lost & Found) - Bài đăng & AI Smart Matching",
+        description = "Tìm kiếm/Lọc bài đăng công khai, Xem chi tiết, Đăng tin Lost/Found, Dấu hiệu nhận dạng riêng tư và Đối sánh thông minh Multimodal AI"
+)
 public class PostController {
     private final PostService posts;
     private final PostCreationService creation;
@@ -51,7 +54,10 @@ public class PostController {
     }
 
     @GetMapping
-    @Operation(summary = "UC13/21: Xem và tìm bài LOST/FOUND đang VISIBLE", description = "Lọc theo keyword, categoryId, postType (LOST/FOUND), location; timeRange=24H/7D cho thời gian gần đây hoặc CUSTOM với fromDate/toDate (yyyy-MM-dd, ngày mất/nhặt theo giờ Việt Nam). Trang bắt đầu từ 1; không trả bài PENDING, bị ẩn hay đã xóa.")
+    @Operation(
+            summary = "[4.1] UC13/21: Tra cứu & lọc danh sách bài đăng LOST / FOUND công khai (VISIBLE)",
+            description = "Lọc theo keyword, categoryId, postType (LOST/FOUND), location; timeRange=24H/7D hoặc CUSTOM với fromDate/toDate (yyyy-MM-dd). Trang bắt đầu từ 1."
+    )
     public ResponseEntity<ApiResponse<PostPageDto>> list(
             @RequestParam(defaultValue = "1") String page,
             @RequestParam(defaultValue = "12") String size,
@@ -73,14 +79,20 @@ public class PostController {
     }
 
     @GetMapping("/categories")
-    @Operation(summary = "Danh mục đang hoạt động để đăng bài")
+    @Operation(
+            summary = "[4.2] Lấy danh sách danh mục đang hoạt động (is_active = true) để đăng bài",
+            description = "Trả về các danh mục đang kích hoạt cho form Đăng tin và Bộ lọc tìm kiếm."
+    )
     public ApiResponse<List<CategoryDto>> categories() {
         return ApiResponse.ok(posts.getActiveCategories());
     }
 
     @PostMapping(value = "/lost", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-    @Operation(summary = "UC15: Mọi vai trò được đăng Lost và hiển thị ngay", description = "Phần data là JSON (tiêu đề, danh mục, thời gian, địa điểm...); images là 0–5 ảnh JPG/PNG, tối đa 5 MB/ảnh. Người đăng lấy tự động từ JWT.")
+    @Operation(
+            summary = "[4.3] UC15: Đăng bài báo mất đồ (LOST) kèm 0–5 ảnh minh họa",
+            description = "Phần data là JSON (tiêu đề, danh mục, thời gian, địa điểm, requestId...); images là 0–5 ảnh JPG/PNG, tối đa 5 MB/ảnh."
+    )
     public ResponseEntity<ApiResponse<CreatedPostDto>> createLost(
             @Parameter(description = "Dữ liệu bài đăng Lost dạng JSON") @Valid @RequestPart("data") CreateLostPostRequest request,
             @Parameter(description = "Danh sách file ảnh đính kèm (0-5 file, tối đa 5MB/file)") @RequestPart(value = "images", required = false) List<MultipartFile> images,
@@ -91,7 +103,10 @@ public class PostController {
 
     @PostMapping(value = "/found", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('USER', 'APPROVER', 'MANAGER', 'ADMIN')")
-    @Operation(summary = "UC16: Đăng Found P2P và hiển thị ngay; yêu cầu giao bên tiếp nhận ở thao tác riêng sau khi đăng")
+    @Operation(
+            summary = "[4.4] UC16: Đăng bài nhặt được đồ (FOUND - P2P) kèm 0–5 ảnh",
+            description = "Đăng bài nhặt được đồ (custody_mode = P2P); chủ bài có thể gửi yêu cầu chuyển giao cho văn phòng sau khi đăng."
+    )
     public ResponseEntity<ApiResponse<CreatedPostDto>> createFound(
             @Parameter(description = "Dữ liệu bài đăng Found dạng JSON") @Valid @RequestPart("data") CreateFoundPostRequest request,
             @Parameter(description = "Danh sách file ảnh đính kèm (0-5 file, tối đa 5MB/file)") @RequestPart(value = "images", required = false) List<MultipartFile> images,
@@ -100,28 +115,11 @@ public class PostController {
                 creation.createFound(request, images, user)));
     }
 
-    @GetMapping("/{id}/private-identifiers")
-    @Operation(summary = "UC17: Chủ bài đọc dấu hiệu nhận dạng riêng tư")
-    public ResponseEntity<ApiResponse<PrivateIdentifiersDto>> readPrivateIdentifiers(
-            @PathVariable long id,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(ApiResponse.ok(privateIdentifiers.read(id, user)));
-    }
-
-    @PutMapping("/{id}/private-identifiers")
-    @Operation(summary = "UC17: Chủ bài thêm/sửa dấu hiệu riêng tư; chuỗi rỗng để xóa")
-    public ResponseEntity<ApiResponse<Void>> updatePrivateIdentifiers(
-            @PathVariable long id,
-            @Valid @RequestBody PrivateIdentifiersDto request,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        privateIdentifiers.update(id, request, user);
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(ApiResponse.ok("Đã lưu dấu hiệu nhận dạng riêng tư", null));
-    }
-
     @GetMapping("/{id}")
-    @Operation(summary = "UC14: Xem chi tiết bài đăng đang hiển thị", description = "Yêu cầu đăng nhập. Không trả đặc điểm bí mật hoặc ghi chú kiểm duyệt.")
+    @Operation(
+            summary = "[4.5] UC14: Xem chi tiết bài đăng đang hiển thị theo ID",
+            description = "Yêu cầu đăng nhập. Không trả về đặc điểm nhận dạng bí mật hoặc ghi chú kiểm duyệt cho người xem thường."
+    )
     public ResponseEntity<ApiResponse<PostDetailDto>> detail(
             @PathVariable String id,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
@@ -136,9 +134,37 @@ public class PostController {
                         posts.getDetailForViewer(postId, user == null ? null : user.getId())));
     }
 
+    @GetMapping("/{id}/private-identifiers")
+    @Operation(
+            summary = "[4.6] UC17: Chủ bài đọc dấu hiệu nhận dạng riêng tư (Private Identifiers)",
+            description = "Chỉ chủ sở hữu bài đăng mới được đọc dấu hiệu nhận dạng riêng tư để đối chiếu khi duyệt Claim."
+    )
+    public ResponseEntity<ApiResponse<PrivateIdentifiersDto>> readPrivateIdentifiers(
+            @PathVariable long id,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(privateIdentifiers.read(id, user)));
+    }
+
+    @PutMapping("/{id}/private-identifiers")
+    @Operation(
+            summary = "[4.7] UC17: Chủ bài thêm / cập nhật dấu hiệu nhận dạng riêng tư",
+            description = "Chủ bài cập nhật dấu hiệu nhận dạng bí mật; truyền chuỗi rỗng để xóa."
+    )
+    public ResponseEntity<ApiResponse<Void>> updatePrivateIdentifiers(
+            @PathVariable long id,
+            @Valid @RequestBody PrivateIdentifiersDto request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        privateIdentifiers.update(id, request, user);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok("Đã lưu dấu hiệu nhận dạng riêng tư", null));
+    }
+
     @GetMapping("/{id}/smart-matches")
-    @Operation(summary = "UC21/AI: Đối sánh thông minh bằng Multimodal AI giữa bài LOST và các bài FOUND",
-            description = "Chỉ dành cho chủ sở hữu bài viết, MANAGER và ADMIN. Pipeline Multimodal AI (YOLOv8 crop + ViT/CLIP text tiếng Việt + HSV màu sắc + Không/Thời gian + Visual Gating). Tự động tìm kiếm các bài viết tiềm năng trùng khớp nhất.")
+    @Operation(
+            summary = "[4.8] UC21/AI: Đối sánh thông minh Multimodal AI giữa bài LOST và các bài FOUND",
+            description = "Chỉ dành cho chủ sở hữu bài viết, MANAGER và ADMIN. Kết hợp AI Service (YOLOv8 + ViT/CLIP + HSV Color + Spatio-Temporal) và Java Fallback Matching."
+    )
     public ResponseEntity<ApiResponse<List<SmartMatchItemDto>>> getSmartMatches(
             @PathVariable long id,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
