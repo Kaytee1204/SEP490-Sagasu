@@ -28,7 +28,7 @@ public class ReportReviewController {
 
     @GetMapping
     @Operation(
-            summary = "[13.4] Hàng đợi danh sách báo cáo vi phạm & tranh chấp dành cho Quản lý (MANAGER)",
+            summary = "[13.5] Hàng đợi danh sách báo cáo vi phạm & tranh chấp dành cho Quản lý (MANAGER)",
             description = "Lọc theo status (ALL, OPEN, IN_REVIEW, RESOLVED, REJECTED), kind (GENERAL, HANDOVER_ISSUE), target và từ khóa q."
     )
     public ApiResponse<?> list(
@@ -44,7 +44,7 @@ public class ReportReviewController {
 
     @GetMapping("/{id}")
     @Operation(
-            summary = "[13.5] Xem hồ sơ điều tra chi tiết của một báo cáo (bao gồm Snapshot, Bằng chứng, Lịch sử & Quyết định)",
+            summary = "[13.6] Xem hồ sơ điều tra chi tiết của một báo cáo (bao gồm Snapshot, Bằng chứng, Lịch sử & Quyết định)",
             description = "Dành cho MANAGER đối chiếu ngữ cảnh chụp lúc báo cáo (report_snapshot) và trạng thái hiện tại."
     )
     public ApiResponse<?> detail(
@@ -56,7 +56,7 @@ public class ReportReviewController {
 
     @PostMapping("/{id}/actions")
     @Operation(
-            summary = "[13.6] Thực hiện thao tác xử lý báo cáo (TAKE / HOLD / RELEASE / CONCLUDE) dành cho MANAGER",
+            summary = "[13.7] Thực hiện thao tác xử lý báo cáo (TAKE / HOLD / RELEASE / CONCLUDE) dành cho MANAGER",
             description = "Hỗ trợ: Tiếp nhận xử lý (TAKE), Tạm dừng giao nhận bài đăng (HOLD), Gỡ tạm dừng (RELEASE), và Kết luận vụ việc (CONCLUDE kèm outcome VIOLATION / SETTLED / UNSUBSTANTIATED / HANDOVER_COMPLETED / HANDOVER_CONTINUE / CLAIM_REJECTED)."
     )
     public ApiResponse<?> action(
@@ -69,7 +69,7 @@ public class ReportReviewController {
 
     @PostMapping("/{id}/inquiries")
     @Operation(
-            summary = "[13.7] Manager gửi yêu cầu giải trình / bổ sung thông tin (Inquiry) tới các bên liên quan",
+            summary = "[13.8] Manager gửi yêu cầu giải trình / bổ sung thông tin (Inquiry) tới các bên liên quan",
             description = "Tạo câu hỏi điều tra (report_inquiry) và gửi thông báo cho người dùng liên quan."
     )
     public ApiResponse<?> ask(
@@ -82,7 +82,7 @@ public class ReportReviewController {
 
     @GetMapping("/inquiries/mine")
     @Operation(
-            summary = "[13.8] Danh sách các yêu cầu giải trình (Inquiries) từ Manager gửi cho tôi",
+            summary = "[13.9] Danh sách các yêu cầu giải trình (Inquiries) từ Manager gửi cho tôi",
             description = "Dành cho người dùng xem các câu hỏi xác minh từ Manager cần phản hồi."
     )
     public ApiResponse<?> mine(
@@ -93,7 +93,7 @@ public class ReportReviewController {
 
     @PostMapping(value = "/inquiries/{id}/reply", consumes = "multipart/form-data")
     @Operation(
-            summary = "[13.9] Người dùng gửi phản hồi giải trình kèm ảnh bằng chứng cho câu hỏi của Manager",
+            summary = "[13.10] Người dùng gửi phản hồi giải trình kèm ảnh bằng chứng cho câu hỏi của Manager",
             description = "Lưu nội dung trả lời vào report_inquiry và đính kèm tệp bằng chứng vào report_reply_evidence."
     )
     public ApiResponse<?> reply(
@@ -107,7 +107,7 @@ public class ReportReviewController {
 
     @GetMapping("/results/mine")
     @Operation(
-            summary = "[13.10] Danh sách kết quả xử lý các báo cáo có liên quan tới tôi",
+            summary = "[13.11] Danh sách kết quả xử lý các báo cáo có liên quan tới tôi",
             description = "Hiển thị kết luận chính thức của Manager cho người báo cáo và các bên liên quan."
     )
     public ApiResponse<?> results(
@@ -118,7 +118,7 @@ public class ReportReviewController {
 
     @GetMapping("/{id}/chat")
     @Operation(
-            summary = "[13.11] Manager xem ngữ cảnh lịch sử tin nhắn Chat liên quan đến báo cáo",
+            summary = "[13.12] Manager xem ngữ cảnh lịch sử tin nhắn Chat liên quan đến báo cáo",
             description = "Đọc lịch sử cuộc hội thoại P2P được đính kèm trong hồ sơ điều tra báo cáo."
     )
     public ApiResponse<?> chat(
