@@ -141,7 +141,7 @@ export default function OfficeClaimList({ mine = false }) {
                 </Empty>
               ) : (
                 <div className="of-table-wrap">
-                  <table className="of-table">
+                  <table className="of-table of-claim-table">
                     <thead>
                       <tr>
                         <th>Yêu cầu / Đồ vật</th>
@@ -154,13 +154,13 @@ export default function OfficeClaimList({ mine = false }) {
                     <tbody>
                       {state.data.content.map((c) => (
                         <tr key={c.id}>
-                          <td>
+                          <td data-label="Đồ vật">
                             <Link to={`${base}/${c.id}`}>{c.postTitle}</Link>
                             <small>
                               Yêu cầu #{c.id} · Bài #{c.postId}
                             </small>
                           </td>
-                          <td>
+                          <td data-label="Người khai">
                             {c.claimantName}
                             <small>
                               <Badge value={c.channel} />
@@ -168,11 +168,11 @@ export default function OfficeClaimList({ mine = false }) {
                                 ` · Nhập bởi ${c.createdBy}`}
                             </small>
                           </td>
-                          <td>
+                          <td data-label="Tiến trình">
                             <ClaimProgress stage={c.stage} scheduledAt={c.collectionAt} />
                           </td>
-                          <td>{date(c.createdAt)}</td>
-                          <td>
+                          <td data-label="Ngày gửi">{date(c.createdAt)}</td>
+                          <td data-label="Thao tác">
                             <Link className="of-button" to={`${base}/${c.id}`} onClick={(e) => {
                               if (!mine && c.ownRequest && ["PENDING", "NEEDS_INFO"].includes(c.status)) {e.preventDefault();setReviewErrorId(c.id);setReviewError("Đây là yêu cầu nhận đồ của bạn. Nhờ một nhân viên khác xét duyệt nhé.");}
                             }}>

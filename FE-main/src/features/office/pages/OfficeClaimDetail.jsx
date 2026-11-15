@@ -176,7 +176,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                         claim.appointment.responseStatus,
                       )}
                     >
-                      {
+                      {claim.appointment.status === "COMPLETED" ? "Lịch hẹn đã hoàn tất." : claim.appointment.status === "CANCELLED" ? "Lịch hẹn đã hủy." :
                         {
                           UNSENT:
                             "Chưa gửi được lời mời; thời hạn 12 giờ chưa bắt đầu.",
@@ -245,6 +245,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                 )}
                 {claim.status === "NEEDS_INFO" && (
                   <SupplementForm
+                    mine={mine}
                     claim={claim}
                     onDone={() => {
                       setNotice({

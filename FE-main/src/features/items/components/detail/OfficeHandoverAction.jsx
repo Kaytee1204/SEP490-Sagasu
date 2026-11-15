@@ -21,7 +21,7 @@ export default function OfficeHandoverAction({ post, onTransferred }) {
       // DaiHV integration: request only; office staff confirm physical custody later.
       onTransferred({
         ...post, custodyMode: 'P2P', moderationStatus: result.moderationStatus,
-        status: result.status, canRequestOfficeHandover: false
+        status: result.status, canRequestOfficeHandover: false, officeTransferPending: true
       });
     } catch (failure) {
       setError(failure.message || 'Chưa gửi được yêu cầu tiếp nhận.');
@@ -32,7 +32,7 @@ export default function OfficeHandoverAction({ post, onTransferred }) {
   }
 
   if (post.postType !== 'FOUND') return null;
-  if (!post.canRequestOfficeHandover) return (post.isOwner || post.canEditOwnPost) ? <Link to="/van-phong/chuyen-giao" className="btn btn-ghost">Theo dõi giao đồ cho văn phòng</Link> : null;
+  if (!post.canRequestOfficeHandover) return (post.isOwner || post.canEditOwnPost) && post.officeTransferPending ? <Link to="/van-phong/chuyen-giao" className="btn btn-ghost">Theo dõi giao đồ cho văn phòng</Link> : null;
   // DaiHV integration: explain and confirm the request at the post action itself.
   return <section aria-label="Gửi đồ cho văn phòng" className="space-y-3">
     <div className="flex items-center gap-3"><button type="button" className="btn btn-ghost" onClick={() => setConfirming(true)}>Nhờ văn phòng giữ đồ</button><InfoHint label="Giải thích việc gửi đồ cho văn phòng">Văn phòng sẽ liên hệ để tiếp nhận. Bạn giữ đồ cho đến khi giao trực tiếp; sau đó văn phòng tiếp tục xử lý các yêu cầu nhận lại đồ.</InfoHint></div>

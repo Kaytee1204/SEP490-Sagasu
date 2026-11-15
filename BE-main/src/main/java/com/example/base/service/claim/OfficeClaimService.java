@@ -225,7 +225,8 @@ public class OfficeClaimService {
         if(!"NEEDS_INFO".equals(c.getStatus())) throw bad("Hồ sơ không ở bước chờ bổ sung.");
         c.review("PENDING"); activities.save(new ClaimActivity(c,actor,"RESUBMIT","NEEDS_INFO",request.information()));
         notifications.notifyRoles(List.of(APPROVER),actor.getId(),"OFFICE_CLAIM_SUPPLEMENTED",
-            "Người nhận đã bổ sung thông tin hồ sơ #" + c.getId(),
+            (actor.getRole()==APPROVER && (c.getClaimant()==null || !Objects.equals(c.getClaimant().getId(),actor.getId()))
+                ? "Văn phòng đã ghi nhận thông tin bổ sung cho hồ sơ #" : "Người nhận đã bổ sung thông tin hồ sơ #") + c.getId(),
             person(actor) + " đã gửi thông tin bổ sung cho hồ sơ \"" + c.getPost().getTitle() + "\".",
             "/approver/office-claims/" + c.getId(),false);
     }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { officeApi } from "../api/officeApi";
 import Notice from "./Notice";
 
-export default function SupplementForm({ claim, onDone }) {
+export default function SupplementForm({ claim, onDone, mine }) {
   const [information, setInformation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +29,7 @@ export default function SupplementForm({ claim, onDone }) {
       <form className="of-form" onSubmit={submit}>
         <Notice error>{error}</Notice>
         <label>
-          Nội dung người khai cung cấp *
+          {mine ? "Thông tin bạn bổ sung *" : "Thông tin người khai cung cấp — văn phòng nhập hộ *"}
           <textarea
             required
             maxLength={2000}

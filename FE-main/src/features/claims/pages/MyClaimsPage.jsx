@@ -82,14 +82,14 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
       <div className="claims-filters"><Link className="btn btn-ghost" to={postId ? `/chi-tiet/${postId}` : '/tim-kiem'}>{postId ? 'Về bài đăng' : 'Tìm đồ thất lạc'}</Link></div></header>}
     {postId && <p><Link className="btn btn-ghost" to={`/claim-cua-toi?view=${view}&claimStatus=ALL`}>Xem tất cả bài đăng</Link></p>}
     <div className="claims-filters claims-navigation">
-    <div className="claims-tabs" role="tablist" aria-label="Loại danh sách claim">
+    <div className="claims-tabs" role="tablist" aria-label="Loại danh sách yêu cầu">
       {[['received', 'Người khác yêu cầu'], ['sent', 'Tôi yêu cầu']].map(([value, label]) => <button type="button" key={value}
         role="tab" aria-selected={view === value} className={`chip ${view === value ? 'active' : ''}`}
         onClick={() => updateClaimState(value, 1, 'ALL')}>{label}</button>)}
     </div>
       <Link className="chip claims-office-link" to="/van-phong/claims" state={{ officeClaimReturn: location.pathname + location.search }}>Nhận đồ tại văn phòng</Link>
     </div>
-    <div className="claims-filters" aria-label="Lọc trạng thái claim">
+    <div className="claims-filters" aria-label="Lọc trạng thái yêu cầu">
       {Object.entries({ ALL: 'Tất cả', PENDING: incoming ? 'Chờ bạn duyệt' : 'Chờ phản hồi', APPROVED: 'Đang nhận đồ', HISTORY: 'Lịch sử' }).map(([value, label]) => <button key={value} type="button"
         className={`chip ${activeFilter === value ? 'active' : ''}`} aria-pressed={activeFilter === value}
         onClick={() => updateClaimState(view, 1, value)}>{label}</button>)}
@@ -101,7 +101,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
         {HISTORY_STATUSES.map(value => <option key={value} value={value}>{CLAIM_STATUS[value]}</option>)}
       </select>
     </div>}
-    {loading ? <p role="status">Đang tải claim…</p> : snapshot.error ? <div className="claim-alert" role="alert"><p>{snapshot.error}</p>
+    {loading ? <p role="status">Đang tải yêu cầu…</p> : snapshot.error ? <div className="claim-alert" role="alert"><p>{snapshot.error}</p>
       <button className="btn btn-ghost" type="button" onClick={() => setAttempt(n => n + 1)}>Thử lại</button></div> : <>
       <p className="claims-muted" role="status">{snapshot.result.totalElements} bài đăng</p>
       {snapshot.result.content.length ? snapshot.result.content.map(group => <ClaimPostGroup key={`${group.postId}:${status}`} group={group} incoming={incoming} status={status}
@@ -113,7 +113,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
             const updated = new URLSearchParams(searchParams); updated.set('expanded', [...next].join(','));
             setSearchParams(updated, { replace: true });
           }} />) : <div className="claim-panel"><p>{status !== 'ALL' ? 'Không có hồ sơ ở trạng thái này.'
-        : incoming ? 'Chưa có claim trên các bài đăng của bạn.' : 'Bạn chưa gửi claim nào.'}</p>
+        : incoming ? 'Chưa có yêu cầu nhận đồ trên các bài đăng của bạn.' : 'Bạn chưa gửi yêu cầu nhận đồ nào.'}</p>
         {page > 1 && <button className="btn btn-ghost" onClick={() => updateClaimState(view, 1, status)}>Về trang đầu</button>}</div>}
       {snapshot.result.totalPages > 1 && <Pagination currentPage={page} totalPages={snapshot.result.totalPages} onPageChange={nextPage => updateClaimState(view, nextPage, status)} />}
     </>}
@@ -133,7 +133,7 @@ function ClaimRow({ claim, incoming, showPost = false }) {
   const location = useLocation();
   return <Link className="claim-group-row" to={claimDetailPath(claim.postId, claim.id)} state={{ claimListReturn: location.pathname + location.search }}>
     {showPost && <div className="workflow-post-context"><ClaimPostThumbnail url={claim.postThumbnailUrl} title={claim.postTitle} /><strong>{claim.postTitle}</strong></div>}
-    <div className="claim-group-row-heading"><strong>{incoming ? claim.claimantName : claim.claimType === 'OFFICE' ? 'Phòng ban tiếp nhận' : `Người nhặt: ${claim.finderName}`}</strong>
+    <div className="claim-group-row-heading"><strong>{incoming ? claim.claimantName : claim.claimType === 'OFFICE' ? 'Văn phòng tiếp nhận' : `Người nhặt: ${claim.finderName}`}</strong>
       <span className={`claim-status claim-status-${claim.status}`}>{claim.status === 'PENDING' && claim.claimType === 'P2P' ? (incoming ? 'Chờ bạn xét duyệt' : 'Chờ người nhặt phản hồi') : CLAIM_STATUS[claim.status]}</span></div>
     {claim.descriptionPreview && <p className="workflow-preview">{claim.descriptionPreview}</p>}
     {claim.closeReason === 'ITEM_RETURNED' && <p className="claims-muted">Đã đóng vì bài được trao trả.</p>}

@@ -30,14 +30,14 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
     const values = [...e.target.files];
     e.target.value = "";
     if (busy) return;
-    if (values.length > 5) {
+    if (files.length + values.length > 5) {
       setError("Chọn tối đa 5 ảnh.");
       return;
     }
     setError("");
     try {
       const prepared = await prepare(values);
-      if (prepared) setFiles(prepared);
+      if (prepared) setFiles(current => [...current,...prepared]);
     } catch (problem) { setError(problem.message); }
   }
   return (

@@ -52,6 +52,6 @@ public class PostMapper {
                 post.getLongitude(),
                 post.getEventAt(), post.getStatus(), post.getCustodyMode(), post.getCreatedAt(), images,
                 isOwner && officeReceipt == null, post.getModerationStatus(),
-                post.getCreatedBy().getFullName(), officeReceipt, canRequestOfficeHandover, isOwner);
+                post.getCreatedBy().getFullName(), officeReceipt, canRequestOfficeHandover, isOwner, isOwner && post.getHandoverRequestedAt()!=null);
     }
 }

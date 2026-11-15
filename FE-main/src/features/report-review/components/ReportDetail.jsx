@@ -59,7 +59,8 @@ export default function ReportDetail({ id, onBack, onRelated }) {
             <p className="rr-muted">
               {labels[r.kind]} · Gửi lúc {date(r.created_at)}
             </p>
-            <p>{r.description}</p>
+            {r.reason_label_snapshot && <p><strong>Lý do:</strong> {r.reason_label_snapshot}</p>}
+            <p className="rr-description">{r.reason_label_snapshot && r.description?.startsWith(r.reason_label_snapshot) ? r.description.slice(r.reason_label_snapshot.length).trim() : r.description}</p>
             <Gallery images={data.evidence} />
             {r.resolution_note && (
               <div className="rr-callout">

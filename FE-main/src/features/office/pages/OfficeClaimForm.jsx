@@ -59,12 +59,18 @@ export default function OfficeClaimForm({ counter = false }) {
   const [files, setFiles] = useState([]);
   const [claimant, setClaimant] = useState(null);
   function selectClaimant(account) {
+    if (account?.id !== claimant?.id && !confirmClaimantChange()) return;
+    if(account?.id !== claimant?.id) { setAnswers({}); setFiles([]); setForm(current => ({...current,description:"",evidenceNote:"",claimantPhone:""})); }
     setClaimant(account);
     setForm((current) => ({
       ...current,
       claimantName: account?.name || "",
       claimantEmail: account?.email || "",
     }));
+  }
+  function confirmClaimantChange() {
+    return !(form.description.trim() || form.evidenceNote.trim() || files.length || Object.keys(answers).length)
+      || window.confirm("Đổi người khai sẽ xóa câu trả lời xác minh và ảnh đang nhập. Tiếp tục?");
   }
   const [saving, setBusy] = useState(false);
   const [imagesProcessing, setImagesProcessing] = useState(false);
@@ -192,9 +198,12 @@ export default function OfficeClaimForm({ counter = false }) {
                 value={claimant}
                 query={form.claimantEmail}
                 onQueryChange={(email) => {
+                  if (claimant && !confirmClaimantChange()) return;
+                  if(claimant) { setAnswers({}); setFiles([]); }
                   setClaimant(null);
                   setForm((current) => ({
                     ...current,
+                    ...(claimant ? {description:"",evidenceNote:"",claimantPhone:""} : {}),
                     claimantEmail: email,
                     claimantName: "",
                   }));

@@ -43,7 +43,7 @@ export default function ItemDetailPage() {
 }
 
 function PostDetail({ id, onRetry }) {
-  const { isAdmin, isManager, isApprover } = useAuth();
+  const { isAdmin, isManager } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
@@ -214,7 +214,7 @@ function PostDetail({ id, onRetry }) {
             )}
           </div>
 
-          {post.postType === 'FOUND' && ((post.isOwner || post.canEditOwnPost) || (isApprover && post.officeReceipt)) && <Link className="btn btn-accent" to={post.officeReceipt && isApprover ? '/approver/office-claims' : postClaimsPath(post.id)}>Xét duyệt yêu cầu nhận đồ</Link>}
+          {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt && (post.isOwner || post.canEditOwnPost) && <Link className="btn btn-accent" to={postClaimsPath(post.id)}>Xét duyệt yêu cầu nhận đồ</Link>}
           <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
           {post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
             && post.moderationStatus === 'VISIBLE'
