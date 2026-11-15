@@ -15,6 +15,8 @@ public class Report {
     @Column(name="message_id") private Long messageId;
     @Column(name="reported_account_id") private Long reportedAccountId;
     @Column(nullable=false,columnDefinition="text") private String description;
+    @Column(name="reason_code",length=64,updatable=false) private String reasonCode;
+    @Column(name="reason_label_snapshot",length=200,updatable=false) private String reasonLabelSnapshot;
     @Column(nullable=false,length=16) private String status="OPEN";
     @Column(name="resolution_note",columnDefinition="text") private String resolutionNote;
     @Column(name="resolved_at") private OffsetDateTime resolvedAt;
@@ -31,5 +33,16 @@ public class Report {
     }
     public String targetType() { return postId!=null?"POST":claimId!=null?"CLAIM":messageId!=null?"MESSAGE":"USER"; }
     public long targetId() { return postId!=null?postId:claimId!=null?claimId:messageId!=null?messageId:reportedAccountId; }
+    public void selectReason(String code, String label) {
+        reasonCode = code;
+        reasonLabelSnapshot = label;
+    }
+    public String additionalDescription() {
+        // Keep the stored summary readable by the existing review workflow.
+        if (reasonLabelSnapshot == null || reasonCode == null || reasonCode.endsWith("_LEGACY")) return description;
+        if (description.equals(reasonLabelSnapshot)) return "";
+        String prefix = reasonLabelSnapshot + "\n\n";
+        return description.startsWith(prefix) ? description.substring(prefix.length()) : description;
+    }
     @PrePersist void create() { createdAt=updatedAt=OffsetDateTime.now(); }
 }

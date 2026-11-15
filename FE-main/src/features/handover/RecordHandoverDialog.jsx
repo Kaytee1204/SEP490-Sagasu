@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { uploadHandover } from './handoverApi';
+import useImageUploads from '@/hooks/useImageUploads';
+import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 
 export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const dialog = useRef(null);
@@ -10,7 +13,9 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const [note, setNote] = useState('');
   const [files, setFiles] = useState([]);
   const [confirmed, setConfirmed] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [submitting, setBusy] = useState(false);
+  const { prepare, processing } = useImageUploads();
+  const busy = submitting || processing;
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
 
@@ -28,28 +33,30 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   }, []);
 
   function close() {
-    if (sending.current) return;
+    if (sending.current || processing) return;
     if (note.trim() || files.length || confirmed) setDiscard(true);
     else onClose();
   }
 
-  function pickImages(event) {
+  async function pickImages(event) {
     const selected = [...event.target.files];
     event.target.value = '';
-    if (files.length + selected.length > 5 || selected.some(file =>
-      !['image/jpeg', 'image/png'].includes(file.type) || !file.size || file.size > 5242880)) {
-      setError('Chọn tối đa 5 ảnh JPG/PNG, mỗi ảnh không quá 5 MB.');
+    if (busy) return;
+    if (files.length + selected.length > 5) {
+      setError('Chọn tối đa 5 ảnh.');
       return;
     }
-    setFiles(current => [...current, ...selected]);
-    request.current = null;
     setError('');
     setDiscard(false);
+    try {
+      const prepared = await prepare(selected);
+      if (prepared) { setFiles(current => [...current, ...prepared]); request.current = null; }
+    } catch (problem) { setError(problem.message); }
   }
 
   async function submit(event) {
     event.preventDefault();
-    if (sending.current || !confirmed) return;
+    if (busy || sending.current || !confirmed) return;
     sending.current = true;
     setBusy(true);
     setError('');
@@ -78,8 +85,9 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
         <textarea maxLength={2000} value={note} disabled={busy} placeholder="Ví dụ: Đã giao kèm các phụ kiện…"
           onChange={event => { setNote(event.target.value); request.current = null; setDiscard(false); }} /></label>
       <label className="handover-record-field">Ảnh bàn giao (tùy chọn)
-        <span className="claims-muted">Tối đa 5 ảnh JPG/PNG, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
-        <input type="file" accept="image/jpeg,image/png" multiple disabled={busy} onChange={pickImages} /></label>
+        <span className="claims-muted">{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
+        <input type="file" accept={IMAGE_ACCEPT} multiple disabled={busy} onChange={pickImages} /></label>
+      <ImageProcessingStatus active={processing} />
       {files.length > 0 && <ul className="handover-record-files">{files.map((file, index) => <li key={`${file.name}:${index}`}>
         <span>{file.name}</span><button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {
           setFiles(current => current.filter((_, position) => position !== index)); request.current = null;
@@ -92,7 +100,7 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
         <footer><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></footer></div>
         : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !confirmed}>{busy ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>}
+          <button type="submit" className="btn btn-accent" disabled={busy || !confirmed}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>}
     </form>
   </dialog>;
 }

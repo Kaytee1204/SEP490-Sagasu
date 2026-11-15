@@ -7,6 +7,8 @@ import { vietnamInput } from '@/features/receipt/receiptUtils';
 import { ReceiptLoading, ReceiptError } from '@/features/receipt/components/ReceiptFeedback';
 import ReceiptImagePicker from '@/features/receipt/components/ReceiptImagePicker';
 import StorageLocationSelect from '@/features/receipt/components/StorageLocationSelect';
+import useImageUploads from '@/hooks/useImageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 
 const inputStyle = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-base text-slate-800 outline-none transition placeholder:text-slate-600 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50';
 
@@ -31,7 +33,9 @@ function ReceiptEditor({ receipt, categories, locations }) {
   const [files, setFiles] = useState([]);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [saving, setBusy] = useState(false);
+  const { prepare, processing } = useImageUploads();
+  const busy = saving || processing;
   const [dirty, setDirty] = useState(false);
   const pending = useRef(false);
   const previewUrls = useRef(new Set());
@@ -69,17 +73,20 @@ function ReceiptEditor({ receipt, categories, locations }) {
     'aria-invalid': !!errors[name], 'aria-describedby': errors[name] ? `${name}-error` : undefined,
     className: `${inputStyle} ${errors[name] ? 'border-rose-400 bg-rose-50/30' : ''}`,
   });
-  const addFiles = (selected) => {
-    if (!selected.length) return;
-    let message = '';
-    if (selected.length + files.length + kept.length > 5) message = 'Tối đa 5 ảnh. Bỏ bớt ảnh trước khi thêm.';
-    else if (selected.some((file) => !['image/jpeg', 'image/png'].includes(file.type))) message = 'Chỉ nhận ảnh JPG hoặc PNG. Vui lòng chọn lại.';
-    else if (selected.some((file) => !file.size || file.size > 5 * 1024 * 1024)) message = 'Mỗi ảnh phải có dung lượng lớn hơn 0 và không quá 5 MB.';
-    if (message) { setErrors((current) => ({ ...current, images: message })); return; }
-    const next = selected.map((file) => {
-      const preview = URL.createObjectURL(file); previewUrls.current.add(preview); return { file, preview };
-    });
-    setFiles((current) => [...current, ...next]); setErrors((current) => ({ ...current, images: '' })); setDirty(true);
+  const addFiles = async (selected) => {
+    if (!selected.length || busy) return;
+    if (selected.length + files.length + kept.length > 5) {
+      setErrors((current) => ({ ...current, images: 'Tối đa 5 ảnh. Bỏ bớt ảnh trước khi thêm.' })); return;
+    }
+    setErrors((current) => ({ ...current, images: '' }));
+    try {
+      const prepared = await prepare(selected);
+      if (!prepared) return;
+      const next = prepared.map((file) => {
+        const preview = URL.createObjectURL(file); previewUrls.current.add(preview); return { file, preview };
+      });
+      setFiles((current) => [...current, ...next]); setDirty(true);
+    } catch (problem) { setErrors((current) => ({ ...current, images: problem.message })); }
   };
   const removeNew = (index) => {
     URL.revokeObjectURL(files[index].preview); previewUrls.current.delete(files[index].preview);
@@ -91,7 +98,7 @@ function ReceiptEditor({ receipt, categories, locations }) {
   };
   const save = async (event) => {
     event.preventDefault();
-    if (pending.current) return;
+    if (pending.current || processing) return;
     const nextErrors = {};
     if (!form.title.trim()) nextErrors.title = 'Nhập tên đồ vật để nhận diện hồ sơ.';
     if (!categories.some((category) => String(category.categoryId) === form.categoryId)) nextErrors.categoryId = 'Chọn một danh mục đang hoạt động.';
@@ -147,7 +154,7 @@ function ReceiptEditor({ receipt, categories, locations }) {
             </Section>
           </div>
           <aside className="space-y-4 xl:sticky xl:top-4">
-            <section id="receipt-images" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><ReceiptImagePicker kept={kept} files={files} onAdd={addFiles} onRemoveNew={removeNew} onRemoveOld={(id) => { setKept((current) => current.filter((image) => image.id !== id)); setDirty(true); setErrors((current) => ({ ...current, images: '' })); }} disabled={busy} error={errors.images} /></section>
+            <section id="receipt-images" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><ReceiptImagePicker kept={kept} files={files} onAdd={addFiles} onRemoveNew={removeNew} onRemoveOld={(id) => { setKept((current) => current.filter((image) => image.id !== id)); setDirty(true); setErrors((current) => ({ ...current, images: '' })); }} disabled={busy} error={errors.images} /><ImageProcessingStatus active={processing} /></section>
             <p className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">Ảnh và mô tả sẽ xuất hiện trên bài đăng. Tránh chụp số giấy tờ, thông tin liên hệ hoặc đặc điểm dùng để xác minh chủ sở hữu.</p><div className="rounded-2xl border border-teal-100 bg-teal-50/70 p-5"><div className="mb-3 flex items-center gap-2 text-base font-semibold text-teal-900"><ClipboardList size={17} />Trước khi tiếp nhận</div><div className="space-y-3 text-sm leading-5 text-teal-800"><p className="flex gap-2"><Check size={15} className="mt-0.5 shrink-0" />Thông tin rõ ràng, đúng với đồ vật thực tế.</p><p className="flex gap-2"><MapPin size={15} className="mt-0.5 shrink-0" />Địa điểm và thời gian đủ để đối chiếu.</p><p className="flex gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" />Lưu nháp để xem lại. Bài chỉ được đăng khi bạn xác nhận đã nhận tài sản.</p></div></div>
           </aside>
         </div>

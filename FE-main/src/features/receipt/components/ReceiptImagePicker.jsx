@@ -1,5 +1,6 @@
 import { Camera, Plus, X, ImageOff } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
 
 export function ReceiptImage({ src, alt, className = '' }) {
   const [failed, setFailed] = useState(false);
@@ -12,10 +13,10 @@ export default function ReceiptImagePicker({ kept, files, onAdd, onRemoveOld, on
   const total = kept.length + files.length;
   return <div className="relative">
     <div className="mb-4 flex items-start justify-between gap-3">
-      <div><p className="text-base font-semibold text-slate-800">Ảnh hiện trường & đồ vật <span className="text-rose-600">*</span></p><p className="mt-1 text-sm leading-5 text-slate-600">1–5 ảnh JPG/PNG, tối đa 5 MB/ảnh. Chụp rõ toàn cảnh và các hư hỏng nếu có.</p></div>
+      <div><p className="text-base font-semibold text-slate-800">Ảnh hiện trường & đồ vật <span className="text-rose-600">*</span></p><p className="mt-1 text-sm leading-5 text-slate-600">1–5 ảnh {IMAGE_FORMATS}, tối đa 5 MB/ảnh. Chụp rõ toàn cảnh và các hư hỏng nếu có.</p></div>
       <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold text-slate-600">{total}/5 ảnh</span>
     </div>
-    <input ref={input} type="file" accept="image/jpeg,image/png" multiple disabled={disabled} className="sr-only" aria-label="Chọn ảnh đồ vật"
+    <input ref={input} type="file" accept={IMAGE_ACCEPT} multiple disabled={disabled} className="sr-only" aria-label="Chọn ảnh đồ vật"
       onChange={(event) => { onAdd(Array.from(event.target.files || [])); event.target.value = ''; }} />
     {total > 0 && <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
       {kept.map((image, index) => <div key={image.id} className="group relative overflow-hidden rounded-xl border border-slate-200">

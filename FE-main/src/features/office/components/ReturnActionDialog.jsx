@@ -15,7 +15,9 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
   const [files, setFiles] = useState([]);
   const [checked, setChecked] = useState(false);
   const [requestId] = useState(() => crypto.randomUUID());
-  const [busy, setBusy] = useState(false);
+  const [saving, setBusy] = useState(false);
+  const [imagesProcessing, setImagesProcessing] = useState(false);
+  const busy = saving || imagesProcessing;
   const [error, setError] = useState("");
   const change = (key, value) => setForm((old) => ({ ...old, [key]: value }));
   async function submit(event) {
@@ -54,7 +56,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       {action === "handover" && <>
         <p>Trao trả cho <strong>{claim.claimantName}</strong>. Sau khi lưu, yêu cầu này hoàn tất, đồ ra khỏi kho và các yêu cầu còn chờ được kết thúc.</p>
         <label>Tình trạng đồ và phụ kiện khi giao *<textarea required maxLength={2000} value={form.condition} disabled={busy} onChange={(e) => change("condition", e.target.value)} /></label>
-        <EvidencePicker files={files} setFiles={setFiles} disabled={busy} />
+        <EvidencePicker files={files} setFiles={setFiles} disabled={busy} onProcessing={setImagesProcessing} />
       </>}
       {action === "complete" && <p>Biên bản đã ghi nhận giao đồ trước đó. Chỉ hoàn tất khi văn phòng đã giao đủ đồ cho người nhận và kiểm tra thông tin trong biên bản.</p>}
       {["handover", "complete"].includes(action) && <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi xác nhận văn phòng đã giao đúng và đủ đồ cho người nhận đã được xác minh.</span></label>}

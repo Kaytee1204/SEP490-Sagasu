@@ -1,0 +1,11 @@
+HEIC/HEIF image conversion
+
+heic-to 1.6.7 is distributed under LGPL-3.0.
+License: heic-to-LICENSE.txt (in this directory)
+Source: https://github.com/hoppergee/heic-to
+Published source package: https://registry.npmjs.org/heic-to/-/heic-to-1.6.7.tgz
+
+The package includes libheif and libde265 compiled for browser-side decoding.
+Their upstream source and license notices are available at:
+https://github.com/strukturag/libheif
+https://github.com/strukturag/libde265

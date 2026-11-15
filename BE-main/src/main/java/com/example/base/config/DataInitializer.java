@@ -80,7 +80,8 @@ public class DataInitializer {
             "db/migrations/21_notifications.sql",
             // DaiHV: investigation and resolution of reports; existing team scripts stay intact.
             "db/migrations/22_report_review.sql",
-            "db/migrations/22_post_creation_requests.sql"
+            "db/migrations/22_post_creation_requests.sql",
+            "db/migrations/23_report_reasons.sql"
     );
 
     @Bean

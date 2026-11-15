@@ -31,7 +31,7 @@ export default function HandoverPanel({claim,onChanged}) {
     {data.status==='NOT_RECORDED'&&!data.canRecord&&<p className="claims-muted">Chờ người nhặt ghi nhận đã giao đồ sau khi claim được chấp thuận.</p>}
     {data.canConfirm&&<div className="handover-actions"><button type="button" className="btn btn-accent" onClick={()=>setConfirmOpen(true)}>Tôi đã nhận đúng đồ</button></div>}
     {data.canReportIssue&&<button type="button" className="btn btn-ghost" onClick={()=>setIssueOpen(true)}>Báo sự cố bàn giao</button>}
-    {data.issue&&<section className="claim-notice"><h3>Báo cáo sự cố #{data.issue.id}</h3><p className="claim-prose">{data.issue.description}</p><p>Đang chờ Manager xử lý. Hai bên vẫn chat được; không thể hoàn tất hoặc hủy claim.</p>
+    {data.issue&&<section className="claim-notice"><h3>Báo cáo sự cố #{data.issue.id}</h3>{data.issue.reasonLabel&&<p><strong>{data.issue.reasonLabel}</strong></p>}<p className="claim-prose">{data.issue.description}</p><p>Đang chờ Manager xử lý. Hai bên vẫn chat được; không thể hoàn tất hoặc hủy claim.</p>
       <div className="report-evidence">{issueEvidence.map((item,i)=><button type="button" key={item.id} onClick={()=>setImage(evidence.length+i)} aria-label="Xem ảnh sự cố"><img src={item.url} alt={item.name}/></button>)}</div></section>}
     {data.confirmedAt&&<p className="claim-notice">Hoàn tất trao trả lúc {date(data.confirmedAt)}. Hội thoại được giữ lại để đối chiếu.</p>}
     </>}

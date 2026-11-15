@@ -1,27 +1,70 @@
 import '@/features/workspace/Workspace.css';
-import { useEffect,useState } from 'react';
-import { Link,useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
-import { getMyReports,getReport } from './reportApi';
+import { getMyReports, getReport } from './reportApi';
+import { reportTypes } from './useReportReasons';
 import './Reports.css';
 const statuses={OPEN:'Chờ xử lý',IN_REVIEW:'Đang xem xét',RESOLVED:'Đã xử lý',REJECTED:'Bị từ chối'};
-const targets={POST:'Bài đăng',CLAIM:'Yêu cầu nhận đồ',MESSAGE:'Tin nhắn',USER:'Tài khoản'};
+const typeOf = report => report.kind === 'HANDOVER_ISSUE' ? 'HANDOVER_ISSUE' : report.targetType;
 const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 export default function MyReportsPage() {
   const {user}=useAuth();return <MyReports key={user.id}/>;
 }
 function MyReports() {
-  const [page,setPage]=useState(1),[status,setStatus]=useState('ALL'),[result,setResult]=useState(null),[error,setError]=useState('');
-  useEffect(()=>{let cancelled=false;setResult(null);setError('');getMyReports(page,status).then(data=>{if(!cancelled)setResult(data);}).catch(e=>{if(!cancelled)setError(e.message);});return()=>{cancelled=true;};},[page,status]);
-  return <main className="container reports-page"><h1>Báo cáo của tôi</h1><p>Theo dõi báo cáo và sự cố bàn giao bạn đã gửi.</p>
-    {/* DaiHV integration: participants answer without seeing another person's dossier. */}
-    <Link className="btn btn-ghost" to="/bao-cao-trao-doi">Thông tin cần bổ sung & kết quả xử lý →</Link>
-    <div className="claims-filters">{Object.entries({ALL:'Tất cả',...statuses}).map(([value,label])=><button key={value} className={`chip ${status===value?'active':''}`} onClick={()=>{setStatus(value);setPage(1);}}>{label}</button>)}</div>
-    {error&&<p role="alert" className="report-error">{error}</p>}{!result&&!error&&<p role="status">Đang tải báo cáo…</p>}
-    {result&&<><p>{result.totalElements} báo cáo</p>{result.content.map(report=><Link className="report-card" key={report.id} to={`/bao-cao/${report.id}`}><span className="claim-status">{statuses[report.status]}</span><h2>{report.targetLabel || `Báo cáo #${report.id}`}</h2><p>{report.kind==='HANDOVER_ISSUE'?'Sự cố bàn giao':targets[report.targetType]} #{report.targetId}</p><p>{report.description.length>240?report.description.slice(0,240)+'…':report.description}</p><p>{date(report.createdAt)}</p></Link>)}
-    {!result.content.length&&<p className="report-card">Chưa có báo cáo ở trạng thái này.</p>}<Pagination currentPage={page} totalPages={result.totalPages} onPageChange={setPage}/></>}
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState('ALL');
+  const [type, setType] = useState('ALL');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    setResult(null);
+    setError('');
+    getMyReports(page, status, type).then(data => {
+      if (!cancelled) setResult(data);
+    }).catch(problem => {
+      if (!cancelled) setError(problem.message);
+    });
+    return () => { cancelled = true; };
+  }, [page, status, type]);
+
+  return <main className="container reports-page">
+    <div className="reports-heading"><div><h1>Báo cáo của tôi</h1><p>Theo dõi báo cáo và sự cố bàn giao bạn đã gửi.</p></div>
+      {/* Keep the existing participant exchange flow. */}
+      <Link className="btn btn-ghost" to="/bao-cao-trao-doi">Thông tin cần bổ sung & kết quả xử lý →</Link></div>
+    <div className="reports-toolbar">
+      <div className="claims-filters" role="group" aria-label="Trạng thái báo cáo">
+        {Object.entries({ALL:'Tất cả', ...statuses}).map(([value, label]) =>
+          <button type="button" key={value} className={`chip ${status === value ? 'active' : ''}`} aria-pressed={status === value}
+            onClick={() => { setStatus(value); setPage(1); }}>{label}</button>)}
+      </div>
+      <label className="reports-type-filter">Loại báo cáo
+        <select value={type} onChange={event => { setType(event.target.value); setPage(1); }}>
+          {Object.entries({ALL:'Tất cả loại', ...reportTypes}).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+    </div>
+    {error && <p role="alert" className="report-error">{error}</p>}
+    {!result && !error && <p role="status">Đang tải báo cáo…</p>}
+    {result && <>
+      <p className="reports-count" role="status">{result.totalElements} báo cáo</p>
+      {result.content.map(report => <Link className="report-card report-list-card" key={report.id} to={`/bao-cao/${report.id}`}>
+        <div className="report-card-meta"><span className="report-kind-badge">{reportTypes[typeOf(report)]}</span>
+          <span className={`report-state report-state-${report.status}`}>{statuses[report.status]}</span></div>
+        <h2>{report.targetLabel || `Báo cáo #${report.id}`}</h2>
+        <p className="report-reason-label"><strong>Lý do:</strong> {report.reasonLabel || 'Chưa phân loại (báo cáo cũ)'}</p>
+        {report.description && <p className="report-excerpt">{report.description.length > 240 ? report.description.slice(0,240) + '…' : report.description}</p>}
+        <div className="report-card-bottom"><time dateTime={report.createdAt}>Gửi lúc {date(report.createdAt)}</time><span>Xem chi tiết →</span></div>
+      </Link>)}
+      {!result.content.length && <div className="report-card reports-empty"><h2>Chưa có báo cáo phù hợp</h2>
+        <p>Thử chọn loại báo cáo hoặc trạng thái khác.</p>
+        {(type !== 'ALL' || status !== 'ALL') && <button type="button" className="btn btn-ghost"
+          onClick={() => { setType('ALL'); setStatus('ALL'); setPage(1); }}>Xóa bộ lọc</button>}</div>}
+      <Pagination currentPage={page} totalPages={result.totalPages} onPageChange={setPage} />
+    </>}
   </main>;
 }
 export function ReportDetailPage() {
@@ -33,7 +76,12 @@ function ReportDetail({id}) {
   const evidence=(report?.evidence||[]).map(item=>({...item,name:item.name||'Ảnh bằng chứng'}));
   return <main className="container reports-page"><Link className="btn btn-ghost" to="/bao-cao-cua-toi">Báo cáo của tôi</Link><h1>{report?.targetLabel || "Chi tiết báo cáo"}</h1>
     {error&&<p role="alert" className="report-error">{error}</p>}{!report&&!error&&<p role="status">Đang tải…</p>}
-    {report&&<><section className="report-card"><h2>{statuses[report.status]}</h2>{report.resolutionNote&&<><h2>Kết luận xử lý</h2><p>{report.resolutionNote}</p></>}<p>{report.kind==='HANDOVER_ISSUE'?'Sự cố bàn giao':targets[report.targetType]} #{report.targetId}</p><p>{report.description}</p><p>Gửi lúc {date(report.createdAt)}</p>
+    {report&&<><section className="report-card"><div className="report-card-meta"><span className="report-kind-badge">{reportTypes[typeOf(report)]}</span><span className={`report-state report-state-${report.status}`}>{statuses[report.status]}</span></div>
+    <dl className="report-detail-fields"><div><dt>Lý do báo cáo</dt><dd>{report.reasonLabel || 'Chưa phân loại (báo cáo cũ)'}</dd></div>
+      {report.description&&<div><dt>Mô tả chi tiết</dt><dd className="report-description">{report.description}</dd></div>}
+      <div><dt>Thời gian gửi</dt><dd>{date(report.createdAt)}</dd></div>
+      {report.resolutionNote&&<div><dt>Kết luận xử lý</dt><dd className="report-description">{report.resolutionNote}</dd></div>}
+    </dl>
     <div className="report-evidence">{evidence.map((item,i)=><button key={item.id} onClick={()=>setImage(i)} aria-label="Xem ảnh bằng chứng"><img src={item.url} alt={item.name}/></button>)}</div>
     </section>
     <details className="report-card"><summary>Lịch sử xử lý</summary>{report.activities.map((item,i)=><p key={i}>{date(item.at)} · {statuses[item.status]}{item.note&&` · ${item.note}`}</p>)}</details></>}

@@ -2,11 +2,16 @@ import { useState } from "react";
 import { reviewApi } from "../api";
 import { Badge, ErrorBox, Gallery } from "./Shared";
 import { date } from "../format";
+import useImageUploads from '@/hooks/useImageUploads';
+import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 export default function ParticipantInquiry({ inquiry: i, onSaved }) {
   const [response, setResponse] = useState(""),
     [files, setFiles] = useState([]),
-    [busy, setBusy] = useState(false),
+    [submitting, setBusy] = useState(false),
     [error, setError] = useState("");
+  const { prepare, processing } = useImageUploads();
+  const busy = submitting || processing;
   async function submit(e) {
     e.preventDefault();
     if (busy) return;
@@ -21,23 +26,19 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
       setBusy(false);
     }
   }
-  function pick(e) {
+  async function pick(e) {
     const values = [...e.target.files];
     e.target.value = "";
-    if (
-      values.length > 5 ||
-      values.some(
-        (f) =>
-          !["image/jpeg", "image/png"].includes(f.type) ||
-          !f.size ||
-          f.size > 5242880,
-      )
-    ) {
-      setError("Chọn tối đa 5 ảnh JPG/PNG, không quá 5 MB mỗi ảnh.");
+    if (busy) return;
+    if (values.length > 5) {
+      setError("Chọn tối đa 5 ảnh.");
       return;
     }
     setError("");
-    setFiles(values);
+    try {
+      const prepared = await prepare(values);
+      if (prepared) setFiles(prepared);
+    } catch (problem) { setError(problem.message); }
   }
   return (
     <section className="rr-card">
@@ -68,15 +69,16 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
             />
           </label>
           <label>
-            Ảnh đối chiếu (tối đa 5 ảnh JPG/PNG, 5 MB mỗi ảnh)
+            Ảnh đối chiếu ({IMAGE_FORMATS}, tối đa 5 ảnh, 5 MB mỗi ảnh)
             <input
               type="file"
-              accept="image/jpeg,image/png"
+              accept={IMAGE_ACCEPT}
               multiple
               disabled={busy}
               onChange={pick}
             />
           </label>
+          <ImageProcessingStatus active={processing} />
           {files.map((f, index) => (
             <div className="rr-row" key={index}>
               <span>{f.name}</span>

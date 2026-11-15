@@ -1,17 +1,18 @@
 import React from 'react';
 import { Camera, X } from 'lucide-react';
+import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
 
-export default function StepImagesUpload({ images, fileInputRef, onUpload, onRemove, compact = false }) {
+export default function StepImagesUpload({ images, imageNames = [], fileInputRef, onUpload, onRemove, compact = false, disabled = false }) {
   if (compact) return <div className="post-upload-compact">
-    <div className="post-upload-heading"><span>Hình ảnh ({images.length}/5)</span><small>JPG/PNG · tối đa 5 MB/ảnh</small></div>
+    <div className="post-upload-heading"><span>Hình ảnh ({images.length}/5)</span><small>{IMAGE_FORMATS} · tối đa 5 MB/ảnh</small></div>
     <div className="post-upload-strip">
       {images.map((src, index) => <div className="post-upload-thumb" key={src}>
-        <img src={src} alt={`Ảnh đã chọn ${index + 1}`} />
-        <button type="button" aria-label={`Xóa ảnh ${index + 1}`} onClick={event => onRemove(index, event)}><X size={12} /></button>
+        <img src={src} alt={`Ảnh đã chọn ${index + 1}`} title={imageNames[index]} />
+        <button type="button" disabled={disabled} aria-label={`Xóa ảnh ${index + 1}`} onClick={event => onRemove(index, event)}><X size={12} /></button>
       </div>)}
-      {images.length < 5 && <button type="button" className="post-upload-add" onClick={() => fileInputRef.current?.click()}><Camera size={18} /><span>Thêm ảnh</span></button>}
+      {images.length < 5 && <button type="button" disabled={disabled} className="post-upload-add" onClick={() => fileInputRef.current?.click()}><Camera size={18} /><span>Thêm ảnh</span></button>}
     </div>
-    <input type="file" ref={fileInputRef} onChange={onUpload} accept="image/jpeg,image/png" multiple hidden />
+    <input type="file" ref={fileInputRef} onChange={onUpload} accept={IMAGE_ACCEPT} disabled={disabled} multiple hidden />
   </div>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -38,6 +39,7 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
                 <img src={imgSrc} alt={`Preview ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={(e) => onRemove(idx, e)}
                   style={{
                     position: 'absolute',
@@ -66,11 +68,12 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
         {/* Vùng tải ảnh (chỉ hiện khi chưa đủ 5 ảnh) */}
         {images.length < 5 && (
           <div
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => !disabled && fileInputRef.current?.click()}
             role="button"
             tabIndex={0}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
-            aria-label="Chọn ảnh JPG hoặc PNG"
+            onKeyDown={e => { if (!disabled && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fileInputRef.current?.click(); } }}
+            aria-disabled={disabled}
+            aria-label={`Chọn ảnh ${IMAGE_FORMATS}`}
             style={{
               border: '2px dashed var(--accent)',
               borderRadius: 'var(--radius-xl)',
@@ -110,13 +113,14 @@ export default function StepImagesUpload({ images, fileInputRef, onUpload, onRem
               {images.length === 0 ? 'Bấm để chọn ảnh (không bắt buộc)' : 'Thêm ảnh khác'}
             </div>
             <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-              Định dạng JPG, PNG. Tối đa 5MB.
+              {IMAGE_FORMATS}. Tối đa 5 MB/ảnh.
             </div>
             <input
               type="file"
               ref={fileInputRef}
               onChange={onUpload}
-              accept="image/jpeg,image/png"
+              accept={IMAGE_ACCEPT}
+              disabled={disabled}
               multiple
               style={{ display: 'none' }}
             />

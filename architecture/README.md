@@ -11,6 +11,7 @@ Chào mừng bạn đến với thư mục tài liệu kiến trúc (`architectu
 | **01** | [**Thiết Kế Cơ Sở Dữ Liệu & Sơ Đồ ERD**](./01-database-schema.md) | Sơ đồ ERD tổng thể + ERD chi tiết theo từng phân hệ (8 phân hệ, 38 bảng PostgreSQL), khóa chính/khóa ngoại, kiểu dữ liệu và các trạng thái nghiệp vụ. |
 | **02** | [**Sơ Đồ Tuần Tự (Sequence Diagrams)**](./02-sequence-diagrams.md) | 7 Sequence Diagrams chi tiết cho các luồng nghiệp vụ cốt lõi: Đăng nhập & OTP, Đăng bài & Smart Match AI, Claim & Questionnaire, Chat P2P, Bàn giao P2P, Nghiệp vụ Văn phòng, Điều tra & Giải quyết Báo cáo. |
 | **03** | [**Tài Liệu Tổng Hợp (All-in-One)**](./03-full-overview.md) | Bản gộp đầy đủ cả Database Schema & Sequence Diagrams trong một file duy nhất để tiện tra cứu nhanh hoặc xuất PDF. |
+| **04** | [**Thống Kê BE/FE & Bảng WBS Project Tracking**](./04-wbs-be-fe-inventory.md) | Thống kê chi tiết 14 Module / 21 Controller / 117 API Backend, 33 Màn hình Frontend và bảng WBS Project Tracking chuẩn 8 cột SEP490. |
 
 ---
 

@@ -28,7 +28,8 @@ public class ImageValidator {
             byte[] bytes = file.getBytes();
             try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
                 var readers = ImageIO.getImageReaders(input);
-                if (!readers.hasNext()) throw new AppException(ErrorCode.IMAGE_CONTENT_INVALID);
+                if (!readers.hasNext()) throw new AppException(ErrorCode.IMAGE_CONTENT_INVALID,
+                        "Không đọc được ảnh “" + file.getOriginalFilename() + "”. Vui lòng kiểm tra tệp hoặc chọn ảnh khác.");
                 var reader = readers.next();
                 try {
                     String format = reader.getFormatName();

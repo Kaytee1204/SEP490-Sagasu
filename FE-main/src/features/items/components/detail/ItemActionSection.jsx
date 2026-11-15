@@ -10,8 +10,8 @@ export default function ItemActionSection({ item, isOwner }) {
       marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column', gap: '12px'
     }}>
-      {/* Nút Quét AI — chỉ hiện với chủ bài đăng */}
-      {isOwner && (
+      {/* AI chỉ dành cho chủ bài cần tìm đồ mất. */}
+      {isOwner && item.type === 'lost' && (
         <button
           type="button"
           onClick={() => navigate('/smart-match')}

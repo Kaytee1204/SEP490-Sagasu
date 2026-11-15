@@ -37,14 +37,28 @@ public class ReportController {
 
     @GetMapping("/mine")
     @Operation(
-            summary = "[13.2] Danh sách các báo cáo do tôi đã gửi (phân trang, lọc theo status)",
-            description = "Lọc theo status (ALL, OPEN, IN_REVIEW, RESOLVED, REJECTED)."
+            summary = "[13.2] Danh sách các báo cáo do tôi đã gửi (phân trang, lọc trạng thái và loại)",
+            description = "Lọc theo status (ALL, OPEN, IN_REVIEW, RESOLVED, REJECTED) và type (ALL, POST, USER, CLAIM, MESSAGE, HANDOVER_ISSUE)."
     )
     public ResponseEntity<?> mine(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "ALL") String status,
+            @RequestParam(defaultValue = "ALL") String type,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.mine(page, status, user)));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.mine(page, status, type, user)));
+    }
+
+    @GetMapping("/reasons")
+    @Operation(
+            summary = "[13.4] Danh sách lý do báo cáo theo đối tượng",
+            description = "Chỉ trả lý do đang hoạt động sau khi kiểm tra quyền báo cáo đối tượng. Sự cố bàn giao dùng bộ lý do riêng."
+    )
+    public ResponseEntity<?> reasons(
+            @RequestParam String targetType,
+            @RequestParam long targetId,
+            @RequestParam(defaultValue = "false") boolean handoverIssue,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.reasonOptions(targetType, targetId, handoverIssue, user)));
     }
 
     @GetMapping("/{id}")

@@ -1,12 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Camera, Check, RotateCcw, X } from 'lucide-react';
+import useImageUploads from '@/hooks/useImageUploads';
+import { IMAGE_ACCEPT, IMAGE_MAX_BYTES } from '@/utils/imageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 
-export default function CameraCapture({ onClose, onAttach }) {
+export default function CameraCapture({ onClose, onAttach, maxImageBytes = IMAGE_MAX_BYTES }) {
   const titleId = useId();
   const dialog = useRef(null), video = useRef(null), stream = useRef(null), fileInput = useRef(null);
   const disposed = useRef(false), capturing = useRef(false);
+  const cameraEpoch = useRef(0);
   const previewUrl = useRef('');
-  const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false), [working, setBusy] = useState(false);
+  const { prepare, processing } = useImageUploads();
+  const busy = working || processing;
   const [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
   const [photo, setPhoto] = useState(null);
 
@@ -32,6 +38,7 @@ export default function CameraCapture({ onClose, onAttach }) {
   }, []);
   useEffect(() => {
     if (photo) { stopCamera(); return; }
+    const epoch = ++cameraEpoch.current;
     let cancelled = false;
     async function startCamera() {
       setReady(false); setError('');
@@ -43,11 +50,11 @@ export default function CameraCapture({ onClose, onAttach }) {
         const media = await navigator.mediaDevices.getUserMedia({ audio: false, video: {
           facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 },
         } });
-        if (cancelled) { media.getTracks().forEach(track => track.stop()); return; }
+        if (cancelled || epoch !== cameraEpoch.current) { media.getTracks().forEach(track => track.stop()); return; }
         stream.current = media; video.current.srcObject = media;
         await video.current.play();
       } catch (problem) {
-        if (cancelled) return;
+        if (cancelled || epoch !== cameraEpoch.current) return;
         stopCamera(); setReady(false);
         setError(problem.name === 'NotAllowedError'
           ? 'Bạn chưa cho phép dùng camera. Hãy cấp quyền trong trình duyệt hoặc chọn ảnh từ thiết bị.'
@@ -77,12 +84,35 @@ export default function CameraCapture({ onClose, onAttach }) {
     finally { capturing.current = false; if (!disposed.current) setBusy(false); }
   }
   function retake() { showPhoto(null); setAttempt(value => value + 1); }
-  function attach() {
-    if (photo && onAttach(photo.file) === false) setError('Ảnh vượt giới hạn đính kèm. Hãy đóng camera và kiểm tra số lượng hoặc dung lượng tệp đang chọn.');
+  async function attach() {
+    if (!photo || busy || capturing.current) return;
+    capturing.current = true;
+    setBusy(true);
+    try {
+      if (await onAttach(photo.file) === false && !disposed.current) setError('Ảnh vượt giới hạn đính kèm. Hãy đóng camera và kiểm tra số lượng hoặc dung lượng tệp đang chọn.');
+    } catch (problem) {
+      if (!disposed.current) setError(problem.message || 'Chưa đính kèm được ảnh. Vui lòng thử lại.');
+    } finally {
+      capturing.current = false;
+      if (!disposed.current) setBusy(false);
+    }
+  }
+  async function pickPhoto(event) {
+    const selected = [...(event.target.files || [])]; event.target.value = '';
+    if (busy || !selected.length) return;
+    cameraEpoch.current++;
+    stopCamera(); setReady(false); setError('');
+    try {
+      const prepared = await prepare(selected, { maxBytes: maxImageBytes });
+      if (prepared) showPhoto(prepared[0]);
+    } catch (problem) { if (!disposed.current) setError(problem.message); }
+  }
+  function close() {
+    if (!busy && !capturing.current) onClose();
   }
   return <dialog ref={dialog} aria-labelledby={titleId} className="chat-location-dialog chat-camera-dialog"
-    onCancel={event => { event.preventDefault(); onClose(); }}>
-    <header><h2 id={titleId}><Camera size={23} /> Chụp ảnh đính kèm</h2><button type="button" aria-label="Đóng camera" onClick={onClose}><X size={23} /></button></header>
+    onCancel={event => { event.preventDefault(); close(); }}>
+    <header><h2 id={titleId}><Camera size={23} /> Chụp ảnh đính kèm</h2><button type="button" aria-label="Đóng camera" disabled={busy} onClick={close}><X size={23} /></button></header>
     <div className="chat-location-content">
       <div className="chat-camera-preview">
         <video ref={video} autoPlay playsInline muted style={{ display: photo ? 'none' : undefined }} onLoadedData={() => setReady(true)} aria-label="Hình ảnh từ camera" />
@@ -91,18 +121,16 @@ export default function CameraCapture({ onClose, onAttach }) {
       </div>
       <p className="chat-location-hint">Ảnh chỉ được gửi khi bạn đính kèm và bấm Gửi trong cuộc trò chuyện.</p>
       {error && <p className="chat-location-warning" role="alert">{error}</p>}
+      <ImageProcessingStatus active={processing} />
       {!photo && <div className="chat-camera-fallback">
-        {error && <button type="button" onClick={() => setAttempt(value => value + 1)}>Thử mở lại camera</button>}
-        <button type="button" onClick={() => fileInput.current?.click()}>Chọn ảnh từ thiết bị</button>
+        {error && <button type="button" disabled={busy} onClick={() => setAttempt(value => value + 1)}>Thử mở lại camera</button>}
+        <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>Chọn ảnh từ thiết bị</button>
       </div>}
-      <input ref={fileInput} className="chat-file-input" type="file" accept="image/jpeg,image/png" capture="environment" aria-label="Chọn ảnh chụp từ thiết bị" onChange={event => {
-        const file = event.target.files?.[0]; event.target.value = '';
-        if (file) { stopCamera(); setReady(false); showPhoto(file); setError(''); }
-      }} />
+      <input ref={fileInput} className="chat-file-input" type="file" accept={IMAGE_ACCEPT} disabled={busy} capture="environment" aria-label="Chọn ảnh chụp từ thiết bị" onChange={pickPhoto} />
     </div>
     <form onSubmit={event => { event.preventDefault(); if (photo) attach(); else capture(); }}><footer>
-      {photo ? <button type="button" className="chat-location-cancel" onClick={retake}><RotateCcw size={17} />Chụp lại</button>
-        : <button type="button" className="chat-location-cancel" onClick={onClose}>Hủy bỏ</button>}
+      {photo ? <button type="button" className="chat-location-cancel" disabled={busy} onClick={retake}><RotateCcw size={17} />Chụp lại</button>
+        : <button type="button" className="chat-location-cancel" disabled={busy} onClick={close}>Hủy bỏ</button>}
       <button type="submit" className="chat-location-confirm" disabled={busy || (!photo && !ready)}>
         {photo ? <Check size={17} /> : <Camera size={17} />}{photo ? 'Đính kèm ảnh' : busy ? 'Đang chụp…' : 'Chụp ảnh'}
       </button>

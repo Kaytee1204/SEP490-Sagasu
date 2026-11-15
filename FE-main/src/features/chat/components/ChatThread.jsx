@@ -8,6 +8,9 @@ import LocationPicker from './LocationPicker';
 import ChatLocation from './ChatLocation';
 import CameraCapture from './CameraCapture';
 import ReportButton from '@/features/reports/ReportButton';
+import useImageUploads from '@/hooks/useImageUploads';
+import { IMAGE_ACCEPT } from '@/utils/imageUploads';
+import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 
 const merge = (old, incoming) => {
   const indexed = new Map(old.map(row => [row.id, row]));
@@ -23,7 +26,9 @@ export default function ChatThread({ chat }) {
   const [before, setBefore] = useState(null);
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [sending, setBusy] = useState(false);
+  const { prepare, processing } = useImageUploads();
+  const busy = sending || processing;
   const [olderBusy, setOlderBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [files, setFiles] = useState([]);
@@ -160,18 +165,25 @@ export default function ChatThread({ chat }) {
     } catch (err) { setError(err.message); refresh(); }
     finally { setBusy(false); }
   }
-  function attachFiles(picked) {
-    const next = [...files, ...picked];
-    const valid = next.length <= limits.attachmentMaxCount && next.every(file => {
-      const name = file.name.toLowerCase();
-      return file.size > 0 && (/\.(jpe?g|png)$/.test(name) ? file.size <= limits.imageMaxBytes : name.endsWith('.pdf') && file.size <= limits.pdfMaxBytes);
-    }) && next.reduce((sum, file) => sum + file.size, 0) <= limits.totalMaxBytes;
-    if (!valid) {
+  async function attachFiles(picked) {
+    if (busy || !chat.canSend) return false;
+    if (files.length + picked.length > limits.attachmentMaxCount ||
+        [...files, ...picked].reduce((sum, file) => sum + file.size, 0) > limits.totalMaxBytes) {
       setError(`Tối đa ${limits.attachmentMaxCount} tệp; ảnh ${limits.imageMaxBytes / 1048576} MB, PDF ${limits.pdfMaxBytes / 1048576} MB, tổng ${limits.totalMaxBytes / 1048576} MB.`);
       return false;
     }
-    setFiles(next); retry.current = null; setError('');
-    return true;
+    setError('');
+    try {
+      const prepared = await prepare(picked, { maxBytes: limits.imageMaxBytes, allowPdf: true, pdfMaxBytes: limits.pdfMaxBytes });
+      if (!prepared) return false;
+      const next = [...files, ...prepared];
+      if (next.reduce((sum, file) => sum + file.size, 0) > limits.totalMaxBytes) {
+        setError(`Tổng tệp sau khi xử lý không được vượt quá ${limits.totalMaxBytes / 1048576} MB.`);
+        return false;
+      }
+      setFiles(next); retry.current = null;
+      return true;
+    } catch (problem) { setError(problem.message); return false; }
   }
   return <>
     <div className="chat-messages" ref={viewport} onScroll={() => {
@@ -190,6 +202,7 @@ export default function ChatThread({ chat }) {
       </article>)}
     </div>
     {error && <p role="alert" className="chat-error">{error}</p>}
+    <ImageProcessingStatus active={processing} />
     {chat.canSend ? <><div className="chat-selected-files">{files.map((file, index) => <span key={`${file.name}:${index}`}>{file.name}
       <button type="button" disabled={busy} aria-label={`Bỏ tệp ${file.name}`} onClick={() => { setFiles(old => old.filter((_, n) => n !== index)); retry.current = null; }}>×</button></span>)}</div>
     <form className="chat-composer" onSubmit={send}>
@@ -199,16 +212,16 @@ export default function ChatThread({ chat }) {
         <button type="button" className="chat-tool-button" aria-label="Chia sẻ vị trí" title="Chia sẻ vị trí" disabled={busy} onClick={() => setLocationOpen(true)}><MapPin size={21} /></button>
       </div>
       <label className="sr-only" htmlFor="chat-message">Nội dung tin nhắn</label>
-      <input ref={fileInput} className="chat-file-input" type="file" multiple accept=".jpg,.jpeg,.png,.pdf" disabled={busy} aria-label="Chọn ảnh hoặc PDF đính kèm" onChange={event => {
+      <input ref={fileInput} className="chat-file-input" type="file" multiple accept={`${IMAGE_ACCEPT},.pdf,application/pdf`} disabled={busy} aria-label="Chọn ảnh hoặc PDF đính kèm" onChange={event => {
           const picked = [...event.target.files]; event.target.value = '';
           attachFiles(picked);
         }} />
       <textarea id="chat-message" maxLength={limits.messageMaxLength} disabled={busy} placeholder="Nhập tin nhắn…" value={body} onChange={event => setBody(event.target.value)} onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
       }} />
-      <button className="btn btn-accent" type="submit" disabled={busy || (!body.trim() && !files.length)}>{busy ? 'Đang gửi…' : 'Gửi'}</button>
-    </form>{cameraOpen && <CameraCapture onClose={() => setCameraOpen(false)} onAttach={file => {
-      if (attachFiles([file])) { setCameraOpen(false); return true; }
+      <button className="btn btn-accent" type="submit" disabled={busy || (!body.trim() && !files.length)}>{processing ? 'Đang xử lý ảnh…' : sending ? 'Đang gửi…' : 'Gửi'}</button>
+    </form>{cameraOpen && <CameraCapture maxImageBytes={limits.imageMaxBytes} onClose={() => setCameraOpen(false)} onAttach={async file => {
+      if (await attachFiles([file])) { setCameraOpen(false); return true; }
       return false;
     }} />}{locationOpen && <LocationPicker chatId={chat.id} onClose={() => setLocationOpen(false)} onSent={message => {
       pinBottom.current = true; setRows(old => merge(old, [message])); setLocationOpen(false); refresh();
