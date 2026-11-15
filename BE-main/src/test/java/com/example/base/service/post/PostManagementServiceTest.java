@@ -134,10 +134,10 @@ class PostManagementServiceTest {
         assertEquals("https://cdn/k1", result.content().get(1).thumbnailUrl());
         // UTC031 - active claim disables editing with blocked reason
         assertFalse(result.content().get(1).canEdit());
-        assertEquals("Bài đã có hồ sơ claim", result.content().get(1).editBlockedReason());
+        assertEquals("Bài đã có yêu cầu nhận đồ", result.content().get(1).editBlockedReason());
         // UTC034 - pending/approved claim disables deletion with blocked reason
         assertFalse(result.content().get(1).canDelete());
-        assertEquals("Bài còn claim đang chờ hoặc đã được chấp thuận", result.content().get(1).deleteBlockedReason());
+        assertEquals("Bài còn yêu cầu nhận đồ đang chờ duyệt hoặc đã được chấp thuận", result.content().get(1).deleteBlockedReason());
         assertEquals(2L, result.content().get(1).pendingClaimCount());
         assertEquals(12L, result.content().get(2).id());
         // UTC032 - status=CLOSED sets non-open editBlockedReason

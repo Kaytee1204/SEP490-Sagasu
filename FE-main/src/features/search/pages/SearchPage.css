@@ -38,7 +38,9 @@ html:has(.post-search-page), body:has(.post-search-page) { overflow-x: clip; }
 .post-list-results-heading h1 { font-size: 1.25rem; font-weight: 700; }
 .post-list-results-heading p { font-size: .875rem; color: var(--text-muted); }
 .post-list-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
-.post-list-card { overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-xl); box-shadow: 0 2px 2px rgba(16, 50, 50, .07); }
+.post-list-card { overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-xl); box-shadow: 0 2px 2px rgba(16, 50, 50, .07); color: inherit; text-decoration: none; cursor: pointer; transition: border-color 150ms ease, box-shadow 150ms ease; }
+.post-list-card:hover { border-color: var(--teal-600); box-shadow: 0 5px 16px rgba(16, 50, 50, .12); }
+.post-list-card:focus-visible { outline: 3px solid var(--teal-600); outline-offset: 3px; }
 .post-list-image { position: relative; aspect-ratio: 1.55; flex: none; overflow: hidden; background: var(--bg-canvas); }
 .post-list-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .post-list-no-image { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted); font-size: .875rem; }
@@ -46,16 +48,13 @@ html:has(.post-search-page), body:has(.post-search-page) { overflow-x: clip; }
 .post-list-badges { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .post-list-badges .badge, .post-list-category { font-size: .625rem; font-weight: 700; line-height: 1.4; padding: 4px 7px; border-radius: 5px; letter-spacing: .035em; text-transform: uppercase; }
 .post-list-category { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--teal-600); background: rgba(30, 107, 107, .11); }
-.post-list-card h2 { font-size: 1.0625rem; font-weight: 700; line-height: 1.45; min-height: 2.9em; margin: 0; }
-.post-list-card h2 a { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.post-list-card h2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--text-primary); font-size: 1.0625rem; font-weight: 700; line-height: 1.45; min-height: 2.9em; margin: 0; }
+.post-list-office-receipt { position: absolute; top: 10px; right: 10px; z-index: 1; display: flex; align-items: center; }
 .post-list-location { min-width: 0; }
 .post-list-location span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .post-list-author span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.post-list-card h2 a { color: var(--text-primary); text-decoration: none; }
-.post-list-card h2 a:hover { text-decoration: underline; }
 .post-list-card p { margin: 0; display: flex; gap: 7px; color: var(--text-secondary); font-size: .75rem; line-height: 1.5; }
 .post-list-card p svg { flex-shrink: 0; margin-top: 1px; width: 14px; height: 14px; }
-.post-list-card .btn { margin-top: auto; min-height: 40px; padding: 8px 12px; border: 1px solid var(--border-strong); font-size: .875rem; }
 .post-list-handling { font-weight: 600; }
 .post-list-message { padding: 56px 16px; display: flex; align-items: center; flex-direction: column; gap: 16px; text-align: center; }
 .post-list-pagination { margin-top: 32px; }

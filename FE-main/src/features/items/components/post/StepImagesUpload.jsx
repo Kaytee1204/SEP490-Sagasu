@@ -1,6 +1,7 @@
 import React from 'react';
 import { Camera, X } from 'lucide-react';
 import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import ImageUploadButton from '@/components/common/ImageUploadButton';
 
 export default function StepImagesUpload({ images, imageNames = [], fileInputRef, onUpload, onRemove, compact = false, disabled = false }) {
   if (compact) return <div className="post-upload-compact">
@@ -10,9 +11,8 @@ export default function StepImagesUpload({ images, imageNames = [], fileInputRef
         <img src={src} alt={`Ảnh đã chọn ${index + 1}`} title={imageNames[index]} />
         <button type="button" disabled={disabled} aria-label={`Xóa ảnh ${index + 1}`} onClick={event => onRemove(index, event)}><X size={12} /></button>
       </div>)}
-      {images.length < 5 && <button type="button" disabled={disabled} className="post-upload-add" onClick={() => fileInputRef.current?.click()}><Camera size={18} /><span>Thêm ảnh</span></button>}
+      {images.length < 5 && <ImageUploadButton disabled={disabled} inputRef={fileInputRef} onChange={onUpload} />}
     </div>
-    <input type="file" ref={fileInputRef} onChange={onUpload} accept={IMAGE_ACCEPT} disabled={disabled} multiple hidden />
   </div>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>

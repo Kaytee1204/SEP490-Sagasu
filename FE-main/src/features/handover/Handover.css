@@ -20,3 +20,50 @@
 @media(max-width:480px) { .handover-record-dialog footer { flex-direction:column-reverse; } .handover-record-dialog footer .btn { width:100%; } }
 
 .handover-confirm-effects { list-style:disc; padding-left:22px; display:grid; gap:10px; line-height:1.6; }
+
+.handover-heading { display: flex; align-items: center; gap: 12px; }
+.handover-heading-icon { display: grid; place-items: center; flex: 0 0 42px; height: 42px; border-radius: 12px; color: #31795f; background: #eaf6ee; }
+.handover-panel .handover-heading h2 { margin: 0; }
+.handover-heading p { margin: 3px 0 0; color: #7b8f7d; font-size: .78rem; }
+.handover-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0; margin: 24px 0; list-style: none; }
+.handover-steps li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; font-size: .73rem; line-height: 1.5; color: #697e69; }
+.handover-steps li:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: calc(50% + 20px); width: calc(100% - 30px); height: 1px; background: #e0e9df; }
+.handover-step-marker { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid #d7e2d5; border-radius: 50%; background: #f8fbf7; color: #94a491; font-size: .75rem; font-weight: 650; z-index: 1; }
+.handover-steps .is-done { color: #426c50; }
+.handover-steps .is-done .handover-step-marker { color: #fff; border-color: #408867; background: #408867; }
+.handover-steps li.is-done:not(:last-child)::after { background: #a9cdb1; }
+.handover-steps .is-current { color: #397e54; font-weight: 650; }
+.handover-steps .is-current .handover-step-marker { border: 2px solid #5d9c70; color: #397e54; background: #f5fbf4; box-shadow: 0 0 0 4px #eff7ed; }
+.handover-current-step { display: flex; align-items: flex-start; gap: 12px; padding: 18px; border: 1px solid #cfe1cd; border-radius: 13px; background: #f4faf1; }
+.handover-current-step > svg { flex-shrink: 0; margin-top: 2px; color: #629567; }
+.handover-current-content { min-width: 0; flex: 1; }
+.handover-panel .handover-current-content h3 { margin: 0; color: #345f3b; font-size: .95rem; font-weight: 700; line-height: 1.5; }
+.handover-current-content > p { margin: 6px 0 0; color: #5a7758; font-size: .82rem; line-height: 1.75; }
+.handover-next-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.handover-next-actions .btn { display: inline-flex; justify-content: center; font-size: .82rem; }
+.handover-panel .handover-issue-button { border-color: #dfc5a6; background: #fffcf8; color: #a37948; }
+.handover-current-step.is-completed { background: #eef8ee; border-color: #c5dec5; }
+.handover-current-step.is-paused { background: #fffaf0; border-color: #e6d8b7; }
+.handover-current-step.is-paused > svg { color: #b6985e; }
+.handover-current-step.is-paused h3 { color: #8a7041; }
+.handover-current-step.is-paused p { color: #7c6c49; }
+.handover-dates { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 18px 0 0; }
+.handover-dates dt { color: #859580; font-size: .73rem; }
+.handover-dates dd { margin: 3px 0 0; color: #54704d; font-size: .8rem; }
+.handover-evidence-details { margin-top: 20px; border-top: 1px solid #e2eadf; }
+.handover-evidence-details > summary { display: flex; align-items: center; gap: 8px; min-height: 52px; padding-top: 8px; color: #598054; font-size: .8rem; font-weight: 600; cursor: pointer; list-style: none; }
+.handover-evidence-details > summary::-webkit-details-marker { display: none; }
+.handover-evidence-details > summary > span { flex: 1; }
+.handover-evidence-details > summary small { color: #96a58f; font-weight: 500; }
+.handover-evidence-details .report-evidence { margin-bottom: 0; }
+.handover-issue-summary { margin-top: 20px; padding: 16px; border: 1px solid #e9d8be; border-radius: 12px; background: #fffbf4; }
+.handover-panel .handover-issue-summary h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: #9d7b49; font-size: .9rem; }
+.handover-issue-summary > p { margin: 7px 0; color: #9b8a69; font-size: .8rem; }
+@media(max-width:600px) {
+  .handover-heading { align-items: flex-start; }
+  .handover-steps { gap: 6px; margin: 22px 0; }
+  .handover-steps li { font-size: .68rem; }
+  .handover-current-step { padding: 14px; gap: 10px; }
+  .handover-next-actions { flex-direction: column; }
+  .handover-next-actions .btn { width: 100%; padding-inline: 10px; }
+}

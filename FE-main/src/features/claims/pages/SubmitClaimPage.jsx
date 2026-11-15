@@ -1,26 +1,31 @@
 import '@/features/workspace/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ChevronDown, Images, MapPin, Package, Send, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getPostDetail } from '@/features/items/api/postApi';
 import { getClaimOnPost, getLatestClaimOnPost, getClaimQuestionnaire, submitClaim } from '../api/claimApi';
-import { validClaimId, claimDetailPath, canSubmitPostClaim, postClaimType } from '../claimUtils';
+import { validClaimId, claimDetailPath, canSubmitPostClaim, postClaimType, evidenceUrl } from '../claimUtils';
 import { serializeQuestionnaireAnswers } from '../questionnaireUtils';
 import ClaimQuestionnaireFields from '../components/ClaimQuestionnaireFields';
 import '../Claims.css';
 import useImageUploads from '@/hooks/useImageUploads';
-import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
+import ImageUploadButton from '@/components/common/ImageUploadButton';
+import ImageViewer from '@/components/common/ImageViewer';
+import './SubmitClaimPage.css';
 
 export default function SubmitClaimPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const retryId = params.get('retryOf');
   const { user } = useAuth();
-  if (!validClaimId(id) || (retryId !== null && !validClaimId(retryId))) return <main className="container claims-page"><p role="alert">Mã bài đăng hoặc claim không hợp lệ.</p></main>;
-  return <ClaimForm key={`${user?.id}:${id}:${retryId}`} postId={id} retryId={retryId} />;
+  const [attempt, setAttempt] = useState(0);
+  if (!validClaimId(id) || (retryId !== null && !validClaimId(retryId))) return <main className="container claims-page"><p role="alert">Mã bài đăng hoặc yêu cầu nhận đồ không hợp lệ.</p></main>;
+  return <ClaimForm key={`${user?.id}:${id}:${retryId}:${attempt}`} postId={id} retryId={retryId} onRetry={() => setAttempt(value => value + 1)} />;
 }
-function ClaimForm({ postId, retryId }) {
+function ClaimForm({ postId, retryId, onRetry }) {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(null);
   const [description, setDescription] = useState('');
@@ -29,6 +34,7 @@ function ClaimForm({ postId, retryId }) {
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
   const [sending, setBusy] = useState(false);
+  const [previewId, setPreviewId] = useState(null);
   const { prepare, processing } = useImageUploads();
   const busy = sending || processing;
   const inFlight = useRef(false);
@@ -44,9 +50,9 @@ function ClaimForm({ postId, retryId }) {
       return Promise.all([getPostDetail(postId), retryId ? getClaimOnPost(postId, retryId) : Promise.resolve(null), getClaimQuestionnaire(postId)])
       .then(([post, old, questionnaire]) => {
         if (cancelled) return;
-        let problem = !canSubmitPostClaim(post) ? 'Bài chưa nhận claim: cần là bài P2P hoặc đồ đã được phòng ban xác nhận tiếp nhận, đang hiển thị và còn mở.' : '';
-        if (post.isOwner || post.canEditOwnPost) problem = 'Bạn không thể claim bài đăng của chính mình.';
-        if (old && (String(old.postId) !== postId || !old.canRetry)) problem = 'Hồ sơ này chưa được phép gửi lại, hoặc bài không còn nhận claim.';
+        let problem = !canSubmitPostClaim(post) ? 'Bài đăng hiện không tiếp nhận yêu cầu nhận đồ mới.' : '';
+        if (post.isOwner || post.canEditOwnPost) problem = 'Bạn không thể gửi yêu cầu nhận đồ trên bài đăng của chính mình.';
+        if (old && (String(old.postId) !== postId || !old.canRetry)) problem = 'Hồ sơ này chưa được phép gửi lại, hoặc bài không còn tiếp nhận yêu cầu nhận đồ.';
         setLoaded({ post, old, questionnaire, problem });
       });
     }
@@ -85,33 +91,67 @@ function ClaimForm({ postId, retryId }) {
     } catch (err) { setError(err.message); }
     finally { inFlight.current = false; setBusy(false); }
   }
-  const evidenceField = <>
-    <label>Ảnh bằng chứng<input type="file" multiple accept={IMAGE_ACCEPT} disabled={busy} onChange={upload} /></label>
-    <p className="claims-muted">Tối đa 5 ảnh {IMAGE_FORMATS}, mỗi ảnh tối đa 5 MB. Có thể gửi căn cứ bằng chữ mà không đính kèm ảnh.</p>
-    <ImageProcessingStatus active={processing} />
-    <div className="claim-evidence">{files.map(entry => <div key={entry.id}><img src={entry.url} alt={entry.file.name} /><small>{entry.file.name}</small>
-      <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => remove(entry)} aria-label={`Xóa ảnh ${entry.file.name}`}>Xóa ảnh</button></div>)}</div>
-    <details className="workflow-disclosure"><summary>Thêm ghi chú về bằng chứng</summary><label>Ghi chú (không bắt buộc)<textarea maxLength={5000} value={evidenceNote} disabled={busy}
-      onChange={event => setEvidenceNote(event.target.value)} placeholder="Ghi chú về ảnh cũ, hóa đơn hoặc tài liệu đính kèm…" /></label></details>
-  </>;
-  return <main className="container claims-page">
-
-    <header className="claims-heading"><h1>{retryId ? 'Gửi claim mới' : 'Yêu cầu nhận lại đồ'}</h1><Link className="btn btn-ghost" to={`/chi-tiet/${postId}`}>Về bài đăng</Link></header>
-    {error && <div className="claim-alert" role="alert">{error}</div>}
-    {!loaded ? <p role="status">{error ? 'Không tải được thông tin bài đăng. Vui lòng mở lại trang.' : 'Đang tải bài đăng…'}</p>
-      : loaded.problem ? <div className="claim-panel" role="alert">{loaded.problem}</div> : <>
-        <section className="claim-panel"><h2>{loaded.post.title}</h2><p>{loaded.post.locationText}</p>
-          <p className="claims-muted">{postClaimType(loaded.post) === 'OFFICE'
-            ? 'Yêu cầu được gửi cho phòng ban tiếp nhận. Bằng chứng chỉ dành cho bạn và cán bộ xét duyệt; luồng này không có chat P2P.'
-            : 'Căn cứ và ảnh bằng chứng chỉ dành cho bạn và người nhặt xem xét, không hiển thị trên bài đăng.'}</p></section>
-        {loaded.old && <div className="claim-notice">Hồ sơ #{loaded.old.id} {loaded.old.status === 'CANCELLED' ? 'đã hủy' : 'đã bị từ chối'}. Lần gửi này tạo hồ sơ mới; nội dung, bằng chứng và lịch sử cũ vẫn được giữ lại.
-          <Link to={claimDetailPath(loaded.old.postId, loaded.old.id)}> Xem hồ sơ cũ</Link></div>}
-        <form className="claim-panel claim-form" onSubmit={send}>
+  const previewIndex = files.findIndex(entry => entry.id === previewId);
+  return <main className="container claims-page claim-submit-page">
+    <header className="claim-submit-heading"><h1>{retryId ? 'Gửi lại yêu cầu nhận đồ' : 'Yêu cầu nhận đồ'}</h1>
+      <Link to={`/chi-tiet/${postId}`}><ArrowLeft size={16} aria-hidden="true" />Về bài đăng</Link></header>
+    {!loaded ? <div className="claim-submit-loading" role={error ? 'alert' : 'status'}>
+      {error ? <><TriangleAlert size={26} aria-hidden="true" /><h2>Chưa tải được thông tin</h2><p>{error}</p>
+        <button type="button" className="btn btn-ghost" onClick={onRetry}>Thử lại</button></> : <p>Đang tải thông tin món đồ…</p>}
+    </div> : loaded.problem ? <div className="claim-submit-loading" role="alert"><TriangleAlert size={26} aria-hidden="true" /><p>{loaded.problem}</p></div> : <>
+        <ClaimPostContext post={loaded.post} />
+        {loaded.old && <div className="claim-submit-retry">Yêu cầu #{loaded.old.id} {loaded.old.status === 'CANCELLED' ? 'đã hủy' : 'đã bị từ chối'}. Bạn đang gửi một yêu cầu mới.
+          <Link to={claimDetailPath(loaded.old.postId, loaded.old.id)}>Xem yêu cầu cũ</Link></div>}
+        <form className="claim-form claim-submit-form" onSubmit={send}>
           <ClaimQuestionnaireFields questionnaire={loaded.questionnaire} answers={answers}
             onAnswer={(code, value) => setAnswers(current => ({ ...current, [code]: value }))}
-            description={description} onDescription={setDescription} evidenceField={evidenceField} disabled={busy} />
-          <button className="btn btn-accent" disabled={busy} type="submit">{processing ? 'Đang xử lý ảnh…' : sending ? 'Đang gửi…' : postClaimType(loaded.post) === 'OFFICE' ? 'Gửi claim cho phòng ban' : 'Gửi yêu cầu nhận đồ'}</button>
+            description={description} onDescription={setDescription} disabled={busy} />
+          <aside className="claim-submit-sidebar" aria-label="Bằng chứng bổ sung">
+            <section className="claim-submit-section claim-submit-evidence">
+              <header className="claim-submit-section-heading"><Images size={19} aria-hidden="true" /><h2>Ảnh bằng chứng</h2></header>
+              <p className="claim-submit-optional">Không bắt buộc</p>
+              <p className="claim-submit-evidence-help">Ảnh cũ, hóa đơn hoặc tài liệu giúp xác minh món đồ của bạn.</p>
+              <ImageUploadButton label="Thêm ảnh bằng chứng" disabled={busy || files.length >= 5} onChange={upload} />
+              <div className="claim-submit-upload-limit"><span>{files.length}/5 ảnh</span><span>Tối đa 5 MB/ảnh</span></div>
+              <p className="claim-submit-image-formats">{IMAGE_FORMATS}</p>
+              <ImageProcessingStatus active={processing} />
+              {files.length > 0 && <div className="claim-submit-photos">{files.map(entry => <figure key={entry.id}>
+                <button type="button" className="claim-submit-photo-preview" disabled={busy} onClick={() => setPreviewId(entry.id)} aria-label={`Xem ảnh ${entry.file.name}`}>
+                  <img src={entry.url} alt={entry.file.name} />
+                </button>
+                <figcaption title={entry.file.name}>{entry.file.name}</figcaption>
+                <button type="button" className="claim-submit-photo-remove" disabled={busy} onClick={() => remove(entry)} aria-label={`Bỏ ảnh ${entry.file.name}`}>
+                  <X size={12} aria-hidden="true" />Bỏ ảnh
+                </button>
+              </figure>)}</div>}
+              <details className="claim-submit-evidence-note"><summary>Thêm ghi chú<ChevronDown size={15} aria-hidden="true" /></summary>
+                <label>Ghi chú về bằng chứng<textarea rows={2} maxLength={5000} value={evidenceNote} disabled={busy}
+                  onChange={event => setEvidenceNote(event.target.value)} placeholder="Bổ sung thông tin về ảnh hoặc tài liệu…" /></label>
+              </details>
+            </section>
+            <footer className="claim-submit-actions">
+              {error && <p className="claim-submit-error" role="alert"><TriangleAlert size={18} aria-hidden="true" />{error}</p>}
+              <button className="btn btn-accent" disabled={busy} type="submit"><Send size={17} aria-hidden="true" />
+                {processing ? 'Đang xử lý ảnh…' : sending ? 'Đang gửi…' : postClaimType(loaded.post) === 'OFFICE' ? 'Gửi yêu cầu cho phòng ban' : 'Gửi yêu cầu nhận đồ'}
+              </button>
+              <p><ShieldCheck size={17} aria-hidden="true" />{postClaimType(loaded.post) === 'OFFICE'
+                ? 'Căn cứ chỉ dành cho bạn và cán bộ xét duyệt.' : 'Căn cứ chỉ dành cho bạn và người nhặt xem xét.'}</p>
+            </footer>
+            <p className="claim-submit-security"><ShieldCheck size={17} aria-hidden="true" />Không nhập mật khẩu, PIN, OTP, CVV hoặc đầy đủ số thẻ ngân hàng.</p>
+          </aside>
         </form>
+        {previewIndex >= 0 && <ImageViewer images={files.map(entry => ({ id: entry.id, url: entry.url, name: entry.file.name }))}
+          initialIndex={previewIndex} title="Ảnh bằng chứng đã chọn" onClose={() => setPreviewId(null)} />}
       </>}
   </main>;
+}
+
+function ClaimPostContext({ post }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const cover = evidenceUrl(post.images?.[0]?.url);
+  return <section className="claim-submit-post" aria-label="Món đồ muốn nhận lại">
+    <div className="claim-submit-post-image">{cover && !imageFailed
+      ? <img src={cover} alt="" onError={() => setImageFailed(true)} /> : <Package size={28} aria-hidden="true" />}</div>
+    <div><h2>{post.title}</h2><p><MapPin size={14} aria-hidden="true" />Nhặt tại {post.locationText}</p></div>
+  </section>;
 }

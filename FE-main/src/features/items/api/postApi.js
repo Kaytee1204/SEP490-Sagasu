@@ -44,17 +44,8 @@ async function createPost(type, data, images) {
   return response.data;
 }
 
-export async function getPrivateIdentifiers(id) {
-  const response = await apiClient.get(`/posts/${encodeURIComponent(id)}/private-identifiers`);
-  return response.data;
-}
-
-export async function updatePrivateIdentifiers(id, privateIdentifiers) {
-  return apiClient.put(`/posts/${encodeURIComponent(id)}/private-identifiers`, { privateIdentifiers });
-}
-
-export async function getMyPosts(page = 1, filter = 'ALL') {
-  return (await apiClient.get(`/posts/mine?${new URLSearchParams({page: String(page), size: '12', filter})}`)).data;
+export async function getMyPosts(page = 1, filter = 'ALL', postType = 'ALL') {
+  return (await apiClient.get(`/posts/mine?${new URLSearchParams({page: String(page), size: '12', filter, postType})}`)).data;
 }
 
 export async function getPostForEdit(id) {

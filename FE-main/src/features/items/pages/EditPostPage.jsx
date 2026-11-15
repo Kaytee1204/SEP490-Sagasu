@@ -6,8 +6,9 @@ import { getPostForEdit, getPostCategories, updatePost } from '../api/postApi';
 import StepDetailsForm from '../components/post/StepDetailsForm';
 import '../../profile/pages/MyPostsPage.css';
 import useImageUploads from '@/hooks/useImageUploads';
-import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
+import ImageUploadButton from '@/components/common/ImageUploadButton';
 
 function toVietnamInputs(value) {
   if (!value) return {date:'', time:''};
@@ -118,8 +119,7 @@ function Editor({ id, onReload, embedded = false, onClose, onSaved, onDirty, onB
             {files.map((item,index)=><figure key={item.preview}><img src={item.preview} alt={`Ảnh mới ${index+1}`}/>
               <button type="button" className="btn btn-ghost" onClick={()=>removeNew(index)}>Xóa ảnh mới {index+1}</button></figure>)}
           </div>
-          <label className="input-label" htmlFor="edit-post-files">Thêm ảnh mới</label>
-          <input id="edit-post-files" type="file" accept={IMAGE_ACCEPT} disabled={saving||processing} multiple onChange={upload}/>
+          <ImageUploadButton id="edit-post-files" label="Thêm ảnh mới" disabled={saving||processing||kept.length+files.length>=5} onChange={upload}/>
           <ImageProcessingStatus active={processing}/>
         </section>
         {!embedded && <p>Ghi chú xác minh riêng tư (không bắt buộc) được quản lý tại <Link to={`/chi-tiet/${id}`}>trang chi tiết của bạn</Link>.</p>}

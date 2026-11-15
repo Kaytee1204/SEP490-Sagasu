@@ -35,14 +35,15 @@ public class PostManagementController {
     @GetMapping("/mine")
     @Operation(
             summary = "[5.1] UC18: Danh sách bài đăng của tôi (kèm trạng thái và quyền thao tác)",
-            description = "Trả về danh sách bài đăng do tài khoản hiện tại tạo, hỗ trợ phân trang và lọc (ALL, LOST, FOUND, PENDING, REJECTED...)."
+            description = "Danh sách bài đăng do tài khoản hiện tại tạo. Lọc trạng thái bằng filter (ALL, VISIBLE, PENDING, REJECTED, HIDDEN) và loại bài bằng postType (ALL, LOST, FOUND), áp dụng trước khi phân trang."
     )
     public ResponseEntity<ApiResponse<MyPostPageDto>> mine(
             @RequestParam(defaultValue="1") String page,
             @RequestParam(defaultValue="12") String size,
             @RequestParam(defaultValue="ALL") String filter,
+            @RequestParam(defaultValue="ALL") String postType,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        try { return noStore(management.listMine(Integer.parseInt(page), Integer.parseInt(size), filter, user)); }
+        try { return noStore(management.listMine(Integer.parseInt(page), Integer.parseInt(size), filter, postType, user)); }
         catch (NumberFormatException ex) { throw new AppException(ErrorCode.POST_PAGINATION_FORMAT_INVALID); }
     }
 

@@ -1,0 +1,25 @@
+.image-upload-control { display: flex; align-items: center; min-width: 0; }
+.image-upload-field { display: grid; gap: 8px; }
+.image-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--teal-600, #1e6b6b);
+  border-radius: 10px;
+  background: var(--teal-50, #eef8f7);
+  color: var(--teal-800, #164e4e);
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.image-upload-button svg { flex-shrink: 0; }
+.image-upload-button:hover:not(:disabled) { background: #def0ed; border-color: #155e5c; }
+.image-upload-button:focus-visible { outline: 3px solid #259d90; outline-offset: 3px; }
+.image-upload-button:disabled { opacity: .55; cursor: not-allowed; }

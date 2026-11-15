@@ -251,7 +251,6 @@ function PostComposer() {
         else setSubmitError('');
       }} />}
 
-      {attempted && <p className="claim-notice">Đã gửi yêu cầu đăng bài. Nếu chưa nhận được kết quả, bấm “Thử đăng lại” để kiểm tra cùng yêu cầu. Nội dung được giữ nguyên để tránh đăng trùng.</p>}
       <div className="card post-create-card">
         {categoryError && <div role="alert"><p>{categoryError}</p><button type="button" className="btn btn-ghost" onClick={() => setCategoryAttempt(n => n + 1)}>Tải lại danh mục</button></div>}
         {!categories && !categoryError && <p role="status">Đang tải danh mục…</p>}

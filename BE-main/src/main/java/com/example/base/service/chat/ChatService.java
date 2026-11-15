@@ -26,8 +26,14 @@ public class ChatService {
     private final ChatQueryRepository queries;
 
     public ChatPageDto list(String cursor, int size, CustomUserDetails user) {
+        return list(cursor, size, "ALL", user);
+    }
+
+    public ChatPageDto list(String cursor, int size, String view, CustomUserDetails user) {
         Account actor = policy.actor(user);
-        if (size < 1 || size > 50) throw new AppException(ErrorCode.CHAT_INPUT_INVALID);
+        if (size < 1 || size > 50 || view == null || !java.util.Set.of("ALL", "ACTIVE", "HISTORY").contains(view)) {
+            throw new AppException(ErrorCode.CHAT_INPUT_INVALID);
+        }
         OffsetDateTime before = null;
         long beforeId = 0;
         if (cursor != null) {
@@ -38,7 +44,8 @@ public class ChatService {
                 if (beforeId <= 0) throw new IllegalArgumentException();
             } catch (RuntimeException ex) { throw new AppException(ErrorCode.CHAT_INPUT_INVALID); }
         }
-        var rows = queries.list(actor.getId(), before, beforeId, size + 1);
+        var rows = "ALL".equals(view) ? queries.list(actor.getId(), before, beforeId, size + 1)
+                : queries.list(actor.getId(), before, beforeId, size + 1, view);
         boolean more = rows.size() > size;
         var items = rows.stream().limit(size).toList();
         var last = items.isEmpty() ? null : items.get(items.size() - 1);

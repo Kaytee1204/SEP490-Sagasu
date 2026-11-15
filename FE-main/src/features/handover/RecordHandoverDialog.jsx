@@ -2,8 +2,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { uploadHandover } from './handoverApi';
 import useImageUploads from '@/hooks/useImageUploads';
-import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
+import ImageUploadButton from '@/components/common/ImageUploadButton';
 
 export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const dialog = useRef(null);
@@ -84,9 +85,9 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
       <label className="handover-record-field">Ghi chú (tùy chọn)
         <textarea maxLength={2000} value={note} disabled={busy} placeholder="Ví dụ: Đã giao kèm các phụ kiện…"
           onChange={event => { setNote(event.target.value); request.current = null; setDiscard(false); }} /></label>
-      <label className="handover-record-field">Ảnh bàn giao (tùy chọn)
+      <div className="handover-record-field"><span>Ảnh bàn giao (tùy chọn)</span>
         <span className="claims-muted">{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
-        <input type="file" accept={IMAGE_ACCEPT} multiple disabled={busy} onChange={pickImages} /></label>
+        <ImageUploadButton label="Thêm ảnh bàn giao" disabled={busy||files.length>=5} onChange={pickImages} /></div>
       <ImageProcessingStatus active={processing} />
       {files.length > 0 && <ul className="handover-record-files">{files.map((file, index) => <li key={`${file.name}:${index}`}>
         <span>{file.name}</span><button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {
