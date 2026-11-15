@@ -3,6 +3,7 @@ import { Flag, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createReport } from './reportApi';
 import ReportReasonPicker from './ReportReasonPicker';
+import { reportDescriptionHint } from './reportDescriptionHints';
 import useReportReasons, { reportTitles, reportTypes } from './useReportReasons';
 import './Reports.css';
 import useImageUploads from '@/hooks/useImageUploads';
@@ -111,6 +112,7 @@ function ReportForm({ type, id, targetLabel, close, done }) {
       <ReportReasonPicker options={options} error={catalogError} reload={reload} value={reasonCode}
         disabled={busy} onChange={code => { setReasonCode(code); changed(); }} />
       <label>{selected?.requiresDescription ? 'Mô tả chi tiết *' : 'Mô tả thêm (không bắt buộc)'}
+        <small>{reportDescriptionHint(reasonCode)}</small>
         <textarea required={!!selected?.requiresDescription} maxLength={4800} value={description} disabled={busy}
           placeholder="Bổ sung thông tin giúp làm rõ báo cáo…"
           onChange={event => { setDescription(event.target.value); changed(); }} /></label>

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { uploadHandover } from './handoverApi';
 import ReportReasonPicker from '@/features/reports/ReportReasonPicker';
+import { reportDescriptionHint } from '@/features/reports/reportDescriptionHints';
 import useReportReasons from '@/features/reports/useReportReasons';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
@@ -87,6 +88,7 @@ export default function ReportHandoverIssueDialog({ claim, handover, onClose, on
       <ReportReasonPicker options={options} error={catalogError} reload={reload} value={reasonCode} disabled={busy}
         onChange={code => { setReasonCode(code); request.current = null; setDiscard(false); setError(''); }} />
       <label className="handover-record-field">Mô tả chi tiết sự cố *
+        <small>{reportDescriptionHint(reasonCode)}</small>
         <textarea required maxLength={4800} value={reason} disabled={busy} placeholder="Mô tả điều đã xảy ra, ví dụ: chưa nhận được đồ hoặc nhận sai món đồ…"
           onChange={event => { setReason(event.target.value); request.current = null; setDiscard(false); }} /></label>
       <label className="handover-record-field">Ảnh bằng chứng (tùy chọn)
