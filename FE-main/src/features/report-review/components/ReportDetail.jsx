@@ -4,6 +4,7 @@ import { reviewApi } from "../api";
 import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
 import { date, labels } from "../format";
 import ContextPanel from "./ContextPanel";
+import EvidenceComparison from "./EvidenceComparison";
 import HoldDialog from "./HoldDialog";
 import ConclusionDialog from "./ConclusionDialog";
 import Inquiries from "./Inquiries";
@@ -81,6 +82,7 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                   ["overview", "Tổng quan"],
                   ["current", "Dữ liệu hiện tại"],
                   ["snapshot", "Bản lưu"],
+                  ["compare", "Đối chiếu thay đổi"],
                   ["inquiries", `Trao đổi (${data.inquiries.length})`],
                   ["history", "Lịch sử xử lý"],
                 ].map(([key, label]) => (
@@ -137,6 +139,7 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                 </div>
               )}
               {tab === "current" && <ContextPanel data={data.current} />}
+              {tab === "compare" && <EvidenceComparison current={data.current} snapshot={data.snapshot} />}
               {tab === "snapshot" && (
                 <div className="rr-stack">
                   <p className="rr-callout">

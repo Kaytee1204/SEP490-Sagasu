@@ -28,6 +28,14 @@ export const date = (value) =>
       })
     : "—";
 
+export function earliestAppointment() {
+  const time = new Date(Date.now() + (12 * 60 + 2) * 60_000);
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(time).replace(' ', 'T');
+}
+
 export const progressLabels = {
   REVIEW: "Chờ xét duyệt", NEEDS_INFO: "Chờ bổ sung thông tin", EMAIL_UNSENT: "Cần gửi lịch hẹn",
   AWAITING_REPLY: "Chờ đồng ý lịch hẹn", REPLY_EXPIRED: "Hết hạn phản hồi lịch", COUNTER_VERIFICATION: "Chờ đến xác minh", VERIFICATION_FAILED: "Cần đối chiếu thêm",

@@ -140,6 +140,21 @@ export default function ContextPanel({ data, snapshot = false }) {
         <section className="rr-card">
           <h3>Phiếu tiếp nhận</h3>
           <Facts data={data.receipt} />
+          <h4>Ảnh ghi nhận khi tiếp nhận</h4>
+          {data.receiptImages === undefined ? (
+            <p className="rr-muted">{snapshot
+              ? "Bản lưu này chưa ghi nhận nhóm ảnh tiếp nhận. Xem dữ liệu hiện tại để đối chiếu thêm."
+              : "Chưa có dữ liệu ảnh tiếp nhận."}</p>
+          ) : <>
+            <Gallery images={data.receiptImages.filter(image => image.evidence_source === "INTAKE")} />
+            {!data.receiptImages.some(image => image.evidence_source === "INTAKE") &&
+              <p className="rr-muted">Phiếu chưa có ảnh tiếp nhận riêng.</p>}
+            {data.receiptImages.some(image => image.evidence_source === "INHERITED_POST") && <details>
+              <summary>Ảnh bài đăng được lưu kèm phiếu cũ</summary>
+              <p className="rr-muted">Nhóm ảnh này được kế thừa từ bài đăng, không xác nhận tình trạng đồ tại thời điểm văn phòng nhận.</p>
+              <Gallery images={data.receiptImages.filter(image => image.evidence_source === "INHERITED_POST")} />
+            </details>}
+          </>}
         </section>
       )}
       <Records

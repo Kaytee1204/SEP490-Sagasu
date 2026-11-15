@@ -243,7 +243,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                     }}
                   />
                 )}
-                {claim.status === "NEEDS_INFO" && (
+                {mine && claim.ownRequest && claim.status === "NEEDS_INFO" && (
                   <SupplementForm
                     mine={mine}
                     claim={claim}

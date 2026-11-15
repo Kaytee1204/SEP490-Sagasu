@@ -115,7 +115,8 @@ function PostDetail({ id, onRetry }) {
   const canUseSmartMatch = post.postType === 'LOST' && (post.canEditOwnPost || isAdmin || isManager);
   const isOwnPost = post.isOwner || post.canEditOwnPost;
   const isFinished = ['RETURNED', 'CLOSED'].includes(post.status);
-  const canViewClaims = post.postType === 'FOUND' && (isOwnPost || (isApprover && post.officeReceipt));
+  // Office integration: personal UI exposes only the owner's P2P review actions.
+  const canViewClaims = post.postType === 'FOUND' && isOwnPost && post.custodyMode === 'P2P' && !post.officeReceipt;
   const canChat = post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
     && post.moderationStatus === 'VISIBLE' && post.status === 'RESERVED'
     && (post.canEditOwnPost || current.myClaim?.status === 'APPROVED');
@@ -170,13 +171,14 @@ function PostDetail({ id, onRetry }) {
                 </button>
               )}
 
-              {!isOwnPost && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
+              {!isOwnPost && !['PENDING','NEEDS_INFO','APPROVED'].includes(current.myClaim?.status) && post.officeReceipt && post.moderationStatus === 'VISIBLE' && post.status === 'OPEN' && (
                 <Link to={`/van-phong/xac-minh/${post.id}`} className="btn btn-accent">
                   <span>Xác minh nhận đồ tại văn phòng</span>
                   <ArrowRight size={17} aria-hidden="true" />
                 </Link>
               )}
 
+              {!isOwnPost && current.myClaim?.claimType === 'OFFICE' && <Link className="btn btn-ghost" to={`/van-phong/claims/${current.myClaim.id}`}>Theo dõi yêu cầu nhận đồ của tôi</Link>}
               {!isOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
                 <Link
                   to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
@@ -187,7 +189,7 @@ function PostDetail({ id, onRetry }) {
                 </Link>
               )}
               {canViewClaims && <Link className={`btn ${isFinished ? 'btn-ghost' : 'btn-accent'}`}
-                to={post.officeReceipt && isApprover ? '/approver/office-claims' : postClaimsPath(post.id)}>
+                to={postClaimsPath(post.id)}>
                 <ClipboardList size={18} aria-hidden="true" />{isFinished ? 'Xem yêu cầu nhận đồ' : 'Xét duyệt yêu cầu nhận đồ'}
               </Link>}
               {canChat && <OpenChatButton postId={post.id} className="btn btn-ghost" />}

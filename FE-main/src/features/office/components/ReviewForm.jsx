@@ -1,9 +1,12 @@
+import { earliestAppointment } from "../officeUtils";
 import { useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { officeApi } from "../api/officeApi";
 import Notice from "./Notice";
+import RequestedInformation from "./RequestedInformation";
 
 export default function ReviewForm({ claim, onDone }) {
+  const [ending, setEnding] = useState(false);
   const [form, setForm] = useState({
     decision: claim.status === "NEEDS_INFO" ? "REJECTED" : "APPROVED",
     reason: "",
@@ -15,6 +18,14 @@ export default function ReviewForm({ claim, onDone }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+  if (claim.status === "NEEDS_INFO" && !ending) return <section className="of-panel of-form">
+    <h2>Đang chờ bổ sung thông tin</h2>
+    <RequestedInformation claim={claim} />
+    <p className="of-muted">Người yêu cầu cần phản hồi trước khi tiếp tục xét duyệt. Nội dung bổ sung sẽ được ghi trong lịch sử xử lý.</p>
+    <details><summary>Cần kết thúc yêu cầu?</summary><p>Chỉ từ chối khi có căn cứ; việc chưa phản hồi không tự xác định người yêu cầu không phải chủ đồ.</p>
+      <button type="button" className="of-button of-danger" onClick={() => setEnding(true)}>Từ chối yêu cầu…</button>
+    </details>
+  </section>;
   async function submit(e) {
     e.preventDefault();
     if (busy) return;
@@ -86,7 +97,7 @@ export default function ReviewForm({ claim, onDone }) {
               Ngày và giờ hẹn (UTC+7) *
               <input
                 required
-                type="datetime-local"
+                type="datetime-local" min={earliestAppointment()}
                 disabled={busy}
                 value={form.scheduledAt}
                 onChange={(e) => change("scheduledAt", e.target.value)}
@@ -143,6 +154,7 @@ export default function ReviewForm({ claim, onDone }) {
                 ? "Xác nhận từ chối"
                 : "Gửi yêu cầu bổ sung"}
         </button>
+        {ending && <button type="button" className="of-button" disabled={busy} onClick={() => setEnding(false)}>Tiếp tục chờ bổ sung</button>}
       </form>
     </section>
   );

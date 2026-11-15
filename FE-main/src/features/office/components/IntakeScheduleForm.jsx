@@ -1,3 +1,4 @@
+import { earliestAppointment } from "../officeUtils";
 import { useState } from "react";
 import Notice from "./Notice";
 import { workflowApi } from "../api/workflowApi";
@@ -18,7 +19,7 @@ export default function IntakeScheduleForm({ transfer, onClose, onDone, onBusyCh
     <h3>{transfer.appointment ? "Hẹn lại ngày mang đồ đến" : "Hẹn người giao mang đồ đến"}</h3>
     <p className="of-muted">Lịch hẹn được gửi qua email để người giao đồng ý hoặc từ chối trong 12 giờ. Văn phòng chỉ tiếp nhận đồ khi bạn xác nhận đã nhận thực tế.</p>
     <Notice error>{error}</Notice>
-    <label>Ngày và giờ (UTC+7) *<input type="datetime-local" required disabled={busy} value={form.scheduledAt} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn thời điểm cách hiện tại hơn 12 giờ.</small></label>
+    <label>Ngày và giờ (UTC+7) *<input type="datetime-local" min={earliestAppointment()} required disabled={busy} value={form.scheduledAt} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn thời điểm cách hiện tại hơn 12 giờ.</small></label>
     <label>Địa điểm tiếp nhận *<input required maxLength={1000} disabled={busy} value={form.location} onChange={(e) => change("location", e.target.value)} placeholder="Văn phòng, tòa nhà, số phòng…" /></label>
     <label>Lời nhắn<textarea maxLength={2000} disabled={busy} value={form.note} onChange={(e) => change("note", e.target.value)} placeholder="Hướng dẫn liên hệ hoặc đồ cần mang kèm…" /></label>
     {needsReason && <label>Lý do văn phòng đổi lịch *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} /></label>}

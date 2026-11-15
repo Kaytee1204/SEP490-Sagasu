@@ -1,15 +1,18 @@
 import { useEffect, useRef, useId, useState } from "react";
 import { X } from "lucide-react";
 
-export default function Dialog({ title, onClose, busy, children }) {
+export default function Dialog({ title, onClose, busy, children, resetKey }) {
   const ref = useRef(null);
   const titleId = useId();
-  const [dirty, setDirty] = useState(false);
-  const [discard, setDiscard] = useState(false);
-  function requestClose() {
+  const [edited, setEdited] = useState(null);
+  const [pending, setPending] = useState(null);
+  const dirty = edited?.key === resetKey && edited?.dirty;
+  const discard = pending?.key === resetKey && Boolean(pending?.action);
+  function guard(action = onClose) {
     if (busy) return;
-    if (dirty) setDiscard(true); else onClose();
+    if (dirty) setPending({ key:resetKey, action }); else action();
   }
+  const content = typeof children === "function" ? children({ guard }) : children;
   useEffect(() => {
     const dialog = ref.current;
     dialog.showModal();
@@ -20,10 +23,10 @@ export default function Dialog({ title, onClose, busy, children }) {
       ref={ref}
       className="of-dialog"
       aria-labelledby={titleId}
-      onInputCapture={() => setDirty(true)}
+      onInputCapture={() => setEdited({ key:resetKey, dirty:true })}
       onCancel={(e) => {
         e.preventDefault();
-        requestClose();
+        guard();
       }}
     >
       <div className="of-dialog-head">
@@ -33,19 +36,19 @@ export default function Dialog({ title, onClose, busy, children }) {
           className="of-icon"
           aria-label="Đóng"
           disabled={busy}
-          onClick={requestClose}
+          onClick={() => guard()}
         >
           <X size={22} />
         </button>
       </div>
       {discard && <section role="alert">
-        <p>Bỏ nội dung đang nhập và đóng?</p>
+        <p>Bỏ những thay đổi chưa lưu?</p>
         <div className="of-actions">
-          <button type="button" className="of-button of-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-          <button type="button" className="of-button of-danger" onClick={onClose}>Bỏ nội dung và đóng</button>
+          <button type="button" className="of-button of-primary" onClick={() => setPending(null)}>Tiếp tục nhập</button>
+          <button type="button" className="of-button of-danger" onClick={() => { setEdited(null); setPending(null); pending.action(); }}>Bỏ thay đổi và tiếp tục</button>
         </div>
       </section>}
-      <div hidden={discard}>{children}</div>
+      <div hidden={discard}>{content}</div>
     </dialog>
   );
 }

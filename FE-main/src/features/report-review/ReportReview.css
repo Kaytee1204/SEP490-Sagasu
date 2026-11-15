@@ -542,3 +542,14 @@
     grid-template-columns: 1fr;
   }
 }
+
+.rr-comparison-row { padding-block:14px; border-bottom:1px solid #dbe4e8; }
+.rr-comparison-row h4 { margin:0 0 10px; }
+.rr-comparison-values, .rr-comparison-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.rr-comparison-values { margin:0; }
+.rr-comparison-values dt { color:#64748b; font-size:13px; margin-bottom:6px; }
+.rr-comparison-values dd { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.rr-comparison-columns > section { min-width:0; }
+.rr-comparison-count { padding-block:10px; border-bottom:1px solid #dbe4e8; }
+@media(max-width:1000px) { .rr-comparison-columns { grid-template-columns:1fr; } }
+@media(max-width:600px) { .rr-comparison-values { grid-template-columns:1fr; } }

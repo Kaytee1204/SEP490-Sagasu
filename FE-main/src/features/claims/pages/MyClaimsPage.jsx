@@ -83,12 +83,11 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
   const views = [
     ['received', 'Người khác yêu cầu', UsersRound],
     ['sent', 'Tôi yêu cầu', Send],
-    ...(isApprover ? [['office', 'Yêu cầu gửi phòng ban', Building2]] : []),
   ];
   return <Wrapper className={`${embedded ? '' : 'container'} claims-page claim-list-page ${embedded ? 'claims-embedded' : ''}`} aria-label={title}>
 
     {!embedded && <header className="claim-list-heading"><h1>{title}</h1>
-      <p>{view === 'office' ? 'Đối chiếu và xử lý yêu cầu nhận đồ gửi cho phòng ban.' : incoming ? 'Xem yêu cầu theo từng món đồ và chọn hồ sơ cần xử lý.' : 'Theo dõi kết quả xét duyệt và việc nhận lại đồ của bạn.'}</p></header>}
+      <p>{incoming ? 'Xem yêu cầu theo từng món đồ và chọn hồ sơ cần xử lý.' : 'Theo dõi kết quả xét duyệt và việc nhận lại đồ của bạn.'}</p></header>}
     {postId && <div className="claim-list-context"><span><Filter size={16} aria-hidden="true" />Đang lọc theo bài đăng</span>
       <Link to={`/chi-tiet/${postId}`}>Xem bài đăng<ArrowUpRight size={15} aria-hidden="true" /></Link>
       <Link className="claim-list-clear-context" to={allPostsPath}><X size={15} aria-hidden="true" />Bỏ lọc bài đăng</Link></div>}
@@ -117,10 +116,9 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     </section>
     {loading ? <div className="claim-list-loading" role="status"><Inbox size={24} aria-hidden="true" />Đang tải yêu cầu nhận đồ…</div> : snapshot.error ? <div className="claim-alert" role="alert"><p>{snapshot.error}</p>
       <button className="btn btn-ghost" type="button" onClick={() => setAttempt(n => n + 1)}>Thử lại</button></div> : <>
-      <header className="claim-list-results-heading"><h2>{grouped ? incoming ? 'Yêu cầu theo món đồ' : 'Những món đồ bạn đã yêu cầu' : 'Hồ sơ gửi phòng ban'}</h2>
-        <span role="status">{snapshot.result.totalElements} {grouped ? 'món đồ' : 'hồ sơ'}</span></header>
-      {snapshot.result.content.length ? <div className="claim-list-results">{(grouped
-        ? snapshot.result.content.map(group => <ClaimPostGroup key={`${group.postId}:${status}`} group={group} incoming={incoming} status={status}
+      <header className="claim-list-results-heading"><h2>{incoming ? 'Yêu cầu theo món đồ' : 'Những món đồ bạn đã yêu cầu'}</h2>
+        <span role="status">{snapshot.result.totalElements} món đồ</span></header>
+      {snapshot.result.content.length ? <div className="claim-list-results">{snapshot.result.content.map(group => <ClaimPostGroup key={`${group.postId}:${status}`} group={group} incoming={incoming} status={status}
           expanded={expandedGroups.has(String(group.postId)) || (postId === String(group.postId) && !searchParams.has('expanded')) || (!incoming && !searchParams.has('expanded'))}
           onToggle={value => {
             const next = new Set(snapshot.result.content.filter(g => expandedGroups.has(String(g.postId)) || (!searchParams.has('expanded') && (!incoming || postId === String(g.postId)))).map(g => String(g.postId)));
@@ -128,9 +126,8 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
             setExpandedGroups(next);
             const updated = new URLSearchParams(searchParams); updated.set('expanded', [...next].join(','));
             setSearchParams(updated, { replace: true });
-          }} />)
-        : <ClaimRows claims={snapshot.result.content} showPost={!postId} incoming={incoming} collapseHistory={Boolean(postId) && status === 'ALL'} />)}</div> : <div className="claim-list-empty"><Inbox size={32} aria-hidden="true" /><h3>{status !== 'ALL' ? 'Không có yêu cầu phù hợp'
-        : view === 'office' ? 'Chưa có yêu cầu gửi cho phòng ban' : incoming ? 'Chưa có yêu cầu nhận đồ' : 'Bạn chưa gửi yêu cầu nhận đồ'}</h3>
+          }} />)}</div> : <div className="claim-list-empty"><Inbox size={32} aria-hidden="true" /><h3>{status !== 'ALL' ? 'Không có yêu cầu phù hợp'
+        : incoming ? 'Chưa có yêu cầu nhận đồ' : 'Bạn chưa gửi yêu cầu nhận đồ'}</h3>
         <p>{status !== 'ALL' ? 'Thử chọn trạng thái khác để xem các hồ sơ còn lại.' : incoming ? 'Yêu cầu của người khác sẽ được nhóm theo món đồ bạn đăng.' : 'Các yêu cầu bạn gửi sẽ được theo dõi tại đây.'}</p>
         {page > 1 ? <button type="button" className="btn btn-ghost" onClick={() => updateClaimState(view, 1, status)}>Về trang đầu</button>
           : status !== 'ALL' && <button type="button" className="btn btn-ghost" onClick={() => updateClaimState(view, 1, 'ALL')}>Xem tất cả trạng thái</button>}</div>}

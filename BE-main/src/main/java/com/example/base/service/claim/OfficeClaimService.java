@@ -221,7 +221,9 @@ public class OfficeClaimService {
     }
     @Transactional
     public void supplement(long id,Supplement request,CustomUserDetails user) {
-        Account actor=access.require(user); Claim c=locked(id); participant(c,actor); version(c,request.expectedVersion()); eligible(c.getPost());
+        Account actor=access.require(user); Claim c=locked(id);
+        if(c.getClaimant()==null || !Objects.equals(c.getClaimant().getId(),actor.getId())) throw new AppException(ErrorCode.FORBIDDEN);
+        version(c,request.expectedVersion()); eligible(c.getPost());
         if(!"NEEDS_INFO".equals(c.getStatus())) throw bad("Hồ sơ không ở bước chờ bổ sung.");
         c.review("PENDING"); activities.save(new ClaimActivity(c,actor,"RESUBMIT","NEEDS_INFO",request.information()));
         notifications.notifyRoles(List.of(APPROVER),actor.getId(),"OFFICE_CLAIM_SUPPLEMENTED",

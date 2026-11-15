@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { officeApi } from "../api/officeApi";
 import Notice from "./Notice";
+import RequestedInformation from "./RequestedInformation";
 
-export default function SupplementForm({ claim, onDone, mine }) {
+export default function SupplementForm({ claim, onDone }) {
   const [information, setInformation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -26,10 +27,12 @@ export default function SupplementForm({ claim, onDone, mine }) {
   return (
     <section className="of-panel">
       <h2>Bổ sung thông tin</h2>
+      <RequestedInformation claim={claim} />
+      <p className="of-muted">Trả lời nội dung văn phòng đang hỏi. Sau khi gửi, yêu cầu của bạn sẽ được xét duyệt lại.</p>
       <form className="of-form" onSubmit={submit}>
         <Notice error>{error}</Notice>
         <label>
-          {mine ? "Thông tin bạn bổ sung *" : "Thông tin người khai cung cấp — văn phòng nhập hộ *"}
+          Thông tin bạn bổ sung *
           <textarea
             required
             maxLength={2000}
@@ -42,7 +45,7 @@ export default function SupplementForm({ claim, onDone, mine }) {
           className="of-button of-primary"
           disabled={busy || !information.trim()}
         >
-          {busy ? "Đang gửi…" : "Ghi nhận & gửi lại xét duyệt"}
+          {busy ? "Đang gửi…" : "Gửi thông tin bổ sung"}
         </button>
       </form>
     </section>

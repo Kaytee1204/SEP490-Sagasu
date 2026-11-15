@@ -47,14 +47,15 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
     try { await workflowApi.decide(id, { ...form, decision: receiving ? "RECEIVED" : mine ? "CANCELLED" : "REJECTED", locationId: form.locationId ? Number(form.locationId) : null, expectedVersion: transfer.version },files);updated(); }
     catch (failure) {setError(failure.message);}finally {setBusy(false);}
   }
-  return <Dialog title="Yêu cầu tiếp nhận đồ" onClose={onClose} busy={busy}>
+  return <Dialog title="Yêu cầu tiếp nhận đồ" onClose={onClose} busy={busy} resetKey={`${transfer?.version}:${mode}`}>
+    {({ guard }) => <>
     <Notice error={notice?.error}>{notice?.text}</Notice>
     <LoadState state={state}>{transfer && <>
       {!pending && <div className={`of-transfer-outcome ${transfer.status === "RECEIVED" ? "is-received" : "is-ended"}`} role="status">
         {transfer.status === "RECEIVED" ? <CheckCircle2 size={28} /> : <XCircle size={28} />}
         <div><strong>{outcomes[transfer.status]}</strong><p>{date(transfer.processedAt)}</p></div>
       </div>}
-      <h3>{transfer.title}</h3><p className="of-muted">Người giao: {transfer.finder} · Gửi lúc {date(transfer.requestedAt)}</p>
+      <div className="of-intake-summary"><strong>{transfer.title}</strong><span>{transfer.finder}</span></div><p className="of-muted">Người giao: {transfer.finder} · Gửi lúc {date(transfer.requestedAt)}</p>
       <details className="of-transfer-description"><summary>Thông tin và ảnh đồ vật</summary><p className="of-prose">{transfer.description}</p>
       <div className="of-gallery">{transfer.images.map((url, i) => <a href={url} target="_blank" rel="noreferrer" key={url}><img src={url} alt={`Đồ cần tiếp nhận, ảnh ${i + 1}`} /></a>)}</div>
       </details>
@@ -65,7 +66,7 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
         {transfer.receiptId && <section><h3>Ảnh khi văn phòng tiếp nhận</h3>
           {transfer.receiptEvidence?.length ? <div className="of-gallery">{transfer.receiptEvidence.map((url,i)=><a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Ảnh tiếp nhận ${i+1}`} /></a>)}</div> : <p className="of-muted">Phiếu cũ chưa lưu ảnh tiếp nhận riêng.</p>}
         </section>}
-        <div className="of-actions"><button className="of-button" onClick={onClose}>Đóng</button></div>
+        <div className="of-actions"><button className="of-button" onClick={() => guard()}>Đóng</button></div>
       </> : <>
         {transfer.activeClaims > 0 && <p className="of-muted">Đồ vật này có {transfer.activeClaims} yêu cầu nhận lại đồ.</p>}
         {mine && a && <AppointmentReply key={a.id} appointment={a} id={id} intake onBusyChange={setBusy} onChanged={() => { state.reload(); onDone(); }} />}
@@ -75,7 +76,7 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
         {self && <Notice>Nhờ một nhân viên khác xử lý yêu cầu tiếp nhận của bạn.</Notice>}
         {!mode && <div className="of-actions of-actions-wrap">
           {officer && !self && <>
-            {<button className="of-button of-primary" onClick={() => setMode("receive")}>Đã nhận đồ tại quầy</button>}
+            <button className={`of-button ${a?.responseStatus === "CONFIRMED" ? "of-primary" : ""}`} onClick={() => setMode("receive")}>Người giao đã đến — tiếp nhận đồ</button>
             {(!a || ["DECLINED", "EXPIRED"].includes(a.responseStatus)) && <button className="of-button of-primary" onClick={() => setMode("schedule")}>{a ? "Sắp xếp lịch mới" : "Hẹn mang đồ đến"}</button>}
           </>}
           <button className="of-button" disabled={busy} onClick={() => state.reload()}>Làm mới trạng thái</button>
@@ -87,9 +88,10 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
             <button className="of-button of-danger" disabled={busy} onClick={() => setMode("reject")}>Từ chối tiếp nhận</button>
           </>}
         </div></details>}
-        {mode === "schedule" && <IntakeScheduleForm transfer={transfer} onBusyChange={setBusy} onClose={() => setMode(null)} onDone={updated} />}
+        {mode === "schedule" && <IntakeScheduleForm transfer={transfer} onBusyChange={setBusy} onClose={() => guard(() => setMode(null))} onDone={updated} />}
         {["receive", "reject", "withdraw"].includes(mode) && <form className="of-form of-intake-form" onSubmit={submit}>
           <h3>{receiving ? "Ghi nhận đồ đã nhận" : mine ? "Hủy yêu cầu tiếp nhận" : "Từ chối yêu cầu tiếp nhận"}</h3>
+          {receiving && <p className="of-callout">Chỉ xác nhận khi người giao đã mang đồ đến và bạn đã kiểm tra thực tế. Việc hẹn lịch chưa chuyển trách nhiệm giữ đồ.</p>}
           {receiving ? <>
             <label>Vị trí lưu kho *<select required value={form.locationId} disabled={busy || locations.loading} onChange={(e) => change("locationId", e.target.value)}><option value="">Chọn vị trí</option>{(locations.data || []).filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</select></label>
             <Notice error>{locations.error}</Notice>
@@ -98,9 +100,10 @@ export default function TransferDialog({ id, mine, onClose, onDone }) {
             <IntakeEvidencePicker files={files} setFiles={setFiles} disabled={busy} />
           <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi đã trực tiếp nhận và kiểm tra đúng đồ.</span></label>
           </> : <label>Lý do *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} placeholder={mine ? "Vì sao bạn muốn hủy yêu cầu?" : "Giải thích ngắn gọn để người giao biết…"} /></label>}
-          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => setMode(null)}>Quay lại</button><button className={`of-button ${receiving ? "of-primary" : "of-danger"}`} disabled={busy || (receiving && (!files.length || !checked))}>{busy ? "Đang lưu…" : receiving ? "Xác nhận đã nhận đồ" : mine ? "Xác nhận hủy yêu cầu" : "Từ chối yêu cầu"}</button></div>
+          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard(() => setMode(null))}>Quay lại</button><button className={`of-button ${receiving ? "of-primary" : "of-danger"}`} disabled={busy || (receiving && (!files.length || !checked))}>{busy ? "Đang lưu…" : receiving ? "Xác nhận đã nhận đồ" : mine ? "Xác nhận hủy yêu cầu" : "Từ chối yêu cầu"}</button></div>
         </form>}
       </>}
     </>}</LoadState>
+    </>}
   </Dialog>;
 }

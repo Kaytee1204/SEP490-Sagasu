@@ -141,6 +141,17 @@ public class ReportContextService {
           post
         )
       );
+      // Manager evidence context: retain receipt photos independently of public post photos.
+      // Older transferred receipts copied post images; do not present those as intake proof.
+      result.put(
+        "receiptImages",
+        jdbc.queryForList(
+          "select i.item_receipt_image_id,i.storage_key,i.image_url,i.created_at,i.is_sensitive,"
+            + "case when r.source='EXISTING_POST' and i.storage_key not like 'receipts/intake/%' then 'INHERITED_POST' else 'INTAKE' end as evidence_source "
+            + "from item_receipt_image i join item_receipt r using(item_receipt_id) where r.post_id=? order by i.sort_order,i.item_receipt_image_id",
+          post
+        )
+      );
       result.put(
         "relatedClaims",
         jdbc.queryForList(

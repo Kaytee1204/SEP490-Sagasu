@@ -1,3 +1,4 @@
+import { earliestAppointment } from "../officeUtils";
 import { useState } from "react";
 import Dialog from "./Dialog";
 import Notice from "./Notice";
@@ -37,6 +38,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
     finally { setBusy(false); }
   }
   return <Dialog title={titles[action]} busy={busy} onClose={onClose}>
+    {({ guard }) => <>
     <form className="of-form" onSubmit={submit}>
       <Notice error>{error}</Notice>
       <p className="of-muted">Hồ sơ #{claim.id} · {claim.postTitle}</p>
@@ -47,7 +49,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       </>}
       {action === "reschedule" && <>
         <Notice>Lịch cũ sẽ hết hiệu lực. Người nhận cần đồng ý lịch mới qua email trong 12 giờ từ khi gửi thành công.</Notice>
-        <label>Ngày và giờ mới (UTC+7) *<input type="datetime-local" required value={form.scheduledAt} disabled={busy} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn thời điểm cách hiện tại hơn 12 giờ.</small></label>
+        <label>Ngày và giờ mới (UTC+7) *<input type="datetime-local" min={earliestAppointment()} required value={form.scheduledAt} disabled={busy} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn thời điểm cách hiện tại hơn 12 giờ.</small></label>
         <label>Địa điểm *<input required maxLength={1000} value={form.location} disabled={busy} onChange={(e) => change("location", e.target.value)} /></label>
         <label>Lời nhắn cho người nhận<textarea maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} /></label>
       </>}
@@ -60,7 +62,8 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       </>}
       {action === "complete" && <p>Biên bản đã ghi nhận giao đồ trước đó. Chỉ hoàn tất khi văn phòng đã giao đủ đồ cho người nhận và kiểm tra thông tin trong biên bản.</p>}
       {["handover", "complete"].includes(action) && <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi xác nhận văn phòng đã giao đúng và đủ đồ cho người nhận đã được xác minh.</span></label>}
-      <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Để sau</button><button className={`of-button ${action === "cancel" ? "of-danger" : "of-primary"}`} disabled={busy}>{busy ? "Đang lưu…" : titles[action]}</button></div>
+      <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard()}>Để sau</button><button className={`of-button ${action === "cancel" ? "of-danger" : "of-primary"}`} disabled={busy}>{busy ? "Đang lưu…" : titles[action]}</button></div>
     </form>
+    </>}
   </Dialog>;
 }
