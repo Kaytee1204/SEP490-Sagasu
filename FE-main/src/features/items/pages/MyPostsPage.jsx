@@ -1,15 +1,15 @@
-import '@/features/workspace/Workspace.css';
+import '@/styles/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowDownWideNarrow, CircleCheck, CircleX, Clock3, Eye, EyeOff, Layers3, ListFilter, PackageOpen, Search, TriangleAlert, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { getMyPosts, deletePost } from '@/features/items/api/postApi';
+import { getMyPosts, deletePost } from '../api/postApi';
 import Pagination from '@/components/common/Pagination';
-import MyPostCard from '../components/MyPostCard';
-import { EditPostDialog } from '@/features/items/pages/EditPostPage';
-import MyPostsEmptyState from '../components/MyPostsEmptyState';
-import MyPostsFilterBar from '../components/MyPostsFilterBar';
-import './MyPostsPage.css';
+import MyPostCard from '../components/my-posts/MyPostCard';
+import EditPostDialog from '../components/post/EditPostDialog';
+import MyPostsEmptyState from '../components/my-posts/MyPostsEmptyState';
+import MyPostsFilterBar from '../components/my-posts/MyPostsFilterBar';
+import '../styles/MyPosts.css';
 
 const FILTERS = [
   { key: 'ALL', label: 'Tất cả', icon: ListFilter },

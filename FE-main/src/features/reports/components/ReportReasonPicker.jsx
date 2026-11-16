@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import './Reports.css';
+import '../styles/Reports.css';
 
 export default function ReportReasonPicker({ options, error, reload, value, onChange, disabled }) {
   const name = useId();

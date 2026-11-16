@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { confirmHandover } from './handoverApi';
+import { confirmHandover } from '../api/handoverApi';
 
 export default function ConfirmReceiptDialog({ claim, handover, onClose, onConfirmed, onReportIssue }) {
   const dialog = useRef(null);

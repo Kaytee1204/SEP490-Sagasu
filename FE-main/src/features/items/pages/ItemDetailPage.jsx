@@ -1,13 +1,13 @@
-import { postClaimsPath } from '@/features/claims/claimUtils';
-import '@/features/workspace/Workspace.css';
+import { postClaimsPath } from '@/features/claims/utils/claimUtils';
+import '@/styles/Workspace.css';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, ChevronRight, CircleCheck, ClipboardList, MapPin, Pencil, SearchCheck, UserRound } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
-import { EditPostDialog } from './EditPostPage';
+import EditPostDialog from '../components/post/EditPostDialog';
 import { getLatestClaimOnPost } from '@/features/claims/api/claimApi';
-import { claimDetailPath, canSubmitPostClaim, postClaimType } from '@/features/claims/claimUtils';
+import { claimDetailPath, canSubmitPostClaim, postClaimType } from '@/features/claims/utils/claimUtils';
 import ItemGallery from '../components/detail/ItemGallery';
 import ItemInfoSection from '../components/detail/ItemInfoSection';
 import ItemCharacteristics from '../components/detail/ItemCharacteristics';
@@ -16,7 +16,7 @@ import SmartMatchModal from '../components/detail/SmartMatchModal';
 import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
-import ReportButton from '@/features/reports/ReportButton';
+import ReportButton from '@/features/reports/components/ReportButton';
 
 const STATUS_LABELS = {
   RESERVED: 'Đang xử lý nhận đồ',

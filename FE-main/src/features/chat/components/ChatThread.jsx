@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Camera, CheckCheck, FileText, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useChat } from '../ChatProvider';
+import { useChat } from '@/features/chat/hooks/useChat';
 import { getMessages, sendMessage, sendAttachments, markChatRead, getReadReceipts } from '../api/chatApi';
 import ChatAttachments from './ChatAttachments';
 import LocationPicker from './LocationPicker';
 import ChatLocation from './ChatLocation';
 import CameraCapture from './CameraCapture';
-import ReportButton from '@/features/reports/ReportButton';
+import ReportButton from '@/features/reports/components/ReportButton';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_ACCEPT } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';

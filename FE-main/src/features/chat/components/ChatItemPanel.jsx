@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { getPostDetail } from '@/features/items/api/postApi';
-import { getHandover } from '@/features/handover/handoverApi';
-import { claimDate, claimDetailPath, evidenceUrl } from '@/features/claims/claimUtils';
-import { useChat } from '../ChatProvider';
+import { getHandover } from '@/features/handover/api/handoverApi';
+import { claimDate, claimDetailPath, evidenceUrl } from '@/features/claims/utils/claimUtils';
+import { useChat } from '@/features/chat/hooks/useChat';
 
 const PROGRESS = { NOT_RECORDED: 'Chưa ghi nhận giao đồ', WAITING_CONFIRMATION: 'Chờ người nhận xác nhận', COMPLETED: 'Đã nhận đồ', DISPUTED: 'Có sự cố — chờ Manager xử lý' };
 const POST_STATUS = { OPEN: 'Đang chờ nhận', RESERVED: 'Đang xử lý nhận đồ', RETURNED: 'Đã trao trả', CLOSED: 'Đã đóng' };

@@ -1,4 +1,4 @@
-import { isQuestionVisible, questionnaireQuestions } from '../questionnaireUtils';
+import { isQuestionVisible, questionnaireQuestions } from '../utils/questionnaireUtils';
 import { CalendarDays, Fingerprint } from 'lucide-react';
 
 function LostDateField({ question, value, onChange }) {

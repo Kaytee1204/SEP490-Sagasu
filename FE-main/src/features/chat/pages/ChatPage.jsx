@@ -1,15 +1,15 @@
-import '@/features/workspace/Workspace.css';
+import '@/styles/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ClipboardCheck, Package, UserRound } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getChat } from '../api/chatApi';
-import { useChat } from '../ChatProvider';
+import { useChat } from '@/features/chat/hooks/useChat';
 import ChatList from '../components/ChatList';
 import ChatThread from '../components/ChatThread';
 import ChatItemPanel from '../components/ChatItemPanel';
-import '../Chat.css';
-import ReportButton from '@/features/reports/ReportButton';
+import '../styles/Chat.css';
+import ReportButton from '@/features/reports/components/ReportButton';
 
 export default function ChatPage() {
   const { conversationId } = useParams();

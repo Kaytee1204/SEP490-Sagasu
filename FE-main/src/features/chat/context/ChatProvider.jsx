@@ -1,11 +1,9 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Client } from '@stomp/stompjs';
+import ChatContext from './ChatContext';
 import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/services/apiClient';
-import { getUnreadCount, getChatLimits } from './api/chatApi';
-
-const ChatContext = createContext({ revision: 0, online: false, unread: 0, refresh: () => {} });
-export const useChat = () => useContext(ChatContext);
+import { getUnreadCount, getChatLimits } from '../api/chatApi';
 
 export default function ChatProvider({ children }) {
   const { user, token } = useAuth();

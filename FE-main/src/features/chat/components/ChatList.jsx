@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, History, LockKeyhole, MessageCircle, RotateCcw, UserRound } from 'lucide-react';
 import { getChats } from '../api/chatApi';
-import { useChat } from '../ChatProvider';
+import { useChat } from '@/features/chat/hooks/useChat';
 
 export default function ChatList({ activeId }) {
   const { revision } = useChat();

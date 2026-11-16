@@ -226,7 +226,7 @@ public class ClaimService {
                         answer.getQuestionLabel(), answer.getAnswerText(), answer.getSectionTitle(),
                         answer.getTemplateCode(), answer.getTemplateVersion())).toList(), chatConversations.canOpen(claim),
                 claim.getClaimType(), claim.getReceipt() == null || claim.getReceipt().getStorageLocation() == null
-                        ? null : claim.getReceipt().getStorageLocation().getName(),claim.getCloseReason(),claim.getClosedAt());
+                        ? null : claim.getReceipt().getStorageLocation().getName(),claim.getCloseReason(),claim.getClosedAt(), reviewer && revocable(claim));
     }
 
     @Transactional
@@ -273,6 +273,76 @@ public class ClaimService {
             );
         }
         return result(claim);
+    }
+
+    @Transactional
+    public ClaimResultDto revokeApproval(long id, RevokeClaimApprovalRequest request, CustomUserDetails user) {
+        Account actor = activeActor(user);
+        // Same lock order as approval, custody transfer and recording a handover.
+        Post post = lockPost(claimPostId(id));
+        routing.lockReceipt(post);
+        Claim claim = lockClaim(id);
+        if (!routing.reviewer(claim, actor)) throw missing();
+        if (request == null || request.reason() == null || request.reason().isBlank()
+                || request.reason().length() > 2000) throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
+        requireVersion(claim, request.expectedVersion());
+        if (!revocable(claim)) throw stateChanged();
+        claim.review("PENDING");
+        post.reopenAfterClaimCancellation();
+        activities.save(new ClaimActivity(claim, actor, "REVOKE_APPROVAL", "APPROVED", request.reason()));
+        claims.flush();
+        chatConversations.notifyChanged(claim);
+        notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_APPROVAL_REVOKED",
+                "Đã thu hồi chấp thuận yêu cầu nhận đồ #" + claim.getId(),
+                "Yêu cầu cho bài đăng " + post.getTitle() + " được đưa về chờ xét duyệt. Lý do: "
+                        + request.reason().strip() + ". Cuộc trò chuyện được giữ để xem lịch sử.",
+                "/bai-dang/" + post.getId() + "/claims/" + claim.getId(), true);
+        return result(claim);
+    }
+
+    private boolean revocable(Claim claim) {
+        return !claim.isOffice() && "APPROVED".equals(claim.getStatus())
+                && routing.matches(claim, Set.of("RESERVED")) && !handovers.existsByClaimId(claim.getId())
+                && !Boolean.TRUE.equals(entityManager.createNativeQuery(
+                    "select exists(select 1 from report_hold where post_id=:postId and released_at is null)")
+                    .setParameter("postId", claim.getPost().getId()).getSingleResult());
+    }
+
+    @Transactional(readOnly = true)
+    public ClaimComparisonDto comparison(long postId, int page, int size, String status, CustomUserDetails user) {
+        Account actor = activeActor(user);
+        Post post = post(postId);
+        if (!Objects.equals(post.getAccount().getId(), actor.getId())
+                || !"FOUND".equals(post.getPostType()) || !"P2P".equals(post.getCustodyMode())) throw missing();
+        if (!Set.of("ALL", "PENDING", "APPROVED").contains(Objects.toString(status, "")))
+            throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
+        if (size > 10) throw new AppException(ErrorCode.POST_PAGINATION_INVALID);
+        var paging = pageable(page, size);
+        String where = " from Claim c where c.post.id=:postId and c.claimType='P2P'"
+                + " and c.status in ('PENDING','APPROVED') and (:status='ALL' or c.status=:status)";
+        long total = entityManager.createQuery("select count(c)" + where, Long.class)
+                .setParameter("postId", postId).setParameter("status", status).getSingleResult();
+        var entries = entityManager.createQuery("select c" + where.replace(" from Claim c where", " from Claim c join fetch c.claimant where")
+                + " order by case when c.status='PENDING' then 0 else 1 end, c.createdAt desc, c.id desc", Claim.class)
+                .setParameter("postId", postId).setParameter("status", status)
+                .setFirstResult((int) paging.getOffset()).setMaxResults(size).getResultList();
+        var ids = entries.stream().map(Claim::getId).toList();
+        if (ids.isEmpty()) return new ClaimComparisonDto(List.of(), page, size, total, (int) Math.ceil((double) total / size));
+        // Batch collections separately to avoid cartesian joins and per-dossier HTTP requests.
+        var answers = entityManager.createQuery("select a from ClaimAnswer a join fetch a.question where a.claim.id in :ids order by a.sortOrder, a.id", ClaimAnswer.class)
+                .setParameter("ids", ids).getResultList().stream()
+                .collect(java.util.stream.Collectors.groupingBy(a -> a.getClaim().getId()));
+        var images = entityManager.createQuery("select e from ClaimEvidence e where e.claim.id in :ids order by e.sortOrder, e.id", ClaimEvidence.class)
+                .setParameter("ids", ids).getResultList().stream()
+                .collect(java.util.stream.Collectors.groupingBy(e -> e.getClaim().getId()));
+        var content = entries.stream().map(c -> new ClaimComparisonDto.Entry(c.getId(), postId, name(c.getClaimant()),
+                c.getStatus(), c.getCreatedAt(), c.getDescription(),
+                answers.getOrDefault(c.getId(), List.of()).stream().map(a -> new ClaimComparisonDto.Answer(
+                    a.getQuestionCode(), a.getQuestionLabel(), a.getAnswerText(),
+                    a.getTemplateCode(), a.getTemplateVersion(), a.getQuestion().isRequired(), a.getSortOrder())).toList(),
+                images.getOrDefault(c.getId(), List.of()).stream().map(e -> new ClaimDetailDto.EvidenceDto(
+                    e.getId(), storage.readUrl(e.getStorageKey(), null), e.getOriginalName(), e.getMimeType(), e.getSizeBytes())).toList())).toList();
+        return new ClaimComparisonDto(content, page, size, total, (int) Math.ceil((double) total / size));
     }
 
     @Transactional

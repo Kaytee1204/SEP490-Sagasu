@@ -1,8 +1,8 @@
-import '@/features/workspace/Workspace.css';
+import '@/styles/Workspace.css';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { readPostDraft, savePostDraft, deletePostDraft } from '../api/postDraftStore';
+import { readPostDraft, savePostDraft, deletePostDraft } from '../storage/postDraftStore';
 import StepImagesUpload from '../components/post/StepImagesUpload';
 import StepDetailsForm from '../components/post/StepDetailsForm';
 import LivePostPreview from '../components/post/LivePostPreview';

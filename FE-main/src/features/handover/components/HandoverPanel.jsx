@@ -1,12 +1,13 @@
 import { useEffect,useState } from 'react';
 import { Check, ChevronDown, CircleCheck, Clock3, Images, PackageCheck, ShieldAlert, TriangleAlert } from 'lucide-react';
-import { useChat } from '@/features/chat/ChatProvider';
+import { useChat } from '@/features/chat/hooks/useChat';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
-import { getHandover } from './handoverApi';
+import { handoverVerificationHint } from '@/features/claims/utils/reviewCriteria';
+import { getHandover } from '../api/handoverApi';
 import RecordHandoverDialog from './RecordHandoverDialog';
 import ConfirmReceiptDialog from './ConfirmReceiptDialog';
 import ReportHandoverIssueDialog from './ReportHandoverIssueDialog';
-import './Handover.css';
+import '../styles/Handover.css';
 // DaiHV integration: reflect Manager dispute outcomes without changing the P2P form.
 const statusLabels={NOT_RECORDED:'Chưa ghi nhận giao đồ',WAITING_CONFIRMATION:'Chờ người nhận xác nhận',COMPLETED:'Đã nhận đồ',DISPUTED:'Có sự cố — chờ quản lý xử lý',CANCELLED:'Đã kết thúc bàn giao theo kết luận của quản lý'};
 const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});
@@ -67,6 +68,7 @@ export default function HandoverPanel({claim,onChanged}) {
     <div className={`handover-current-step ${data.status === 'COMPLETED' ? 'is-completed' : data.heldForReview || ['DISPUTED','CANCELLED'].includes(data.status) ? 'is-paused' : ''}`}>
       <StepIcon size={24} aria-hidden="true" /><div className="handover-current-content"><h3>{step.title}</h3><p>{step.description}</p>
       {(data.canRecord || data.canConfirm || data.canReportIssue) && <div className="handover-next-actions">
+        {data.canRecord && <p className="handover-verification-hint">{handoverVerificationHint(claim.answers)}</p>}
         {data.canRecord&&<button type="button" className="btn btn-accent" onClick={()=>setRecordOpen(true)}><PackageCheck size={18} aria-hidden="true" />Ghi nhận đã giao đồ</button>}
         {data.canConfirm&&<button type="button" className="btn btn-accent" onClick={()=>setConfirmOpen(true)}><CircleCheck size={18} aria-hidden="true" />Xác nhận đã nhận đúng đồ</button>}
         {data.canReportIssue&&<button type="button" className="btn btn-ghost handover-issue-button" onClick={()=>setIssueOpen(true)}><TriangleAlert size={17} aria-hidden="true" />Báo sự cố bàn giao</button>}

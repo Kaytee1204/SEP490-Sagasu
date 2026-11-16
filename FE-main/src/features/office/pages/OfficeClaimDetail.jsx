@@ -15,7 +15,7 @@ import ReceiptInfo from "../components/ReceiptInfo";
 import OfficeReturnPanel from "../components/OfficeReturnPanel";
 import "../Office.css";
 // DaiHV integration: office complaints enter the shared Manager report workflow.
-import ReportButton from "../../reports/ReportButton";
+import ReportButton from "@/features/reports/components/ReportButton";
 
 export default function OfficeClaimDetail({ mine = false }) {
   const { id } = useParams();

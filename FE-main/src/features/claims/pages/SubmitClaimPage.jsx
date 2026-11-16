@@ -1,14 +1,14 @@
-import '@/features/workspace/Workspace.css';
+import '@/styles/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, Images, MapPin, Package, Send, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getPostDetail } from '@/features/items/api/postApi';
 import { getClaimOnPost, getLatestClaimOnPost, getClaimQuestionnaire, submitClaim } from '../api/claimApi';
-import { validClaimId, claimDetailPath, canSubmitPostClaim, postClaimType, evidenceUrl } from '../claimUtils';
-import { serializeQuestionnaireAnswers } from '../questionnaireUtils';
+import { validClaimId, claimDetailPath, canSubmitPostClaim, postClaimType, evidenceUrl } from '../utils/claimUtils';
+import { serializeQuestionnaireAnswers } from '../utils/questionnaireUtils';
 import ClaimQuestionnaireFields from '../components/ClaimQuestionnaireFields';
-import '../Claims.css';
+import '../styles/Claims.css';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';

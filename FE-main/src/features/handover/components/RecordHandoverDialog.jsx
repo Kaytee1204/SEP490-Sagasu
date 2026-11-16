@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { uploadHandover } from './handoverApi';
+import { uploadHandover } from '../api/handoverApi';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';

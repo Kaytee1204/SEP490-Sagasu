@@ -1,12 +1,13 @@
-import '@/features/workspace/Workspace.css';
+import '@/styles/Workspace.css';
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ArrowUpRight, Building2, ChevronDown, Clock3, Filter, History, Inbox, Send, UserRound, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import ClaimEvidenceComparison from '../components/ClaimEvidenceComparison';
 import Pagination from '@/components/common/Pagination';
 import { getGroupedClaims } from '../api/claimApi';
-import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath, evidenceUrl } from '../claimUtils';
-import '../Claims.css';
+import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath, evidenceUrl } from '../utils/claimUtils';
+import '../styles/Claims.css';
 import './MyClaimsPage.css';
 
 const HISTORY_STATUSES = ['COMPLETED', 'REJECTED', 'CANCELLED', 'CLOSED'];
@@ -18,13 +19,6 @@ export default function MyClaimsPage({ embedded = false }) {
   // Existing staff bookmarks belong to the Approver workspace.
   if (params.get('view') === 'office' && isApprover) return <Navigate replace to="/approver/office-claims" />;
   return <ClaimList key={`${user?.id}:${initialView}:${params.get("postId") || ""}`} initialView={initialView} embedded={embedded} />;
-}
-export function PostClaimsPage() {
-  const { id } = useParams();
-  const [params] = useSearchParams();
-  if (!validClaimId(id)) return <main className="container claims-page"><p role="alert">Mã bài đăng không hợp lệ.</p></main>;
-  const target = new URLSearchParams({ view: 'received', postId: id, claimStatus: params.get('claimStatus') || 'ALL' });
-  return <Navigate replace to={`/claim-cua-toi?${target}`} />;
 }
 function ClaimList({ embedded = false, initialView = 'received' }) {
   const location = useLocation();
@@ -183,6 +177,7 @@ function ClaimPostGroup({ group, incoming, status, expanded, onToggle }) {
   const pendingCount = visible.filter(claim => claim.status === 'PENDING').length;
   const latestClaim = visible[0];
   const listId = `claim-post-group-${group.postId}`;
+  const compare = incoming && ['ALL', 'PENDING', 'APPROVED'].includes(status) && visible.some(c => ['PENDING', 'APPROVED'].includes(c.status));
   return <article className={`claim-panel claim-post-group ${expanded ? 'is-expanded' : ''} ${incoming && pendingCount > 0 ? 'has-pending' : ''}`}>
     <button type="button" className="claim-group-toggle" aria-expanded={expanded} aria-controls={expanded ? listId : undefined} onClick={() => onToggle(!expanded)}>
       <ClaimPostThumbnail url={group.postThumbnailUrl} title={group.postTitle} />
@@ -196,7 +191,8 @@ function ClaimPostGroup({ group, incoming, status, expanded, onToggle }) {
     {expanded && <div id={listId} className="claim-group-expanded">
       <header className="claim-group-content-heading"><h3>{incoming ? 'Yêu cầu nhận đồ trên bài này' : 'Yêu cầu của bạn'}</h3>
         <Link className="claim-group-post-link" to={`/chi-tiet/${group.postId}`}>Xem bài đăng<ArrowUpRight size={15} aria-hidden="true" /></Link></header>
-      <ClaimRows claims={visible} incoming={incoming} collapseHistory={status === 'ALL'} latestOnly={!incoming} />
+      {compare && <ClaimEvidenceComparison key={`${group.postId}:${status}`} postId={group.postId} status={status} />}
+      <ClaimRows claims={compare ? visible.filter(c => !['PENDING', 'APPROVED'].includes(c.status)) : visible} incoming={incoming} collapseHistory={status === 'ALL'} latestOnly={!incoming} />
     </div>}
   </article>;
 }

@@ -4,7 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Navbar from './Navbar';
 import Footer from './Footer';
-import ChatProvider from '@/features/chat/ChatProvider';
+import ChatProvider from '@/features/chat/context/ChatProvider';
 
 export default function MainLayout() {
   const { isAuthenticated, user } = useAuth();

@@ -1,20 +1,21 @@
-import '@/features/workspace/Workspace.css';
+import '@/styles/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, ClipboardCheck, XCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getPostDetail } from '@/features/items/api/postApi';
-import { getClaim, getClaimOnPost, reviewClaim, cancelClaim } from '../api/claimApi';
-import { evidenceUrl, validClaimId, claimDetailPath, postClaimsPath } from '../claimUtils';
+import { getClaimOnPost, reviewClaim, cancelClaim } from '../api/claimApi';
+import { evidenceUrl, validClaimId, postClaimsPath } from '../utils/claimUtils';
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import { ClaimActivityTimeline, ClaimDetailSummary, ClaimParticipantPanel, ClaimStatusPanel, ClaimVerificationPanel } from '../components/ClaimDetailPanels';
 import RejectClaimDialog from '../components/RejectClaimDialog';
 import CancelClaimDialog from '../components/CancelClaimDialog';
+import RevokeClaimApprovalDialog from '../components/RevokeClaimApprovalDialog';
 import ApproveClaimDialog from '../components/ApproveClaimDialog';
-import ReportButton from '@/features/reports/ReportButton';
-import HandoverPanel from '@/features/handover/HandoverPanel';
-import { useChat } from '@/features/chat/ChatProvider';
-import '../Claims.css';
+import ReportButton from '@/features/reports/components/ReportButton';
+import HandoverPanel from '@/features/handover/components/HandoverPanel';
+import { useChat } from '@/features/chat/hooks/useChat';
+import '../styles/Claims.css';
 import './ClaimDetailPage.css';
 
 export default function ClaimDetailPage() {
@@ -22,28 +23,6 @@ export default function ClaimDetailPage() {
   const { user } = useAuth();
   if (!validClaimId(postId) || !validClaimId(claimId)) return <main className="container claims-page"><p role="alert">Mã bài đăng hoặc claim không hợp lệ.</p></main>;
   return <ClaimDetail key={`${user?.id}:${postId}:${claimId}`} postId={postId} id={claimId} />;
-}
-
-export function LegacyClaimRedirect() {
-  const { id } = useParams();
-  const { user } = useAuth();
-  if (!validClaimId(id)) return <main className="container claims-page"><p role="alert">Mã claim không hợp lệ.</p></main>;
-  return <LegacyClaimLookup key={`${user?.id}:${id}`} id={id} />;
-}
-function LegacyClaimLookup({ id }) {
-  const location = useLocation();
-  const [result, setResult] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    getClaim(id).then(claim => { if (!cancelled) setResult({ claim }); })
-      .catch(error => { if (!cancelled) setResult({ error: error.message }); });
-    return () => { cancelled = true; };
-  }, [id]);
-  if (result?.claim) return <Navigate to={claimDetailPath(result.claim.postId, result.claim.id)} replace state={location.state} />;
-  return <main className="container claims-page">
-    {result?.error ? <p role="alert">{result.error}</p> : <p role="status">Đang mở hồ sơ claim…</p>}
-    <Link to="/claim-cua-toi">Về danh sách claim</Link>
-  </main>;
 }
 
 function ClaimDetail({ postId, id }) {
@@ -61,6 +40,7 @@ function ClaimDetail({ postId, id }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
   const [focusRevision,setFocusRevision]=useState(0);
@@ -131,6 +111,10 @@ function ClaimDetail({ postId, id }) {
           <button type="button" className="btn btn-ghost claim-detail-reject" disabled={busy} onClick={() => setRejectOpen(true)}><XCircle size={18} aria-hidden="true" />Từ chối yêu cầu</button>
         </div> : <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu kết quả xét duyệt'}</button>}
       </form>}
+      {claim.canRevokeApproval && <section className="claim-panel claim-detail-review">
+        <h2>Xét duyệt lại người nhận</h2><p>Thu hồi chấp thuận nếu cần kiểm tra lại căn cứ trước khi giao đồ.</p>
+        <button type="button" className="btn btn-ghost" onClick={() => setRevokeOpen(true)}>Thu hồi chấp thuận</button>
+      </section>}
       <ClaimParticipantPanel claim={claim} />
       <ClaimActivityTimeline activities={claim.activities} />
       <div className="claim-detail-secondary-actions">
@@ -163,6 +147,13 @@ function ClaimDetail({ postId, id }) {
         setApproveOpen(false); setError(''); setNotice('Đã chấp thuận yêu cầu. Hai bên có thể trao đổi để nhận đồ.');
         setClaim(current => ({ ...current, status: 'APPROVED', canReview: false }));
         getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+      }} />}
+    {revokeOpen && claim?.canRevokeApproval && <RevokeClaimApprovalDialog claim={claim}
+      onClose={() => { setRevokeOpen(false); setFocusRevision(value => value + 1); }} onRevoked={() => {
+        setRevokeOpen(false); setError(''); setNotice('Đã thu hồi chấp thuận. Hồ sơ trở lại chờ xét duyệt.');
+        setClaim(current => ({ ...current, status: 'PENDING', canRevokeApproval: false, canOpenChat: false }));
+        getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+        getPostDetail(postId).then(setPost).catch(() => {});
       }} />}
     {previewImageId !== null && <ClaimEvidencePreview images={previewImages}
       initialIndex={previewImages.findIndex(image => image.id === previewImageId)} onClose={() => setPreviewImageId(null)} />}

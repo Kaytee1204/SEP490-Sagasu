@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, BadgeCheck, ChevronDown, CircleCheck, CircleX, Clock3, FileCheck2, History, Images, ListChecks, MapPin, Package, UserRound } from 'lucide-react';
-import { CLAIM_ACTION, CLAIM_STATUS, claimDate, evidenceUrl } from '../claimUtils';
+import { CLAIM_ACTION, CLAIM_STATUS, claimDate, evidenceUrl } from '../utils/claimUtils';
 import ClaimAnswerSummary from './ClaimAnswerSummary';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
 

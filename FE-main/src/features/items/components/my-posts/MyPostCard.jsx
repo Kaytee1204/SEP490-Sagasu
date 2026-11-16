@@ -1,4 +1,4 @@
-import { postClaimsPath } from '@/features/claims/claimUtils';
+import { postClaimsPath } from '@/features/claims/utils/claimUtils';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowUpRight, CalendarDays, Check, ChevronDown, ClipboardList, Clock3, Eye, EyeOff, LockKeyhole, MapPin, Package, Pencil, CircleX } from 'lucide-react';

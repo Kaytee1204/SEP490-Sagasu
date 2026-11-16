@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
-import { useChat } from '../ChatProvider';
+import { useChat } from '@/features/chat/hooks/useChat';
 
 export default function ChatBadgeLink() {
   const { unread } = useChat();

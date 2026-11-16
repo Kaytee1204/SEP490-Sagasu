@@ -1,5 +1,5 @@
 import { MapPin, Map } from 'lucide-react';
-import { googleMapsUrl, googleMapsDirectionsUrl } from '../locationUtils';
+import { googleMapsUrl, googleMapsDirectionsUrl } from '../utils/locationUtils';
 
 export default function ChatLocation({ location }) {
   const url = googleMapsUrl(location);

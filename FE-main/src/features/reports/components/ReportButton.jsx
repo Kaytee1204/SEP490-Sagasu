@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Flag, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { createReport } from './reportApi';
+import { createReport } from '../api/reportApi';
 import ReportReasonPicker from './ReportReasonPicker';
-import { reportDescriptionHint } from './reportDescriptionHints';
-import useReportReasons, { reportTitles, reportTypes } from './useReportReasons';
-import './Reports.css';
+import { reportDescriptionHint } from '../utils/reportDescriptionHints';
+import useReportReasons from '../hooks/useReportReasons';
+import { reportTitles, reportTypes } from '../constants/reportConstants';
+import '../styles/Reports.css';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';

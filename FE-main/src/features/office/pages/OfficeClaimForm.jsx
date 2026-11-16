@@ -18,7 +18,7 @@ import Notice from "../components/Notice";
 import LoadState from "../components/LoadState";
 import SearchBox from "../components/SearchBox";
 import ClaimQuestionnaireFields from "@/features/claims/components/ClaimQuestionnaireFields";
-import { serializeQuestionnaireAnswers } from "@/features/claims/questionnaireUtils";
+import { serializeQuestionnaireAnswers } from "@/features/claims/utils/questionnaireUtils";
 import "../Office.css";
 
 export default function OfficeClaimForm({ counter = false }) {

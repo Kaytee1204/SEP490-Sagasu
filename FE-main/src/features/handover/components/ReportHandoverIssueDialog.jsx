@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { uploadHandover } from './handoverApi';
-import ReportReasonPicker from '@/features/reports/ReportReasonPicker';
-import { reportDescriptionHint } from '@/features/reports/reportDescriptionHints';
-import useReportReasons from '@/features/reports/useReportReasons';
+import { uploadHandover } from '../api/handoverApi';
+import ReportReasonPicker from '@/features/reports/components/ReportReasonPicker';
+import { reportDescriptionHint } from '@/features/reports/utils/reportDescriptionHints';
+import useReportReasons from '@/features/reports/hooks/useReportReasons';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';

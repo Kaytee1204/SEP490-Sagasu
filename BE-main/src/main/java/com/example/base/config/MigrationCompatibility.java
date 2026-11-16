@@ -20,6 +20,7 @@ final class MigrationCompatibility {
     private static final String TRANSITIONS = """
         ALTER TABLE claim_activity ADD CONSTRAINT chk_claim_activity_transition CHECK ((
           (action='SUBMIT' AND from_status IS NULL AND to_status='PENDING') OR
+          (action='REVOKE_APPROVAL' AND from_status='APPROVED' AND to_status='PENDING' AND nullif(btrim(reason),'') IS NOT NULL) OR
           (action='APPROVE' AND from_status='PENDING' AND to_status='APPROVED') OR
           (action='REJECT' AND from_status IN ('PENDING','NEEDS_INFO') AND to_status='REJECTED') OR
           (action='REQUEST_INFO' AND from_status='PENDING' AND to_status='NEEDS_INFO') OR

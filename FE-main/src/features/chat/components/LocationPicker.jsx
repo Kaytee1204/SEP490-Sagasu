@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { CheckCircle, Crosshair, Info, LocateFixed, MapPin, X } from 'lucide-react';
 import { getLocationAddress, sendLocation } from '../api/chatApi';
-import { locationPoint } from '../locationUtils';
+import { locationPoint } from '../utils/locationUtils';
 
 export default function LocationPicker({ chatId, onClose, onSent }) {
   const titleId = useId();
@@ -36,7 +36,7 @@ export default function LocationPicker({ chatId, onClose, onSent }) {
   useEffect(() => {
     let cancelled = false, instance;
     setReady(false); setMapError('');
-    import('../chatMap').then(({ createChatMap }) => {
+    import('../utils/chatMap').then(({ createChatMap }) => {
       if (cancelled) return;
       instance = createChatMap(canvas.current, {
         onPick: value => { if (!cancelled) choose.current(value); },

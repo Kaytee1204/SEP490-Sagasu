@@ -22,3 +22,7 @@ export async function submitClaim(postId, request, images, retryId) {
 
 export const getGroupedClaims = (page = 1, status = 'ALL', sent = false, postId = null) =>
   data(apiClient.get(`/claims/grouped?${new URLSearchParams({page: String(page), size: '8', status, sent: String(sent), ...(postId ? { postId } : {})})}`));
+
+export const getClaimComparison = (postId, page = 1, status = 'ALL') => data(apiClient.get(
+  `/posts/${encodeURIComponent(postId)}/claims/comparison?${new URLSearchParams({ page: String(page), size: '5', status })}`));
+export const revokeClaimApproval = (id, request) => data(apiClient.post(`/claims/${encodeURIComponent(id)}/revoke-approval`, request));

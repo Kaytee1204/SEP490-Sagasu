@@ -158,6 +158,23 @@ public class ClaimController {
         return response(200, service.review(id, request, user));
     }
 
+    @GetMapping("/posts/{postId}/claims/comparison")
+    @Operation(summary = "[6.14] Chủ bài đăng đối chiếu căn cứ của các yêu cầu P2P đang xử lý")
+    public ResponseEntity<ApiResponse<ClaimComparisonDto>> comparison(
+            @PathVariable long postId, @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "5") int size, @RequestParam(defaultValue = "ALL") String status,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return response(200, service.comparison(postId, page, size, status, user));
+    }
+
+    @PostMapping("/claims/{id}/revoke-approval")
+    @Operation(summary = "[6.15] Thu hồi chấp thuận P2P trước khi ghi nhận giao đồ")
+    public ResponseEntity<ApiResponse<ClaimResultDto>> revokeApproval(
+            @PathVariable long id, @Valid @RequestBody RevokeClaimApprovalRequest request,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return response(200, service.revokeApproval(id, request, user));
+    }
+
     @PostMapping("/claims/{id}/cancel")
     @Operation(
             summary = "[6.12] UC45: Người gửi chủ động hủy yêu cầu nhận đồ kèm lý do",
