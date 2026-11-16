@@ -13,7 +13,7 @@ function readSavedReceiptFilters(initialFilter) {
     return {
       page: Number.isInteger(parsed?.page) && parsed.page >= 1 ? parsed.page : 1,
       keyword: typeof parsed?.keyword === 'string' ? parsed.keyword : '',
-      filter: typeof parsed?.filter === 'string' ? parsed.filter : initialFilter,
+      filter: ['ALL', 'DRAFT', 'REJECTED', 'IN_STORAGE', 'RETURNED'].includes(parsed?.filter) ? parsed.filter : initialFilter,
       source: typeof parsed?.source === 'string' ? parsed.source : 'ALL',
     };
   } catch {

@@ -23,8 +23,13 @@ export const officeApi = {
     data(api.get(`/office-claims${mine ? "/mine" : ""}?${query(filters)}`)),
   claim: (id) => data(api.get(`/office-claims/${id}`)),
   review: (id, body) => data(api.post(`/office-claims/${id}/review`, body)),
-  supplement: (id, body) =>
-    data(api.post(`/office-claims/${id}/supplement`, body)),
+  supplements: (id) => data(api.get(`/office-claims/${id}/supplements`)),
+  supplement: (id, body, files = []) => {
+    const form = new FormData();
+    form.append('data', new Blob([JSON.stringify(body)], { type: 'application/json' }));
+    files.forEach(file => form.append('images', file));
+    return data(api.upload(`/office-claims/${id}/supplement`, form));
+  },
   resend: (id) => data(api.post(`/office-claims/${id}/appointment-email`, {})),
   submit: (body, files, counter) => {
     const form = new FormData();

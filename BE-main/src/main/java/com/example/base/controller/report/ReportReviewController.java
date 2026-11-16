@@ -25,6 +25,37 @@ public class ReportReviewController {
     private final ReportReviewService reviews;
     private final ReportInquiryService inquiries;
     private final ReportChatService chat;
+    private final ReportCaseService cases;
+    private final ReportWorkbenchService workbench;
+
+    @GetMapping("/work-queue")
+    @Operation(summary="Hàng đợi theo đối tượng",description="Nhóm báo cáo cùng đối tượng; lọc NEW, MINE, WAITING, UPDATED, DONE, ALL. Không tự gộp kết luận.")
+    public ApiResponse<?> workQueue(@RequestParam(name="page",defaultValue="1") int page,@RequestParam(name="stage",defaultValue="NEW") String stage,@RequestParam(name="q",defaultValue="") String q,@AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(workbench.queue(page,stage,q,user));
+    }
+    @GetMapping("/target-reports")
+    @Operation(summary="Đối chiếu báo cáo cùng đối tượng",description="Phân trang 20 báo cáo, giữ nguồn bằng chứng và người gửi riêng. key: P:id, C:id, M:id, U:id.")
+    public ApiResponse<?> targetReports(@RequestParam(name="key") String key,@RequestParam(name="page",defaultValue="1") int page,@AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(workbench.group(key,page,user));
+    }
+    @PostMapping("/batch-actions")
+    @Operation(summary="Nhận xử lý hoặc kết luận các báo cáo đã chọn",description="TAKE hoặc CONCLUDE; tối đa 20 báo cáo cùng đối tượng; kiểm tra phiên bản, quyền và giao dịch toàn bộ. CONCLUDE chỉ dành cho GENERAL. Biện pháp áp dụng một lần; quyết định và thông báo riêng.")
+    public ApiResponse<?> conclusions(@Valid @RequestBody ReportWorkbenchService.Batch request,@AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(workbench.conclude(request,user));
+    }
+
+    @GetMapping("/{id}/case")
+    public ApiResponse<?> caseDetail(@PathVariable("id") long id, @RequestParam(name="page",defaultValue="1") int page, @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(cases.detail(id,page,user));
+    }
+    @PostMapping("/{id}/case")
+    public ApiResponse<?> linkCase(@PathVariable("id") long id, @Valid @RequestBody ReportCaseService.Link request, @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(cases.link(id,request,user));
+    }
+    @PostMapping("/{id}/case/unlink")
+    public ApiResponse<?> unlinkCase(@PathVariable("id") long id, @Valid @RequestBody ReportCaseService.Unlink request, @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(cases.unlink(id,request,user));
+    }
 
     @GetMapping
     @Operation(

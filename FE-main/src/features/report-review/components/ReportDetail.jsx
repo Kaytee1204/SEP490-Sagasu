@@ -5,6 +5,7 @@ import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
 import { date, labels } from "../format";
 import ContextPanel from "./ContextPanel";
 import EvidenceComparison from "./EvidenceComparison";
+import ReportCasePanel from "./ReportCasePanel";
 import HoldDialog from "./HoldDialog";
 import ConclusionDialog from "./ConclusionDialog";
 import Inquiries from "./Inquiries";
@@ -98,6 +99,8 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               </nav>
               {tab === "overview" && (
                 <div className="rr-stack">
+                  <section className="rr-card"><h3>Việc cần làm tiếp theo</h3><p>{data.conflict?'Nhờ quản lý khác xử lý vì bạn có liên quan đến phản ánh.':data.canTake?'Nhận xử lý, đối chiếu phản ánh với bằng chứng trước khi đưa ra kết luận.':data.canProcess?data.inquiries.some(i=>!i.responded_at)?'Đang chờ thông tin từ người liên quan. Xem mục Trao đổi để theo dõi người chưa phản hồi.':'Đối chiếu bằng chứng; yêu cầu làm rõ nếu còn mâu thuẫn, hoặc kết luận khi đã đủ căn cứ.':['RESOLVED','REJECTED'].includes(r.status)?'Đã có kết quả. Xem kết luận và lịch sử xử lý bên dưới.':'Một quản lý khác đang phụ trách.'}</p></section>
+                  <details className="rr-card"><summary>Liên hệ với vụ việc khác · Khi cần điều tra chung</summary><ReportCasePanel key={id} report={r} onChanged={() => setRefresh(x => x + 1)} onOpen={onRelated} /></details>
                   <section className="rr-card">
                     <h3>Người liên quan</h3>
                     <div className="rr-people">
@@ -116,26 +119,12 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                       ))}
                     </div>
                   </section>
-                  {data.related.length > 0 && (
-                    <section className="rr-card">
-                      <h3>Báo cáo cùng đối tượng</h3>
-                      {data.related.map((x) => (
-                        <button
-                          className="rr-related"
-                          key={x.report_id}
-                          onClick={() => onRelated(x.report_id)}
-                        >
-                          #{x.report_id} · {date(x.created_at)}{" "}
-                          <Badge value={x.status} />
-                        </button>
-                      ))}
-                    </section>
-                  )}
-                  <ChatContext
+                  <section className="rr-card"><h3>{r.kind==='HANDOVER_ISSUE'?'Bằng chứng và diễn biến trao trả':'Nội dung cần đối chiếu'}</h3><ContextPanel data={r.kind==='HANDOVER_ISSUE'?{claim:data.current.claim,answers:data.current.answers,claimEvidence:data.current.claimEvidence,claimSupplements:data.current.claimSupplements,appointments:data.current.appointments,verifications:data.current.verifications,p2pHandover:data.current.p2pHandover,officeHandover:data.current.officeHandover,handoverEvidence:data.current.handoverEvidence,claimHistory:data.current.claimHistory}:{post:data.current.post,postImages:data.current.postImages,message:data.current.message,messageAttachments:data.current.messageAttachments,account:data.current.account,claim:data.current.claim,answers:data.current.answers,claimEvidence:data.current.claimEvidence}}/></section>
+                  <details className="rr-card"><summary>Cuộc trao đổi liên quan</summary><ChatContext
                     key={id}
                     id={id}
                     reportedMessage={r.message_id}
-                  />
+                  /></details>
                 </div>
               )}
               {tab === "current" && <ContextPanel data={data.current} />}

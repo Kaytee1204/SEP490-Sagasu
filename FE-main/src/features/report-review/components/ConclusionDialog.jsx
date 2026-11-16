@@ -38,8 +38,10 @@ const handoverOutcomes = [
   ],
 ];
 
-export default function ConclusionDialog({ data, onClose, onSaved }) {
-  const [outcome, setOutcome] = useState("");
+export default function ConclusionDialog({ data, onClose, onSaved, selectedReports, initialOutcome='' }) {
+  const [outcome, setOutcome] = useState(initialOutcome);
+  const [discard,setDiscard]=useState(false);
+  function close(){if(busy)return;if(outcome||conclusion||basis)setDiscard(true);else onClose();}
   const [hidePost, setHidePost] = useState(false),
     [suspend, setSuspend] = useState(false);
   const [targetId, setTarget] = useState(""),
@@ -60,9 +62,9 @@ export default function ConclusionDialog({ data, onClose, onSaved }) {
       ["USER", "APPROVER"].includes(p.role) &&
       p.status === "ACTIVE",
   );
-  const previous = data.decisions.filter((d) =>
+  const previous = [...data.decisions.filter((d) =>
     ["HIDE_POST", "SUSPEND_ACCOUNT"].includes(d.action),
-  );
+  ), ...(data.caseMeasures || [])];
   const hasMeasure = hidePost || (suspend && targetId) || previousDecisionId;
   const ready =
     outcome &&
@@ -86,7 +88,7 @@ export default function ConclusionDialog({ data, onClose, onSaved }) {
     setBusy(true);
     setError("");
     try {
-      const result = await reviewApi.act(data.report.report_id, {
+      const decision = {
         version: data.report.version,
         action: "CONCLUDE",
         outcome,
@@ -99,7 +101,8 @@ export default function ConclusionDialog({ data, onClose, onSaved }) {
             ? Number(previousDecisionId)
             : null,
         custodyVerified,
-      });
+      };
+      const result = selectedReports ? await reviewApi.concludeSelected(selectedReports.map(r=>({id:r.report_id,version:r.version})),decision) : await reviewApi.act(data.report.report_id,decision);
       onSaved(result);
       onClose();
     } catch (problem) {
@@ -109,8 +112,10 @@ export default function ConclusionDialog({ data, onClose, onSaved }) {
     }
   }
   return (
-    <Dialog title="Kết luận báo cáo" busy={busy} onClose={onClose}>
-      <form className="rr-stack" onSubmit={submit}>
+    <Dialog title="Kết luận báo cáo" busy={busy} onClose={close}>
+      {discard&&<div className="rr-callout" role="alert"><strong>Bỏ kết luận chưa lưu?</strong><div className="rr-actions"><button onClick={()=>setDiscard(false)}>Tiếp tục nhập</button><button onClick={onClose}>Bỏ thay đổi</button></div></div>}
+      <form className="rr-stack" onSubmit={submit} style={discard?{display:'none'}:undefined}>
+        <div className="rr-callout"><strong>Phạm vi kết luận</strong><p>{selectedReports ? `Kết thúc ${selectedReports.length} báo cáo đã chọn: ${selectedReports.map(r=>`#${r.report_id}`).join(', ')}. Biện pháp áp dụng một lần; mỗi người liên quan nhận kết quả riêng.` : `Chỉ kết thúc báo cáo #${data.report.report_id}.`}</p><p>Các báo cáo ngoài phạm vi này vẫn giữ nguyên.</p></div>
         <fieldset className="rr-conclusion-fields" disabled={busy}>
           <legend>Kết quả đối chiếu *</legend>
           <div className="rr-outcomes">
@@ -185,7 +190,7 @@ export default function ConclusionDialog({ data, onClose, onSaved }) {
               )}
               {previous.length > 0 && (
                 <label>
-                  Biện pháp đã thực hiện cho báo cáo này
+                  Biện pháp đã thực hiện trong báo cáo hoặc cùng vụ việc
                   <select
                     value={previousDecisionId}
                     onChange={(e) => setPrevious(e.target.value)}
@@ -195,7 +200,7 @@ export default function ConclusionDialog({ data, onClose, onSaved }) {
                     </option>
                     {previous.map((d) => (
                       <option key={d.decision_id} value={d.decision_id}>
-                        {labels[d.action]} · {date(d.created_at)}
+                        #{d.decision_id} · {d.report_id ? `Báo cáo #${d.report_id} · ` : ''}{labels[d.action] || 'Xử lý vi phạm'} · {date(d.created_at)} · {d.conclusion}
                       </option>
                     ))}
                   </select>
@@ -304,7 +309,7 @@ export default function ConclusionDialog({ data, onClose, onSaved }) {
         </fieldset>
         <ErrorBox>{error}</ErrorBox>
         <footer className="rr-actions">
-          <button type="button" onClick={onClose} disabled={busy}>
+          <button type="button" onClick={close} disabled={busy}>
             Quay lại
           </button>
           <button className="rr-primary" disabled={busy || !ready}>

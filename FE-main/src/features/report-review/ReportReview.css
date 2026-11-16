@@ -553,3 +553,31 @@
 .rr-comparison-count { padding-block:10px; border-bottom:1px solid #dbe4e8; }
 @media(max-width:1000px) { .rr-comparison-columns { grid-template-columns:1fr; } }
 @media(max-width:600px) { .rr-comparison-values { grid-template-columns:1fr; } }
+.rr-case-panel h3 { display:flex; align-items:center; gap:10px; }
+.rr-case-members { list-style:none; margin:16px 0; padding:0; }
+.rr-case-members li { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:16px 0; border-bottom:1px solid #dbe5e8; }
+.rr-case-members li > div:first-child { flex:1 1 220px; min-width:0; }
+.rr-case-tag { display:inline-block; padding:4px 10px; border-radius:8px; background:#e5f4f2; color:#115e59; font-size:14px; }
+.rr-case-candidates { margin-top:20px; }
+.rr-case-candidates summary { cursor:pointer; min-height:44px; padding:10px 0; font-weight:600; }
+.rr-case-panel small { color:#526578; }
+.rr-case-panel .rr-callout strong { overflow-wrap:anywhere; }
+.rr-case-panel button svg { flex-shrink:0; }
+@media(max-width:600px) {
+  .rr-case-panel .rr-actions { flex-direction:column; align-items:stretch; }
+  .rr-case-panel .rr-actions button { width:100%; justify-content:center; }
+}
+.rr-work-items { display:grid; gap:16px; margin-top:20px; }
+.rr-work-item { padding:20px; border:1px solid #dbe5e8; border-radius:14px; min-width:0; }
+.rr-work-item h3 { display:flex; align-items:center; gap:8px; overflow-wrap:anywhere; }
+.rr-work-item p { white-space:pre-wrap; }
+.rr-work-item button { min-height:44px; }
+@media(max-width:600px) { .rr-work-item { padding:14px; } .rr-work-item .rr-row { align-items:flex-start; } }
+.rr-moderation-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
+.rr-moderation-layout > *, .rr-moderation-reports { min-width:0; }
+.rr-reported-content { background:#f8fafc; }
+.rr-moderation-actions { margin-top:24px; padding:20px; border:1px solid #a5d8d2; border-radius:14px; background:#f0fdfa; }
+.rr-moderation-actions summary { min-height:44px; padding:12px 0; cursor:pointer; }
+.rr-reported-content > details summary { min-height:44px; padding:12px 0; cursor:pointer; }
+@media(max-width:1000px) { .rr-moderation-layout { grid-template-columns:1fr; } }
+@media(max-width:600px) { .rr-moderation-actions .rr-actions { flex-direction:column; align-items:stretch; } }

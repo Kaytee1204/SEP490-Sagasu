@@ -1,4 +1,6 @@
 export const labels = {
+  CASE_LINK: "Liên kết vụ việc",
+  CASE_UNLINK: "Tách khỏi vụ việc",
   DISPUTE_RESOLVE: "Kết luận tranh chấp",
   OPEN: "Chờ xử lý",
   IN_REVIEW: "Đang xem xét",

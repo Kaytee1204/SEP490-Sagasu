@@ -12,7 +12,10 @@ import SearchBox from "../components/SearchBox";
 import Select from "../components/Select";
 import Pager from "../components/Pager";
 import ClaimProgress from "../components/ClaimProgress";
+import PersonalOfficeHeader from '../components/PersonalOfficeHeader';
+import PersonalClaimCards from '../components/PersonalClaimCards';
 import "../Office.css";
+import '../PersonalOffice.css';
 
 export default function OfficeClaimList({ mine = false }) {
   const location = useLocation();
@@ -28,8 +31,8 @@ export default function OfficeClaimList({ mine = false }) {
   const change = (key, value) =>
     setFilters((f) => ({ ...f, [key]: value, page: 1 }));
   return (
-    <div className="office-page">
-      <Header
+    <div className={`office-page ${mine?'office-personal':''}`}>
+      {mine?<PersonalOfficeHeader active="claims" backPath={backPath}/>:<Header
         eyebrow={
           mine ? "Văn phòng · Hồ sơ của bạn" : "Văn phòng · Xét duyệt hồ sơ"
         }
@@ -55,7 +58,7 @@ export default function OfficeClaimList({ mine = false }) {
             Quay lại
           </Link>
         )}
-      </Header>
+      </Header>}
       <div className="of-panel">
         <div className="of-toolbar">
           <SearchBox
@@ -135,7 +138,7 @@ export default function OfficeClaimList({ mine = false }) {
                     </Link>
                   )}
                 </Empty>
-              ) : (
+              ) : mine ? <PersonalClaimCards claims={state.data.content}/> : (
                 <div className="of-table-wrap">
                   <table className="of-table of-claim-table">
                     <thead>

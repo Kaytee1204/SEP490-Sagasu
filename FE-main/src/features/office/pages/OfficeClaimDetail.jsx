@@ -6,6 +6,7 @@ import { date } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
 import ReviewForm from "../components/ReviewForm";
 import SupplementForm from "../components/SupplementForm";
+import SupplementHistory from "../components/SupplementHistory";
 import Badge from "../components/Badge";
 import Header from "../components/Header";
 import Notice from "../components/Notice";
@@ -121,6 +122,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                     </div>
                   )}
                 </section>
+                <SupplementHistory claim={claim} />
                 {!mine && <ReceiptInfo receipt={claim.receipt} />}
                 <section className="of-panel">
                   <h2>Lịch sử xử lý</h2>

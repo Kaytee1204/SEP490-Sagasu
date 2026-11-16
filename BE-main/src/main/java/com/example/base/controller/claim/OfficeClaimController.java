@@ -25,6 +25,21 @@ import java.util.List;
 public class OfficeClaimController {
 
     private final OfficeClaimService service;
+    private final com.example.base.service.claim.OfficeSupplementService supplements;
+
+    @GetMapping("/{id}/supplements")
+    public ApiResponse<?> supplements(@PathVariable("id") long id, @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(supplements.history(id, user));
+    }
+
+    @PostMapping(value="/{id}/supplement", consumes="multipart/form-data")
+    public ApiResponse<Void> supplementImages(@PathVariable("id") long id,
+            @Valid @RequestPart("data") Supplement request,
+            @RequestPart(value="images",required=false) List<MultipartFile> images,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        supplements.submit(id, request, images, user);
+        return ApiResponse.ok(null);
+    }
 
     @GetMapping("/questionnaire")
     public ApiResponse<com.example.base.dto.claim.ClaimQuestionnaireDto> questionnaire(
@@ -136,7 +151,7 @@ public class OfficeClaimController {
         return ApiResponse.ok(service.resend(id, user));
     }
 
-    @PostMapping("/{id}/supplement")
+    @PostMapping(value="/{id}/supplement", consumes="application/json")
     @Operation(
             summary = "[10.9] Người nhận gửi bổ sung thông tin cho Claim Văn phòng (khi ở trạng thái NEEDS_INFO)",
             description = "Cập nhật thông tin bổ sung theo yêu cầu của cán bộ văn phòng và chuyển lại trạng thái sang PENDING."

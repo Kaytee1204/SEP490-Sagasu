@@ -1,0 +1,51 @@
+/* Personal office lists follow the user claim workspace; staff screens keep Office.css. */
+.office-page.office-personal { max-width:1160px; padding:28px 24px 48px; color:#173f37; }
+.office-personal .op-back { display:inline-flex; align-items:center; gap:7px; min-height:44px; color:#416d55; font-size:14px; text-decoration:none; margin-bottom:12px; }
+.op-heading { display:flex; align-items:flex-start; gap:14px; margin-bottom:24px; }
+.op-heading-icon { display:grid; place-items:center; width:48px; height:48px; flex-shrink:0; border-radius:14px; background:#e7f1e9; color:#416d55; }
+.office-personal .op-heading h1 { font-size:clamp(24px,2.6vw,32px); line-height:1.3; letter-spacing:-.025em; margin:0; }
+.op-heading p { margin:8px 0 0; max-width:70ch; color:#5c7466; font-size:14px; line-height:1.65; }
+.op-navigation { display:flex; gap:4px; padding:5px; border:1px solid #dae6de; border-radius:14px; background:#eef4f0; margin-bottom:20px; width:fit-content; max-width:100%; }
+.op-navigation a { display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; border:1px solid transparent; border-radius:10px; padding:10px 18px; font-size:14px; font-weight:600; color:#526d5b; text-decoration:none; }
+.op-navigation a[aria-current=page] { color:#1c6d56; background:#fff; border-color:#e0e9e2; box-shadow:0 2px 5px #173c3508; }
+.op-navigation a:hover:not([aria-current=page]) { background:#e3eee7; }
+.office-personal > .of-panel { background:transparent; border:0; padding:0; box-shadow:none; }
+.office-personal .of-toolbar { padding:18px 20px; border:1px solid #dae6de; border-radius:16px; background:#fff; gap:14px; margin-bottom:20px; }
+.office-personal .of-search { min-width:180px; border-color:#cfddd3; background:#f8faf7; }
+.office-personal .of-search input { min-height:44px; font-size:14px; }
+.office-personal .of-select { color:#5c7466; font-size:13px; }
+.office-personal .of-select select { min-height:44px; border-color:#cfddd3; color:#30563c; font:inherit; background:#f8faf7; }
+.op-claim-list { display:grid; gap:12px; }
+.op-claim-card { display:flex; align-items:center; gap:16px; padding:20px; background:#fff; border:1px solid #dae6de; border-radius:16px; }
+.op-item-icon { display:grid; place-items:center; width:52px; height:52px; flex-shrink:0; border:1px solid #d9e8dc; background:#eef6ed; color:#648967; border-radius:12px; }
+.op-claim-content { flex:1; min-width:0; }
+.op-claim-title { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.op-claim-title > a { color:#30563c; font-size:17px; font-weight:650; overflow-wrap:anywhere; text-decoration:none; }
+.op-meta,.op-date { margin:8px 0 0; color:#647b67; font-size:13px; }
+.op-date { display:flex; align-items:center; gap:6px; }
+.office-personal .of-button { min-height:44px; border-radius:10px; border-color:#cbded2; color:#416d55; background:#fff; font-size:14px; padding:10px 14px; }
+.office-personal .of-button:hover { background:#f2f8f4; border-color:#89b59a; }
+.office-personal .of-button.of-primary { background:#1c6d56; border-color:#1c6d56; color:#fff; }
+.office-personal .of-button.of-primary:hover { background:#175b48; }
+.office-personal .of-progress-badge.active { background:#eef5ef; color:#386e43; }
+.office-personal .of-progress-badge.complete { background:#e4f2ea; color:#286347; }
+.office-personal .of-empty { background:#fff; border:1px solid #dae6de; border-radius:16px; padding:48px 24px; min-height:240px; }
+.office-personal .of-transfer-grid { margin-top:0; }
+.office-personal .of-transfer-card { border-color:#dae6de; border-radius:16px; }
+.office-personal .of-transfer-list .of-transfer-body h2 { color:#30563c; font-size:17px; }
+.office-personal .of-pager { margin-top:20px; padding:0 4px; font-size:13px; }
+.office-personal :is(a,button,select,input):focus-visible { outline:3px solid #429c7e; outline-offset:3px; }
+@media(max-width:700px) {
+  .office-page.office-personal { padding:20px 16px 32px; }
+  .op-heading-icon { display:none; }
+  .op-navigation { width:100%; }
+  .op-navigation a { flex:1; padding:10px; font-size:13px; }
+  .office-personal .of-toolbar { padding:16px; }
+  .office-personal .of-toolbar .of-search { flex-basis:100%; min-width:0; }
+  .office-personal .of-toolbar .of-select { flex:1 1 140px; }
+  .op-claim-card { flex-wrap:wrap; align-items:flex-start; gap:12px; padding:16px; }
+  .op-item-icon { width:40px; height:40px; }
+  .op-claim-content { flex-basis:calc(100% - 52px); }
+  .op-claim-card > .of-button { margin-left:52px; }
+  .op-claim-title { flex-direction:column; }
+}

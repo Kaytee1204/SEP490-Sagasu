@@ -123,6 +123,7 @@ export default function ContextPanel({ data, snapshot = false }) {
           <Gallery images={data.claimEvidence} />
         </section>
       )}
+      {!!data.claimSupplements?.length && <section className="rr-card"><h3>Thông tin bổ sung cho yêu cầu nhận đồ</h3>{data.claimSupplements.map(entry => <div className="rr-record" key={entry.claim_activity_id}><strong>{entry.actor} · {date(entry.created_at)}</strong><p className="rr-description">{entry.reason}</p><Gallery images={entry.images} /></div>)}</section>}
       {data.message && (
         <section className="rr-card">
           <h3>Tin nhắn bị báo cáo #{data.message.message_id}</h3>

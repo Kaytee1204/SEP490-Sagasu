@@ -82,6 +82,9 @@ public class ReportContextService {
           claim
         )
       );
+      var supplements = jdbc.queryForList("select x.claim_activity_id,x.reason,x.created_at,a.full_name as actor from claim_activity x join accounts a on a.id=x.actor_id where x.claim_id=? and x.action='RESUBMIT' order by x.claim_activity_id",claim);
+      for(var supplement:supplements) supplement.put("images",jdbc.queryForList("select storage_key,original_name from office_claim_supplement_image where activity_id=? order by sort_order",supplement.get("claim_activity_id")));
+      result.put("claimSupplements",supplements);
       result.put(
         "appointments",
         jdbc.queryForList(

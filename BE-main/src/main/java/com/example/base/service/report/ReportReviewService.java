@@ -87,9 +87,9 @@ public class ReportReviewService {
     var params = new ArrayList<>(Arrays.asList(args));
     params.add((page - 1) * 12);
     var rows = jdbc.queryForList(
-      "select r.report_id,r.kind,r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.status,r.created_at,a.full_name as reporter,m.full_name as assignee" +
+      "select r.report_id,r.kind,r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.status,r.created_at,r.case_id,a.full_name as reporter,m.full_name as assignee" +
         where +
-        " order by r.created_at desc,r.report_id desc limit 12 offset ?",
+        " order by case when r.status in ('OPEN','IN_REVIEW') then 0 else 1 end,case when r.kind='HANDOVER_ISSUE' and r.status in ('OPEN','IN_REVIEW') then 0 else 1 end,r.created_at,r.report_id limit 12 offset ?",
       params.toArray()
     );
     return Map.of(
@@ -147,6 +147,9 @@ public class ReportReviewService {
       )
     );
     out.put("inquiries", inquiries(reportId));
+    out.put("caseMeasures", r.get("case_id")==null ? List.of() : jdbc.queryForList(
+      "select d.decision_id,d.report_id,d.action,d.conclusion,d.created_at from report_decision d join report x using(report_id) where x.case_id=? and x.report_id<>? and d.action in ('VIOLATION','HIDE_POST','SUSPEND_ACCOUNT') order by d.decision_id desc",
+      r.get("case_id"), reportId));
     out.put(
       "hold",
       context.one(
@@ -458,6 +461,7 @@ public class ReportReviewService {
       "Báo cáo không có bài đăng để ẩn."
     );
     var p = posts.findById(id(post, "post_id")).orElseThrow();
+    if (!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng đã bị ẩn. Hãy tải lại và chọn biện pháp đã thực hiện trong vụ việc.");
     before.put("moderation", p.getModerationStatus());
     moderation.moderate(
       p.getId(),
@@ -509,17 +513,33 @@ public class ReportReviewService {
     Map<String, Object> current
   ) {
     var decision = context.one(
-      "select action,before_state::text from report_decision where report_id=? and decision_id=? and action in ('HIDE_POST','SUSPEND_ACCOUNT')",
+      "select d.action,d.before_state::text,d.report_id from report_decision d join report x using(report_id) where (d.report_id=? or (x.case_id is not null and x.case_id=(select case_id from report where report_id=?))) and d.decision_id=? and d.action in ('VIOLATION','HIDE_POST','SUSPEND_ACCOUNT')",
+      reportId,
       reportId,
       decisionId
     );
     if (decision.isEmpty()) throw bad(
-      "Biện pháp đã chọn không thuộc báo cáo này."
+      "Biện pháp không thuộc báo cáo hoặc vụ việc này."
     );
+    var before = context.parse((String) decision.get("before_state"));
+    if ("VIOLATION".equals(decision.get("action"))) {
+      List<String> applicable = new ArrayList<>();
+      var oldContext = (Map<String,Object>) before.getOrDefault("context", Map.of());
+      var oldPost = (Map<String,Object>) oldContext.getOrDefault("post", Map.of());
+      var post = (Map<String,Object>) current.getOrDefault("post", Map.of());
+      if(before.containsKey("moderation") && id(oldPost,"post_id")!=null && Objects.equals(id(oldPost,"post_id"),id(post,"post_id")) && "HIDDEN".equals(post.get("moderation_status")))
+        applicable.add("Ẩn bài đăng #"+post.get("post_id"));
+      Long target=id(before,"targetAccountId");
+      if(target!=null && participants(current).contains(target) && Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from accounts where id=? and status='SUSPENDED')",Boolean.class,target)))
+        applicable.add("Đình chỉ tài khoản #"+target);
+      if(applicable.isEmpty()) throw bad("Biện pháp này không còn hiệu lực hoặc không áp dụng cho đối tượng của báo cáo đang xem.");
+      return "Dùng lại quyết định #"+decisionId+" của báo cáo #"+decision.get("report_id")+": "+String.join(", ",applicable)+". Không áp dụng lại biện pháp.";
+    }
     if ("HIDE_POST".equals(decision.get("action"))) {
       var post = (Map<String, Object>) current.get("post");
+      var sourcePost = (Map<String,Object>) context.context(report(id(decision,"report_id"))).getOrDefault("post",Map.of());
       if (
-        post == null || !"HIDDEN".equals(post.get("moderation_status"))
+        post == null || !Objects.equals(id(sourcePost,"post_id"),id(post,"post_id")) || !"HIDDEN".equals(post.get("moderation_status"))
       ) throw bad(
         "Bài đăng không còn bị ẩn. Hãy đối chiếu lại trước khi kết luận."
       );
@@ -531,8 +551,8 @@ public class ReportReviewService {
         ")."
       );
     }
-    var before = context.parse((String) decision.get("before_state"));
     Long target = id(before, "targetAccountId");
+    if(target==null || !participants(current).contains(target)) throw bad("Biện pháp không áp dụng cho người liên quan trong báo cáo này.");
     var account = context.one(
       "select full_name,status from accounts where id=?",
       target

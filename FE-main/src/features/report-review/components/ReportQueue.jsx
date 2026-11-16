@@ -84,6 +84,7 @@ export default function ReportQueue({ onOpen }) {
         </label>
       </div>
       <ErrorBox>{error}</ErrorBox>
+      <p className="rr-muted">Ưu tiên báo cáo chưa kết thúc, vướng mắc trao trả và yêu cầu chờ lâu. Số lượng báo cáo không quyết định kết quả xử lý.</p>
       {error && (
         <button onClick={() => setReload((x) => x + 1)}>Thử lại</button>
       )}
@@ -121,6 +122,7 @@ export default function ReportQueue({ onOpen }) {
                           #{r.report_id} · {labels[r.kind]}
                         </strong>
                         <p className="rr-excerpt">{r.description}</p>
+                        {r.case_id && <span className="rr-case-tag">Vụ việc #{r.case_id}</span>}
                       </td>
                       <td>{r.reporter}</td>
                       <td>
