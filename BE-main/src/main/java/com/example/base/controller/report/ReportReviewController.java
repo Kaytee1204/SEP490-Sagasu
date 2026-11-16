@@ -29,31 +29,74 @@ public class ReportReviewController {
     private final ReportWorkbenchService workbench;
 
     @GetMapping("/work-queue")
-    @Operation(summary="Hàng đợi theo đối tượng",description="Nhóm báo cáo cùng đối tượng; lọc NEW, MINE, WAITING, UPDATED, DONE, ALL. Không tự gộp kết luận.")
-    public ApiResponse<?> workQueue(@RequestParam(name="page",defaultValue="1") int page,@RequestParam(name="stage",defaultValue="NEW") String stage,@RequestParam(name="q",defaultValue="") String q,@AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[13.13] Hàng đợi điều tra báo cáo theo nhóm đối tượng (MANAGER Workbench)",
+            description = "Nhóm báo cáo cùng đối tượng; lọc NEW, MINE, WAITING, UPDATED, DONE, ALL. Không tự gộp kết luận."
+    )
+    public ApiResponse<?> workQueue(
+            @RequestParam(name="page",defaultValue="1") int page,
+            @RequestParam(name="stage",defaultValue="NEW") String stage,
+            @RequestParam(name="q",defaultValue="") String q,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(workbench.queue(page,stage,q,user));
     }
+
     @GetMapping("/target-reports")
-    @Operation(summary="Đối chiếu báo cáo cùng đối tượng",description="Phân trang 20 báo cáo, giữ nguồn bằng chứng và người gửi riêng. key: P:id, C:id, M:id, U:id.")
-    public ApiResponse<?> targetReports(@RequestParam(name="key") String key,@RequestParam(name="page",defaultValue="1") int page,@AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[13.14] Đối chiếu danh sách báo cáo cùng một đối tượng (Post / Claim / Message / Account)",
+            description = "Phân trang 20 báo cáo, giữ nguồn bằng chứng và người gửi riêng. key: P:id, C:id, M:id, U:id."
+    )
+    public ApiResponse<?> targetReports(
+            @RequestParam(name="key") String key,
+            @RequestParam(name="page",defaultValue="1") int page,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(workbench.group(key,page,user));
     }
+
     @PostMapping("/batch-actions")
-    @Operation(summary="Nhận xử lý hoặc kết luận các báo cáo đã chọn",description="TAKE hoặc CONCLUDE; tối đa 20 báo cáo cùng đối tượng; kiểm tra phiên bản, quyền và giao dịch toàn bộ. CONCLUDE chỉ dành cho GENERAL. Biện pháp áp dụng một lần; quyết định và thông báo riêng.")
-    public ApiResponse<?> conclusions(@Valid @RequestBody ReportWorkbenchService.Batch request,@AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[13.15] Nhận xử lý hoặc kết luận đồng loạt các báo cáo đã chọn của cùng đối tượng",
+            description = "TAKE hoặc CONCLUDE; tối đa 20 báo cáo cùng đối tượng; kiểm tra phiên bản, quyền và giao dịch toàn bộ. CONCLUDE chỉ dành cho GENERAL. Biện pháp áp dụng một lần; quyết định và thông báo riêng."
+    )
+    public ApiResponse<?> conclusions(
+            @Valid @RequestBody ReportWorkbenchService.Batch request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(workbench.conclude(request,user));
     }
 
     @GetMapping("/{id}/case")
-    public ApiResponse<?> caseDetail(@PathVariable("id") long id, @RequestParam(name="page",defaultValue="1") int page, @AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[13.16] Xem chi tiết hồ sơ vụ việc (Report Case) và các báo cáo ứng viên liên quan",
+            description = "Hiển thị vụ việc hiện tại của báo cáo, danh sách báo cáo thành viên và gợi ý báo cáo cùng đối tượng."
+    )
+    public ApiResponse<?> caseDetail(
+            @PathVariable("id") long id,
+            @RequestParam(name="page",defaultValue="1") int page,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(cases.detail(id,page,user));
     }
+
     @PostMapping("/{id}/case")
-    public ApiResponse<?> linkCase(@PathVariable("id") long id, @Valid @RequestBody ReportCaseService.Link request, @AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[13.17] Tạo mới hoặc liên kết báo cáo vào một hồ sơ vụ việc (Report Case)",
+            description = "Liên kết báo cáo vào vụ việc đang phụ trách để phối hợp điều tra (các kết luận vẫn giữ độc lập)."
+    )
+    public ApiResponse<?> linkCase(
+            @PathVariable("id") long id,
+            @Valid @RequestBody ReportCaseService.Link request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(cases.link(id,request,user));
     }
+
     @PostMapping("/{id}/case/unlink")
-    public ApiResponse<?> unlinkCase(@PathVariable("id") long id, @Valid @RequestBody ReportCaseService.Unlink request, @AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[13.18] Tách báo cáo khỏi hồ sơ vụ việc (Unlink Report Case)",
+            description = "Gỡ liên kết báo cáo khỏi vụ việc hiện tại kèm lý do ghi vào lịch sử điều tra."
+    )
+    public ApiResponse<?> unlinkCase(
+            @PathVariable("id") long id,
+            @Valid @RequestBody ReportCaseService.Unlink request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(cases.unlink(id,request,user));
     }
 

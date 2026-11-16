@@ -63,11 +63,15 @@ public class OfficeWorkflowController {
     }
 
     @PostMapping(value="/transfers/{id}/receive",consumes="multipart/form-data")
+    @Operation(
+            summary = "[11.17] Xác nhận tiếp nhận đồ chuyển giao vào kho Văn phòng kèm ảnh chụp biên nhận (RECEIVED)",
+            description = "Cán bộ văn phòng xác nhận đã nhận vật phẩm vào kho kèm ảnh chụp thực tế khi tiếp nhận."
+    )
     public ApiResponse<TransferView> receive(
             @PathVariable("id") long id,
             @Valid @RequestPart("data") TransferDecision request,
             @RequestPart("images") List<MultipartFile> files,
-            @AuthenticationPrincipal CustomUserDetails user) {
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         if(!"RECEIVED".equals(request.decision())) throw OfficeAccess.bad("Thao tác tiếp nhận không hợp lệ.");
         return ApiResponse.ok(transfers.decide(id,request,user,files));
     }

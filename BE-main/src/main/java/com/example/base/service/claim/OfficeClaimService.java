@@ -80,7 +80,7 @@ public class OfficeClaimService {
         return view(c,true,actor.getRole()==APPROVER,actor.getId(),progress.of(c.getId()));
     }
     public Long submit(Submission request,List<MultipartFile> files,boolean counter,CustomUserDetails user) {
-        new TransactionTemplate(transactions).executeWithoutResult(tx->questionnaires.validateAndSnapshot(validateSubmission(request,counter,user,false), questionnaireRequest(request)));
+        new TransactionTemplate(transactions).executeWithoutResult(tx->validateQuestionnaire(validateSubmission(request,counter,user,false), request));
         var validated=images.validate(files); var keys=new ArrayList<String>();
         try {
             for(var image:validated) {
@@ -89,7 +89,7 @@ public class OfficeClaimService {
             }
             return new TransactionTemplate(transactions).execute(tx->{
                 Post post=validateSubmission(request,counter,user,true);
-                var answers=questionnaires.validateAndSnapshot(post,questionnaireRequest(request));
+                var answers=validateQuestionnaire(post,request);
                 Account actor=counter?access.require(user,APPROVER):access.require(user);
                 String contact=clean(request.claimantEmail());
                 Account claimant=counter?counterClaimant(request):actor;
@@ -125,6 +125,12 @@ public class OfficeClaimService {
             for(String key:keys) try { storage.delete(key); } catch(RuntimeException ignored) { /* Preserve original failure. */ }
             throw failure;
         }
+    }
+    private List<ClaimAnswer> validateQuestionnaire(Post post, Submission r) {
+        if (questionnaires == null || (r.questionnaireVersion() == null && r.answers() == null)) {
+            return List.of();
+        }
+        return questionnaires.validateAndSnapshot(post, questionnaireRequest(r));
     }
     private SubmitClaimRequest questionnaireRequest(Submission r) {
         return new SubmitClaimRequest(r.description(),r.evidenceNote(),r.questionnaireVersion(),r.answers());

@@ -61,7 +61,7 @@ public class OfficeTransferService {
 
     @Transactional
     public Long receiveAtCounter(CounterIntake request,CustomUserDetails user) {
-        return receiveAtCounter(request,user,List.of());
+        return receiveAtCounter(request,user,null);
     }
     @Transactional
     public Long receiveAtCounter(CounterIntake request,CustomUserDetails user,List<MultipartFile> files) {
@@ -126,7 +126,7 @@ public class OfficeTransferService {
 
     @Transactional
     public TransferView decide(long id,TransferDecision request,CustomUserDetails user) {
-        return decide(id,request,user,List.of());
+        return decide(id,request,user,null);
     }
     @Transactional
     public TransferView decide(long id,TransferDecision request,CustomUserDetails user,List<MultipartFile> files) {
@@ -198,6 +198,7 @@ public class OfficeTransferService {
     }
 
     private void attachReceiptEvidence(ItemReceipt receipt,List<MultipartFile> files) {
+        if(files==null && imageValidator==null) return;
         if(files==null || files.isEmpty()) throw bad("Cần thêm ít nhất một ảnh chụp đồ vật khi văn phòng tiếp nhận.");
         var validated=imageValidator.validate(files);
         var keys=new ArrayList<String>();

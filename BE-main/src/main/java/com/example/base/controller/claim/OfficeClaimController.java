@@ -28,24 +28,39 @@ public class OfficeClaimController {
     private final com.example.base.service.claim.OfficeSupplementService supplements;
 
     @GetMapping("/{id}/supplements")
-    public ApiResponse<?> supplements(@PathVariable("id") long id, @AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[10.12] Xem lịch sử các lần gửi bổ sung thông tin và ảnh bằng chứng của Claim Văn phòng",
+            description = "Trả về danh sách các lần bổ sung thông tin (RESUBMIT) kèm câu hỏi yêu cầu và ảnh đính kèm."
+    )
+    public ApiResponse<?> supplements(
+            @PathVariable("id") long id,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(supplements.history(id, user));
     }
 
     @PostMapping(value="/{id}/supplement", consumes="multipart/form-data")
-    public ApiResponse<Void> supplementImages(@PathVariable("id") long id,
+    @Operation(
+            summary = "[10.11] Người nhận gửi bổ sung thông tin kèm ảnh bằng chứng cho Claim Văn phòng",
+            description = "Cập nhật thông tin bổ sung kèm tối đa 5 ảnh minh chứng theo yêu cầu của cán bộ văn phòng (NEEDS_INFO -> PENDING)."
+    )
+    public ApiResponse<Void> supplementImages(
+            @PathVariable("id") long id,
             @Valid @RequestPart("data") Supplement request,
             @RequestPart(value="images",required=false) List<MultipartFile> images,
-            @AuthenticationPrincipal CustomUserDetails user) {
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         supplements.submit(id, request, images, user);
         return ApiResponse.ok(null);
     }
 
     @GetMapping("/questionnaire")
+    @Operation(
+            summary = "[10.10] Lấy bảng câu hỏi xác minh (Questionnaire) khi lập Claim Văn phòng",
+            description = "Trả về bộ câu hỏi xác minh theo danh mục của bài đăng khi nộp Claim trực tuyến hoặc tại quầy."
+    )
     public ApiResponse<com.example.base.dto.claim.ClaimQuestionnaireDto> questionnaire(
             @RequestParam(name="postId") long postId,
             @RequestParam(name="counter",defaultValue="false") boolean counter,
-            @AuthenticationPrincipal CustomUserDetails user) {
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(service.questionnaire(postId,counter,user));
     }
 
