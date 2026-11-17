@@ -91,3 +91,7 @@
   .post-gallery-thumbnails > button { width: 56px; height: 56px; }
   .post-detail-tags { gap: 5px; }
 }
+.post-claim-quota { width:100%; }
+.post-claim-quota .btn { width:100%; }
+.post-claim-quota .btn:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
+.post-claim-quota p { margin:8px 0 0; font-size:.78rem; line-height:1.5; color:#71848a; }

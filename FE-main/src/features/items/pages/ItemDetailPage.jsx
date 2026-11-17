@@ -14,6 +14,7 @@ import OfficeHandoverAction from '../components/detail/OfficeHandoverAction';
 import SmartMatchModal from '../components/detail/SmartMatchModal';
 import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
+import useClaimDailyLimit from '@/features/claims/hooks/useClaimDailyLimit';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import ReportButton from '@/features/reports/components/ReportButton';
 import SavePostButton from '../components/saved-posts/SavePostButton';
@@ -41,7 +42,8 @@ export default function ItemDetailPage() {
 }
 
 function PostDetail({ id, onRetry }) {
-  const { isAdmin, isManager } = useAuth();
+  const { user, isAdmin, isManager } = useAuth();
+  const quota = useClaimDailyLimit(user?.id);
   const location = useLocation();
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
@@ -178,6 +180,10 @@ function PostDetail({ id, onRetry }) {
 
               {!isOwnPost && current.myClaim?.claimType === 'OFFICE' && <Link className="btn btn-ghost" to={`/van-phong/claims/${current.myClaim.id}`}>Theo dõi yêu cầu nhận đồ của tôi</Link>}
               {!isOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
+                !current.myClaim && user && (!quota || quota.error || quota.remaining === 0) ? <div className="post-claim-quota">
+                  <button type="button" className="btn btn-accent" disabled>Đây là đồ của tôi<ArrowRight size={17}/></button>
+                  <p role="status">{!quota ? 'Đang kiểm tra lượt yêu cầu…' : quota.error ? 'Chưa kiểm tra được lượt yêu cầu. Vui lòng tải lại trang.' : 'Bạn đã dùng hết 2 lượt hôm nay. Có thể gửi lại sau 00:00 ngày mai (giờ Việt Nam).'}</p>
+                </div> :
                 <Link
                   to={current.myClaim ? claimDetailPath(post.id, current.myClaim.id) : `/xac-minh/${post.id}`}
                   className="btn btn-accent"

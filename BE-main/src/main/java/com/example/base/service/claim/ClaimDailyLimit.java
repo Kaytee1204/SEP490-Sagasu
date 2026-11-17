@@ -31,12 +31,20 @@ public class ClaimDailyLimit {
     @Transactional(propagation = Propagation.MANDATORY)
     public void requireAvailable(long accountId) {
         em.find(Account.class, accountId, LockModeType.PESSIMISTIC_WRITE);
+        if (status(accountId).remaining() == 0) {
+            throw new AppException(ErrorCode.CLAIM_DAILY_LIMIT);
+        }
+    }
+
+    public record Status(int limit, long used, long remaining, java.time.OffsetDateTime resetsAt) {}
+
+    @Transactional(readOnly = true)
+    public Status status(long accountId) {
         var zone = ZoneId.of("Asia/Ho_Chi_Minh");
         var today = clock.instant().atZone(zone).toLocalDate();
         var start = today.atStartOfDay(zone).toOffsetDateTime();
         var end = today.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
-        if (claims.countByClaimant_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(accountId, start, end) >= 2) {
-            throw new AppException(ErrorCode.CLAIM_DAILY_LIMIT);
-        }
+        long used = claims.countByClaimant_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(accountId, start, end);
+        return new Status(2, used, Math.max(0, 2 - used), end);
     }
 }

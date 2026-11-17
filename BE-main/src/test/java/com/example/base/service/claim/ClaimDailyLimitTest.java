@@ -11,6 +11,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ClaimDailyLimitTest {
+    @Test void quotaReportsNoRemainingAttemptsAtOrAboveTwo() {
+        var claims = mock(ClaimRepository.class);
+        var policy = new ClaimDailyLimit(claims, mock(EntityManager.class),
+                Clock.fixed(Instant.parse("2026-11-17T12:00:00Z"), ZoneOffset.UTC));
+        when(claims.countByClaimant_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(7L), any(), any())).thenReturn(0L, 1L, 2L, 5L);
+        assertEquals(2, policy.status(7).remaining());
+        assertEquals(1, policy.status(7).remaining());
+        assertEquals(0, policy.status(7).remaining());
+        assertEquals(0, policy.status(7).remaining());
+    }
     @Test void allowsFirstAndSecondButRejectsThirdAcrossAllChannels() {
         var claims = mock(ClaimRepository.class);
         var em = mock(EntityManager.class);
