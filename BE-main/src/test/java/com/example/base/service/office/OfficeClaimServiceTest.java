@@ -38,6 +38,30 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OfficeClaimServiceTest {
+    @Mock com.example.base.service.claim.ClaimDailyLimit dailyLimit;
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void dailyLimitAppliesToOnlineAndCounterUsingClaimantAccount(boolean counter) {
+        setupTransactionTemplate();
+        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
+        Account actor = counter ? makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE) : claimant;
+        var user = userDetails(actor);
+        if (counter) when(access.require(user, AccountRole.APPROVER)).thenReturn(actor);
+        else when(access.require(user)).thenReturn(actor);
+        when(accounts.findById(7L)).thenReturn(Optional.of(claimant));
+        var post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+        when(posts.findById(10L)).thenReturn(Optional.of(post));
+        when(posts.findForClaimUpdate(10L)).thenReturn(Optional.of(post));
+        var receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
+        when(receipts.findByPostId(10L)).thenReturn(Optional.of(receipt));
+        when(images.validate(any())).thenReturn(List.of());
+        doThrow(new AppException(ErrorCode.CLAIM_DAILY_LIMIT)).when(dailyLimit).requireAvailable(7L);
+        var req = new Submission(10L, counter ? 7L : null, null, null, null, "My item", null);
+        var error = assertThrows(AppException.class, () -> service.submit(req, List.of(), counter, user));
+        assertEquals(ErrorCode.CLAIM_DAILY_LIMIT, error.getErrorCode());
+        verify(claims, never()).saveAndFlush(any());
+    }
 
     @Mock ClaimRepository claims;
     @Mock OfficeClaimProgress progress;

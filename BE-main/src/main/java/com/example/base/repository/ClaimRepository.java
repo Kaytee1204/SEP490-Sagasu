@@ -10,6 +10,8 @@ import java.util.Collection;
 import java.util.Optional;
 
 public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
+    long countByClaimant_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(long accountId,
+            java.time.OffsetDateTime start, java.time.OffsetDateTime end);
     // DaiHV integration: always called after locking the post, matching P2P lock order.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Claim c where c.post.id=:postId order by c.id")

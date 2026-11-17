@@ -30,6 +30,7 @@ import static com.example.base.entity.AccountRole.APPROVER;
 @Service @RequiredArgsConstructor
 public class OfficeClaimService {
     private final ClaimRepository claims;
+    private final ClaimDailyLimit dailyLimit;
     private final ClaimQuestionnaireService questionnaires;
     private final OfficeClaimProgress progress;
     private final PostRepository posts;
@@ -97,6 +98,7 @@ public class OfficeClaimService {
                 if(claimant!=null && claims.existsByPost_IdAndClaimant_IdAndStatusIn(post.getId(),claimant.getId(),List.of("PENDING","NEEDS_INFO","APPROVED")))
                     throw new AppException(ErrorCode.CLAIM_DUPLICATE);
                 String name=person(claimant);
+                dailyLimit.requireAvailable(claimant.getId());
                 if(name==null) throw bad("Nhập họ tên người yêu cầu nhận đồ.");
                 if(contact==null&&claimant!=null) contact=claimant.getEmail();
                 Claim c=Claim.office(post,claimant,actor,counter?"COUNTER":"ONLINE",name,

@@ -28,6 +28,7 @@ public class ClaimService {
     private static final Set<String> ACTIVE_STATUSES = Set.of("PENDING", "APPROVED");
     private static final Set<String> RETRYABLE_STATUSES = Set.of("REJECTED", "CANCELLED");
     private final ClaimRepository claims;
+    private final ClaimDailyLimit dailyLimit;
     private final ClaimActivityRepository activities;
     private final PostRepository posts;
     private final AccountRepository accounts;
@@ -81,6 +82,7 @@ public class ClaimService {
                 Account actor = activeActor(user);
                 ItemReceipt receipt = routing.lockReceipt(post);
                 validateNewClaim(post, actor.getId(), previousId);
+                dailyLimit.requireAvailable(actor.getId());
                 Claim claim = Claim.submit(post, actor, request.description(), request.evidenceNote(), receipt);
                 questionnaires.validateAndSnapshot(post, request).forEach(claim::addAnswer);
                 for (int i = 0; i < images.size(); i++) {

@@ -80,6 +80,20 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ClaimServiceTest {
+    @Mock private ClaimDailyLimit dailyLimit;
+
+    @Test
+    void dailyLimitRejectsBeforeSavingP2pDossier() {
+        var req = new SubmitClaimRequest("Description", null, "v1", List.of());
+        stubSubmittablePost(p2pPost, claimant);
+        when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(p2pPost));
+        when(questionnaires.validateAndSnapshot(p2pPost, req)).thenReturn(List.of());
+        when(validator.validate(any())).thenReturn(List.of());
+        doThrow(new AppException(ErrorCode.CLAIM_DAILY_LIMIT)).when(dailyLimit).requireAvailable(20L);
+        var error = assertThrows(AppException.class, () -> service.submit(100L, req, List.of(), claimantUser));
+        assertEquals(ErrorCode.CLAIM_DAILY_LIMIT, error.getErrorCode());
+        verify(claims, never()).saveAndFlush(any());
+    }
 
     @Mock
     private ClaimRepository claims;

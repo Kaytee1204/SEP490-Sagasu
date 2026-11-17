@@ -19,6 +19,7 @@ public enum ErrorCode {
     CHAT_UNAVAILABLE(HttpStatus.CONFLICT, "CHAT_409_STATE", "Chỉ được nhắn tin khi yêu cầu nhận đồ đã được chấp thuận và món đồ đang chờ trao trả"),
     CHAT_INPUT_INVALID(HttpStatus.BAD_REQUEST, "CHAT_400", "Nội dung hoặc con trỏ tin nhắn không hợp lệ"),
     CHAT_DUPLICATE_PAYLOAD(HttpStatus.CONFLICT, "CHAT_409_RETRY", "Mã gửi tin đã được dùng cho nội dung khác"),
+    CLAIM_DAILY_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "CLAIM_429_DAILY_LIMIT", "Bạn đã dùng hết 2 lượt yêu cầu nhận đồ hôm nay (tính chung P2P và văn phòng). Vui lòng thử lại sau 00:00 ngày mai."),
     CLAIM_QUESTIONNAIRE_INVALID(HttpStatus.BAD_REQUEST, "CLAIM_400_ANSWERS", "Câu trả lời claim chưa hợp lệ"),
     CLAIM_QUESTIONNAIRE_STALE(HttpStatus.CONFLICT, "CLAIM_409_QUESTIONS", "Bộ câu hỏi đã thay đổi. Vui lòng mở lại form claim"),
     CLAIM_QUESTIONNAIRE_UNAVAILABLE(HttpStatus.CONFLICT, "CLAIM_409_NO_QUESTIONS", "Chưa có bộ câu hỏi khả dụng cho claim"),
