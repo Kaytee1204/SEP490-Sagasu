@@ -3,7 +3,9 @@ import { reviewApi } from "../api";
 import { Badge, ErrorBox, Gallery } from "./Shared";
 import { date } from "../format";
 import useImageUploads from '@/hooks/useImageUploads';
-import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import ImageUploadButton from "@/components/common/ImageUploadButton";
+import { Send, ShieldCheck } from "lucide-react";
+import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 export default function ParticipantInquiry({ inquiry: i, onSaved }) {
   const [response, setResponse] = useState(""),
@@ -41,7 +43,7 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
     } catch (problem) { setError(problem.message); }
   }
   return (
-    <section className="rr-card">
+    <section className="rr-card exchange-inquiry">
       <div className="rr-row">
         <h2>Báo cáo #{i.report_id}</h2>
         <Badge value={i.status} />
@@ -62,22 +64,17 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
             <textarea
               required
               maxLength={5000}
-              rows={4}
+              rows={3}
               value={response}
               disabled={busy}
               onChange={(e) => setResponse(e.target.value)}
             />
           </label>
-          <label>
-            Ảnh đối chiếu ({IMAGE_FORMATS}, tối đa 5 ảnh, 5 MB mỗi ảnh)
-            <input
-              type="file"
-              accept={IMAGE_ACCEPT}
-              multiple
-              disabled={busy}
-              onChange={pick}
-            />
-          </label>
+          <div className="exchange-upload">
+            <span className="exchange-field-label">Ảnh đối chiếu <small>Không bắt buộc</small></span>
+            <ImageUploadButton label="Thêm ảnh đối chiếu" disabled={busy || files.length >= 5} onChange={pick}/>
+            <small>{files.length}/5 ảnh · Tối đa 5 MB/ảnh</small><small>{IMAGE_FORMATS}</small>
+          </div>
           <ImageProcessingStatus active={processing} />
           {files.map((f, index) => (
             <div className="rr-row" key={index}>
@@ -93,13 +90,13 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
               </button>
             </div>
           ))}
-          <p className="rr-muted">
+          <footer className="exchange-submit"><p className="rr-muted"><ShieldCheck size={16}/>
             Phản hồi chỉ được gửi một lần và được lưu nguyên vẹn để đối chiếu.
           </p>
           <ErrorBox>{error}</ErrorBox>
           <button className="rr-primary" disabled={busy || !response.trim()}>
-            {busy ? "Đang gửi…" : "Gửi thông tin bổ sung"}
-          </button>
+            <Send size={16}/>{busy ? "Đang gửi…" : "Gửi thông tin bổ sung"}
+          </button></footer>
         </form>
       ) : (
         <p>Vụ việc đã kết thúc, không cần gửi thêm thông tin.</p>

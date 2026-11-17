@@ -1,3 +1,4 @@
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import useReviewResource from "./hooks/useReviewResource";
@@ -26,8 +27,8 @@ export default function ReportExchangesPage() {
       ? pending
       : (data || []).filter((i) => !pending.includes(i));
   return (
-    <main className="rr rr-public">
-      <Link to="/bao-cao-cua-toi">← Báo cáo của tôi</Link>
+    <main className="container rr rr-public report-exchanges">
+      <Link className="exchange-back" to="/bao-cao-cua-toi"><ArrowLeft size={15}/> Báo cáo của tôi</Link>
       <header className="rr-header">
         <div>
           <h1>Trao đổi về báo cáo</h1>
@@ -36,9 +37,10 @@ export default function ReportExchangesPage() {
             quan đến bạn.
           </p>
         </div>
-        <button onClick={() => setReload((x) => x + 1)}>Làm mới</button>
+
       </header>
       <ErrorBox>{error}</ErrorBox>
+      <section className="exchange-controls"><div className="exchange-controls-heading"><span>Trao đổi & kết quả xử lý</span><button type="button" onClick={() => setReload((x) => x + 1)}><RefreshCw size={15}/> Làm mới danh sách</button></div><span className="exchange-filter-label">Trạng thái trao đổi</span>
       <nav className="rr-tabs" aria-label="Trao đổi và kết quả báo cáo">
         {[
           ["pending", `Cần phản hồi (${pending.length})`],
@@ -54,7 +56,7 @@ export default function ReportExchangesPage() {
             {label}
           </button>
         ))}
-      </nav>
+      </nav></section>
       {!data && !error && <Empty>Đang tải…</Empty>}
       {data &&
         (tab === "results" ? results.length === 0 : visible.length === 0) && (
@@ -66,7 +68,7 @@ export default function ReportExchangesPage() {
                 : "Chưa có thông tin đã trao đổi."}
           </Empty>
         )}
-      <div className="rr-stack">
+      <div className="rr-stack exchange-list">
         {tab !== "results" &&
           visible.map((i) => (
             <ParticipantInquiry
