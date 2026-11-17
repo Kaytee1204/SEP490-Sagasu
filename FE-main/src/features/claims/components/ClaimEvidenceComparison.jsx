@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { FileSearch, RefreshCw } from 'lucide-react';
+import { FileSearch, ListChecks, RefreshCw } from 'lucide-react';
 import { useChat } from '@/features/chat/hooks/useChat';
 import ImageViewer from '@/components/common/ImageViewer';
 import { getClaimComparison } from '../api/claimApi';
@@ -60,7 +60,7 @@ export default function ClaimEvidenceComparison({ postId, status }) {
   const rows = snapshot.data?.content || [];
   const criteria = comparisonCriteria(rows);
   return <section className="claim-comparison" aria-label="Đối chiếu căn cứ nhận đồ">
-    <header className="claim-comparison-heading"><div><h4><FileSearch size={18} aria-hidden="true" />Căn cứ cần đối chiếu</h4><p>Các câu hỏi bắt buộc (*) và ảnh bằng chứng. Kiểm tra câu trả lời với món đồ thực tế trước khi chấp thuận.</p></div>
+    <header className="claim-comparison-heading"><div><h4><FileSearch size={18} aria-hidden="true" />Căn cứ cần đối chiếu</h4><p>Ưu tiên hồ sơ trả lời đầy đủ các câu hỏi áp dụng. Mức độ hoàn thành không xác nhận quyền sở hữu.</p></div>
       <button type="button" className="btn btn-ghost" onClick={() => setRefresh(value => value + 1)} disabled={loading}><RefreshCw size={15} aria-hidden="true" />Tải lại</button></header>
     {loading ? <p role="status">Đang tải căn cứ…</p> : snapshot.error ? <p role="alert" className="claim-alert">{snapshot.error}</p> : !rows.length ? <div><p>Không còn yêu cầu đang xử lý ở trang này.</p>{page > 1 && <button type="button" className="btn btn-ghost" onClick={() => changePage(1)}>Về trang đầu</button>}</div> : <>
       <div className="claim-comparison-cards">
@@ -68,13 +68,20 @@ export default function ClaimEvidenceComparison({ postId, status }) {
           <header className="claim-compare-card-heading">
             <div className="claim-compare-person"><h5 id={`claim-compare-person-${postId}-${claim.id}`}>{claim.claimantName}</h5>
               <small>Hồ sơ #{claim.id} · {claimDate(claim.createdAt)}</small></div>
-            <div className="claim-compare-card-actions"><span className={`claim-status claim-status-${claim.status}`}>{CLAIM_STATUS[claim.status]}</span>
+            <div className="claim-compare-card-actions">
+              <span className={`claim-completion${claim.completion?.total > 0 && claim.completion.answered === claim.completion.total ? ' is-complete' : ''}`}
+                title="Tính các câu hỏi áp dụng, gồm câu tùy chọn; ảnh bằng chứng hiển thị riêng. Chỉ đếm việc trả lời, không chấm đúng sai.">
+                <ListChecks size={16} aria-hidden="true" />{claim.completion?.total > 0
+                  ? <>Đã trả lời <strong>{claim.completion.answered}/{claim.completion.total}</strong> câu</>
+                  : 'Chưa có dữ liệu câu hỏi'}
+              </span>
+              <span className={`claim-status claim-status-${claim.status}`}>{CLAIM_STATUS[claim.status]}</span>
               <Link className="btn btn-ghost" to={claimDetailPath(postId, claim.id)} state={{ claimListReturn: location.pathname + location.search }}>Xem hồ sơ & xử lý →</Link></div>
           </header>
           <dl className="claim-compare-fields">{criteria.map(c => <CriterionField key={c.key} claim={claim} criterion={c} />)}<EvidenceField claim={claim} /></dl>
         </article>)}
       </div>
-      <footer className="claim-comparison-footer"><small>{snapshot.data.totalElements} yêu cầu đang xử lý · Chờ duyệt trước, mới nhất trước</small>
+      <footer className="claim-comparison-footer"><small>{snapshot.data.totalElements} yêu cầu đang xử lý · Chờ duyệt trước, đầy đủ trước; cùng mức thì mới nhất trước</small>
         {snapshot.data.totalPages > 1 && <nav className="claim-compare-pagination" aria-label="Trang đối chiếu">
           <button type="button" className="btn btn-ghost" disabled={page <= 1} onClick={() => changePage(page - 1)}>Trang trước</button>
           <span>Trang {page}/{snapshot.data.totalPages}</span>

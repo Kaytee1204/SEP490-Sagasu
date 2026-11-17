@@ -38,7 +38,7 @@ public class OpenApiConfig {
         final String securitySchemeName = "bearerAuth";
         return new OpenAPI()
                 .info(new Info()
-                        .title("Sagasu - Lost & Found Management System API (14 Modules)")
+                        .title("Sagasu - Lost & Found Management System API (15 Modules)")
                         .description(
                                 "### Tài liệu Kiểm thử API Backend Hệ thống Sagasu\n\n"
                                 + "#### 1. Hướng dẫn Xác thực & Đăng nhập:\n"
@@ -49,12 +49,13 @@ public class OpenApiConfig {
                                 + "  - `MANAGER`: `khanhtrinh1204@gmail.com` / `L!H$1204`\n"
                                 + "  - `USER`: `user` / `123`\n"
                                 + "- **Sử dụng JWT Bearer Token**: Sau khi gọi `[1.1] POST /api/auth/login`, copy giá trị `accessToken` và dán vào nút **Authorize** ở góc trên bên phải.\n\n"
-                                + "#### 2. Danh sách 14 Module Chức năng (Đánh số thứ tự 01 -> 14):\n"
+                                + "#### 2. Danh sách 15 Module Chức năng (Đánh số thứ tự 01 -> 15):\n"
                                 + "- **01 -> 02**: Xác thực (Auth) & Quản lý Tài khoản (Account/Profile)\n"
                                 + "- **03 -> 05**: Danh mục (Category), Bài đăng công khai & AI Smart Match (Posts), Bài đăng của tôi (My Posts)\n"
                                 + "- **06 -> 08**: Yêu cầu nhận đồ P2P & Bộ câu hỏi (Claims P2P), Trò chuyện trực tuyến (Chat P2P), Bàn giao trực tiếp (Handover P2P)\n"
                                 + "- **09 -> 12**: Nghiệp vụ Văn phòng (Biên bản tiếp nhận, Kho lưu trữ, Claim văn phòng, Chuyển giao & Lịch hẹn 12h, Kiểm duyệt bài đăng)\n"
                                 + "- **13 -> 14**: Báo cáo vi phạm & Điều tra giải quyết (Reports & Review), Thông báo đa kênh (Notifications)\n"
+                                + "- **15**: Bài đăng đã lưu theo tài khoản (Saved Posts)\n"
                         )
                         .version("2.0.0")
                         .contact(new Contact().name("Sagasu Development Team")))
@@ -86,7 +87,9 @@ public class OpenApiConfig {
                         new Tag().name("13. Reports & Dispute Resolution - Báo cáo & Điều tra giải quyết")
                                 .description("Gửi báo cáo vi phạm, Xem báo cáo của tôi, Điều tra của Manager (Chụp Snapshot, Tạm dừng giao nhận Hold, Hỏi đáp Inquiry, Kết luận xử lý)"),
                         new Tag().name("14. Notifications - Thông báo đa kênh & Cài đặt tùy chọn")
-                                .description("Danh sách thông báo trong ứng dụng, Đếm thông báo chưa đọc, Đánh dấu đã đọc và Bật/Tắt tùy chọn thông báo (In-App, Email, Browser Push)")
+                                .description("Danh sách thông báo trong ứng dụng, Đếm thông báo chưa đọc, Đánh dấu đã đọc và Bật/Tắt tùy chọn thông báo (In-App, Email, Browser Push)"),
+                        new Tag().name("15. Saved Posts - Bài đăng đã lưu")
+                                .description("Lưu hoặc bỏ lưu bài đăng theo tài khoản; danh sách riêng tư có phân trang và lọc LOST/FOUND. Không tạo yêu cầu nhận đồ.")
                 ))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()

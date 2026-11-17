@@ -12,6 +12,10 @@
 .claim-compare-person small { font-size: 12px; color: #62797b; }
 .claim-compare-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
 .claim-compare-card-actions .btn { font-size: 13px; white-space: normal; text-align: center; }
+.claim-completion { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid #d4e1e0; border-radius: 8px; background: #fff; color: #536f6f; font-size: 12px; white-space: nowrap; }
+.claim-completion svg { flex: none; }
+.claim-completion strong { font-weight: 750; }
+.claim-completion.is-complete { background: #e8f6f0; border-color: #c1e2d4; color: #1b6650; }
 .claim-compare-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 20px 24px; margin: 0; padding: 18px; }
 .claim-compare-field { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .claim-compare-field dt { margin: 0 0 8px; color: #536f6f; font-size: 13px; font-weight: 600; line-height: 1.5; }

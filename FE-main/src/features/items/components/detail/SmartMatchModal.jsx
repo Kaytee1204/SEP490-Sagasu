@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, SearchCheck, MapPin, Calendar, ExternalLink, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSmartMatches } from '../../api/postApi';
+import SavePostButton from '../saved-posts/SavePostButton';
 
 export default function SmartMatchModal({ isOpen, onClose, post }) {
   const [loading, setLoading] = useState(false);
@@ -418,7 +419,8 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                     )}
 
                     {/* Action buttons */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                      <SavePostButton postId={item.id} />
                       <Link
                         to={`/chi-tiet/${item.id}`}
                         target="_blank"

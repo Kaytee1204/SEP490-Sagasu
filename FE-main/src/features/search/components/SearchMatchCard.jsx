@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { MapPin, Clock, UserRound } from 'lucide-react';
 import OfficeReceiptBadge from '@/features/items/components/OfficeReceiptBadge';
+import SavePostButton from '@/features/items/components/saved-posts/SavePostButton';
 
 const STATUS = { OPEN: 'Đang xử lý', RESERVED: 'Đang xác minh nhận đồ', RETURNED: 'Đã trao trả', CLOSED: 'Đã đóng' };
 
@@ -15,12 +16,12 @@ function Thumbnail({ url, title }) {
 
 export default function SearchMatchCard({ item }) {
   const location = useLocation();
-  const fromState = { from: `${location.pathname}${location.search}`, fromLabel: 'Danh sách tìm kiếm' };
+  const fromState = { from: `${location.pathname}${location.search}`, fromLabel: location.pathname === '/bai-dang-da-luu' ? 'Bài đăng đã lưu' : 'Danh sách tìm kiếm' };
   const found = item.postType === 'FOUND';
   const eventTime = new Date(item.eventAt).toLocaleString('vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short',
   });
-  return <Link to={`/chi-tiet/${item.id}`} state={fromState} className="card post-list-card" aria-labelledby={`post-list-title-${item.id}`}
+  return <article className="post-list-card-wrap"><Link to={`/chi-tiet/${item.id}`} state={fromState} className="card post-list-card" aria-labelledby={`post-list-title-${item.id}`}
     aria-describedby={item.officeReceipt ? `post-list-receipt-${item.id}` : undefined}>
     <div className="post-list-image">
       <Thumbnail key={item.thumbnailUrl || 'empty'} url={item.thumbnailUrl} title={item.title} />
@@ -39,5 +40,5 @@ export default function SearchMatchCard({ item }) {
       <p className="post-list-author"><UserRound size={16} aria-hidden="true" /><span title={item.authorName}>Người đăng: <strong>{item.authorName || "Chưa có thông tin"}</strong></span></p>
       <p className="post-list-handling">{STATUS[item.status] || item.status}</p>
     </div>
-  </Link>;
+  </Link><SavePostButton postId={item.id} compact /></article>;
 }

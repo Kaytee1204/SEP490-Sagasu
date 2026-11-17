@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import { getMyPosts, deletePost } from '../api/postApi';
 import Pagination from '@/components/common/Pagination';
 import MyPostCard from '../components/my-posts/MyPostCard';
-import EditPostDialog from '../components/post/EditPostDialog';
 import MyPostsEmptyState from '../components/my-posts/MyPostsEmptyState';
 import MyPostsFilterBar from '../components/my-posts/MyPostsFilterBar';
 import '../styles/MyPosts.css';
@@ -92,7 +91,6 @@ function MyPostList({ page, filter, postType, onPage, onReload, onResetFilter })
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [postToDelete, setPostToDelete] = useState(null);
-  const [postToEdit, setPostToEdit] = useState(null);
   useEffect(() => {
     let cancelled = false;
     getMyPosts(page, filter, postType).then(data => { if (!cancelled) setResult(data); })
@@ -122,13 +120,9 @@ function MyPostList({ page, filter, postType, onPage, onReload, onResetFilter })
           <span><ArrowDownWideNarrow size={15} aria-hidden="true" />Mới nhất trước</span>
         </div>
         {result.content.length ? <div className="my-post-list">{result.content.map(post => <MyPostCard key={`${post.id}:${post.updatedAt}`} post={post}
-          onDelete={setPostToDelete} onEdit={setPostToEdit} />)}</div> : <MyPostsEmptyState filter={filter} postType={postType} onReset={onResetFilter} />}
+          onDelete={setPostToDelete} />)}</div> : <MyPostsEmptyState filter={filter} postType={postType} onReset={onResetFilter} />}
         <Pagination className="my-posts-pagination" currentPage={page} totalPages={result.totalPages} onPageChange={onPage} />
       </>}
-    {postToEdit && <EditPostDialog id={postToEdit.id} onClose={() => setPostToEdit(null)} onSaved={() => {
-      setPostToEdit(null); setNotice('Đã cập nhật bài đăng.');
-      getMyPosts(page, filter, postType).then(data => {if (!data.content.length && page > 1) onPage(page - 1); else setResult(data);}).catch(err => setError(err.message));
-    }} />}
     {postToDelete && <DeletePostDialog post={postToDelete} onCancel={() => setPostToDelete(null)} onSuccess={afterDelete} />}
   </>;
 }

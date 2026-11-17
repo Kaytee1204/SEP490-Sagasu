@@ -5,7 +5,6 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, ChevronRight, CircleCheck, ClipboardList, MapPin, Pencil, SearchCheck, UserRound } from 'lucide-react';
 import OfficeReceiptBadge from '../components/OfficeReceiptBadge';
 import { getPostDetail } from '../api/postApi';
-import EditPostDialog from '../components/post/EditPostDialog';
 import { getLatestClaimOnPost } from '@/features/claims/api/claimApi';
 import { claimDetailPath, canSubmitPostClaim, postClaimType } from '@/features/claims/utils/claimUtils';
 import ItemGallery from '../components/detail/ItemGallery';
@@ -17,6 +16,7 @@ import { useAuth } from '@/context/AuthContext';
 import './ItemDetailPage.css';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import ReportButton from '@/features/reports/components/ReportButton';
+import SavePostButton from '../components/saved-posts/SavePostButton';
 
 const STATUS_LABELS = {
   RESERVED: 'Đang xử lý nhận đồ',
@@ -45,8 +45,6 @@ function PostDetail({ id, onRetry }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const [editNotice, setEditNotice] = useState('');
   const [activeImage, setActiveImage] = useState(0);
   const [showSmartMatch, setShowSmartMatch] = useState(false);
   const validId = /^[1-9]\d*$/.test(id);
@@ -144,6 +142,7 @@ function PostDetail({ id, onRetry }) {
         <section className="post-detail-info" aria-label="Thông tin bài đăng">
           <div className="post-detail-card post-detail-summary">
             <ItemInfoSection item={item} />
+            {post.moderationStatus === 'VISIBLE' && <div className="post-detail-save-action"><SavePostButton postId={post.id} /></div>}
             <div className="post-detail-author">
               <span className="post-detail-author-icon"><UserRound size={19} aria-hidden="true" /></span>
               <div><span>Người đăng</span><strong>{post.authorName || 'Chưa cập nhật tên'}</strong></div>
@@ -161,7 +160,6 @@ function PostDetail({ id, onRetry }) {
             </div>
 
             {post.moderationStatus === 'PENDING' && <p className="post-detail-notice" role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
-            {editNotice && <p className="post-detail-notice" role="status">{editNotice}</p>}
 
             <div className="post-detail-actions">
               {canUseSmartMatch && (
@@ -196,9 +194,10 @@ function PostDetail({ id, onRetry }) {
             </div>
 
             {isOwnPost && <div className="post-detail-manage-actions">
-              {post.canEditOwnPost ? <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(true)}>
+              {post.canEditOwnPost ? <Link className="btn btn-ghost" to={`/sua-tin/${post.id}`}
+                state={{ from: location.pathname + location.search, fromLabel: 'Về bài đăng' }}>
                 <Pencil size={16} aria-hidden="true" />Sửa bài đăng
-              </button> : <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng</Link>}
+              </Link> : <Link className="btn btn-ghost" to="/tin-dang-cua-toi">Quản lý bài đăng</Link>}
               {post.postType === 'FOUND' && <div className="post-detail-office-action">
                 <OfficeHandoverAction post={post} onTransferred={updated => setResult(current => ({ ...current, post: updated }))} />
               </div>}
@@ -215,12 +214,6 @@ function PostDetail({ id, onRetry }) {
           </section>}
 
           {!isOwnPost && <div className="post-detail-report"><ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" /></div>}
-
-          {editOpen && <EditPostDialog id={post.id} onClose={() => setEditOpen(false)} onSaved={() => {
-            setEditOpen(false); setEditNotice('Đã lưu thay đổi.');
-            getPostDetail(post.id).then(updated => {setResult(current => ({...current, post:updated}));setActiveImage(0);})
-              .catch(() => setEditNotice('Đã lưu bài. Hãy tải lại trang để xem nội dung mới.'));
-          }} />}
         </section>
       </div>
 

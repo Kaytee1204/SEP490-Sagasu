@@ -38,6 +38,8 @@ import MyReportsPage from '@/features/reports/pages/MyReportsPage';
 import ReportDetailPage from '@/features/reports/pages/ReportDetailPage';
 import ReportExchangesPage from '@/features/report-review/ReportExchangesPage';
 import NotificationProvider from '@/features/notifications/NotificationProvider';
+import SavedPostsPage from '@/features/items/pages/SavedPostsPage';
+import SavedPostsProvider from '@/features/items/context/SavedPostsProvider';
 
 function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
   const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
@@ -102,6 +104,7 @@ function AppRoutes() {
         <Route path="/sua-tin/:id" element={<ProtectedRoute><EditPostPage /></ProtectedRoute>} />
         <Route path="/" element={<RootHomeRoute />} />
         <Route path="/tim-kiem" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
+        <Route path="/bai-dang-da-luu" element={<ProtectedRoute><SavedPostsPage /></ProtectedRoute>} />
         <Route path="/chi-tiet/:id" element={<ProtectedRoute><ItemDetailPage /></ProtectedRoute>} />
 
         <Route
@@ -210,7 +213,9 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <NotificationProvider>
+          <SavedPostsProvider>
           <AppRoutes />
+          </SavedPostsProvider>
         </NotificationProvider>
       </BrowserRouter>
     </AuthProvider>

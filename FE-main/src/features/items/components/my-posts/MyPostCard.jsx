@@ -11,7 +11,7 @@ const MODERATION = {
 };
 const HANDLING = { RESERVED: 'Đang xử lý nhận đồ', RETURNED: 'Đã trao trả', CLOSED: 'Đã đóng' };
 
-export default function MyPostCard({ post, onDelete, onEdit }) {
+export default function MyPostCard({ post, onDelete }) {
   const [imageFailed, setImageFailed] = useState(false);
   const location = useLocation();
   const fromState = { from: `${location.pathname}${location.search}`, fromLabel: 'Tin đăng của tôi' };
@@ -55,9 +55,9 @@ export default function MyPostCard({ post, onDelete, onEdit }) {
       </Link>}
       <div className="my-post-card-actions">
         <Link className="my-post-view-button" to={`/chi-tiet/${post.id}`} state={fromState}>Xem bài<ArrowUpRight size={15} aria-hidden="true" /></Link>
-        <button type="button" className="my-post-edit-button" disabled={!post.canEdit} onClick={() => onEdit(post)}>
+        {post.canEdit ? <Link className="my-post-edit-button" to={`/sua-tin/${post.id}`} state={fromState}>
           <Pencil size={15} aria-hidden="true" />Sửa bài
-        </button>
+        </Link> : <button type="button" className="my-post-edit-button" disabled><Pencil size={15} aria-hidden="true" />Sửa bài</button>}
         <button type="button" className="my-post-hide-button" disabled={!post.canDelete} onClick={() => onDelete(post)}>
           <EyeOff size={15} aria-hidden="true" />Ẩn bài
         </button>

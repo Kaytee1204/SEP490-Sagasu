@@ -1,0 +1,32 @@
+.post-edit-container { max-width: 1120px; }
+.post-edit-heading { margin-bottom: 16px; }
+.post-edit-back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px; color: var(--teal-600); font-size: .875rem; }
+.post-edit-card { padding: 24px; }
+.post-edit-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.post-edit-workspace { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr); align-items: start; gap: 28px; }
+.post-edit-inputs, .post-edit-preview { min-width: 0; }
+.post-edit-preview { position: sticky; top: calc(var(--navbar-offset, 68px) + 20px); }
+.post-edit-photos { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.post-edit-upload-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 12px; }
+.post-edit-upload-heading h2 { margin: 0; font-size: .875rem; font-weight: 650; }
+.post-edit-upload-heading small { font-size: .72rem; color: var(--text-secondary); }
+.post-edit-images { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.post-edit-images figure { display: flex; flex-direction: column; gap: 5px; width: 88px; margin: 0; }
+.post-edit-images img, .post-edit-images figure > span { width: 88px; height: 76px; border: 1px solid var(--border); border-radius: 8px; object-fit: contain; background: var(--bg-canvas); }
+.post-edit-images figure > span { display: grid; place-items: center; text-align: center; font-size: .72rem; }
+.post-edit-images button { min-height: 30px; padding: 4px; border: 1px solid #e5d6d3; border-radius: 7px; background: #fff8f6; color: #a3483f; font-size: .75rem; cursor: pointer; }
+.post-edit-images button:disabled { cursor: not-allowed; }
+.post-edit-page .post-edit-actions { justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; }
+.post-edit-alert { margin-bottom: 16px; padding: 12px 16px; border: 1px solid #eccbc4; border-radius: 12px; background: #fff5f2; color: #993f32; }
+.post-edit-alert p { margin: 0; }
+.post-edit-alert .btn { margin-top: 10px; }
+.post-edit-category-warning { margin-top: 10px; color: #993f32; font-size: .8rem; }
+@media (max-width: 860px) {
+  .post-edit-workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .post-edit-preview { position: static; }
+  .post-edit-card { padding: 16px; }
+}
+@media (max-width: 480px) {
+  .post-edit-page .post-edit-actions { flex-wrap: wrap; }
+  .post-edit-actions > .btn { flex: 1; min-width: 0; }
+}

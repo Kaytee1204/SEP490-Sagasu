@@ -308,7 +308,7 @@ public class ClaimService {
                     .setParameter("postId", claim.getPost().getId()).getSingleResult());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public ClaimComparisonDto comparison(long postId, int page, int size, String status, CustomUserDetails user) {
         Account actor = activeActor(user);
         Post post = post(postId);
@@ -320,18 +320,30 @@ public class ClaimService {
         var paging = pageable(page, size);
         String where = " from Claim c where c.post.id=:postId and c.claimType='P2P'"
                 + " and c.status in ('PENDING','APPROVED') and (:status='ALL' or c.status=:status)";
-        long total = entityManager.createQuery("select count(c)" + where, Long.class)
-                .setParameter("postId", postId).setParameter("status", status).getSingleResult();
-        var entries = entityManager.createQuery("select c" + where.replace(" from Claim c where", " from Claim c join fetch c.claimant where")
-                + " order by case when c.status='PENDING' then 0 else 1 end, c.createdAt desc, c.id desc", Claim.class)
+        var candidates = entityManager.createQuery("select c" + where.replace(" from Claim c where", " from Claim c join fetch c.claimant where"), Claim.class)
                 .setParameter("postId", postId).setParameter("status", status)
-                .setFirstResult((int) paging.getOffset()).setMaxResults(size).getResultList();
-        var ids = entries.stream().map(Claim::getId).toList();
-        if (ids.isEmpty()) return new ClaimComparisonDto(List.of(), page, size, total, (int) Math.ceil((double) total / size));
-        // Batch collections separately to avoid cartesian joins and per-dossier HTTP requests.
-        var answers = entityManager.createQuery("select a from ClaimAnswer a join fetch a.question where a.claim.id in :ids order by a.sortOrder, a.id", ClaimAnswer.class)
-                .setParameter("ids", ids).getResultList().stream()
+                .getResultList();
+        long total = candidates.size();
+        if (candidates.isEmpty() || paging.getOffset() >= total) return new ClaimComparisonDto(List.of(), page, size, total, (int) Math.ceil((double) total / size));
+        // Score the whole item's queue before pagination. Fetch images only for the selected page.
+        var allAnswers = entityManager.createQuery("select a from ClaimAnswer a join fetch a.question q join fetch q.template where a.claim.id in :ids order by a.sortOrder, a.id", ClaimAnswer.class)
+                .setParameter("ids", candidates.stream().map(Claim::getId).toList()).getResultList();
+        var answers = allAnswers.stream()
                 .collect(java.util.stream.Collectors.groupingBy(a -> a.getClaim().getId()));
+        var templateIds = allAnswers.stream().map(a -> a.getQuestion().getTemplate().getId()).distinct().toList();
+        var definitions = templateIds.isEmpty() ? List.<ClaimQuestion>of() : entityManager.createQuery(
+                "select q from ClaimQuestion q join fetch q.template where q.template.id in :ids order by q.sortOrder, q.id", ClaimQuestion.class)
+                .setParameter("ids", templateIds).getResultList();
+        Map<Long, ClaimComparisonDto.Completion> completeness = new HashMap<>();
+        for (var claim : candidates) {
+            var claimAnswers = answers.getOrDefault(claim.getId(), List.of());
+            var originalTemplates = claimAnswers.stream().map(a -> a.getQuestion().getTemplate().getId()).collect(java.util.stream.Collectors.toSet());
+            completeness.put(claim.getId(), ClaimReviewCompleteness.calculate(claim.getDescription(), claimAnswers,
+                    definitions.stream().filter(q -> originalTemplates.contains(q.getTemplate().getId())).toList()));
+        }
+        var entries = candidates.stream().sorted(ClaimReviewCompleteness.order(completeness))
+                .skip(paging.getOffset()).limit(size).toList();
+        var ids = entries.stream().map(Claim::getId).toList();
         var images = entityManager.createQuery("select e from ClaimEvidence e where e.claim.id in :ids order by e.sortOrder, e.id", ClaimEvidence.class)
                 .setParameter("ids", ids).getResultList().stream()
                 .collect(java.util.stream.Collectors.groupingBy(e -> e.getClaim().getId()));
@@ -341,7 +353,8 @@ public class ClaimService {
                     a.getQuestionCode(), a.getQuestionLabel(), a.getAnswerText(),
                     a.getTemplateCode(), a.getTemplateVersion(), a.getQuestion().isRequired(), a.getSortOrder())).toList(),
                 images.getOrDefault(c.getId(), List.of()).stream().map(e -> new ClaimDetailDto.EvidenceDto(
-                    e.getId(), storage.readUrl(e.getStorageKey(), null), e.getOriginalName(), e.getMimeType(), e.getSizeBytes())).toList())).toList();
+                    e.getId(), storage.readUrl(e.getStorageKey(), null), e.getOriginalName(), e.getMimeType(), e.getSizeBytes())).toList(),
+                completeness.get(c.getId()))).toList();
         return new ClaimComparisonDto(content, page, size, total, (int) Math.ceil((double) total / size));
     }
 

@@ -49,7 +49,7 @@ html:has(.post-search-page), body:has(.post-search-page) { overflow-x: clip; }
 .post-list-badges .badge, .post-list-category { font-size: .625rem; font-weight: 700; line-height: 1.4; padding: 4px 7px; border-radius: 5px; letter-spacing: .035em; text-transform: uppercase; }
 .post-list-category { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--teal-600); background: rgba(30, 107, 107, .11); }
 .post-list-card h2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--text-primary); font-size: 1.0625rem; font-weight: 700; line-height: 1.45; min-height: 2.9em; margin: 0; }
-.post-list-office-receipt { position: absolute; top: 10px; right: 10px; z-index: 1; display: flex; align-items: center; }
+.post-list-office-receipt { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 72px); z-index: 1; display: flex; align-items: center; }
 .post-list-location { min-width: 0; }
 .post-list-location span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .post-list-author span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
