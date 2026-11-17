@@ -60,3 +60,71 @@
   .report-dialog form > footer { flex-wrap:nowrap; }
   .report-dialog form > footer .btn { flex:1; }
 }
+/* User report workspace */
+.reports-dashboard { max-width:1120px; color:#193f46; }
+.reports-dashboard .reports-heading h1 { font-size:1.85rem; font-weight:750; }
+.reports-heading p { color:#6a8388; font-size:.9rem; }
+.reports-dashboard .reports-toolbar { background:#fff; border:1px solid #d7e5e3; border-radius:16px; padding:16px; }
+.reports-dashboard .claims-filters { display:flex; flex-wrap:wrap; gap:8px; }
+.reports-page .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; font-size:.85rem; }
+.report-account-list { display:grid; gap:14px; margin-top:14px; }
+.report-account-group { background:#fff; border:1px solid #d7e5e3; border-radius:16px; overflow:hidden; }
+.report-account-heading { display:flex; align-items:center; gap:14px; padding:20px; }
+.report-account-avatar,.report-entry-icon { display:grid; place-items:center; flex-shrink:0; width:48px; height:48px; border:1px solid #dce8df; border-radius:12px; background:#eef6f0; color:#608a6e; }
+.report-account-info { flex:1; min-width:0; }
+.report-account-caption { font-size:.75rem; color:#72898e; }
+.report-account-info h2 { font-size:1.05rem; font-weight:700; overflow-wrap:anywhere; }
+.report-account-info p { margin:4px 0 0; font-size:.8rem; color:#69868b; }
+.report-group-pending { margin-top:6px; padding:3px 8px; font-size:.72rem; }
+.report-chevron-open { transform:rotate(180deg); }
+.report-account-items { border-top:1px solid #e1ece8; background:#f8fbf9; padding:16px 20px; display:grid; gap:12px; }
+.report-entry { display:flex; gap:14px; align-items:flex-start; padding:18px; border:1px solid #dce8df; border-radius:12px; background:white; }
+.report-entry-icon { width:40px; height:40px; }
+.report-entry-content { flex:1; min-width:0; }
+.report-entry-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:.75rem; color:#789096; }
+.report-entry h3 { font-size:1rem; font-weight:650; margin:10px 0 6px; overflow-wrap:anywhere; }
+.report-entry p { font-size:.85rem; line-height:1.6; margin:4px 0; overflow-wrap:anywhere; }
+.report-entry-description { color:#6a8388; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.report-entry time { display:flex; align-items:center; gap:6px; margin-top:10px; color:#72898e; font-size:.75rem; }
+.report-view-button { align-self:center; flex-shrink:0; }
+@media(max-width:640px) {
+ .report-account-heading { flex-wrap:wrap; padding:16px; }
+ .report-account-heading > .btn { margin-left:62px; }
+ .report-account-items { padding:12px; }
+ .report-entry { flex-wrap:wrap; padding:14px; gap:10px; }
+ .report-entry-content { flex-basis:calc(100% - 50px); }
+ .report-view-button { margin-left:50px; }
+}
+.report-detail-title { margin:24px 0 16px; font-size:1.8rem; font-weight:750; }.report-detail-account { padding:0 0 20px; margin-bottom:20px; border-bottom:1px solid #e1ece8; }
+/* Match the compact controls and nested rows in the request workspace. */
+.reports-dashboard { max-width:1160px; padding-block:28px 48px; }
+.reports-dashboard .reports-heading { margin-bottom:24px; }
+.reports-dashboard .reports-heading h1 { font-size:clamp(1.5rem,2.6vw,2rem); line-height:1.3; letter-spacing:-.025em; }
+.reports-dashboard .reports-heading p { margin:8px 0 0; font-size:.85rem; line-height:1.65; }
+.reports-dashboard .reports-toolbar { display:block; padding:18px 20px; border-radius:17px; }
+.reports-navigation { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.reports-dashboard .reports-type-filter { gap:5px; font-size:.73rem; }
+.reports-dashboard .reports-type-filter select { min-height:40px; font-size:.8rem; border-radius:9px; }
+.reports-status-row { margin-top:16px; padding-top:16px; border-top:1px solid #e8eee9; }
+.reports-filter-label { display:block; margin-bottom:7px; font-size:.73rem; color:#647a69; }
+.reports-dashboard .claims-filters { gap:7px; }
+.reports-dashboard .claims-filters .chip { min-height:38px; padding:8px 13px; border:1px solid #dce6de; border-radius:9px; background:#fff; color:#617968; font-size:.78rem; line-height:1.4; }
+.reports-dashboard .claims-filters .chip.active { border-color:#216e55; background:#216e55; color:#fff; font-weight:650; }
+.reports-dashboard .report-account-items { padding:12px 16px; gap:8px; }
+.reports-dashboard .report-entry { padding:12px 14px; gap:10px; align-items:center; }
+.reports-dashboard .report-entry-icon { width:32px; height:32px; border-radius:9px; }
+.reports-dashboard .report-entry-icon svg { width:17px; height:17px; }
+.reports-dashboard .report-entry-meta { gap:6px; font-size:.68rem; }
+.reports-dashboard .report-entry-meta :is(.report-kind-badge,.report-state) { padding:3px 7px; font-size:.68rem; }
+.reports-dashboard .report-entry h3 { margin:5px 0 3px; font-size:.85rem; line-height:1.4; }
+.reports-dashboard .report-entry p { margin:2px 0; font-size:.75rem; line-height:1.45; }
+.reports-dashboard .report-entry-description { -webkit-line-clamp:1; }
+.reports-dashboard .report-entry time { margin-top:5px; font-size:.68rem; }
+.reports-dashboard .report-entry .report-view-button { min-height:36px; padding:7px 10px; font-size:.73rem; border-radius:9px; }
+@media(max-width:640px) {
+ .reports-dashboard .reports-toolbar { padding:15px; }
+ .reports-navigation { align-items:stretch; }
+ .reports-navigation > .btn { width:100%; }
+ .reports-dashboard .report-entry-content { flex-basis:calc(100% - 42px); }
+ .reports-dashboard .report-view-button { margin-left:42px; }
+}

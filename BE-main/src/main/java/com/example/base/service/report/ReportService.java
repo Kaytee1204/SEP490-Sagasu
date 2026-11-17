@@ -37,12 +37,13 @@ public class ReportService {
     public record Activity(String action,String status,String note,OffsetDateTime at) {}
     public record Detail(long id,String kind,String targetType,long targetId,String description,String status,
             String resolutionNote,OffsetDateTime createdAt,List<Evidence> evidence,List<Activity> activities,String targetLabel,
-            String reasonCode,String reasonLabel) {
+            String reasonCode,String reasonLabel,TargetAccount targetAccount) {
         public Detail(long id,String kind,String targetType,long targetId,String description,String status,
                 String resolutionNote,OffsetDateTime createdAt,List<Evidence> evidence,List<Activity> activities,String targetLabel) {
-            this(id,kind,targetType,targetId,description,status,resolutionNote,createdAt,evidence,activities,targetLabel,null,null);
+            this(id,kind,targetType,targetId,description,status,resolutionNote,createdAt,evidence,activities,targetLabel,null,null,null);
         }
     }
+    public record TargetAccount(Long id,String name) {}
     public record Page(List<Detail> content,int totalPages,long totalElements) {}
 
     public Detail create(Submit request,List<MultipartFile> files,CustomUserDetails user) {
@@ -157,7 +158,17 @@ public class ReportService {
     public Detail detail(Report report) {
         var evidence=jdbc.query("select * from report_evidence where report_id=? order by sort_order",(rs,n)->new Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),report.getId());
         var activities=jdbc.query("select action,to_status,public_note,created_at from report_activity where report_id=? and (public_note is not null or action='CREATE') order by activity_id",(rs,n)->new Activity(rs.getString(1),rs.getString(2),rs.getString(3),rs.getObject(4,OffsetDateTime.class)),report.getId());
-        return new Detail(report.getId(),report.getKind(),report.targetType(),report.targetId(),report.additionalDescription(),report.getStatus(),report.getResolutionNote(),report.getCreatedAt(),evidence,activities,targetLabel(report),report.getReasonCode(),report.getReasonLabelSnapshot());
+        return new Detail(report.getId(),report.getKind(),report.targetType(),report.targetId(),report.additionalDescription(),report.getStatus(),report.getResolutionNote(),report.getCreatedAt(),evidence,activities,targetLabel(report),report.getReasonCode(),report.getReasonLabelSnapshot(),targetAccount(report));
+    }
+    private TargetAccount targetAccount(Report report) {
+        String sql = switch (report.targetType()) {
+            case "POST" -> "select a.id,a.full_name from post p join accounts a on a.id=p.account_id where p.post_id=?";
+            case "CLAIM" -> "select a.id,a.full_name from claim c join post p on p.post_id=c.post_id join accounts a on a.id=case when c.claimant_id=" + report.getReporterId() + " then p.account_id else c.claimant_id end where c.claim_id=?";
+            case "MESSAGE" -> "select a.id,a.full_name from chat_message m join accounts a on a.id=m.sender_id where m.message_id=?";
+            default -> "select id,full_name from accounts where id=?";
+        };
+        return jdbc.query(sql, (rs, row) -> new TargetAccount(rs.getLong(1),rs.getString(2)), report.targetId())
+                .stream().findFirst().orElse(null);
     }
     private String targetLabel(Report report) {
         String sql = switch (report.targetType()) {
