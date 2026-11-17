@@ -38,6 +38,11 @@ spring:
       max-request-size: 27MB
 
 app:
+  claim-summary:
+    enabled: ${CLAIM_SUMMARY_ENABLED:false}
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
+    timeout-ms: ${GEMINI_TIMEOUT_MS:20000}
   storage:
     r2:
       enabled: ${R2_ENABLED:true}

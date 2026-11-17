@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { FileSearch, ListChecks, RefreshCw } from 'lucide-react';
+import { FileSearch, ListChecks } from 'lucide-react';
 import { useChat } from '@/features/chat/hooks/useChat';
 import ImageViewer from '@/components/common/ImageViewer';
 import { getClaimComparison } from '../api/claimApi';
 import { CLAIM_STATUS, claimDate, claimDetailPath, evidenceUrl } from '../utils/claimUtils';
 import { comparisonCriteria } from '../utils/reviewCriteria';
+import ClaimSummary from './ClaimSummary';
 import './ClaimEvidenceComparison.css';
 
 function AnswerText({ text }) {
@@ -60,8 +61,9 @@ export default function ClaimEvidenceComparison({ postId, status }) {
   const rows = snapshot.data?.content || [];
   const criteria = comparisonCriteria(rows);
   return <section className="claim-comparison" aria-label="Đối chiếu căn cứ nhận đồ">
-    <header className="claim-comparison-heading"><div><h4><FileSearch size={18} aria-hidden="true" />Căn cứ cần đối chiếu</h4><p>Ưu tiên hồ sơ trả lời đầy đủ các câu hỏi áp dụng. Mức độ hoàn thành không xác nhận quyền sở hữu.</p></div>
-      <button type="button" className="btn btn-ghost" onClick={() => setRefresh(value => value + 1)} disabled={loading}><RefreshCw size={15} aria-hidden="true" />Tải lại</button></header>
+    <ClaimSummary key={key} postId={postId} page={page} status={status} claims={rows}
+      disabled={loading || !!snapshot.error || !rows.length}
+      heading={<div><h4><FileSearch size={18} aria-hidden="true" />Căn cứ cần đối chiếu</h4><p>Ưu tiên hồ sơ trả lời đầy đủ các câu hỏi áp dụng. Mức độ hoàn thành không xác nhận quyền sở hữu.</p></div>} />
     {loading ? <p role="status">Đang tải căn cứ…</p> : snapshot.error ? <p role="alert" className="claim-alert">{snapshot.error}</p> : !rows.length ? <div><p>Không còn yêu cầu đang xử lý ở trang này.</p>{page > 1 && <button type="button" className="btn btn-ghost" onClick={() => changePage(1)}>Về trang đầu</button>}</div> : <>
       <div className="claim-comparison-cards">
         {rows.map(claim => <article className="claim-compare-card" key={claim.id} aria-labelledby={`claim-compare-person-${postId}-${claim.id}`}>

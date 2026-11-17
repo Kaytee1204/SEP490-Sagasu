@@ -25,4 +25,6 @@ export const getGroupedClaims = (page = 1, status = 'ALL', sent = false, postId 
 
 export const getClaimComparison = (postId, page = 1, status = 'ALL') => data(apiClient.get(
   `/posts/${encodeURIComponent(postId)}/claims/comparison?${new URLSearchParams({ page: String(page), size: '5', status })}`));
+export const getClaimSummary = (postId, page = 1, status = 'ALL') => data(apiClient.post(
+  `/posts/${encodeURIComponent(postId)}/claims/summary?${new URLSearchParams({ page: String(page), size: '5', status })}`, {}));
 export const revokeClaimApproval = (id, request) => data(apiClient.post(`/claims/${encodeURIComponent(id)}/revoke-approval`, request));
