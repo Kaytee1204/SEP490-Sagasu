@@ -28,6 +28,17 @@ export const date = (value) =>
       })
     : "—";
 
+export function claimActivityReason(activity, hideVerificationNote = false) {
+  const { action, reason } = activity;
+  if (action === "AUTO_CLOSE" && reason === "ITEM_RETURNED") {
+    return "Đồ vật đã được trao trả cho người nhận.";
+  }
+  if (hideVerificationNote && action === "OFFICE_CANCEL" && reason?.startsWith("Không đạt xác minh người nhận tại quầy:")) {
+    return "Không đạt xác minh người nhận tại quầy.";
+  }
+  return reason;
+}
+
 export function earliestAppointment() {
   const time = new Date(Date.now() + (12 * 60 + 2) * 60_000);
   return new Intl.DateTimeFormat('sv-SE', {

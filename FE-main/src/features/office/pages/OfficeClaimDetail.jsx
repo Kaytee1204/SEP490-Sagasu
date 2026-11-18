@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CalendarDays, Mail } from "lucide-react";
 import { officeApi } from "../api/officeApi";
+import { workflowApi } from "../api/workflowApi";
 import { date } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
 import ReviewForm from "../components/ReviewForm";
 import SupplementForm from "../components/SupplementForm";
-import SupplementHistory from "../components/SupplementHistory";
+import OfficeClaimTimeline from "../components/OfficeClaimTimeline";
 import Badge from "../components/Badge";
 import Header from "../components/Header";
 import Notice from "../components/Notice";
@@ -25,7 +26,11 @@ export default function OfficeClaimDetail({ mine = false }) {
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const claim = state.data;
-  if (mine) return <main className="office-page office-personal"><Notice error={notice?.error}>{notice?.text}</Notice><LoadState state={state}>{claim && <PersonalClaimDetail claim={claim} onChanged={() => state.reload()}/>}</LoadState></main>;
+  const workflow = useLoad(
+    () => claim ? workflowApi.detail(claim.id) : null,
+    `${mine}:${claim?.id}:${claim?.version}`,
+  );
+  if (mine) return <main className="office-page office-personal"><Notice error={notice?.error}>{notice?.text}</Notice><LoadState state={state}>{claim && <PersonalClaimDetail claim={claim} workflow={workflow} onChanged={state.reload}/>}</LoadState></main>;
   async function resend() {
     if (busy) return;
     setBusy(true);
@@ -129,48 +134,11 @@ export default function OfficeClaimDetail({ mine = false }) {
                     </div>
                   )}
                 </section>
-                <SupplementHistory claim={claim} />
                 {!mine && <ReceiptInfo receipt={claim.receipt} />}
-                <section className="of-panel">
-                  <h2>Lịch sử xử lý</h2>
-                  <ol className="of-timeline">
-                    {claim.activities.map((a) => (
-                      <li key={a.id}>
-                        <strong>
-                          {{
-                            SUBMIT: "Tạo hồ sơ",
-                            APPROVE: "Duyệt yêu cầu",
-                            REJECT: "Từ chối",
-                            REQUEST_INFO: "Yêu cầu bổ sung",
-                            RESUBMIT: "Bổ sung thông tin",
-                            CANCEL: "Hủy hồ sơ",
-                            TRANSFER_OFFICE: "Chuyển trách nhiệm sang văn phòng",
-                            RESCHEDULE: "Đổi lịch hẹn",
-                            OFFICE_CANCEL: "Hủy lịch và thu hồi duyệt",
-                            HANDOVER: "Ghi nhận giao đồ",
-                            CONFIRM_RECEIPT: "Hoàn tất trao trả",
-                            AUTO_CLOSE: "Đóng hồ sơ do đồ đã được trao trả",
-                            REPORT_ISSUE: "Phản ánh việc nhận đồ",
-                            INVITE_CONFIRM: "Đồng ý lịch hẹn",
-                            INVITE_DECLINE: "Từ chối lịch hẹn",
-                            INVITE_EXPIRE:
-                              "Hết hạn phản hồi — hệ thống tự động",
-                          }[a.action] || a.action}
-                        </strong>
-                        <p className="of-muted">
-                          {a.action === "INVITE_EXPIRE"
-                            ? "Hệ thống"
-                            : a.actorName}{" "}
-                          · {date(a.createdAt)}
-                        </p>
-                        {a.reason && <p className="of-prose">{a.reason}</p>}
-                      </li>
-                    ))}
-                  </ol>
-                </section>
+                <OfficeClaimTimeline claim={claim} workflow={workflow} />
               </div>
               <aside className="of-sticky">
-                <OfficeReturnPanel claim={claim} mine={mine} onChanged={(result) => {
+                <OfficeReturnPanel claim={claim} state={workflow} onChanged={(result) => {
                   setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã đổi lịch, nhưng chưa gửi được email. Hãy gửi lại thư lịch hẹn." : "Đã cập nhật tiến trình trao trả." });
                   state.reload();
                 }} />
@@ -178,8 +146,10 @@ export default function OfficeClaimDetail({ mine = false }) {
                   <section className="of-panel of-appointment">
                     <CalendarDays size={26} color="#0f766e" />
                     <h2 style={{ marginTop: 12 }}>Lịch hẹn nhận đồ</h2>
-                    <strong>{date(claim.appointment.scheduledAt)}</strong>
-                    <p className="of-prose">{claim.appointment.location}</p>
+                    <dl className="of-facts">
+                      <div><dt>Thời gian hẹn</dt><dd>{date(claim.appointment.scheduledAt)}</dd></div>
+                      <div><dt>Địa điểm nhận đồ</dt><dd className="of-prose">{claim.appointment.location}</dd></div>
+                    </dl>
                     <Notice
                       error={["EXPIRED", "DECLINED"].includes(
                         claim.appointment.responseStatus,
@@ -209,11 +179,11 @@ export default function OfficeClaimDetail({ mine = false }) {
                     )}
                     {claim.appointment.cancellationReason && (
                       <p className="of-prose">
-                        {claim.appointment.cancellationReason}
+                        <strong>Lý do lịch bị hủy: </strong>{claim.appointment.cancellationReason}
                       </p>
                     )}
                     {claim.appointment.note && (
-                      <p className="of-prose">{claim.appointment.note}</p>
+                      <p className="of-prose"><strong>Lời nhắn về lịch hẹn: </strong>{claim.appointment.note}</p>
                     )}
                     {claim.appointment.status === "SCHEDULED" && <p className="of-muted">
                       Mang theo giấy tờ và bằng chứng để xác minh trực tiếp. Yêu
