@@ -28,9 +28,13 @@ public class ReportReviewController {
     private final ReportBatchService batches;
 
     @PostMapping("/batch-conclusion")
-    @Operation(summary = "Kết luận các báo cáo đã chọn cùng sự việc", description = "Tối đa 20 báo cáo cùng đối tượng, loại và lý do; từng báo cáo phải do Manager hiện tại phụ trách. Kiểm tra phiên bản và lưu toàn bộ trong một giao dịch. Không áp dụng kết luận chung cho tranh chấp P2P đang chờ phân xử.")
-    public ApiResponse<?> batch(@Valid @RequestBody ReportBatchService.Request request,
-        @AuthenticationPrincipal CustomUserDetails user) {
+    @Operation(
+            summary = "[13.13] Kết luận đồng loạt các báo cáo đã chọn cùng sự việc (MANAGER)",
+            description = "Tối đa 20 báo cáo cùng đối tượng, loại và lý do; từng báo cáo phải do Manager hiện tại phụ trách. Kiểm tra phiên bản và lưu toàn bộ trong một giao dịch. Không áp dụng kết luận chung cho tranh chấp P2P đang chờ phân xử."
+    )
+    public ApiResponse<?> batch(
+            @Valid @RequestBody ReportBatchService.Request request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
       batches.conclude(request, user);
       return ApiResponse.ok(Map.of("processed", request.reports().size()));
     }
