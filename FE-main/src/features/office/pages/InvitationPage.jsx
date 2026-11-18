@@ -6,6 +6,7 @@ import { date } from "../officeUtils";
 import Notice from "../components/Notice";
 import IntakeReplyReason from "../components/IntakeReplyReason";
 import "../Office.css";
+import "../PersonalOffice.css";
 
 const statuses = {
   CONFIRMED: [
@@ -94,7 +95,7 @@ function InvitationContent({ hash, intake }) {
     }
   }
   return (
-    <main className="office-page of-invitation-page">
+    <main className="office-page office-personal of-invitation-page">
       <section className="of-panel">
         <p className="of-eyebrow">Văn phòng · Sagasu</p>
         <CalendarDays size={32} aria-hidden="true" />

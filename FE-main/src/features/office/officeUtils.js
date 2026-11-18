@@ -37,8 +37,9 @@ export function earliestAppointment() {
 }
 
 export const progressLabels = {
+  APPOINTMENT_REVIEW: "Lịch hẹn đã qua — cần hẹn lại",
   REVIEW: "Chờ xét duyệt", NEEDS_INFO: "Chờ bổ sung thông tin", EMAIL_UNSENT: "Cần gửi lịch hẹn",
-  AWAITING_REPLY: "Chờ đồng ý lịch hẹn", REPLY_EXPIRED: "Hết hạn phản hồi lịch", COUNTER_VERIFICATION: "Chờ đến xác minh", VERIFICATION_FAILED: "Cần đối chiếu thêm",
+  AWAITING_REPLY: "Chờ đồng ý lịch hẹn", REPLY_EXPIRED: "Hết hạn phản hồi lịch", COUNTER_VERIFICATION: "Chờ đến xác minh", VERIFICATION_FAILED: "Không đạt xác minh",
   READY_TO_HANDOVER: "Sẵn sàng trao trả", OFFICE_COMPLETION: "Cần xác nhận hoàn tất", COMPLETED: "Đã trao trả",
   DISPUTED: "Có phản ánh cần xử lý", REJECTED: "Đã từ chối", CANCELLED: "Đã hủy", CLOSED: "Đã kết thúc",
 };

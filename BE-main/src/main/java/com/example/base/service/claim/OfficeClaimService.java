@@ -80,6 +80,13 @@ public class OfficeClaimService {
         Account actor=access.require(user); Claim c=office(id); participant(c,actor);
         return view(c,true,actor.getRole()==APPROVER,actor.getId(),progress.of(c.getId()));
     }
+    @Transactional(readOnly=true)
+    public ClaimView personalDetail(long id,CustomUserDetails user) {
+        Account actor=access.require(user); Claim c=office(id);
+        if(c.getClaimant()==null || !c.getClaimant().getId().equals(actor.getId()))
+            throw new AppException(ErrorCode.FORBIDDEN);
+        return view(c,true,false,actor.getId(),progress.of(c.getId()));
+    }
     public Long submit(Submission request,List<MultipartFile> files,boolean counter,CustomUserDetails user) {
         new TransactionTemplate(transactions).executeWithoutResult(tx->validateQuestionnaire(validateSubmission(request,counter,user,false), request));
         var validated=images.validate(files); var keys=new ArrayList<String>();
@@ -153,6 +160,8 @@ public class OfficeClaimService {
         eligible(p);
         if(!"OPEN".equals(p.getStatus())||!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
         Account claimant = counter ? counterClaimant(r) : actor;
+        if(claims.hasFailedOfficeVerification(p.getId(),claimant.getId()))
+            throw bad("Người nhận đã không đạt xác minh tại quầy và không được yêu cầu nhận lại món đồ này.");
         if (claimant != null && (Objects.equals(p.getAccount().getId(), claimant.getId()) || (p.getCreatedBy() != null && Objects.equals(p.getCreatedBy().getId(), claimant.getId())))) {
             throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
         }
@@ -175,6 +184,8 @@ public class OfficeClaimService {
             if(!"PENDING".equals(c.getStatus())&&!"REJECTED".equals(request.decision())) throw bad("Chờ bổ sung thông tin trước khi duyệt.");
             String previous=c.getStatus(); Appointment a=null;
             if("APPROVED".equals(request.decision())) {
+                if(c.getClaimant()!=null && claims.hasFailedOfficeVerification(c.getPost().getId(),c.getClaimant().getId()))
+                    throw bad("Không thể duyệt: người nhận đã không đạt xác minh tại quầy cho món đồ này.");
                 if(claims.existsByPost_IdAndStatusIn(c.getPost().getId(),List.of("APPROVED"))) throw bad("Đồ vật đã có yêu cầu được duyệt.");
                 if(request.scheduledAt()==null||!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1))) throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
                 if(clean(request.location())==null) throw bad("Nhập địa điểm nhận đồ.");
@@ -223,9 +234,9 @@ public class OfficeClaimService {
             access.require(user,APPROVER); Claim c=locked(id); eligible(c.getPost());
             if(!"APPROVED".equals(c.getStatus())) throw bad("Yêu cầu chưa được duyệt.");
             Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(id,"SCHEDULED").orElseThrow(()->bad("Chưa có lịch hẹn."));
-            if(!a.getScheduledAt().isAfter(OffsetDateTime.now())) throw bad("Lịch hẹn đã qua, không gửi lại email cũ.");
+            if(!a.responseExpired(OffsetDateTime.now()) && !a.getScheduledAt().isAfter(OffsetDateTime.now())) throw bad("Lịch hẹn đã qua, không gửi lại email cũ.");
         });
-        return new ReviewResult(id,"APPROVED",invitations.send(id)?"SENT":"FAILED");
+        return invitations.sendWithResult(id);
     }
     @Transactional
     public void supplement(long id,Supplement request,CustomUserDetails user) {

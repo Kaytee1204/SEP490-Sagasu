@@ -12,6 +12,9 @@ import java.util.Optional;
 public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
     long countByClaimant_IdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(long accountId,
             java.time.OffsetDateTime start, java.time.OffsetDateTime end);
+
+    @Query(value="select exists(select 1 from claim c join office_claim_verification v on v.claim_id=c.claim_id where c.post_id=:postId and c.claimant_id=:claimantId and v.result='FAILED')",nativeQuery=true)
+    boolean hasFailedOfficeVerification(@Param("postId") long postId,@Param("claimantId") long claimantId);
     // DaiHV integration: always called after locking the post, matching P2P lock order.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from Claim c where c.post.id=:postId order by c.id")

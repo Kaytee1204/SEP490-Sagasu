@@ -39,23 +39,27 @@ public class OfficeInvitationService {
     }
     // Called after approval commits, using the existing SMTP bean rather than OTP services.
     public boolean send(long claimId) {
-        return Boolean.TRUE.equals(new TransactionTemplate(transactions).execute(tx->{
+        return "SENT".equals(sendWithResult(claimId).emailStatus());
+    }
+    public com.example.base.dto.office.OfficeDtos.ReviewResult sendWithResult(long claimId) {
+        return new TransactionTemplate(transactions).execute(tx->{
             Claim c=lock(claimId);
             Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(claimId,"SCHEDULED").orElseThrow(()->bad("Lịch hẹn không còn hiệu lực."));
             em.refresh(a,LockModeType.PESSIMISTIC_WRITE);
             if(!"APPROVED".equals(c.getStatus())) throw bad("Yêu cầu chưa được duyệt.");
             if("CONFIRMED".equals(a.getResponseStatus())) throw bad("Người nhận đã đồng ý lịch hẹn, không cần gửi lại lời mời.");
             OffsetDateTime now=OffsetDateTime.now();
-            if(a.responseExpired(now)) { reject(c,a,"EXPIRED",now); return false; }
+            if(a.responseExpired(now)) { reject(c,a,"EXPIRED",now); return new com.example.base.dto.office.OfficeDtos.ReviewResult(claimId,c.getStatus(),"EXPIRED"); }
             if(a.getEmailSentAt()==null && !a.getScheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
                 throw bad("Giờ hẹn quá gần để dành đủ 12 giờ phản hồi. Cần bố trí lại lịch trước khi gửi lời mời.");
             String token=InvitationTokens.create();
             String recipient=c.getClaimantEmail()!=null?c.getClaimantEmail():c.getClaimant().getEmail();
             var mail=new AppointmentEmailService.Mail(c.getId(),recipient,c.getClaimantName(),c.getPost().getTitle(),a.getScheduledAt(),a.getLocation(),a.getNote());
-            if(!email.send(mail,token,a.getResponseDeadline())) return false;
+            if(!email.send(mail,token,a.getResponseDeadline())) return new com.example.base.dto.office.OfficeDtos.ReviewResult(claimId,c.getStatus(),"FAILED");
             // Failed resend preserves the old link. Successful resend rotates it without extending the deadline.
-            a.invitationSent(InvitationTokens.hash(token),OffsetDateTime.now()); appointments.flush(); return true;
-        }));
+            a.invitationSent(InvitationTokens.hash(token),OffsetDateTime.now()); appointments.flush();
+            return new com.example.base.dto.office.OfficeDtos.ReviewResult(claimId,c.getStatus(),"SENT");
+        });
     }
     @Transactional(readOnly=true)
     public View preview(String token) { return view(lookup(InvitationTokens.hash(token))); }

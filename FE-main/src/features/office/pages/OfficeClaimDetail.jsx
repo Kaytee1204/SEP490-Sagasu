@@ -14,15 +14,18 @@ import LoadState from "../components/LoadState";
 import ReceiptInfo from "../components/ReceiptInfo";
 import OfficeReturnPanel from "../components/OfficeReturnPanel";
 import "../Office.css";
+import "../PersonalOffice.css";
+import PersonalClaimDetail from '../components/PersonalClaimDetail';
 // DaiHV integration: office complaints enter the shared Manager report workflow.
 import ReportButton from "@/features/reports/components/ReportButton";
 
 export default function OfficeClaimDetail({ mine = false }) {
   const { id } = useParams();
-  const state = useLoad(() => officeApi.claim(id), id);
+  const state = useLoad(() => mine ? officeApi.personalClaim(id) : officeApi.claim(id), `${mine}:${id}`);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const claim = state.data;
+  if (mine) return <main className="office-page office-personal"><Notice error={notice?.error}>{notice?.text}</Notice><LoadState state={state}>{claim && <PersonalClaimDetail claim={claim} onChanged={() => state.reload()}/>}</LoadState></main>;
   async function resend() {
     if (busy) return;
     setBusy(true);
@@ -31,19 +34,22 @@ export default function OfficeClaimDetail({ mine = false }) {
       setNotice({
         error: r.emailStatus !== "SENT",
         text:
-          r.emailStatus === "SENT"
+          r.emailStatus === "EXPIRED"
+            ? "Đã hết hạn phản hồi. Yêu cầu bị từ chối và lịch hẹn đã hủy."
+            : r.emailStatus === "SENT"
             ? "Đã gửi lại thư lịch hẹn."
             : "Chưa gửi được thư. Lịch hẹn vẫn được lưu; hãy thử lại sau.",
       });
       state.reload();
     } catch (err) {
       setNotice({ error: true, text: err.message });
+      state.reload();
     } finally {
       setBusy(false);
     }
   }
   return (
-    <div className="office-page">
+    <div className={`office-page ${mine ? "office-personal op-detail" : ""}`}>
       <Link
         className="of-back"
         to={mine ? "/van-phong/claims" : "/approver/office-claims"}
@@ -55,8 +61,9 @@ export default function OfficeClaimDetail({ mine = false }) {
         {claim && (
           <>
             <Header
-              title={`Yêu cầu nhận lại đồ #${claim.id}`}
-              description={`${claim.postTitle} · Gửi lúc ${date(claim.createdAt)}`}
+              eyebrow={mine ? "Nhận đồ tại văn phòng" : undefined}
+              title={claim.postTitle || "Yêu cầu nhận đồ"}
+              description={`Yêu cầu #${claim.id} · Gửi lúc ${date(claim.createdAt)}`}
             >
               <Badge value={claim.status} />
               <Badge value={claim.channel} />
@@ -66,18 +73,18 @@ export default function OfficeClaimDetail({ mine = false }) {
             <div className="of-detail-grid of-claim-grid">
               <div>
                 <section className="of-panel">
-                  <h2>Thông tin người khai</h2>
+                  <h2>{mine ? "Thông tin yêu cầu" : "Thông tin người khai"}</h2>
                   <dl className="of-facts">
                     <div>
-                      <dt>Người nhận đồ</dt>
+                      <dt>Người yêu cầu nhận đồ</dt>
                       <dd>{claim.claimantName}</dd>
                     </div>
-                    <div>
-                      <dt>Người lập hồ sơ</dt>
+                    {claim.channel === "COUNTER" && <div>
+                      <dt>Nhân viên tạo yêu cầu tại quầy</dt>
                       <dd>{claim.createdBy}</dd>
-                    </div>
+                    </div>}
                     <div>
-                      <dt>Địa chỉ thư điện tử</dt>
+                      <dt>Email liên hệ</dt>
                       <dd>{claim.claimantEmail || "Chưa cung cấp"}</dd>
                     </div>
                     <div>
@@ -257,7 +264,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                     }}
                   />
                 )}
-                {!claim.appointment &&
+                {!mine && !claim.appointment &&
                   !["PENDING", "NEEDS_INFO"].includes(claim.status) && (
                     <section className="of-panel">
                       <h2>Kết quả xử lý</h2>

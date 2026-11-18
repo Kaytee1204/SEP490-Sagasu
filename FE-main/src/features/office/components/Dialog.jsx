@@ -23,7 +23,7 @@ export default function Dialog({ title, onClose, busy, children, resetKey }) {
       ref={ref}
       className="of-dialog"
       aria-labelledby={titleId}
-      onInputCapture={() => setEdited({ key:resetKey, dirty:true })}
+      onChange={() => setEdited({ key:resetKey, dirty:true })}
       onCancel={(e) => {
         e.preventDefault();
         guard();

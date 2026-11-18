@@ -1,10 +1,11 @@
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import useReviewResource from "./hooks/useReviewResource";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
+import useLoad from "../office/hooks/useLoad";
+import { reviewApi } from "./api";
 import ParticipantInquiry from "./components/ParticipantInquiry";
-import { Badge, ErrorBox, Empty } from "./components/Shared";
-import { date } from "./format";
+import { ErrorBox, Empty } from "./components/Shared";
+
 import "./ReportReview.css";
 export default function ReportExchangesPage() {
   const [reload, setReload] = useState(0);
@@ -12,13 +13,7 @@ export default function ReportExchangesPage() {
   const tab = ["history", "results"].includes(params.get("tab"))
     ? params.get("tab")
     : "pending";
-  const { data: resource, error } = useReviewResource(
-    "exchanges",
-    null,
-    reload,
-  );
-  const data = resource?.[0],
-    results = resource?.[1] || [];
+  const {data,error}=useLoad(reviewApi.mine,reload);
   const pending = (data || []).filter(
     (i) => !i.responded_at && ["OPEN", "IN_REVIEW"].includes(i.status),
   );
@@ -26,6 +21,7 @@ export default function ReportExchangesPage() {
     tab === "pending"
       ? pending
       : (data || []).filter((i) => !pending.includes(i));
+  if(tab==="results") return <Navigate replace to="/ket-qua-bao-cao"/>;
   return (
     <main className="container rr rr-public report-exchanges">
       <Link className="exchange-back" to="/bao-cao-cua-toi"><ArrowLeft size={15}/> Báo cáo của tôi</Link>
@@ -45,7 +41,6 @@ export default function ReportExchangesPage() {
         {[
           ["pending", `Cần phản hồi (${pending.length})`],
           ["history", "Thông tin đã trao đổi"],
-          ["results", "Kết quả xử lý"],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -56,10 +51,11 @@ export default function ReportExchangesPage() {
             {label}
           </button>
         ))}
+        <Link to="/ket-qua-bao-cao">Kết quả xử lý</Link>
       </nav></section>
       {!data && !error && <Empty>Đang tải…</Empty>}
       {data &&
-        (tab === "results" ? results.length === 0 : visible.length === 0) && (
+        (visible.length === 0) && (
           <Empty>
             {tab === "pending"
               ? "Bạn không có yêu cầu nào cần phản hồi."
@@ -69,8 +65,7 @@ export default function ReportExchangesPage() {
           </Empty>
         )}
       <div className="rr-stack exchange-list">
-        {tab !== "results" &&
-          visible.map((i) => (
+        {visible.map((i) => (
             <ParticipantInquiry
               key={`${i.inquiry_id}:${i.responded_at}`}
               inquiry={i}
@@ -81,21 +76,7 @@ export default function ReportExchangesPage() {
             />
           ))}
       </div>
-      {tab === "results" && results.length > 0 && (
-        <section className="rr-card">
-          <h2>Kết quả xử lý</h2>
-          {results.map((r) => (
-            <article className="rr-record" key={r.report_id}>
-              <div className="rr-row">
-                <h3>Báo cáo #{r.report_id}</h3>
-                <Badge value={r.status} />
-              </div>
-              <small>{date(r.resolved_at)}</small>
-              <p>{r.resolution_note}</p>
-            </article>
-          ))}
-        </section>
-      )}
+
     </main>
   );
 }

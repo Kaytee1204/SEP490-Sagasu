@@ -4,12 +4,12 @@ import { CheckCircle2, Search, Package } from "lucide-react";
 import { workflowApi } from "../api/workflowApi";
 import { officeApi } from "../api/officeApi";
 import useLoad from "../hooks/useLoad";
-import Dialog from "./Dialog";
+import WorkflowPageFrame from "./WorkflowPageFrame";
 import Notice from "./Notice";
 import IntakeEvidencePicker from "./IntakeEvidencePicker";
 import LoadState from "./LoadState";
 
-export default function CounterIntakeDialog({ onClose, onDone }) {
+export default function CounterIntakeContent({ onClose, onDone }) {
   const [query, setQuery] = useState("");
   const [people, setPeople] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -44,7 +44,8 @@ export default function CounterIntakeDialog({ onClose, onDone }) {
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   }
-  return <Dialog title="Tiếp nhận tại quầy" busy={busy} onClose={onClose} resetKey={receiptId}>
+  const Frame=WorkflowPageFrame;
+  return <Frame title="Tiếp nhận tại quầy" busy={busy} onClose={onClose} resetKey={receiptId}>
     {({ guard }) => <>
     {receiptId ? <div className="of-counter-success"><CheckCircle2 size={36} /><h3>Đã tiếp nhận đồ</h3><p>Phiếu #{receiptId} đã được tạo. Văn phòng tiếp tục quản lý bài đăng và các yêu cầu nhận lại đồ liên quan.</p><div className="of-actions"><Link className="of-button of-primary" to={`/approver/receipts/${receiptId}`}>Xem phiếu tiếp nhận</Link><button className="of-button" onClick={() => guard()}>Đóng</button></div></div> : <>
       <p className="of-muted">Dành cho người mang đến đồ đã có bài đăng. Tìm người đăng, đối chiếu đồ và ghi nhận tiếp nhận tại đây.</p>
@@ -71,5 +72,5 @@ export default function CounterIntakeDialog({ onClose, onDone }) {
       </>}
     </>}
     </>}
-  </Dialog>;
+  </Frame>;
 }

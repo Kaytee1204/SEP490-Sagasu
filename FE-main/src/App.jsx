@@ -26,6 +26,11 @@ import OfficeClaimDetail from '@/features/office/pages/OfficeClaimDetail';
 import InvitationPage from '@/features/office/pages/InvitationPage';
 // DaiHV integration: office custody requests share the existing protected layouts.
 import OfficeTransfers from '@/features/office/pages/OfficeTransfers';
+import OfficeTransferDetailPage from '@/features/office/pages/OfficeTransferDetailPage';
+import CounterIntakePage from '@/features/office/pages/CounterIntakePage';
+import StorageLocationsPage from '@/features/office/pages/StorageLocationsPage';
+import ReportReviewDetailPage from '@/features/report-review/pages/ReportReviewDetailPage';
+import ReportResultsPage from '@/features/report-review/pages/ReportResultsPage';
 import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
@@ -90,6 +95,7 @@ function AppRoutes() {
       <Route element={<MainLayout />}>
         <Route path="/van-phong/claims" element={<ProtectedRoute><OfficeClaimList mine /></ProtectedRoute>} />
         <Route path="/van-phong/chuyen-giao" element={<ProtectedRoute><OfficeTransfers mine /></ProtectedRoute>} />
+        <Route path="/van-phong/chuyen-giao/:id" element={<ProtectedRoute><OfficeTransferDetailPage mine /></ProtectedRoute>} />
         <Route path="/van-phong/claims/:id" element={<ProtectedRoute><OfficeClaimDetail mine /></ProtectedRoute>} />
         <Route path="/van-phong/xac-minh/:id" element={<ProtectedRoute><OfficeClaimForm /></ProtectedRoute>} />
         <Route path="/tin-nhan" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
@@ -97,6 +103,7 @@ function AppRoutes() {
         <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
         <Route path="/bao-cao-cua-toi" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
         <Route path="/bao-cao-trao-doi" element={<ProtectedRoute><ReportExchangesPage /></ProtectedRoute>} />
+        <Route path="/ket-qua-bao-cao" element={<ProtectedRoute><ReportResultsPage /></ProtectedRoute>} />
         <Route path="/bao-cao/:id" element={<ProtectedRoute><ReportDetailPage /></ProtectedRoute>} />
         <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />
         <Route path="/bai-dang/:postId/claims/:claimId" element={<ProtectedRoute><ClaimDetailPage /></ProtectedRoute>} />
@@ -180,8 +187,11 @@ function AppRoutes() {
         <Route path="items" element={<ProtectedRoute managerOnly><PostAdministration /></ProtectedRoute>} />
         <Route path="items/:id" element={<ProtectedRoute managerOnly><StaffPostDetail /></ProtectedRoute>} />
         <Route path="storage" element={<ProtectedRoute managerOnly><StoragePage /></ProtectedRoute>} />
+        <Route path="storage/locations" element={<ProtectedRoute managerOnly><StorageLocationsPage /></ProtectedRoute>} />
         <Route path="transfers" element={<ProtectedRoute managerOnly><OfficeTransfers /></ProtectedRoute>} />
+        <Route path="transfers/:id" element={<ProtectedRoute managerOnly><OfficeTransferDetailPage /></ProtectedRoute>} />
         <Route path="reports" element={<ProtectedRoute managerOnly><AdminReportsPage /></ProtectedRoute>} />
+        <Route path="reports/:id" element={<ProtectedRoute managerOnly><ReportReviewDetailPage /></ProtectedRoute>} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>
 
@@ -190,6 +200,8 @@ function AppRoutes() {
         <Route path="storage" element={<StoragePage />} />
         {/* DaiHV: Approver owns counter claims and the office return workflow. */}
         <Route path="transfers" element={<OfficeTransfers />} />
+        <Route path="transfers/new" element={<CounterIntakePage />} />
+        <Route path="transfers/:id" element={<OfficeTransferDetailPage />} />
         <Route path="office-claims" element={<OfficeClaimList />} />
         <Route path="office-claims/new" element={<OfficeClaimForm counter />} />
         <Route path="office-claims/:id" element={<OfficeClaimDetail />} />

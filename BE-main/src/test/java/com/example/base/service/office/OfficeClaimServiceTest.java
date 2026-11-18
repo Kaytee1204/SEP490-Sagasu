@@ -63,6 +63,20 @@ class OfficeClaimServiceTest {
         verify(claims, never()).saveAndFlush(any());
     }
 
+    @Test
+    void personalDetailRejectsAnotherClaimantEvenForApprover() {
+        Account actor = makeAccount(4L, AccountRole.APPROVER, AccountStatus.ACTIVE);
+        Account claimant = makeAccount(5L, AccountRole.USER, AccountStatus.ACTIVE);
+        CustomUserDetails user = userDetails(actor);
+        Claim claim = mock(Claim.class);
+        when(claim.getClaimType()).thenReturn("OFFICE");
+        when(claim.getClaimant()).thenReturn(claimant);
+        when(claims.findById(3L)).thenReturn(Optional.of(claim));
+        when(access.require(user)).thenReturn(actor);
+        assertThrows(AppException.class, () -> service.personalDetail(3L, user));
+        verifyNoInteractions(progress);
+    }
+
     @Mock ClaimRepository claims;
     @Mock OfficeClaimProgress progress;
     @Mock PostRepository posts;
@@ -1283,7 +1297,7 @@ class OfficeClaimServiceTest {
                 }
                 return null;
             }).when(mock).executeWithoutResult(any());
-            when(invitations.send(30L)).thenReturn(true);
+            when(invitations.sendWithResult(30L)).thenReturn(new ReviewResult(30L,"APPROVED","SENT"));
         })) {
             ReviewResult result = service.resend(30L, ud);
             assertThat(result.status()).isEqualTo("APPROVED");

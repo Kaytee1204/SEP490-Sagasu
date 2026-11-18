@@ -25,85 +25,19 @@ public class ReportReviewController {
     private final ReportReviewService reviews;
     private final ReportInquiryService inquiries;
     private final ReportChatService chat;
-    private final ReportCaseService cases;
-    private final ReportWorkbenchService workbench;
+    private final ReportBatchService batches;
 
-    @GetMapping("/work-queue")
-    @Operation(
-            summary = "[13.13] Hàng đợi điều tra báo cáo theo nhóm đối tượng (MANAGER Workbench)",
-            description = "Nhóm báo cáo cùng đối tượng; lọc NEW, MINE, WAITING, UPDATED, DONE, ALL. Không tự gộp kết luận."
-    )
-    public ApiResponse<?> workQueue(
-            @RequestParam(name="page",defaultValue="1") int page,
-            @RequestParam(name="stage",defaultValue="NEW") String stage,
-            @RequestParam(name="q",defaultValue="") String q,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(workbench.queue(page,stage,q,user));
+    @PostMapping("/batch-conclusion")
+    @Operation(summary = "Kết luận các báo cáo đã chọn cùng sự việc", description = "Tối đa 20 báo cáo cùng đối tượng, loại và lý do; từng báo cáo phải do Manager hiện tại phụ trách. Kiểm tra phiên bản và lưu toàn bộ trong một giao dịch. Không áp dụng kết luận chung cho tranh chấp P2P đang chờ phân xử.")
+    public ApiResponse<?> batch(@Valid @RequestBody ReportBatchService.Request request,
+        @AuthenticationPrincipal CustomUserDetails user) {
+      batches.conclude(request, user);
+      return ApiResponse.ok(Map.of("processed", request.reports().size()));
     }
-
-    @GetMapping("/target-reports")
-    @Operation(
-            summary = "[13.14] Đối chiếu danh sách báo cáo cùng một đối tượng (Post / Claim / Message / Account)",
-            description = "Phân trang 20 báo cáo, giữ nguồn bằng chứng và người gửi riêng. key: P:id, C:id, M:id, U:id."
-    )
-    public ApiResponse<?> targetReports(
-            @RequestParam(name="key") String key,
-            @RequestParam(name="page",defaultValue="1") int page,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(workbench.group(key,page,user));
-    }
-
-    @PostMapping("/batch-actions")
-    @Operation(
-            summary = "[13.15] Nhận xử lý hoặc kết luận đồng loạt các báo cáo đã chọn của cùng đối tượng",
-            description = "TAKE hoặc CONCLUDE; tối đa 20 báo cáo cùng đối tượng; kiểm tra phiên bản, quyền và giao dịch toàn bộ. CONCLUDE chỉ dành cho GENERAL. Biện pháp áp dụng một lần; quyết định và thông báo riêng."
-    )
-    public ApiResponse<?> conclusions(
-            @Valid @RequestBody ReportWorkbenchService.Batch request,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(workbench.conclude(request,user));
-    }
-
-    @GetMapping("/{id}/case")
-    @Operation(
-            summary = "[13.16] Xem chi tiết hồ sơ vụ việc (Report Case) và các báo cáo ứng viên liên quan",
-            description = "Hiển thị vụ việc hiện tại của báo cáo, danh sách báo cáo thành viên và gợi ý báo cáo cùng đối tượng."
-    )
-    public ApiResponse<?> caseDetail(
-            @PathVariable("id") long id,
-            @RequestParam(name="page",defaultValue="1") int page,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(cases.detail(id,page,user));
-    }
-
-    @PostMapping("/{id}/case")
-    @Operation(
-            summary = "[13.17] Tạo mới hoặc liên kết báo cáo vào một hồ sơ vụ việc (Report Case)",
-            description = "Liên kết báo cáo vào vụ việc đang phụ trách để phối hợp điều tra (các kết luận vẫn giữ độc lập)."
-    )
-    public ApiResponse<?> linkCase(
-            @PathVariable("id") long id,
-            @Valid @RequestBody ReportCaseService.Link request,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(cases.link(id,request,user));
-    }
-
-    @PostMapping("/{id}/case/unlink")
-    @Operation(
-            summary = "[13.18] Tách báo cáo khỏi hồ sơ vụ việc (Unlink Report Case)",
-            description = "Gỡ liên kết báo cáo khỏi vụ việc hiện tại kèm lý do ghi vào lịch sử điều tra."
-    )
-    public ApiResponse<?> unlinkCase(
-            @PathVariable("id") long id,
-            @Valid @RequestBody ReportCaseService.Unlink request,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(cases.unlink(id,request,user));
-    }
-
     @GetMapping
     @Operation(
             summary = "[13.5] Hàng đợi danh sách báo cáo vi phạm & tranh chấp dành cho Quản lý (MANAGER)",
-            description = "Lọc theo status (ALL, OPEN, IN_REVIEW, RESOLVED, REJECTED), kind (GENERAL, HANDOVER_ISSUE), target và từ khóa q."
+            description = "Lọc status, kind, target, q; queue: ALL, UNASSIGNED, MINE, WAITING, REPLIED. Mặc định mỗi dòng đại diện một đối tượng, object_count là số báo cáo phù hợp bộ lọc. Truyền target + targetId để xem từng báo cáo. Sắp theo nguy cơ giao nhận/ưu tiên Manager rồi thời gian chờ."
     )
     public ApiResponse<?> list(
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -111,9 +45,11 @@ public class ReportReviewController {
             @RequestParam(name = "kind", defaultValue = "ALL") String kind,
             @RequestParam(name = "target", defaultValue = "ALL") String target,
             @RequestParam(name = "q", defaultValue = "") String q,
+            @RequestParam(name = "queue", defaultValue = "ALL") String queue,
+            @RequestParam(name = "targetId", required = false) Long targetId,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user
     ) {
-        return ApiResponse.ok(reviews.list(page, status, kind, target, q, user));
+        return ApiResponse.ok(reviews.list(page, status, kind, target, q, queue, targetId, user));
     }
 
     @GetMapping("/{id}")
@@ -130,8 +66,7 @@ public class ReportReviewController {
 
     @PostMapping("/{id}/actions")
     @Operation(
-            summary = "[13.7] Thực hiện thao tác xử lý báo cáo (TAKE / HOLD / RELEASE / CONCLUDE) dành cho MANAGER",
-            description = "Hỗ trợ: Tiếp nhận xử lý (TAKE), Tạm dừng giao nhận bài đăng (HOLD), Gỡ tạm dừng (RELEASE), và Kết luận vụ việc (CONCLUDE kèm outcome VIOLATION / SETTLED / UNSUBSTANTIATED / HANDOVER_COMPLETED / HANDOVER_CONTINUE / CLAIM_REJECTED)."
+            summary = "[13.7] Thực hiện thao tác xử lý báo cáo (TAKE / HOLD / RELEASE / HIDE_POST / SUSPEND_ACCOUNT / RESOLVE / DISMISS) dành cho MANAGER"
     )
     public ApiResponse<?> action(
             @PathVariable("id") long id,

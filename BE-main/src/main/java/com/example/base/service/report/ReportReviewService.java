@@ -36,10 +36,7 @@ public class ReportReviewService {
     @Size(max = 5000) String conclusion,
     @Size(max = 5000) String basis,
     Long targetId,
-    boolean custodyVerified,
-    String outcome,
-    boolean hidePost,
-    Long previousDecisionId
+    boolean custodyVerified
   ) {}
 
   @Transactional(readOnly = true)
@@ -51,7 +48,14 @@ public class ReportReviewService {
     String q,
     CustomUserDetails user
   ) {
-    access.require(user, AccountRole.MANAGER);
+    return list(page,status,kind,target,q,"ALL",null,user);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String,Object> list(int page, String status, String kind, String target, String q,
+      String queue, Long targetId, CustomUserDetails user) {
+    Account actor = access.require(user, AccountRole.MANAGER);
+    if (!Set.of("ALL","UNASSIGNED","MINE","WAITING","REPLIED").contains(queue)) throw bad("Hàng đợi không hợp lệ.");
     if (
       page < 1 ||
       page > 100000 ||
@@ -62,8 +66,21 @@ public class ReportReviewService {
       !Set.of("ALL", "POST", "CLAIM", "MESSAGE", "USER").contains(target) ||
       q.length() > 200
     ) throw bad("Bộ lọc không hợp lệ.");
-    String where =
-      " from report r join accounts a on a.id=r.reporter_id left join accounts m on m.id=r.assigned_to where (?='ALL' or r.status=?) and (?='ALL' or r.kind=?) and (?='ALL' or case when r.post_id is not null then 'POST' when r.claim_id is not null then 'CLAIM' when r.message_id is not null then 'MESSAGE' else 'USER' end=?) and (r.description ilike ? or a.full_name ilike ? or cast(r.report_id as text)=?)";
+    String where = "\n" + """
+      from report r
+      join accounts a on a.id=r.reporter_id
+      left join accounts m on m.id=r.assigned_to
+      left join claim c on c.claim_id=r.claim_id
+      left join accounts claimant on claimant.id=c.claimant_id
+      left join post p on p.post_id=coalesce(r.post_id,c.post_id)
+      left join chat_message msg on msg.message_id=r.message_id
+      left join accounts subject on subject.id=coalesce(r.reported_account_id,msg.sender_id,p.created_by)
+      where (?='ALL' or r.status=?) and (?='ALL' or r.kind=?)
+      and (?='ALL' or case when r.post_id is not null then 'POST' when r.claim_id is not null
+        then 'CLAIM' when r.message_id is not null then 'MESSAGE' else 'USER' end=?)
+      and (r.description ilike ? or a.full_name ilike ? or cast(r.report_id as text)=?
+        or p.title ilike ? or subject.full_name ilike ? or r.reason_label_snapshot ilike ?)
+      """;
     String pattern =
       "%" +
       q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") +
@@ -78,20 +95,55 @@ public class ReportReviewService {
       pattern,
       pattern,
       q.strip(),
+      pattern,
+      pattern,
+      pattern,
     };
-    long count = jdbc.queryForObject(
-      "select count(*)" + where,
-      Long.class,
-      args
-    );
+    if (targetId != null) {
+      if (targetId <= 0 || "ALL".equals(target)) throw bad("Chọn loại đối tượng hợp lệ.");
+      String column = switch(target) { case "POST" -> "post_id"; case "CLAIM" -> "claim_id"; case "MESSAGE" -> "message_id"; default -> "reported_account_id"; };
+      where += " and r." + column + "=" + targetId;
+    }
+    if (!"ALL".equals(queue)) where += " and r.status in ('OPEN','IN_REVIEW')";
+    where += switch(queue) {
+      case "UNASSIGNED" -> " and r.assigned_to is null";
+      case "MINE" -> " and r.assigned_to=" + actor.getId();
+      case "WAITING" -> " and exists(select 1 from report_inquiry i where i.report_id=r.report_id and i.responded_at is null)";
+      case "REPLIED" -> " and exists(select 1 from report_inquiry i where i.report_id=r.report_id and i.responded_at > coalesce((select max(d.created_at) from report_decision d where d.report_id=r.report_id and d.action not in ('PRIORITY_HIGH','PRIORITY_NORMAL','PRIORITY_AUTO')),r.created_at))";
+      default -> "";
+    };
+    String objectKey = "case when r.post_id is not null then 'POST:'||r.post_id when r.claim_id is not null then 'CLAIM:'||r.claim_id when r.message_id is not null then 'MESSAGE:'||r.message_id else 'USER:'||r.reported_account_id end";
+    var totals = jdbc.queryForMap("select count(*) as reports, count(distinct " + objectKey + ") as groups" + where,args);
+    long reportCount = ((Number) totals.get("reports")).longValue();
+    long count = targetId == null ? ((Number) totals.get("groups")).longValue() : reportCount;
     var params = new ArrayList<>(Arrays.asList(args));
     params.add((page - 1) * 12);
+    String priorityReason = "case when r.status not in ('OPEN','IN_REVIEW') then null when (select d.action from report_decision d where d.report_id=r.report_id and d.action in ('PRIORITY_HIGH','PRIORITY_NORMAL','PRIORITY_AUTO') order by d.decision_id desc limit 1)='PRIORITY_HIGH' then 'MANUAL_HIGH' when (select d.action from report_decision d where d.report_id=r.report_id and d.action in ('PRIORITY_HIGH','PRIORITY_NORMAL','PRIORITY_AUTO') order by d.decision_id desc limit 1)='PRIORITY_NORMAL' then null when r.kind='HANDOVER_ISSUE' and exists(select 1 from claim c join appointment ap on ap.claim_id=c.claim_id where (c.claim_id=r.claim_id or c.post_id=r.post_id) and c.status='APPROVED' and ap.status='SCHEDULED' and ap.scheduled_at between now() and now()+interval '24 hours') then 'OFFICE_SOON' when r.kind='HANDOVER_ISSUE' and exists(select 1 from claim c join p2p_handover h on h.claim_id=c.claim_id where (c.claim_id=r.claim_id or c.post_id=r.post_id) and h.status in ('WAITING_CONFIRMATION','DISPUTED')) then 'P2P_ACTIVE' when r.kind='HANDOVER_ISSUE' then 'HANDOVER' else null end";
+    String projection = """
+      select r.report_id,r.kind,r.post_id,r.claim_id,r.message_id,r.reported_account_id,
+        r.description,r.reason_code,r.reason_label_snapshot,r.status,r.created_at,
+        a.full_name as reporter,m.full_name as assignee,
+        coalesce(nullif(p.title,''),case when r.reported_account_id is not null then nullif(subject.full_name,'') end) as subject_title,
+        nullif(subject.full_name,'') as subject_name,
+        left(msg.body,240) as message_preview, msg.message_type,
+        coalesce(nullif(c.claimant_name,''), claimant.full_name) as claimant_name, c.status as claim_status,
+        p.post_id as related_post_id, p.moderation_status,
+        coalesce(nullif(r.reason_label_snapshot,''),case when r.kind='HANDOVER_ISSUE'
+          then 'Vướng mắc trao trả' else 'Báo cáo vi phạm' end) as reason_label,
+      """ + priorityReason + " as priority_reason," + objectKey + " as report_key" + where;
+    String ranked = "select reports.*,case when status not in ('OPEN','IN_REVIEW') then 3 when priority_reason='HANDOVER' then 1 when priority_reason is not null then 0 else 2 end as priority_rank from (" + projection + ") reports";
+    String grouped = "select ranked.*, count(*) over(partition by report_key) as object_count,"
+      + " count(*) filter (where status in ('OPEN','IN_REVIEW')) over(partition by report_key) as open_count,"
+      + " row_number() over(partition by report_key order by priority_rank,created_at,report_id) as object_row from (" + ranked + ") ranked";
     var rows = jdbc.queryForList(
-      "select r.report_id,r.kind,r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.status,r.created_at,r.case_id,a.full_name as reporter,m.full_name as assignee" +
-        where +
-        " order by case when r.status in ('OPEN','IN_REVIEW') then 0 else 1 end,case when r.kind='HANDOVER_ISSUE' and r.status in ('OPEN','IN_REVIEW') then 0 else 1 end,r.created_at,r.report_id limit 12 offset ?",
+      "with queue_rows as (" + grouped + ") select queue_rows.*, "
+        + "(select jsonb_object_agg(reason_label, amount)::text from "
+        + "(select reason_label,count(*) as amount from queue_rows sibling where sibling.report_key=queue_rows.report_key group by reason_label) reasons) as reason_summary "
+        + "from queue_rows " + (targetId == null ? "where object_row=1 " : "")
+        + "order by priority_rank,created_at,report_id limit 12 offset ?",
       params.toArray()
     );
+    rows.forEach(row -> row.put("reason_summary", context.parse((String) row.get("reason_summary"))));
     return Map.of(
       "content",
       rows,
@@ -99,6 +151,8 @@ public class ReportReviewService {
       page,
       "totalElements",
       count,
+      "totalReports",
+      reportCount,
       "totalPages",
       Math.max(1, (count + 11) / 12)
     );
@@ -147,9 +201,6 @@ public class ReportReviewService {
       )
     );
     out.put("inquiries", inquiries(reportId));
-    out.put("caseMeasures", r.get("case_id")==null ? List.of() : jdbc.queryForList(
-      "select d.decision_id,d.report_id,d.action,d.conclusion,d.created_at from report_decision d join report x using(report_id) where x.case_id=? and x.report_id<>? and d.action in ('VIOLATION','HIDE_POST','SUSPEND_ACCOUNT') order by d.decision_id desc",
-      r.get("case_id"), reportId));
     out.put(
       "hold",
       context.one(
@@ -161,7 +212,7 @@ public class ReportReviewService {
     out.put(
       "related",
       jdbc.queryForList(
-        "select x.report_id,x.kind,x.status,x.resolution_note,x.created_at from report x where x.report_id<>? and ((x.post_id is not null and x.post_id=?) or (x.claim_id is not null and x.claim_id=?) or (x.message_id is not null and x.message_id=?) or (x.reported_account_id is not null and x.reported_account_id=?)) order by x.created_at desc limit 30",
+        "select x.report_id,x.kind,x.status,x.version,x.assigned_to,x.reason_code,x.reason_label_snapshot,x.description,x.post_id,x.claim_id,x.message_id,x.reported_account_id,x.resolution_note,x.created_at from report x where x.report_id<>? and ((x.post_id is not null and x.post_id=?) or (x.claim_id is not null and x.claim_id=?) or (x.message_id is not null and x.message_id=?) or (x.reported_account_id is not null and x.reported_account_id=?)) order by x.created_at desc limit 30",
         reportId,
         r.get("post_id"),
         r.get("claim_id"),
@@ -270,30 +321,6 @@ public class ReportReviewService {
     Account actor = access.require(user, AccountRole.MANAGER);
     var r = lock(reportId);
     String action = request.action();
-    // Final outcomes and their measures are committed together. Old standalone close actions are rejected.
-    if ("CONCLUDE".equals(action)) {
-      if (
-        !Set.of(
-          "VIOLATION",
-          "SETTLED",
-          "UNSUBSTANTIATED",
-          "HANDOVER_COMPLETED",
-          "HANDOVER_CONTINUE",
-          "CLAIM_REJECTED"
-        ).contains(Objects.toString(request.outcome(), ""))
-      ) throw bad("Chọn kết quả xử lý trước khi xác nhận kết luận.");
-      action = request.outcome();
-      if (
-        !"VIOLATION".equals(action) &&
-        (request.hidePost() ||
-          request.targetId() != null ||
-          request.previousDecisionId() != null)
-      ) throw bad("Biện pháp xử lý không phù hợp với kết luận đã chọn.");
-    } else if (!Set.of("TAKE", "HOLD", "RELEASE").contains(action)) {
-      throw bad(
-        "Hãy tải lại và dùng form Kết luận báo cáo để chọn kết quả xử lý."
-      );
-    }
     if ("TAKE".equals(action)) {
       if (
         !open(r) ||
@@ -328,6 +355,9 @@ public class ReportReviewService {
     before.put("reportStatus", status);
     String next = status;
     switch (action) {
+      case "PRIORITY_HIGH", "PRIORITY_NORMAL", "PRIORITY_AUTO" -> {
+        // Priority changes affect triage only, never the claim or report outcome.
+      }
       case "HOLD", "RELEASE" -> {
         @SuppressWarnings("unchecked")
         var post = (Map<String, Object>) current.get("post");
@@ -354,33 +384,14 @@ public class ReportReviewService {
           reportId
         );
       }
-      case "VIOLATION" -> {
-        requireGeneralConclusion(reportId);
-        if (
-          !request.hidePost() &&
-          request.targetId() == null &&
-          request.previousDecisionId() == null
-        ) throw bad(
-          "Chọn biện pháp xử lý hoặc biện pháp đã thực hiện cho báo cáo này."
-        );
-        List<String> measures = new ArrayList<>();
-        if (request.previousDecisionId() != null) measures.add(
-          previousMeasure(reportId, request.previousDecisionId(), current)
-        );
-        if (request.hidePost()) measures.add(
-          hidePost(current, conclusion, user, before)
-        );
-        if (request.targetId() != null) measures.add(
-          suspendAccount(r, current, request.targetId(), before)
-        );
-        basis = String.join("\n", measures) + "\n" + basis;
-        before.put("previousDecisionId", request.previousDecisionId());
-        before.put("measures", measures);
-        next = "RESOLVED";
+      case "HIDE_POST" -> hidePost(current, conclusion, user, before);
+      case "SUSPEND_ACCOUNT" -> {
+        if (request.targetId() == null) throw bad("Chọn tài khoản cần xử lý.");
+        basis = suspendAccount(r, current, request.targetId(), before) + "\n" + basis;
       }
-      case "SETTLED", "UNSUBSTANTIATED" -> {
+      case "RESOLVE", "DISMISS" -> {
         requireGeneralConclusion(reportId);
-        next = "UNSUBSTANTIATED".equals(action) ? "REJECTED" : "RESOLVED";
+        next = "DISMISS".equals(action) ? "REJECTED" : "RESOLVED";
       }
       case "HANDOVER_COMPLETED", "HANDOVER_CONTINUE", "CLAIM_REJECTED" -> {
         if (
@@ -461,7 +472,7 @@ public class ReportReviewService {
       "Báo cáo không có bài đăng để ẩn."
     );
     var p = posts.findById(id(post, "post_id")).orElseThrow();
-    if (!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng đã bị ẩn. Hãy tải lại và chọn biện pháp đã thực hiện trong vụ việc.");
+    if (!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng đã bị ẩn. Hãy tải lại để xem trạng thái hiện tại.");
     before.put("moderation", p.getModerationStatus());
     moderation.moderate(
       p.getId(),
@@ -503,71 +514,6 @@ public class ReportReviewService {
     accountRepository.flush();
     return (
       "Đã đình chỉ tài khoản " + suspended.getFullName() + " (#" + target + ")."
-    );
-  }
-
-  @SuppressWarnings("unchecked")
-  private String previousMeasure(
-    long reportId,
-    long decisionId,
-    Map<String, Object> current
-  ) {
-    var decision = context.one(
-      "select d.action,d.before_state::text,d.report_id from report_decision d join report x using(report_id) where (d.report_id=? or (x.case_id is not null and x.case_id=(select case_id from report where report_id=?))) and d.decision_id=? and d.action in ('VIOLATION','HIDE_POST','SUSPEND_ACCOUNT')",
-      reportId,
-      reportId,
-      decisionId
-    );
-    if (decision.isEmpty()) throw bad(
-      "Biện pháp không thuộc báo cáo hoặc vụ việc này."
-    );
-    var before = context.parse((String) decision.get("before_state"));
-    if ("VIOLATION".equals(decision.get("action"))) {
-      List<String> applicable = new ArrayList<>();
-      var oldContext = (Map<String,Object>) before.getOrDefault("context", Map.of());
-      var oldPost = (Map<String,Object>) oldContext.getOrDefault("post", Map.of());
-      var post = (Map<String,Object>) current.getOrDefault("post", Map.of());
-      if(before.containsKey("moderation") && id(oldPost,"post_id")!=null && Objects.equals(id(oldPost,"post_id"),id(post,"post_id")) && "HIDDEN".equals(post.get("moderation_status")))
-        applicable.add("Ẩn bài đăng #"+post.get("post_id"));
-      Long target=id(before,"targetAccountId");
-      if(target!=null && participants(current).contains(target) && Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from accounts where id=? and status='SUSPENDED')",Boolean.class,target)))
-        applicable.add("Đình chỉ tài khoản #"+target);
-      if(applicable.isEmpty()) throw bad("Biện pháp này không còn hiệu lực hoặc không áp dụng cho đối tượng của báo cáo đang xem.");
-      return "Dùng lại quyết định #"+decisionId+" của báo cáo #"+decision.get("report_id")+": "+String.join(", ",applicable)+". Không áp dụng lại biện pháp.";
-    }
-    if ("HIDE_POST".equals(decision.get("action"))) {
-      var post = (Map<String, Object>) current.get("post");
-      var sourcePost = (Map<String,Object>) context.context(report(id(decision,"report_id"))).getOrDefault("post",Map.of());
-      if (
-        post == null || !Objects.equals(id(sourcePost,"post_id"),id(post,"post_id")) || !"HIDDEN".equals(post.get("moderation_status"))
-      ) throw bad(
-        "Bài đăng không còn bị ẩn. Hãy đối chiếu lại trước khi kết luận."
-      );
-      return (
-        "Ghi nhận biện pháp đã thực hiện: ẩn bài đăng #" +
-        post.get("post_id") +
-        " (quyết định #" +
-        decisionId +
-        ")."
-      );
-    }
-    Long target = id(before, "targetAccountId");
-    if(target==null || !participants(current).contains(target)) throw bad("Biện pháp không áp dụng cho người liên quan trong báo cáo này.");
-    var account = context.one(
-      "select full_name,status from accounts where id=?",
-      target
-    );
-    if (!"SUSPENDED".equals(account.get("status"))) throw bad(
-      "Tài khoản không còn bị đình chỉ. Hãy đối chiếu lại trước khi kết luận."
-    );
-    return (
-      "Ghi nhận biện pháp đã thực hiện: đình chỉ " +
-      account.get("full_name") +
-      " (#" +
-      target +
-      ", quyết định #" +
-      decisionId +
-      ")."
     );
   }
 

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus } from "lucide-react";
 import { officeApi } from "../api/officeApi";
 import { date, labels, progressLabels } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
@@ -22,9 +22,10 @@ export default function OfficeClaimList({ mine = false }) {
   const returnTo = location.state?.officeClaimReturn;
   const backPath = typeof returnTo === "string" && (returnTo === "/claim-cua-toi" || returnTo.startsWith("/claim-cua-toi?"))
     ? returnTo : "/claim-cua-toi?view=sent";
-  const [filters, setFilters] = useState({ page: 1, q: "", status: "ALL", stage: "ALL" });
+  const [filters, setFilters] = useState(() => { try { return JSON.parse(sessionStorage.getItem(`office-claims-filters:${mine}`)) || { page: 1, q: "", status: "ALL", stage: "ALL" }; } catch { return { page: 1, q: "", status: "ALL", stage: "ALL" }; } });
+  useEffect(() => { sessionStorage.setItem(`office-claims-filters:${mine}`, JSON.stringify(filters)); }, [filters, mine]);
   const state = useLoad(
-    () => officeApi.claims(filters, mine),
+    () => officeApi.claims(mine ? {...filters, stage: "ALL"} : filters, mine),
     JSON.stringify(filters) + mine,
   );
   const base = mine ? "/van-phong/claims" : "/approver/office-claims";
@@ -59,7 +60,7 @@ export default function OfficeClaimList({ mine = false }) {
           </Link>
         )}
       </Header>}
-      <div className="of-panel">
+      <div className={`of-panel${mine ? "" : " of-staff-list"}`}>
         <div className="of-toolbar">
           <SearchBox
             value={filters.q}
@@ -70,14 +71,14 @@ export default function OfficeClaimList({ mine = false }) {
                 : "Tìm đồ vật hoặc người yêu cầu…"
             }
           />
-          <Select
+          {!mine && <Select
             label="Tiến trình xử lý"
             value={filters.stage}
             onChange={(v) => change("stage", v)}
-            options={[["ALL", "Tất cả giai đoạn"], ...Object.entries(progressLabels)]}
-          />
+            options={[["ALL", "Tất cả"], ...Object.entries(progressLabels)]}
+          />}
           <Select
-            label="Trạng thái hồ sơ"
+            label={mine ? "Trạng thái yêu cầu" : "Trạng thái hồ sơ"}
             value={filters.status}
             onChange={(v) => change("status", v)}
             options={[
@@ -144,10 +145,10 @@ export default function OfficeClaimList({ mine = false }) {
                     <thead>
                       <tr>
                         <th>Yêu cầu / Đồ vật</th>
-                        <th>Người khai</th>
+                        <th>Người yêu cầu</th>
                         <th>Tiến trình xử lý</th>
                         <th>Ngày gửi</th>
-                        <th></th>
+                        <th scope="col">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -159,7 +160,7 @@ export default function OfficeClaimList({ mine = false }) {
                               Yêu cầu #{c.id} · Bài #{c.postId}
                             </small>
                           </td>
-                          <td data-label="Người khai">
+                          <td data-label="Người yêu cầu">
                             {c.claimantName}
                             <small>
                               <Badge value={c.channel} />
@@ -172,11 +173,9 @@ export default function OfficeClaimList({ mine = false }) {
                           </td>
                           <td data-label="Ngày gửi">{date(c.createdAt)}</td>
                           <td data-label="Thao tác">
-                            <Link className="of-button" to={!mine && c.ownRequest ? `/van-phong/claims/${c.id}` : `${base}/${c.id}`}>
-                              {mine && c.stage === "AWAITING_REPLY" ? "Phản hồi lịch hẹn" : !mine && !c.ownRequest && c.status === "PENDING"
-                                ? "Xét duyệt"
-                                : "Chi tiết"}{" "}
-                              →
+                            <Link className={`of-button of-worklist-action${!c.ownRequest && c.status === "PENDING" ? " of-primary" : ""}`} to={c.ownRequest ? `/van-phong/claims/${c.id}` : `${base}/${c.id}`}>
+                              {!c.ownRequest && c.status === "PENDING" ? "Xét duyệt" : "Xem chi tiết"}
+                              <ArrowRight size={16} aria-hidden="true" />
                             </Link>
                           </td>
                         </tr>

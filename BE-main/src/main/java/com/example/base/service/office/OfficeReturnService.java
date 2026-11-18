@@ -47,6 +47,7 @@ public class OfficeReturnService {
             Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
             if(!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1))) throw bad("Lịch mới cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
             Appointment old=scheduled(c);
+            requireNotVerified(c,old);
             old.cancelByOffice(request.reason().strip());
             appointments.flush();
             appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note()));
@@ -69,7 +70,9 @@ public class OfficeReturnService {
     @Transactional
     public Workflow cancel(long id,VersionedReason request,CustomUserDetails user) {
         Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
-        scheduled(c).cancelByOffice(request.reason().strip());
+        Appointment appointment=scheduled(c);
+        requireNotVerified(c,appointment);
+        appointment.cancelByOffice(request.reason().strip());
         c.review("REJECTED"); c.getPost().reopenAfterClaimCancellation();
         activities.save(new ClaimActivity(c,actor,"OFFICE_CANCEL","APPROVED",request.reason().strip()));
         claims.flush();
@@ -89,6 +92,17 @@ public class OfficeReturnService {
         if(!"CONFIRMED".equals(a.getResponseStatus())) throw bad("Người nhận cần đồng ý lịch hẹn trước khi xác minh tại quầy.");
         jdbc.update("insert into office_claim_verification(claim_id,appointment_id,verified_by,result,note) values(?,?,?,?,?)",
                 id,a.getId(),actor.getId(),request.result(),request.note().strip());
+        if("FAILED".equals(request.result())) {
+            String reason="Không đạt xác minh người nhận tại quầy: "+request.note().strip();
+            reason=reason.substring(0,Math.min(2000,reason.length()));
+            a.cancelByOffice(reason);
+            c.review("REJECTED");
+            c.getPost().reopenAfterClaimCancellation();
+            activities.save(new ClaimActivity(c,actor,"OFFICE_CANCEL","APPROVED",reason));
+            if(c.getClaimant()!=null) notifications.notifyUser(c.getClaimant().getId(),"CLAIM_REJECTED",
+                "Yêu cầu nhận đồ #"+id+" bị từ chối sau xác minh",
+                reason+". Lịch hẹn đã hủy. Bạn không được gửi lại yêu cầu cho món đồ này.","/van-phong/claims/"+id,false);
+        }
         c.touchWorkflow();claims.flush();return view(c,actor);
     }
 
@@ -181,6 +195,11 @@ public class OfficeReturnService {
         Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(c.getId(),"SCHEDULED").orElseThrow(()->bad("Không có lịch hẹn đang hiệu lực."));
         em.refresh(a,LockModeType.PESSIMISTIC_WRITE);return a;
     }
+    private void requireNotVerified(Claim c,Appointment appointment) {
+        var history=verifications(c.getId());
+        if(!history.isEmpty() && history.getFirst().appointmentId()==appointment.getId() && "PASSED".equals(history.getFirst().result()))
+            throw bad("Người nhận đã xác minh đạt tại quầy. Không thể đổi lịch hoặc thu hồi duyệt ở bước này.");
+    }
     private Account approver(CustomUserDetails user) { return access.require(user,APPROVER); }
     private Claim claim(long id) {return claims.findById(id).filter(Claim::isOffice).orElseThrow(()->bad("Không tìm thấy hồ sơ văn phòng."));}
     private Claim lock(long id) {
@@ -214,8 +233,10 @@ public class OfficeReturnService {
         boolean confirmed=a!=null&&"CONFIRMED".equals(a.getResponseStatus());
         boolean verified=confirmed&&!history.isEmpty()&&history.getFirst().appointmentId()==a.getId()&&"PASSED".equals(history.getFirst().result());
         boolean canComplete=officer&&h!=null&&approved&&"WAITING_CONFIRMATION".equals(h.status());
+        boolean rejectedAtCounter="REJECTED".equals(c.getStatus())&&!history.isEmpty()&&"FAILED".equals(history.getFirst().result());
         String next=h!=null?switch(h.status()) {case "COMPLETED"->"Đã hoàn tất trao trả.";case "DISPUTED"->"Đã ghi nhận phản ánh. Vui lòng liên hệ văn phòng.";default->"Đã có biên bản giao đồ. Nhân viên văn phòng cần xác nhận hoàn tất.";}
-                :Set.of("REJECTED","CANCELLED","CLOSED").contains(c.getStatus())?"Hồ sơ đã kết thúc. Xem lý do trong lịch sử xử lý.":!approved?"Hồ sơ cần được duyệt trước khi thực hiện trao trả.":!confirmed?"Chờ người nhận đồng ý lịch hẹn qua email hoặc trên hệ thống.":!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy.":"Đã xác minh. Có thể ghi nhận giao đồ.";
-        return new Workflow(history,h,preparing&&confirmed,preparing&&verified,preparing,preparing,canComplete,next);
+                :rejectedAtCounter?"Không đạt xác minh tại quầy. Yêu cầu đã bị từ chối, lịch hẹn đã hủy; tài khoản này không được yêu cầu lại món đồ này."
+                :Set.of("REJECTED","CANCELLED","CLOSED").contains(c.getStatus())?"Hồ sơ đã kết thúc. Xem lý do trong lịch sử xử lý.":!approved?"Hồ sơ cần được duyệt trước khi thực hiện trao trả.":!confirmed?OfficeAppointmentGuidance.pendingMessage(a,java.time.OffsetDateTime.now()):!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy.":"Đã xác minh. Có thể ghi nhận giao đồ.";
+        return new Workflow(history,h,preparing&&confirmed,preparing&&verified,preparing&&!verified,preparing&&!verified,canComplete,next);
     }
 }

@@ -4,15 +4,13 @@ import { reviewApi } from "../api";
 import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
 import { date, labels } from "../format";
 import ContextPanel from "./ContextPanel";
-import EvidenceComparison from "./EvidenceComparison";
-import ReportCasePanel from "./ReportCasePanel";
-import HoldDialog from "./HoldDialog";
-import ConclusionDialog from "./ConclusionDialog";
+import DecisionDialog from "./DecisionDialog";
 import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
 import useReviewResource from "../hooks/useReviewResource";
 export default function ReportDetail({ id, onBack, onRelated }) {
   const [tab, setTab] = useState("overview"),
+    [priorityChoice, setPriorityChoice] = useState("PRIORITY_AUTO"),
     [inquiryOpen, setInquiryOpen] = useState(false),
     [action, setAction] = useState(null),
     [busy, setBusy] = useState(false),
@@ -83,7 +81,6 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                   ["overview", "Tổng quan"],
                   ["current", "Dữ liệu hiện tại"],
                   ["snapshot", "Bản lưu"],
-                  ["compare", "Đối chiếu thay đổi"],
                   ["inquiries", `Trao đổi (${data.inquiries.length})`],
                   ["history", "Lịch sử xử lý"],
                 ].map(([key, label]) => (
@@ -99,8 +96,6 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               </nav>
               {tab === "overview" && (
                 <div className="rr-stack">
-                  <section className="rr-card"><h3>Việc cần làm tiếp theo</h3><p>{data.conflict?'Nhờ quản lý khác xử lý vì bạn có liên quan đến phản ánh.':data.canTake?'Nhận xử lý, đối chiếu phản ánh với bằng chứng trước khi đưa ra kết luận.':data.canProcess?data.inquiries.some(i=>!i.responded_at)?'Đang chờ thông tin từ người liên quan. Xem mục Trao đổi để theo dõi người chưa phản hồi.':'Đối chiếu bằng chứng; yêu cầu làm rõ nếu còn mâu thuẫn, hoặc kết luận khi đã đủ căn cứ.':['RESOLVED','REJECTED'].includes(r.status)?'Đã có kết quả. Xem kết luận và lịch sử xử lý bên dưới.':'Một quản lý khác đang phụ trách.'}</p></section>
-                  <details className="rr-card"><summary>Liên hệ với vụ việc khác · Khi cần điều tra chung</summary><ReportCasePanel key={id} report={r} onChanged={() => setRefresh(x => x + 1)} onOpen={onRelated} /></details>
                   <section className="rr-card">
                     <h3>Người liên quan</h3>
                     <div className="rr-people">
@@ -119,16 +114,29 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                       ))}
                     </div>
                   </section>
-                  <section className="rr-card"><h3>{r.kind==='HANDOVER_ISSUE'?'Bằng chứng và diễn biến trao trả':'Nội dung cần đối chiếu'}</h3><ContextPanel data={r.kind==='HANDOVER_ISSUE'?{claim:data.current.claim,answers:data.current.answers,claimEvidence:data.current.claimEvidence,claimSupplements:data.current.claimSupplements,appointments:data.current.appointments,verifications:data.current.verifications,p2pHandover:data.current.p2pHandover,officeHandover:data.current.officeHandover,handoverEvidence:data.current.handoverEvidence,claimHistory:data.current.claimHistory}:{post:data.current.post,postImages:data.current.postImages,message:data.current.message,messageAttachments:data.current.messageAttachments,account:data.current.account,claim:data.current.claim,answers:data.current.answers,claimEvidence:data.current.claimEvidence}}/></section>
-                  <details className="rr-card"><summary>Cuộc trao đổi liên quan</summary><ChatContext
+                  {data.related.length > 0 && (
+                    <section className="rr-card">
+                      <h3>Báo cáo khác về cùng mục</h3>
+                      {data.related.map((x) => (
+                        <button
+                          className="rr-related"
+                          key={x.report_id}
+                          onClick={() => onRelated(x.report_id)}
+                        >
+                          #{x.report_id} · {date(x.created_at)}{" "}
+                          <Badge value={x.status} />
+                        </button>
+                      ))}
+                    </section>
+                  )}
+                  <ChatContext
                     key={id}
                     id={id}
                     reportedMessage={r.message_id}
-                  /></details>
+                  />
                 </div>
               )}
               {tab === "current" && <ContextPanel data={data.current} />}
-              {tab === "compare" && <EvidenceComparison current={data.current} snapshot={data.snapshot} />}
               {tab === "snapshot" && (
                 <div className="rr-stack">
                   <p className="rr-callout">
@@ -141,7 +149,7 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                 </div>
               )}
               {tab === "inquiries" && (
-                <Inquiries data={data} onSaved={setData} open={inquiryOpen} setOpen={setInquiryOpen}/>
+                <Inquiries data={data} onSaved={setData} open={inquiryOpen} setOpen={setInquiryOpen} />
               )}
               {tab === "history" && (
                 <section className="rr-card">
@@ -186,18 +194,15 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               ) : data.canProcess ? (
                 <>
                   <p className="rr-muted">
-                    Xem thông tin đối chiếu, hỏi thêm nếu cần rồi đưa ra kết
-                    luận.
+                    Đối chiếu bằng chứng trước khi quyết định. Mỗi thao tác đều
+                    cần ghi căn cứ.
                   </p>
-                  <button onClick={() => {setTab("inquiries");setInquiryOpen(true);}}>
-                    Yêu cầu bổ sung
+                  <button onClick={() => { setTab("inquiries"); setInquiryOpen(true); }}>
+                    Yêu cầu thông tin từ các bên
                   </button>
-                  {(data.hold.reason ||
-                    (data.current.post?.post_type === "FOUND" &&
-                      ["OPEN", "RESERVED"].includes(data.current.post.status) &&
-                      !data.current.post.deleted_at)) && (
+                  {data.current.post && (
                     <>
-                      <button
+                      {(data.hold.reason || (data.current.post.post_type === "FOUND" && ["OPEN", "RESERVED"].includes(data.current.post.status) && !data.current.post.deleted_at)) && <button
                         onClick={() =>
                           setAction(data.hold.reason ? "RELEASE" : "HOLD")
                         }
@@ -205,20 +210,46 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                         {data.hold.reason
                           ? "Gỡ tạm dừng giao nhận"
                           : "Tạm dừng giao nhận"}
+                      </button>}
+                      <button onClick={() => setAction("HIDE_POST")}>
+                        Ẩn bài đăng liên quan
                       </button>
                     </>
                   )}
-                  <hr />
-                  <button
-                    className="rr-primary"
-                    onClick={() => setAction("CONCLUDE")}
-                  >
-                    Kết luận báo cáo
+                  <button onClick={() => setAction("SUSPEND_ACCOUNT")}>
+                    Đình chỉ tài khoản liên quan
                   </button>
-                  <p className="rr-muted">
-                    Chọn kết quả và biện pháp phù hợp trước khi xác nhận kết
-                    thúc.
-                  </p>
+                  <hr />
+                  <strong>Kết luận vụ việc</strong>
+                  {(data.p2pDispute
+                    ? [
+                        "HANDOVER_COMPLETED",
+                        "HANDOVER_CONTINUE",
+                        "CLAIM_REJECTED",
+                      ]
+                    : ["RESOLVE", "DISMISS"]
+                  ).map((value) => (
+                    <button
+                      key={value}
+                      className={value === "RESOLVE" ? "rr-primary" : ""}
+                      onClick={() => setAction(value)}
+                    >
+                      {labels[value]}
+                    </button>
+                  ))}
+                  <details>
+                    <summary>Đổi mức ưu tiên</summary>
+                    <p>Hệ thống tự xếp hàng theo tình trạng giao nhận. Dùng mục này khi cần điều chỉnh thứ tự xem xét.</p>
+                    <label>
+                      Mức ưu tiên
+                      <select value={priorityChoice} onChange={(event) => setPriorityChoice(event.target.value)}>
+                        <option value="PRIORITY_AUTO">Tự động theo tình trạng giao nhận</option>
+                        <option value="PRIORITY_HIGH">Ưu tiên cao</option>
+                        <option value="PRIORITY_NORMAL">Ưu tiên bình thường</option>
+                      </select>
+                    </label>
+                    <button onClick={() => setAction(priorityChoice)}>Ghi lý do và lưu</button>
+                  </details>
                 </>
               ) : (
                 <p>
@@ -229,15 +260,8 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               )}
             </aside>
           </div>
-          {action === "CONCLUDE" && (
-            <ConclusionDialog
-              data={data}
-              onClose={() => setAction(null)}
-              onSaved={setData}
-            />
-          )}
-          {action && action !== "CONCLUDE" && (
-            <HoldDialog
+          {action && (
+            <DecisionDialog
               key={action}
               action={action}
               data={data}

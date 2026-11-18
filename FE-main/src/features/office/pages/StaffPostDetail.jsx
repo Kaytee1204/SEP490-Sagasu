@@ -10,6 +10,7 @@ import Header from "../components/Header";
 import Notice from "../components/Notice";
 import LoadState from "../components/LoadState";
 import ReceiptInfo from "../components/ReceiptInfo";
+import PostAuthor from "../components/PostAuthor";
 import "../Office.css";
 
 export default function StaffPostDetail() {
@@ -67,18 +68,14 @@ export default function StaffPostDetail() {
                   <h2>Thông tin bài đăng</h2>
                   <div className="of-badges">
                     <Badge value={post.postType} />
-                    <Badge value={post.status} />
                     <Badge value={post.moderationStatus} />
-                    <Badge value={post.custodyMode} />
+                    {post.postType === "FOUND" && <Badge value={post.status} />}
+                    {post.postType === "FOUND" && <Badge value={post.custodyMode} />}
                   </div>
                   <dl className="of-facts" style={{ marginTop: 20 }}>
                     <div>
                       <dt>Người đăng</dt>
-                      <dd>{post.author}</dd>
-                    </div>
-                    <div>
-                      <dt>Thư điện tử</dt>
-                      <dd>{post.authorEmail}</dd>
+                      <dd><PostAuthor post={post} /></dd>
                     </div>
                     <div>
                       <dt>Địa điểm</dt>
