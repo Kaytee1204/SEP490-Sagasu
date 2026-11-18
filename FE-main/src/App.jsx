@@ -32,6 +32,9 @@ import StorageLocationsPage from '@/features/office/pages/StorageLocationsPage';
 import ReportReviewDetailPage from '@/features/report-review/pages/ReportReviewDetailPage';
 import ReportResultsPage from '@/features/report-review/pages/ReportResultsPage';
 import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
+import AdminOverviewPage from '@/features/admin/pages/AdminOverviewPage';
+import ReportReasonsManagementPage from '@/features/admin/pages/ReportReasonsManagementPage';
+import AdminAuditLogsPage from '@/features/admin/pages/AdminAuditLogsPage';
 import AdminUserDetailsPage from '@/features/admin/pages/AdminUserDetailsPage';
 import AccountDashboardPage from '@/features/account/pages/AccountDashboardPage';
 import CategoryManagementPage from '@/features/category/pages/CategoryManagementPage';
@@ -181,9 +184,12 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<AccountDashboardPage />} />
+        <Route index element={<AdminOverviewPage />} />
+        <Route path="dashboard" element={<AdminOverviewPage />} />
         <Route path="users" element={<AccountDashboardPage />} />
         <Route path="users/:id" element={<AdminUserDetailsPage />} />
+        <Route path="report-reasons" element={<ReportReasonsManagementPage />} />
+        <Route path="audit-logs" element={<AdminAuditLogsPage />} />
         <Route path="items" element={<ProtectedRoute managerOnly><PostAdministration /></ProtectedRoute>} />
         <Route path="items/:id" element={<ProtectedRoute managerOnly><StaffPostDetail /></ProtectedRoute>} />
         <Route path="storage" element={<ProtectedRoute managerOnly><StoragePage /></ProtectedRoute>} />

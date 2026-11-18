@@ -1,5 +1,5 @@
 // src/components/layouts/admin/adminNavConfig.js
-import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck } from 'lucide-react';
+import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield } from 'lucide-react';
 
 export const ADMIN_NAV_SECTIONS = [
   {
@@ -26,6 +26,7 @@ export const ADMIN_NAV_SECTIONS = [
     title: 'Quản lý dữ liệu',
     items: [
       { label: 'Danh mục', path: '/admin/categories', icon: Tags, roles: ['MANAGER'] },
+      { label: 'Lý do báo cáo', path: '/admin/report-reasons', icon: FileWarning, roles: ['ADMIN', 'MANAGER'] },
       { label: 'Kho & vị trí lưu trữ', path: '/admin/storage', icon: Warehouse, roles: ['MANAGER'] },
       { label: 'Theo dõi chuyển giao', path: '/admin/transfers', icon: Package, roles: ['MANAGER'] },
       {
@@ -39,12 +40,19 @@ export const ADMIN_NAV_SECTIONS = [
         label: 'Báo cáo & phản ánh',
         path: '/admin/reports',
         icon: AlertTriangle,
+        badgeKey: 'pendingReports',
         roles: ['MANAGER'],
       },
       {
         label: 'Tài khoản thành viên',
         path: '/admin/users',
         icon: Users,
+        roles: ['ADMIN', 'MANAGER'],
+      },
+      {
+        label: 'Nhật ký hệ thống (Audit)',
+        path: '/admin/audit-logs',
+        icon: Shield,
         roles: ['ADMIN', 'MANAGER'],
       },
     ],

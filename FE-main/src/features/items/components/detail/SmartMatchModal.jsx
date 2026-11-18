@@ -1,71 +1,162 @@
-import React, { useState, useEffect } from 'react';
-import { X, SearchCheck, MapPin, Calendar, ExternalLink, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  X,
+  SearchCheck,
+  MapPin,
+  Calendar,
+  ExternalLink,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  Trophy,
+  Award,
+  Sparkles,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSmartMatches } from '../../api/postApi';
 import SavePostButton from '../saved-posts/SavePostButton';
 
+function getRankTheme(rank, score) {
+  if (rank === 1) {
+    return {
+      rankLabel: 'TOP 1 • Đề xuất tốt nhất',
+      rankGradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+      rankShadow: '0 4px 12px rgba(245, 158, 11, 0.35)',
+      cardBorder: '2px solid #f59e0b',
+      cardBg: 'linear-gradient(180deg, #fffbeb 0%, #ffffff 52%)',
+      cardShadow: '0 10px 24px -6px rgba(245, 158, 11, 0.22)',
+      accentColor: '#d97706',
+      scoreBg: '#fef3c7',
+      scoreBorder: '#f59e0b',
+      scoreText: '#b45309',
+      scoreLabel: `${score}% Khớp Hạng 1`,
+      thumbBorder: '2px solid #fbbf24',
+      ctaBg: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+      ctaBorder: '#d97706',
+    };
+  }
+  if (rank === 2) {
+    return {
+      rankLabel: 'TOP 2 • Tương đồng cao',
+      rankGradient: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+      rankShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+      cardBorder: '2px solid #818cf8',
+      cardBg: 'linear-gradient(180deg, #eef2ff 0%, #ffffff 52%)',
+      cardShadow: '0 8px 20px -6px rgba(99, 102, 241, 0.18)',
+      accentColor: '#4f46e5',
+      scoreBg: '#e0e7ff',
+      scoreBorder: '#818cf8',
+      scoreText: '#3730a3',
+      scoreLabel: `${score}% Khớp Hạng 2`,
+      thumbBorder: '2px solid #a5b4fc',
+      ctaBg: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+      ctaBorder: '#4338ca',
+    };
+  }
+  if (rank === 3) {
+    return {
+      rankLabel: 'TOP 3 • Khả năng khớp',
+      rankGradient: 'linear-gradient(135deg, #ea580c 0%, #be123c 100%)',
+      rankShadow: '0 4px 12px rgba(234, 88, 12, 0.28)',
+      cardBorder: '2px solid #fb923c',
+      cardBg: 'linear-gradient(180deg, #fff7ed 0%, #ffffff 52%)',
+      cardShadow: '0 8px 20px -6px rgba(234, 88, 12, 0.16)',
+      accentColor: '#ea580c',
+      scoreBg: '#ffedd5',
+      scoreBorder: '#fb923c',
+      scoreText: '#c2410c',
+      scoreLabel: `${score}% Khớp Hạng 3`,
+      thumbBorder: '2px solid #fdba74',
+      ctaBg: 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
+      ctaBorder: '#c2410c',
+    };
+  }
+  if (rank === 4) {
+    return {
+      rankLabel: 'TOP 4 • Gợi ý mở rộng',
+      rankGradient: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+      rankShadow: '0 3px 8px rgba(2, 132, 199, 0.22)',
+      cardBorder: '1.5px solid #7dd3fc',
+      cardBg: 'linear-gradient(180deg, #f0f9ff 0%, #ffffff 52%)',
+      cardShadow: '0 4px 14px -4px rgba(2, 132, 199, 0.12)',
+      accentColor: '#0284c7',
+      scoreBg: '#e0f2fe',
+      scoreBorder: '#7dd3fc',
+      scoreText: '#0369a1',
+      scoreLabel: `${score}% Tương đồng`,
+      thumbBorder: '1.5px solid #bae6fd',
+      ctaBg: '#0284c7',
+      ctaBorder: '#0284c7',
+    };
+  }
+  return {
+    rankLabel: `HẠNG #${rank} • Tiềm năng`,
+    rankGradient: 'linear-gradient(135deg, #475569 0%, #334155 100%)',
+    rankShadow: '0 2px 6px rgba(51, 65, 85, 0.18)',
+    cardBorder: '1px solid #cbd5e1',
+    cardBg: '#ffffff',
+    cardShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+    accentColor: '#0d9488',
+    scoreBg: '#f1f5f9',
+    scoreBorder: '#cbd5e1',
+    scoreText: '#334155',
+    scoreLabel: `${score}% Tiềm năng`,
+    thumbBorder: '1px solid #e2e8f0',
+    ctaBg: '#0d9488',
+    ctaBorder: '#0d9488',
+  };
+}
+
 export default function SmartMatchModal({ isOpen, onClose, post }) {
-  const [loading, setLoading] = useState(false);
-  const [matches, setMatches] = useState([]);
-  const [error, setError] = useState('');
+  const [state, setState] = useState({
+    loading: false,
+    matches: [],
+    error: '',
+    loadedKey: null,
+  });
   const [expandedId, setExpandedId] = useState(null);
 
+  const requestKey = isOpen && post?.id ? `${post.id}` : null;
+  const isLoading = Boolean(requestKey) && (state.loading || state.loadedKey !== requestKey);
+
   useEffect(() => {
-    if (!isOpen || !post?.id) return;
+    if (!requestKey) return;
 
     let isMounted = true;
-    setLoading(true);
-    setError('');
-
     getSmartMatches(post.id)
       .then((data) => {
         if (isMounted) {
-          setMatches(Array.isArray(data) ? data : []);
+          setState({
+            loading: false,
+            matches: Array.isArray(data) ? data : [],
+            error: '',
+            loadedKey: requestKey,
+          });
         }
       })
       .catch((err) => {
         if (isMounted) {
-          setError(err.message || 'Không thể tải kết quả đối sánh vào lúc này.');
+          setState({
+            loading: false,
+            matches: [],
+            error: err.message || 'Không thể tải kết quả đối sánh vào lúc này.',
+            loadedKey: requestKey,
+          });
         }
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [isOpen, post?.id]);
+  }, [requestKey, post?.id]);
 
   if (!isOpen) return null;
 
   const isLostPost = post.postType === 'LOST';
   const targetLabel = isLostPost ? 'đồ nhặt được (FOUND)' : 'đồ thất lạc (LOST)';
-
-  const getScoreBadge = (score) => {
-    if (score >= 80) {
-      return {
-        bg: '#ecfdf5',
-        border: '#a7f3d0',
-        text: '#047857',
-        label: `${score}% Trùng khớp cao`,
-      };
-    }
-    if (score >= 65) {
-      return {
-        bg: '#f0fdfa',
-        border: '#99f6e4',
-        text: '#0f766e',
-        label: `${score}% Tương đồng`,
-      };
-    }
-    return {
-      bg: '#f8fafc',
-      border: '#e2e8f0',
-      text: '#475569',
-      label: `${score}% Tiềm năng`,
-    };
-  };
+  const matches = state.matches;
+  const error = state.error;
 
   return (
     <div
@@ -73,7 +164,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
         position: 'fixed',
         inset: 0,
         zIndex: 1050,
-        background: 'rgba(15, 23, 42, 0.5)',
+        background: 'rgba(15, 23, 42, 0.55)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -85,13 +176,13 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
       <div
         style={{
           background: '#ffffff',
-          borderRadius: '16px',
+          borderRadius: '18px',
           width: '100%',
-          maxWidth: '720px',
+          maxWidth: '760px',
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.28)',
           border: '1px solid #e2e8f0',
           overflow: 'hidden',
         }}
@@ -111,15 +202,15 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: '10px',
-                background: '#f0fdfa',
+                width: 42,
+                height: 42,
+                borderRadius: '11px',
+                background: 'linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)',
                 color: '#0d9488',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '1px solid #ccfbf1',
+                border: '1px solid #99f6e4',
               }}
             >
               <SearchCheck size={22} />
@@ -129,15 +220,15 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                 style={{
                   margin: 0,
                   fontSize: '1.15rem',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   color: '#0f172a',
                   letterSpacing: '-0.01em',
                 }}
               >
-                Gợi ý đồ vật trùng khớp
+                Bảng Xếp Hạng AI Smart Match
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
-                Đối sánh tự động với các bài đăng {targetLabel} đang mở
+                Đối sánh đa phương thức & xếp hạng màu sắc theo Top 1, Top 2, Top 3 với các bài đăng {targetLabel}
               </p>
             </div>
           </div>
@@ -149,8 +240,8 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
               background: '#f8fafc',
               border: '1px solid #e2e8f0',
               borderRadius: '8px',
-              width: 32,
-              height: 32,
+              width: 34,
+              height: 34,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -162,9 +253,40 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
           </button>
         </div>
 
+        {/* Tier Legend Bar */}
+        {!isLoading && !error && matches.length > 0 && (
+          <div
+            style={{
+              padding: '10px 24px',
+              background: '#f8fafc',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+            }}
+          >
+            <span style={{ color: '#64748b', fontWeight: 600 }}>Phân hạng AI:</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 999, background: '#fef3c7', color: '#b45309', border: '1px solid #f59e0b' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b' }} /> Top 1 (Vàng Hoàng Kim)
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 999, background: '#e0e7ff', color: '#3730a3', border: '1px solid #818cf8' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#6366f1' }} /> Top 2 (Tím Indigo)
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 999, background: '#ffedd5', color: '#c2410c', border: '1px solid #fb923c' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ea580c' }} /> Top 3 (Đồng Ánh Cam)
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#0284c7' }} /> Top 4+ (Xanh Lam / Xám)
+            </span>
+          </div>
+        )}
+
         {/* Content Body */}
         <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
-          {loading && (
+          {isLoading && (
             <div style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
               <div
                 style={{
@@ -187,7 +309,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
             </div>
           )}
 
-          {!loading && error && (
+          {!isLoading && error && (
             <div
               style={{
                 padding: '16px',
@@ -206,7 +328,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
             </div>
           )}
 
-          {!loading && !error && matches.length === 0 && (
+          {!isLoading && !error && matches.length === 0 && (
             <div
               style={{
                 textAlign: 'center',
@@ -226,41 +348,107 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
             </div>
           )}
 
-          {!loading && !error && matches.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '2px' }}>
-                Tìm thấy <strong style={{ color: '#0f172a' }}>{matches.length} bài đăng triển vọng nhất</strong> được xếp hạng theo mức độ tương đồng:
+          {!isLoading && !error && matches.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                Tìm thấy <strong style={{ color: '#0f172a' }}>{matches.length} bài đăng triển vọng nhất</strong> được xếp hạng từ cao xuống thấp:
               </div>
 
-              {matches.map((item) => {
-                const badge = getScoreBadge(item.matchScore);
+              {matches.map((item, idx) => {
+                const rank = idx + 1;
+                const theme = getRankTheme(rank, item.matchScore);
                 const isExpanded = expandedId === item.id;
                 const eventDate = item.eventAt
                   ? new Date(item.eventAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
                   : 'Chưa cập nhật';
+                const RankIcon = rank === 1 ? Trophy : rank <= 3 ? Award : Sparkles;
 
                 return (
                   <div
                     key={item.id}
                     style={{
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '12px',
+                      position: 'relative',
+                      background: theme.cardBg,
+                      border: theme.cardBorder,
+                      borderRadius: '14px',
                       padding: '16px',
-                      transition: 'border-color 150ms, box-shadow 150ms',
+                      boxShadow: theme.cardShadow,
+                      transition: 'transform 150ms ease, box-shadow 150ms ease',
                     }}
                   >
+                    {/* Top Rank Ribbon + Score Header */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: theme.rankGradient,
+                            color: '#ffffff',
+                            fontSize: '0.73rem',
+                            fontWeight: 800,
+                            padding: '4px 11px',
+                            borderRadius: '999px',
+                            boxShadow: theme.rankShadow,
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          <RankIcon size={13} />
+                          <span>{theme.rankLabel}</span>
+                        </span>
+
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            background: item.postType === 'FOUND' ? '#ecfdf5' : '#eff6ff',
+                            color: item.postType === 'FOUND' ? '#059669' : '#2563eb',
+                            border: `1px solid ${item.postType === 'FOUND' ? '#a7f3d0' : '#bfdbfe'}`,
+                          }}
+                        >
+                          {item.postType === 'FOUND' ? 'NHẶT ĐƯỢC' : 'THẤT LẠC'}
+                        </span>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          padding: '4px 12px',
+                          borderRadius: '999px',
+                          background: theme.scoreBg,
+                          border: `1.5px solid ${theme.scoreBorder}`,
+                          color: theme.scoreText,
+                        }}
+                      >
+                        {theme.scoreLabel}
+                      </span>
+                    </div>
+
                     <div style={{ display: 'flex', gap: '16px' }}>
                       {/* Image Thumbnail */}
                       <div
                         style={{
-                          width: 88,
-                          height: 88,
-                          borderRadius: '8px',
+                          position: 'relative',
+                          width: 92,
+                          height: 92,
+                          borderRadius: '10px',
                           overflow: 'hidden',
                           background: '#f1f5f9',
                           flexShrink: 0,
-                          border: '1px solid #e2e8f0',
+                          border: theme.thumbBorder,
                         }}
                       >
                         {item.imageUrl ? (
@@ -284,46 +472,32 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                             Không có ảnh
                           </div>
                         )}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 6,
+                            left: 6,
+                            background: theme.rankGradient,
+                            color: '#fff',
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            padding: '1px 7px',
+                            borderRadius: '6px',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                          }}
+                        >
+                          #{rank}
+                        </div>
                       </div>
 
                       {/* Info & Details */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                          <span
-                            style={{
-                              fontSize: '0.72rem',
-                              fontWeight: 700,
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              background: item.postType === 'FOUND' ? '#ecfdf5' : '#eff6ff',
-                              color: item.postType === 'FOUND' ? '#059669' : '#2563eb',
-                              border: `1px solid ${item.postType === 'FOUND' ? '#a7f3d0' : '#bfdbfe'}`,
-                            }}
-                          >
-                            {item.postType === 'FOUND' ? 'NHẶT ĐƯỢC' : 'THẤT LẠC'}
-                          </span>
-
-                          <span
-                            style={{
-                              fontSize: '0.78rem',
-                              fontWeight: 700,
-                              padding: '3px 10px',
-                              borderRadius: '20px',
-                              background: badge.bg,
-                              border: `1px solid ${badge.border}`,
-                              color: badge.text,
-                            }}
-                          >
-                            {badge.label}
-                          </span>
-                        </div>
-
                         <h4
                           style={{
-                            margin: '6px 0 4px',
-                            fontSize: '0.98rem',
-                            fontWeight: 700,
-                            color: '#1e293b',
+                            margin: '0 0 6px',
+                            fontSize: '1.02rem',
+                            fontWeight: 800,
+                            color: '#0f172a',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -339,22 +513,33 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                             alignItems: 'center',
                             gap: '12px',
                             fontSize: '0.8rem',
-                            color: '#64748b',
+                            color: '#475569',
                             margin: '4px 0 6px',
                           }}
                         >
                           {item.locationText && (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <MapPin size={13} style={{ color: '#94a3b8' }} /> {item.locationText}
+                              <MapPin size={13} style={{ color: theme.accentColor }} /> {item.locationText}
                             </span>
                           )}
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Calendar size={13} style={{ color: '#94a3b8' }} /> {eventDate}
+                            <Calendar size={13} style={{ color: theme.accentColor }} /> {eventDate}
                           </span>
                         </div>
 
                         {item.matchReason && (
-                          <div style={{ fontSize: '0.78rem', color: '#0d9488', fontWeight: 500, margin: '4px 0' }}>
+                          <div
+                            style={{
+                              fontSize: '0.78rem',
+                              color: theme.scoreText,
+                              fontWeight: 600,
+                              margin: '6px 0 0',
+                              background: 'rgba(255,255,255,0.75)',
+                              padding: '5px 9px',
+                              borderRadius: '7px',
+                              border: `1px solid ${theme.scoreBorder}`,
+                            }}
+                          >
                             ✓ {item.matchReason}
                           </div>
                         )}
@@ -363,16 +548,16 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
 
                     {/* Breakdown accordion toggle */}
                     {item.matchBreakdown && (
-                      <div style={{ marginTop: '10px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                      <div style={{ marginTop: '12px', borderTop: '1px solid rgba(148,163,184,0.22)', paddingTop: '10px' }}>
                         <button
                           type="button"
                           onClick={() => setExpandedId(isExpanded ? null : item.id)}
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#64748b',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
+                            color: theme.scoreText,
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -381,7 +566,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                           }}
                         >
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          {isExpanded ? 'Thu gọn tiêu chí chi tiết' : 'Xem chi tiết các tiêu chí đối sánh'}
+                          {isExpanded ? 'Thu gọn tiêu chí chi tiết' : 'Xem chi tiết điểm thành phần AI'}
                         </button>
 
                         {isExpanded && (
@@ -389,30 +574,38 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                             style={{
                               marginTop: '8px',
                               display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                              gap: '8px',
-                              background: '#f8fafc',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+                              gap: '10px',
+                              background: '#ffffff',
                               padding: '10px 12px',
-                              borderRadius: '8px',
+                              borderRadius: '10px',
+                              border: '1px solid #e2e8f0',
                               fontSize: '0.75rem',
                             }}
                           >
-                            <div>
-                              <span style={{ color: '#64748b' }}>Hình ảnh: </span>
-                              <strong style={{ color: '#1e293b' }}>{item.matchBreakdown.visual ?? 0}%</strong>
-                            </div>
-                            <div>
-                              <span style={{ color: '#64748b' }}>Màu sắc: </span>
-                              <strong style={{ color: '#1e293b' }}>{item.matchBreakdown.color ?? 0}%</strong>
-                            </div>
-                            <div>
-                              <span style={{ color: '#64748b' }}>Mô tả: </span>
-                              <strong style={{ color: '#1e293b' }}>{item.matchBreakdown.text ?? 0}%</strong>
-                            </div>
-                            <div>
-                              <span style={{ color: '#64748b' }}>Địa điểm & Ngày: </span>
-                              <strong style={{ color: '#1e293b' }}>{item.matchBreakdown.spatioTemporal ?? 0}%</strong>
-                            </div>
+                            {[
+                              { label: 'Hình ảnh', val: item.matchBreakdown.visual ?? 0 },
+                              { label: 'Màu sắc', val: item.matchBreakdown.color ?? 0 },
+                              { label: 'Mô tả', val: item.matchBreakdown.text ?? 0 },
+                              { label: 'Địa điểm & Ngày', val: item.matchBreakdown.spatioTemporal ?? 0 },
+                            ].map((crit) => (
+                              <div key={crit.label}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <span style={{ color: '#64748b' }}>{crit.label}</span>
+                                  <strong style={{ color: theme.scoreText }}>{crit.val}%</strong>
+                                </div>
+                                <div style={{ height: 5, borderRadius: 99, background: '#f1f5f9', overflow: 'hidden' }}>
+                                  <div
+                                    style={{
+                                      width: `${Math.min(100, Math.max(0, crit.val))}%`,
+                                      height: '100%',
+                                      background: theme.rankGradient,
+                                      borderRadius: 99,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -430,7 +623,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                           alignItems: 'center',
                           gap: '6px',
                           padding: '7px 14px',
-                          borderRadius: '6px',
+                          borderRadius: '8px',
                           background: '#ffffff',
                           border: '1px solid #cbd5e1',
                           color: '#334155',
@@ -451,13 +644,14 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                             alignItems: 'center',
                             gap: '6px',
                             padding: '7px 14px',
-                            borderRadius: '6px',
-                            background: '#0d9488',
-                            border: '1px solid #0d9488',
+                            borderRadius: '8px',
+                            background: theme.ctaBg,
+                            border: `1px solid ${theme.ctaBorder}`,
                             color: '#ffffff',
                             fontSize: '0.8rem',
-                            fontWeight: 600,
+                            fontWeight: 700,
                             textDecoration: 'none',
+                            boxShadow: theme.rankShadow,
                           }}
                         >
                           <span>Xác minh nhận đồ</span>

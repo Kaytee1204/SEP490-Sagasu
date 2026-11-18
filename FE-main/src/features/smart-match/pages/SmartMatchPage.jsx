@@ -37,7 +37,7 @@ const AI_MATCHES = [
     matchBreakdown: { visual: 70, location: 80, time: 75 },
     img: 'https://images.unsplash.com/photo-1559591937-bea52fc059ba?w=400&q=80',
     status: 'found',
-  }
+  },
 ];
 
 export default function SmartMatchPage() {
@@ -49,20 +49,34 @@ export default function SmartMatchPage() {
 
         {/* ── AI MATCH RESULTS ── */}
         <div className="container" style={{ padding: '60px var(--space-6) 100px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
-            <ShieldCheck size={28} style={{ color: 'var(--status-found)' }} />
-            <div>
-              <h2 className="text-heading" style={{ margin: 0 }}>Gợi ý thông minh (AI Matches)</h2>
-              <div style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-                Đã tìm thấy <strong style={{ color: 'var(--text-primary)' }}>{AI_MATCHES.length} kết quả</strong> có độ tương đồng trên 60%.
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '28px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <ShieldCheck size={28} style={{ color: 'var(--status-found)' }} />
+              <div>
+                <h2 className="text-heading" style={{ margin: 0 }}>Gợi ý thông minh (AI Ranking)</h2>
+                <div style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
+                  Đã tìm thấy <strong style={{ color: 'var(--text-primary)' }}>{AI_MATCHES.length} kết quả</strong> được phân màu theo thứ hạng Top 1 – Top 2 – Top 3.
+                </div>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '0.75rem', fontWeight: 700 }}>
+              <span style={{ padding: '4px 10px', borderRadius: 999, background: '#fef3c7', color: '#b45309', border: '1px solid #f59e0b' }}>
+                Top 1: Vàng Hoàng Kim
+              </span>
+              <span style={{ padding: '4px 10px', borderRadius: 999, background: '#e0e7ff', color: '#3730a3', border: '1px solid #818cf8' }}>
+                Top 2: Tím Indigo
+              </span>
+              <span style={{ padding: '4px 10px', borderRadius: 999, background: '#ffedd5', color: '#c2410c', border: '1px solid #fb923c' }}>
+                Top 3: Đồng Ánh Cam
+              </span>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: '24px' }}>
             {AI_MATCHES.map((item, i) => (
               <div key={item.id} style={{ animationDelay: `${i * 0.1}s` }}>
-                <SmartMatchCard item={item} />
+                <SmartMatchCard item={item} rank={i + 1} />
               </div>
             ))}
           </div>
