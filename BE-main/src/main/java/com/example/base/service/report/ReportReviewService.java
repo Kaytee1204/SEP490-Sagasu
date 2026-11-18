@@ -118,7 +118,7 @@ public class ReportReviewService {
     long count = targetId == null ? ((Number) totals.get("groups")).longValue() : reportCount;
     var params = new ArrayList<>(Arrays.asList(args));
     params.add((page - 1) * 12);
-    String priorityReason = "case when r.status not in ('OPEN','IN_REVIEW') then null when (select d.action from report_decision d where d.report_id=r.report_id and d.action in ('PRIORITY_HIGH','PRIORITY_NORMAL','PRIORITY_AUTO') order by d.decision_id desc limit 1)='PRIORITY_HIGH' then 'MANUAL_HIGH' when (select d.action from report_decision d where d.report_id=r.report_id and d.action in ('PRIORITY_HIGH','PRIORITY_NORMAL','PRIORITY_AUTO') order by d.decision_id desc limit 1)='PRIORITY_NORMAL' then null when r.kind='HANDOVER_ISSUE' and exists(select 1 from claim c join appointment ap on ap.claim_id=c.claim_id where (c.claim_id=r.claim_id or c.post_id=r.post_id) and c.status='APPROVED' and ap.status='SCHEDULED' and ap.scheduled_at between now() and now()+interval '24 hours') then 'OFFICE_SOON' when r.kind='HANDOVER_ISSUE' and exists(select 1 from claim c join p2p_handover h on h.claim_id=c.claim_id where (c.claim_id=r.claim_id or c.post_id=r.post_id) and h.status in ('WAITING_CONFIRMATION','DISPUTED')) then 'P2P_ACTIVE' when r.kind='HANDOVER_ISSUE' then 'HANDOVER' else null end";
+    String priorityReason = "case when r.status not in ('OPEN','IN_REVIEW') then null when r.kind='HANDOVER_ISSUE' and exists(select 1 from claim c join appointment ap on ap.claim_id=c.claim_id where (c.claim_id=r.claim_id or c.post_id=r.post_id) and c.status='APPROVED' and ap.status='SCHEDULED' and ap.scheduled_at between now() and now()+interval '24 hours') then 'OFFICE_SOON' when r.kind='HANDOVER_ISSUE' and exists(select 1 from claim c join p2p_handover h on h.claim_id=c.claim_id where (c.claim_id=r.claim_id or c.post_id=r.post_id) and h.status in ('WAITING_CONFIRMATION','DISPUTED')) then 'P2P_ACTIVE' when r.kind='HANDOVER_ISSUE' then 'HANDOVER' else null end";
     String projection = """
       select r.report_id,r.kind,r.post_id,r.claim_id,r.message_id,r.reported_account_id,
         r.description,r.reason_code,r.reason_label_snapshot,r.status,r.created_at,
@@ -355,9 +355,6 @@ public class ReportReviewService {
     before.put("reportStatus", status);
     String next = status;
     switch (action) {
-      case "PRIORITY_HIGH", "PRIORITY_NORMAL", "PRIORITY_AUTO" -> {
-        // Priority changes affect triage only, never the claim or report outcome.
-      }
       case "HOLD", "RELEASE" -> {
         @SuppressWarnings("unchecked")
         var post = (Map<String, Object>) current.get("post");

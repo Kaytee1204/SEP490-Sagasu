@@ -373,7 +373,7 @@ class OfficeReturnServiceTest {
     }
 
     @Test
-    void utc039_verify_failedResult_rejectsClaimAndCancelsAppointment() {
+    void utc039_verify_failedResult_rejectsClaimCancelsAppointmentAndReopensPost() {
         grant(approver);
         Claim c = officeClaim(30L, claimant, "APPROVED", 3L);
         Appointment appt = appointment(c, 8L, "CONFIRMED");
@@ -388,6 +388,7 @@ class OfficeReturnServiceTest {
         assertThat(c.getStatus()).isEqualTo("REJECTED");
         assertThat(appt.getStatus()).isEqualTo("CANCELLED");
         assertThat(c.getPost().getStatus()).isEqualTo("OPEN");
+        assertThat(w.canVerify()).isFalse();
         assertThat(w.canRecord()).isFalse();
         assertThat(w.nextStep()).startsWith("Không đạt xác minh tại quầy");
     }

@@ -28,8 +28,8 @@ export default function AppointmentReply({ appointment, id, intake = false, onCh
   }
   return <section className="of-appointment-reply" aria-label={intake ? "Phản hồi lịch mang đồ đến" : "Phản hồi lịch nhận đồ"}>
     <div className="of-appointment-heading"><CalendarDays size={22} /><div><small>{intake ? "LỊCH MANG ĐỒ ĐẾN" : "LỊCH NHẬN LẠI ĐỒ"}</small><h3>{date(appointment.scheduledAt)}</h3></div></div>
-    <p className="of-appointment-location"><MapPin size={17} /><span>{appointment.location}</span></p>
-    {appointment.note && <p className="of-prose">{appointment.note}</p>}
+    <p className="of-appointment-location"><MapPin size={17} aria-hidden="true" /><span><strong>Địa điểm: </strong>{appointment.location}</span></p>
+    {appointment.note && <p className="of-prose"><strong>Lời nhắn về lịch hẹn: </strong>{appointment.note}</p>}
     <Notice error>{error}</Notice>
     {status === "COMPLETED" && <p className="of-reply-outcome" role="status">Lịch hẹn đã hoàn tất.</p>}
     {oldAppointment && <p className="of-reply-outcome" role="status">{past ? "Lịch hẹn này đã qua. Vui lòng liên hệ văn phòng để được hẹn lại." : status === "LEGACY" ? "Lịch hẹn cũ chưa áp dụng xác nhận trực tuyến. Vui lòng liên hệ văn phòng để xác nhận lịch." : "Văn phòng đang chuẩn bị lời mời. Bạn chưa cần phản hồi."}</p>}

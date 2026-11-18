@@ -43,7 +43,6 @@ function Reports({ filters, onOpen }) {
 }
 
 const priorityReasons = {
-  MANUAL_HIGH: "Quản lý đánh dấu cần xem sớm. Xem căn cứ trong lịch sử xử lý.",
   OFFICE_SOON: "Có lịch nhận đồ trong 24 giờ tới",
   P2P_ACTIVE: "Bàn giao trực tiếp đang chờ xác nhận hoặc có tranh chấp",
   HANDOVER: "Cần làm rõ vướng mắc trao trả",
