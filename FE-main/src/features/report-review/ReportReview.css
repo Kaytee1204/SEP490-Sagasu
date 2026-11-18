@@ -661,7 +661,6 @@
 .rr-group-reports li > div { flex:1 1 240px; min-width:0; }
 .rr-group-reports li p { margin:4px 0; white-space:pre-wrap; }
 .rr-group-reports li small { display:block; margin-top:4px; }
-.rr-priority-options { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 @media(max-width:640px) {
  .rr-queue .rr-table-wrap { overflow:visible; }
  .rr-queue table,.rr-queue tbody,.rr-queue tr,.rr-queue td { display:block; width:100%; min-width:0; }

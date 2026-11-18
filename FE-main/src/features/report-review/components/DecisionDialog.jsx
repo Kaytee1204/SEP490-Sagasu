@@ -3,9 +3,6 @@ import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
 import { labels } from "../format";
 const warnings = {
-  PRIORITY_HIGH: "Đưa báo cáo lên nhóm cần xem sớm. Ghi rõ nguy cơ hoặc mức nghiêm trọng đã xác định.",
-  PRIORITY_NORMAL: "Đưa báo cáo về mức bình thường. Ghi rõ lý do không còn cần ưu tiên cao.",
-  PRIORITY_AUTO: "Dùng lại mức ưu tiên hệ thống xác định từ tình trạng giao nhận hiện tại.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
   SUSPEND_ACCOUNT:
     "Tài khoản được chọn sẽ bị đình chỉ truy cập. Quản lý chỉ xử lý tài khoản người dùng hoặc nhân viên tiếp nhận.",

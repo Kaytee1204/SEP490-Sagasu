@@ -10,7 +10,6 @@ import ChatContext from "./ChatContext";
 import useReviewResource from "../hooks/useReviewResource";
 export default function ReportDetail({ id, onBack, onRelated }) {
   const [tab, setTab] = useState("overview"),
-    [priorityChoice, setPriorityChoice] = useState("PRIORITY_AUTO"),
     [inquiryOpen, setInquiryOpen] = useState(false),
     [action, setAction] = useState(null),
     [busy, setBusy] = useState(false),
@@ -237,19 +236,6 @@ export default function ReportDetail({ id, onBack, onRelated }) {
                       {labels[value]}
                     </button>
                   ))}
-                  <details>
-                    <summary>Đổi mức ưu tiên</summary>
-                    <p>Hệ thống tự xếp hàng theo tình trạng giao nhận. Dùng mục này khi cần điều chỉnh thứ tự xem xét.</p>
-                    <label>
-                      Mức ưu tiên
-                      <select value={priorityChoice} onChange={(event) => setPriorityChoice(event.target.value)}>
-                        <option value="PRIORITY_AUTO">Tự động theo tình trạng giao nhận</option>
-                        <option value="PRIORITY_HIGH">Ưu tiên cao</option>
-                        <option value="PRIORITY_NORMAL">Ưu tiên bình thường</option>
-                      </select>
-                    </label>
-                    <button onClick={() => setAction(priorityChoice)}>Ghi lý do và lưu</button>
-                  </details>
                 </>
               ) : (
                 <p>
