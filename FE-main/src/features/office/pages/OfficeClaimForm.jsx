@@ -1,4 +1,5 @@
-import { useState } from "react";
+import "../PersonalOffice.css";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -75,6 +76,22 @@ export default function OfficeClaimForm({ counter = false }) {
   const [saving, setBusy] = useState(false);
   const [imagesProcessing, setImagesProcessing] = useState(false);
   const busy = saving || imagesProcessing;
+  const submitted = useRef(false);
+  const dirty = !!(form.description.trim() || form.evidenceNote.trim() || files.length || Object.keys(answers).length);
+  useEffect(() => {
+    if (counter || !dirty) return;
+    const unload = e => { if (!submitted.current) { e.preventDefault(); e.returnValue = ""; } };
+    const leave = e => {
+      const link = e.target.closest('a[href]');
+      if (!link || submitted.current || link.target === '_blank' || e.ctrlKey || e.metaKey) return;
+      if (!window.confirm("Thông tin yêu cầu chưa được gửi. Bạn có muốn rời trang và bỏ phần đang nhập?")) {
+        e.preventDefault(); e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', unload);
+    document.addEventListener('click', leave, true);
+    return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', leave, true); };
+  }, [counter, dirty]);
   const [error, setError] = useState("");
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const back = counter ? "/approver/office-claims" : "/van-phong/claims";
@@ -111,6 +128,7 @@ export default function OfficeClaimForm({ counter = false }) {
         files,
         counter,
       );
+      submitted.current = true;
       navigate(`${back}/${claimId}`, { replace: true });
     } catch (err) {
       setError(err.message);
@@ -124,7 +142,7 @@ export default function OfficeClaimForm({ counter = false }) {
     }
   }
   return (
-    <div className="office-page">
+    <div className={`office-page ${!counter ? "office-personal op-form" : ""}`}>
       <Link className="of-back" to={back}>
         ← Danh sách yêu cầu
       </Link>
@@ -262,7 +280,10 @@ export default function OfficeClaimForm({ counter = false }) {
                 questionnaire={questionnaire.data} answers={answers}
                 onAnswer={(code,value) => setAnswers(current => ({...current,[code]:value}))}
                 description={form.description} onDescription={value => change("description",value)}
-                disabled={busy} evidenceField={<>
+                disabled={busy} />}
+            </LoadState>
+            <section className="of-form" aria-label="Bằng chứng đính kèm">
+            <h3>Ảnh và thông tin bằng chứng</h3>
             <label>
               Ghi chú bằng chứng
               <textarea
@@ -273,8 +294,7 @@ export default function OfficeClaimForm({ counter = false }) {
               />
             </label>
             <EvidencePicker files={files} setFiles={setFiles} disabled={busy} onProcessing={setImagesProcessing} />
-              </>} />}
-            </LoadState>
+            </section>
             <div className="of-actions">
               <button
                 className="of-button of-primary"

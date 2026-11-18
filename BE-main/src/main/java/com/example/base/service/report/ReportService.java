@@ -20,7 +20,6 @@ import java.time.OffsetDateTime;
 
 @Service @RequiredArgsConstructor
 public class ReportService {
-    private final ReportCaseAlerts caseAlerts;
     private final ReportRepository reports;
     private final EntityManager em;
     private final ChatAccessPolicy actors;
@@ -109,7 +108,6 @@ public class ReportService {
         // DaiHV integration: keep the source content before later edits and retain referenced assets.
         context.capture(report.getId(),"SUBMISSION");
         // DaiHV case review: notify the case owner; preserve the team's independent report submission.
-        caseAlerts.notifyRelated(report.getId());
         if("CLAIM".equals(type) && "HANDOVER_ISSUE".equals(kind))
             jdbc.update("insert into office_handover_issue(report_id,handover_id) select ?,handover_id from office_handover where claim_id=? on conflict do nothing",report.getId(),target);
         return report;

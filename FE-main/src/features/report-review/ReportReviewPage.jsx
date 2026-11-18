@@ -1,11 +1,12 @@
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
-import ReportDetail from "./components/ReportDetail";
-import ReportWorkbench from "./components/ReportWorkbench";
+import ReportQueue from "./components/ReportQueue";
 import "./ReportReview.css";
 export default function ReportReviewPage() {
-  const [params, setParams] = useSearchParams(),
-    id = params.get("id"), target=params.get("target");
+  const navigate=useNavigate();
+  const [params] = useSearchParams(),
+    id = params.get("id");
+  if(id){const next=new URLSearchParams(params);next.delete('id');return <Navigate replace to={`/admin/reports/${id}${next.size?`?${next}`:''}`}/>;}
   return (
     <main className="rr">
       <header className="rr-header">
@@ -20,16 +21,7 @@ export default function ReportReviewPage() {
           </p>
         </div>
       </header>
-      {id ? (
-        <ReportDetail
-          key={id}
-          id={id}
-          onBack={() => setParams(target?{target}:{})}
-          onRelated={(value) => setParams({ id: value,...(target?{target}:{}) })}
-        />
-      ) : (
-        <ReportWorkbench target={target} onTarget={value=>setParams(value?{target:value}:{})} onOpen={value=>setParams({id:value,...(target?{target}:{})})}/>
-      )}
+      <ReportQueue onOpen={value=>navigate(`/admin/reports/${value}${params.size ? `?${params}` : ""}`)}/>
     </main>
   );
 }

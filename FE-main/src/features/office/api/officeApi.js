@@ -22,6 +22,7 @@ export const officeApi = {
   claims: (filters, mine = false) =>
     data(api.get(`/office-claims${mine ? "/mine" : ""}?${query(filters)}`)),
   claim: (id) => data(api.get(`/office-claims/${id}`)),
+  personalClaim: (id) => data(api.get(`/office-claims/mine/${id}`)),
   review: (id, body) => data(api.post(`/office-claims/${id}/review`, body)),
   supplements: (id) => data(api.get(`/office-claims/${id}/supplements`)),
   supplement: (id, body, files = []) => {

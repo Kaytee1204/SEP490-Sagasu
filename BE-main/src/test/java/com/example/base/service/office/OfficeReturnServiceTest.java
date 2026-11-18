@@ -373,7 +373,7 @@ class OfficeReturnServiceTest {
     }
 
     @Test
-    void utc039_verify_failedResult_showsReverifyNextStep() {
+    void utc039_verify_failedResult_rejectsClaimAndCancelsAppointment() {
         grant(approver);
         Claim c = officeClaim(30L, claimant, "APPROVED", 3L);
         Appointment appt = appointment(c, 8L, "CONFIRMED");
@@ -385,8 +385,11 @@ class OfficeReturnServiceTest {
 
         Workflow w = service.verify(30L, new Verify(3L, "FAILED", "Wrong serial"), ud(approver));
 
+        assertThat(c.getStatus()).isEqualTo("REJECTED");
+        assertThat(appt.getStatus()).isEqualTo("CANCELLED");
+        assertThat(c.getPost().getStatus()).isEqualTo("OPEN");
         assertThat(w.canRecord()).isFalse();
-        assertThat(w.nextStep()).startsWith("Đối chiếu danh tính");
+        assertThat(w.nextStep()).startsWith("Không đạt xác minh tại quầy");
     }
 
     @Test

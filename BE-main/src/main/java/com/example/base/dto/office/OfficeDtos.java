@@ -19,7 +19,8 @@ public final class OfficeDtos {
     public record PostView(Long id, String title, String description, String postType, String status,
         String moderationStatus, String custodyMode, String category, String author, String authorEmail,
         String location, OffsetDateTime createdAt, OffsetDateTime updatedAt, String moderationNote,
-        String moderatedBy, OffsetDateTime moderatedAt, List<String> images, ReceiptView receipt) {}
+        String moderatedBy, OffsetDateTime moderatedAt, List<String> images, ReceiptView receipt,
+        Long authorId, String owner, Long ownerId) {}
     public record ClaimantOption(Long id, String name, String email) {}
     public record Submission(@NotNull @Positive Long postId, @Positive Long claimantId,
         @Size(max=150) String claimantName, @Email @Size(max=255) String claimantEmail,

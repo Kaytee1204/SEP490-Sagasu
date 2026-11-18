@@ -13,7 +13,7 @@ import static com.example.base.service.office.OfficeAccess.bad;
 public class OfficeClaimProgress {
     private final JdbcTemplate jdbc;
     public record Progress(long id,String stage,OffsetDateTime scheduledAt) {}
-    private static final Set<String> STAGES=Set.of("ALL","REVIEW","NEEDS_INFO","EMAIL_UNSENT","AWAITING_REPLY","REPLY_EXPIRED","COUNTER_VERIFICATION","VERIFICATION_FAILED","READY_TO_HANDOVER","OFFICE_COMPLETION","COMPLETED","DISPUTED","REJECTED","CANCELLED","CLOSED");
+    private static final Set<String> STAGES=Set.of("ALL","APPOINTMENT_REVIEW","REVIEW","NEEDS_INFO","EMAIL_UNSENT","AWAITING_REPLY","REPLY_EXPIRED","COUNTER_VERIFICATION","VERIFICATION_FAILED","READY_TO_HANDOVER","OFFICE_COMPLETION","COMPLETED","DISPUTED","REJECTED","CANCELLED","CLOSED");
     private static final String BASE="""
         select c.claim_id,c.status,c.claimant_id,c.claimant_name,c.created_at,p.title,a.scheduled_at,
         case when h.status='DISPUTED' then 'DISPUTED'
@@ -22,6 +22,7 @@ public class OfficeClaimProgress {
              when c.status='PENDING' then 'REVIEW'
              when c.status='NEEDS_INFO' then 'NEEDS_INFO'
              when c.status<>'APPROVED' then c.status
+             when a.response_status in ('LEGACY','UNSENT') and a.scheduled_at<=now() then 'APPOINTMENT_REVIEW'
              when a.appointment_id is null or a.response_status in ('UNSENT','LEGACY') then 'EMAIL_UNSENT'
              when a.response_status='PENDING' and a.response_deadline<=now() then 'REPLY_EXPIRED'
              when a.response_status<>'CONFIRMED' then 'AWAITING_REPLY'

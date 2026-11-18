@@ -105,6 +105,13 @@ public class OfficeClaimController {
         return ApiResponse.ok(service.list(page, status, q, stage, true, user));
     }
 
+    @GetMapping("/mine/{id}")
+    @Operation(summary = "Chi tiết yêu cầu của chính tài khoản đăng nhập, kể cả Approver")
+    public ApiResponse<ClaimView> personalDetail(@PathVariable("id") long id,
+            @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(service.personalDetail(id, user));
+    }
+
     @GetMapping("/{id}")
     @Operation(
             summary = "[10.4] Xem chi tiết hồ sơ Claim Văn phòng theo ID",

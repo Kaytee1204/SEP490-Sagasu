@@ -198,7 +198,7 @@ public class OfficeWorkflowController {
     @PostMapping("/claims/{id}/verify")
     @Operation(
             summary = "[11.14] Ghi nhận kết quả xác minh trực tiếp tại quầy Văn phòng (PASSED / FAILED)",
-            description = "Cán bộ văn phòng đối chiếu giấy tờ tùy thân và vật phẩm thực tế tại quầy trước khi bàn giao."
+              description = "PASSED cho phép ghi nhận giao đồ. FAILED từ chối yêu cầu, hủy lịch và giải phóng đồ; tài khoản không được yêu cầu lại cùng món đồ, kể cả lập tại quầy."
     )
     public ApiResponse<Workflow> verify(
             @PathVariable("id") long id,

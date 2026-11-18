@@ -1,4 +1,14 @@
+export const reportTargets = {
+  POST: "Bài đăng",
+  CLAIM: "Yêu cầu nhận đồ",
+  MESSAGE: "Tin nhắn",
+  USER: "Tài khoản",
+};
+
 export const labels = {
+  PRIORITY_HIGH: "Đặt ưu tiên cao",
+  PRIORITY_NORMAL: "Đặt ưu tiên bình thường",
+  PRIORITY_AUTO: "Ưu tiên theo nguy cơ giao nhận",
   CASE_LINK: "Liên kết vụ việc",
   CASE_UNLINK: "Tách khỏi vụ việc",
   DISPUTE_RESOLVE: "Kết luận tranh chấp",

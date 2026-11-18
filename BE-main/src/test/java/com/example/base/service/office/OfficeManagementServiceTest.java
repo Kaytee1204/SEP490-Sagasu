@@ -394,6 +394,7 @@ class OfficeManagementServiceTest {
         PostView res = service.moderate(10L, new Moderation("HIDDEN", "Internal", t), ud(manager));
 
         assertThat(res.moderationStatus()).isEqualTo("HIDDEN");
+        assertThat(res.ownerId()).isNull();
         verifyNoInteractions(notifications);
     }
 

@@ -44,7 +44,8 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       <p className="of-muted">Hồ sơ #{claim.id} · {claim.postTitle}</p>
       {action === "verify" && <>
         <p>Đối chiếu người đến quầy với <strong>{claim.claimantName}</strong> và căn cứ sở hữu trong hồ sơ. Chỉ ghi kết quả kiểm tra, tránh lưu toàn bộ số giấy tờ cá nhân.</p>
-        <label>Kết quả<select value={form.result} disabled={busy} onChange={(e) => change("result", e.target.value)}><option value="PASSED">Đạt — đủ căn cứ trao trả</option><option value="FAILED">Chưa đạt — chưa được giao đồ</option></select></label>
+        <label>Kết quả<select value={form.result} disabled={busy} onChange={(e) => change("result", e.target.value)}><option value="PASSED">Đạt — đủ căn cứ trao trả</option><option value="FAILED">Không đạt — từ chối nhận đồ</option></select></label>
+        {form.result === "FAILED" && <Notice error>Yêu cầu sẽ bị từ chối, lịch hẹn bị hủy và đồ được mở cho người khác nhận. Tài khoản này không được yêu cầu lại món đồ này, kể cả tại quầy.</Notice>}
         <label>Nội dung đã đối chiếu *<textarea required maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} placeholder="Danh tính, dấu hiệu riêng và bằng chứng đã đối chiếu…" /></label>
       </>}
       {action === "reschedule" && <>

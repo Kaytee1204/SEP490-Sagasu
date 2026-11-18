@@ -44,7 +44,15 @@ public class OfficeManagementService {
         var data=posts.findAll((root,cq,cb)-> {
             List<Predicate> p=new ArrayList<>();
             p.add(cb.isNull(root.get("deletedAt")));
-            p.add(cb.or(cb.gt(cb.locate(cb.lower(root.get("title")),keyword),0),cb.gt(cb.locate(cb.lower(root.get("description")),keyword),0)));
+            if (!keyword.isEmpty()) {
+                var author = root.join("createdBy");
+                p.add(cb.or(
+                    cb.gt(cb.locate(cb.lower(root.get("title")),keyword),0),
+                    cb.gt(cb.locate(cb.lower(root.get("description")),keyword),0),
+                    cb.gt(cb.locate(cb.lower(author.get("fullName")),keyword),0),
+                    cb.gt(cb.locate(cb.lower(author.get("email")),keyword),0),
+                    cb.equal(root.get("id").as(String.class),keyword)));
+            }
             if(!"ALL".equals(type)) p.add(cb.equal(root.get("postType"),type));
             if(!"ALL".equals(status)) p.add(cb.equal(root.get("status"),status));
             if(!"ALL".equals(moderation)) p.add(cb.equal(root.get("moderationStatus"),moderation));
@@ -87,12 +95,15 @@ public class OfficeManagementService {
         return posts.findById(id).filter(p->p.getDeletedAt()==null).orElseThrow(()->bad("Không tìm thấy bài đăng."));
     }
     private PostView postView(Post p, boolean detail) {
+        Account author = p.getCreatedBy();
+        Account owner = p.getAccount();
         return new PostView(p.getId(),p.getTitle(),detail?p.getDescription():null,p.getPostType(),p.getStatus(),
-            p.getModerationStatus(),p.getCustodyMode(),p.getCategory().getName(),person(p.getCreatedBy()),
-            detail?p.getCreatedBy().getEmail():null,p.getLocationText(),p.getCreatedAt(),p.getUpdatedAt(),
+            p.getModerationStatus(),p.getCustodyMode(),p.getCategory().getName(),person(author),
+            author==null?null:author.getEmail(),p.getLocationText(),p.getCreatedAt(),p.getUpdatedAt(),
             detail?p.getModerationNote():null,person(p.getModeratedBy()),p.getModeratedAt(),
             p.getImages().stream().limit(detail?5:1).map(i->storage.readUrl(i.getStorageKey(),i.getImageUrl())).toList(),
-            detail?receipts.findByPostId(p.getId()).map(this::receiptView).orElse(null):null);
+            detail?receipts.findByPostId(p.getId()).map(this::receiptView).orElse(null):null,
+            author==null?null:author.getId(),person(owner),owner==null?null:owner.getId());
     }
     public ReceiptView receiptView(ItemReceipt r) {
         return new ReceiptView(r.getId(),r.getReceiptCode(),r.getPostId(),r.getTitle(),r.getStatus(),r.getConditionAtReceipt(),
