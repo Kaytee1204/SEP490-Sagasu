@@ -24,8 +24,11 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.function.Executable;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -41,10 +44,15 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
+/** One test per UTC of sheet "Claim" for ClaimQuestionnaireService (UTC083-UTC119). */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ClaimQuestionnaireServiceTest {
+
+    private static final ZoneId VN = ZoneId.of("Asia/Ho_Chi_Minh");
 
     @Mock
     private ClaimQuestionTemplateRepository templates;
@@ -71,7 +79,7 @@ class ClaimQuestionnaireServiceTest {
 
         Account owner = new Account();
         owner.setId(5L);
-        owner.setEmail("owner@fpt.edu.vn");
+        owner.setEmail("owner@gmail.com");
         owner.setFullName("Owner");
         owner.setRole(AccountRole.USER);
         owner.setStatus(AccountStatus.ACTIVE);
@@ -93,13 +101,13 @@ class ClaimQuestionnaireServiceTest {
                 question(21L, categoryTemplate, "Q_CAT_1", "Hình nền", "TEXT", true, 1, null, null, false),
                 question(22L, categoryTemplate, "Q_CAT_2", "Ngày mất", "LOST_DATE", false, 2, null, null, false)
         );
+        stubActiveQuestionnaire();
     }
 
-    // UTC081 - forCategory returns ordered questionnaire DTO with computed version string
-    @Test
-    void forCategory_whenTemplatesValid_returnsOrderedQuestionnaireWithComputedVersion() {
-        stubActiveQuestionnaire();
+    // ---------------------------------------------------------------- forCategory
 
+    @Test
+    void utc083_forCategory_returnsOrderedQuestionnaireWithVersion() {
         ClaimQuestionnaireDto dto = service.forCategory(category);
 
         assertEquals("COMMON:2/CAT_ELECTRONICS:4", dto.version());
@@ -109,132 +117,13 @@ class ClaimQuestionnaireServiceTest {
         assertEquals(2, dto.categoryQuestions().size());
     }
 
-    // UTC084 - forCategory throws CLAIM_QUESTIONNAIRE_UNAVAILABLE when category template missing or COMMON has fewer than 4 questions
     @Test
-    void forCategory_whenCategoryTemplateMissingOrCommonCountInvalid_throwsUnavailable() {
-        // Supplementary (ClaimQuestionnaireService.forCategory): missing category and OTHER fallback throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.of(commonTemplate));
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.empty());
-
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE,
-                assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
-
-        // UTC084 - COMMON template having only 3 questions throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.of(categoryTemplate));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L))
-                .thenReturn(commonQuestions.subList(0, 3));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L))
-                .thenReturn(categoryQuestions);
-
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE,
-                assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
-    }
-
-    // UTC087 - validateAndSnapshot throws CLAIM_QUESTIONNAIRE_STALE on outdated questionnaireVersion
-    @Test
-    void validateAndSnapshot_whenVersionStale_throwsClaimQuestionnaireStale() {
-        stubActiveQuestionnaire();
-        SubmitClaimRequest req = new SubmitClaimRequest("desc", null, "COMMON:1/CAT_ELECTRONICS:4", List.of());
-
-        AppException ex = assertThrows(AppException.class, () -> service.validateAndSnapshot(post, req));
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_STALE, ex.getErrorCode());
-    }
-
-    // UTC086, UTC101, UTC107 - validateAndSnapshot produces ordered snapshots for TEXT, CHOICE with details, and EXACT LOST_DATE
-    @Test
-    void validateAndSnapshot_whenValidVisibleAndConditionalAnswers_createsOrderedSnapshots() {
-        stubActiveQuestionnaire();
-        // UTC101 - CHOICE option with allowed/required details formats "<label>\n<details>"
-        ObjectNode selectWithDetails = choice("Có", "Bao da đen");
-        // UTC107 - LOST_DATE with EXACT precision formats VN date and time
-        ObjectNode lostDate = mapper.createObjectNode();
-        lostDate.put("precision", "EXACT");
-        lostDate.put("date", "2026-01-15");
-        lostDate.put("time", "14:30");
-
-        // UTC086 - matching version and valid answers yield ordered ClaimAnswer snapshots
-        SubmitClaimRequest req = new SubmitClaimRequest(
-                "desc", "note", "COMMON:2/CAT_ELECTRONICS:4",
-                List.of(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("  Đen nhám ")),
-                        new ClaimAnswerRequest("Q_COMMON_2", selectWithDetails),
-                        new ClaimAnswerRequest("Q_COMMON_3", TextNode.valueOf("Sạc 20W")),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Ảnh chó Corgi")),
-                        new ClaimAnswerRequest("Q_CAT_2", lostDate)
-                ));
-
-        List<ClaimAnswer> snapshots = service.validateAndSnapshot(post, req);
-
-        assertEquals(5, snapshots.size());
-        assertEquals("Q_COMMON_1", snapshots.get(0).getQuestionCode());
-        assertEquals("Đen nhám", snapshots.get(0).getAnswerText());
-        assertEquals("Có\nBao da đen", snapshots.get(1).getAnswerText());
-        assertEquals("Sạc 20W", snapshots.get(2).getAnswerText());
-        assertEquals("Ngày 15/01/2026, lúc 14:30 (giờ Việt Nam)", snapshots.get(4).getAnswerText());
-    }
-
-    // UTC098, UTC115 - validateAndSnapshot accepts CHOICE without details and skips hidden conditional required questions
-    @Test
-    void validateAndSnapshot_whenConditionalHiddenQuestionAnsweredOrRequiredMissing_handlesVisibility() {
-        stubActiveQuestionnaire();
-        // UTC098, UTC115 - CHOICE "Không" hides required Q_COMMON_3 so omitting it succeeds
-        SubmitClaimRequest hiddenSkipped = new SubmitClaimRequest(
-                "desc", null, "COMMON:2/CAT_ELECTRONICS:4",
-                List.of(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Ảnh nền mặc định"))
-                ));
-
-        List<ClaimAnswer> ok = service.validateAndSnapshot(post, hiddenSkipped);
-        assertEquals(3, ok.size());
-
-        // Supplementary (ClaimQuestionnaireService.validateAndSnapshot): visible conditional required question missing throws CLAIM_QUESTIONNAIRE_INVALID
-        SubmitClaimRequest visibleMissing = new SubmitClaimRequest(
-                "desc", null, "COMMON:2/CAT_ELECTRONICS:4",
-                List.of(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Có", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Ảnh nền mặc định"))
-                ));
-
-        AppException ex = assertThrows(AppException.class, () -> service.validateAndSnapshot(post, visibleMissing));
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, ex.getErrorCode());
-    }
-
-    // UTC099 - validateAndSnapshot rejects invalid CHOICE option
-    @Test
-    void validateAndSnapshot_whenInvalidOptionOrUnknownCodeOrDuplicate_throwsInvalid() {
-        stubActiveQuestionnaire();
-        SubmitClaimRequest badOption = new SubmitClaimRequest(
-                "desc", null, "COMMON:2/CAT_ELECTRONICS:4",
-                List.of(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("INVALID_CHOICE", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Ảnh"))
-                ));
-
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
-                assertThrows(AppException.class, () -> service.validateAndSnapshot(post, badOption)).getErrorCode());
-    }
-
-    // UTC082 - forCategory falls back to OTHER template when category-specific template is missing
-    @Test
-    void forCategory_whenCategoryTemplateMissing_fallsBackToOtherTemplate() {
+    void utc084_forCategory_missingCategoryTemplateFallsBackToOther() {
         ClaimQuestionTemplate otherTemplate = template(9L, "OTHER", "Khác", null, 1);
-        List<ClaimQuestion> otherQuestions = List.of(
-                question(91L, otherTemplate, "Q_OTHER_1", "Đặc điểm riêng", "TEXT", true, 1, null, null, false));
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.of(commonTemplate));
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.empty());
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("OTHER"))
-                .thenReturn(Optional.of(otherTemplate));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(9L)).thenReturn(otherQuestions);
+        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L)).thenReturn(Optional.empty());
+        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("OTHER")).thenReturn(Optional.of(otherTemplate));
+        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(9L)).thenReturn(List.of(
+                question(91L, otherTemplate, "Q_OTHER_1", "Đặc điểm riêng", "TEXT", true, 1, null, null, false)));
 
         ClaimQuestionnaireDto dto = service.forCategory(category);
 
@@ -243,56 +132,70 @@ class ClaimQuestionnaireServiceTest {
         assertEquals("Q_OTHER_1", dto.categoryQuestions().get(0).code());
     }
 
-    // UTC083, UTC085 - forCategory throws CLAIM_QUESTIONNAIRE_UNAVAILABLE when COMMON missing or specific questions empty
     @Test
-    void forCategory_whenCommonMissingOrCategoryQuestionsEmpty_throwsUnavailable() {
-        // UTC083 - no active COMMON template throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.empty());
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE,
-                assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
-
-        // UTC085 - category template with 0 questions throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.of(commonTemplate));
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.of(categoryTemplate));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(List.of());
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE,
-                assertThrows(AppException.class, () -> service.forCategory(category)).getErrorCode());
+    void utc085_forCategory_missingCommonTemplateThrowsUnavailable() {
+        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON")).thenReturn(Optional.empty());
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, code(() -> service.forCategory(category)));
     }
 
-    // UTC088, UTC089 - validateAndSnapshot rejects null answers list or more than 24 answers
     @Test
-    void validateAndSnapshot_whenAnswersNullOrExceedMax24_throwsInvalid() {
-        stubActiveQuestionnaire();
-        // UTC088 - null answers throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post,
-                        new SubmitClaimRequest("desc", null, "COMMON:2/CAT_ELECTRONICS:4", null)))
-                .getErrorCode());
+    void utc086_forCategory_commonWithThreeQuestionsThrowsUnavailable() {
+        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions.subList(0, 3));
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, code(() -> service.forCategory(category)));
 
-        // UTC089 - 25 answers exceeds max 24 and throws CLAIM_QUESTIONNAIRE_INVALID
+        // neither a category template nor the OTHER fallback exists
+        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
+        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L)).thenReturn(Optional.empty());
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, code(() -> service.forCategory(category)));
+    }
+
+    @Test
+    void utc087_forCategory_categoryTemplateWithoutQuestionsThrowsUnavailable() {
+        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(List.of());
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, code(() -> service.forCategory(category)));
+    }
+
+    // ---------------------------------------------------------------- validateAndSnapshot: request shape
+
+    @Test
+    void utc088_validate_validAnswersCreateOrderedSnapshots() {
+        List<ClaimAnswer> snapshots = service.validateAndSnapshot(post, submitWith(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("  Đen nhám ")),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("Có", "Bao da đen")),
+                new ClaimAnswerRequest("Q_COMMON_3", TextNode.valueOf("Sạc 20W")),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Ảnh chó Corgi"))));
+
+        assertEquals(4, snapshots.size());
+        assertEquals("Q_COMMON_1", snapshots.get(0).getQuestionCode());
+        assertEquals("Đen nhám", snapshots.get(0).getAnswerText());
+        assertEquals("Sạc 20W", snapshots.get(2).getAnswerText());
+        assertEquals("Q_CAT_1", snapshots.get(3).getQuestionCode());
+    }
+
+    @Test
+    void utc089_validate_staleVersionThrowsStale() {
+        SubmitClaimRequest req = new SubmitClaimRequest("desc", null, "COMMON:1/CAT_ELECTRONICS:4", List.of());
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_STALE, code(() -> service.validateAndSnapshot(post, req)));
+    }
+
+    @Test
+    void utc090_validate_nullAnswersThrowsInvalid() {
+        SubmitClaimRequest req = new SubmitClaimRequest("desc", null, "COMMON:2/CAT_ELECTRONICS:4", null);
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, code(() -> service.validateAndSnapshot(post, req)));
+    }
+
+    @Test
+    void utc091_validate_25AnswersThrowsInvalid() {
         List<ClaimAnswerRequest> tooMany = new ArrayList<>();
         for (int i = 0; i < 25; i++) {
             tooMany.add(new ClaimAnswerRequest("Q_" + i, TextNode.valueOf("val")));
         }
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post,
-                        new SubmitClaimRequest("desc", null, "COMMON:2/CAT_ELECTRONICS:4", tooMany)))
-                .getErrorCode());
+        SubmitClaimRequest req = new SubmitClaimRequest("desc", null, "COMMON:2/CAT_ELECTRONICS:4", tooMany);
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, code(() -> service.validateAndSnapshot(post, req)));
     }
 
-    // UTC090 - validateAndSnapshot accepts boundary size of 24 valid answers
     @Test
-    void validateAndSnapshot_when24AnswersSubmitted_acceptsBoundary() {
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.of(commonTemplate));
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.of(categoryTemplate));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
-
+    void utc092_validate_24AnswersAcceptedAtBoundary() {
         List<ClaimQuestion> twentyCategory = new ArrayList<>();
         List<ClaimAnswerRequest> answers = new ArrayList<>(List.of(
                 new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
@@ -300,258 +203,277 @@ class ClaimQuestionnaireServiceTest {
                 new ClaimAnswerRequest("Q_COMMON_3", TextNode.valueOf("Trong suốt")),
                 new ClaimAnswerRequest("Q_COMMON_4", choice("Sticker", null))));
         for (int i = 1; i <= 20; i++) {
-            String code = "Q_EXTRA_" + i;
-            twentyCategory.add(question(100L + i, categoryTemplate, code, "Extra " + i, "TEXT", false, i, null, null,
-                    false));
-            answers.add(new ClaimAnswerRequest(code, TextNode.valueOf("v" + i)));
+            String qCode = "Q_EXTRA_" + i;
+            twentyCategory.add(question(100L + i, categoryTemplate, qCode, "Extra " + i, "TEXT", false, i, null, null, false));
+            answers.add(new ClaimAnswerRequest(qCode, TextNode.valueOf("v" + i)));
         }
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(twentyCategory);
 
-        List<ClaimAnswer> snapshots = service.validateAndSnapshot(
-                post, new SubmitClaimRequest("desc", null, "COMMON:2/CAT_ELECTRONICS:4", answers));
-
-        assertEquals(24, snapshots.size());
+        assertEquals(24, service.validateAndSnapshot(post,
+                new SubmitClaimRequest("desc", null, "COMMON:2/CAT_ELECTRONICS:4", answers)).size());
     }
 
-    // UTC091, UTC092, UTC093 - validateAndSnapshot rejects unknown codes, duplicates, and DESCRIPTION inputType answers
     @Test
-    void validateAndSnapshot_whenUnknownDuplicateOrExistingFieldAnswered_throwsInvalid() {
-        List<ClaimQuestion> withExisting = new ArrayList<>(categoryQuestions);
-        withExisting.add(question(99L, categoryTemplate, "Q_DESC_EXISTING", "Mô tả", "DESCRIPTION", true, 3, null,
-                null, false));
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.of(commonTemplate));
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.of(categoryTemplate));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(withExisting);
-
-        // UTC091 - unknown questionCode throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("UNKNOWN_CODE", TextNode.valueOf("x")))))
-                .getErrorCode());
-
-        // UTC092 - duplicate questionCode throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Trắng")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
-                .getErrorCode());
-
-        // UTC093 - answering DESCRIPTION question throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")),
-                        new ClaimAnswerRequest("Q_DESC_EXISTING", TextNode.valueOf("Duplicate desc")))))
-                .getErrorCode());
+    void utc093_validate_unknownQuestionCodeThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalid(new ClaimAnswerRequest("UNKNOWN_CODE", TextNode.valueOf("x"))));
     }
 
-    // UTC094, UTC095 - validateAndSnapshot requires non-blank required TEXT and skips omitted optional questions
     @Test
-    void validateAndSnapshot_whenRequiredMissingOrOptionalOmitted_handlesValidation() {
-        stubActiveQuestionnaire();
-
-        // UTC094 - blank required TEXT throws CLAIM_QUESTIONNAIRE_INVALID with question label
-        AppException missingRequired = assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("   ")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))));
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, missingRequired.getErrorCode());
-        assertEquals("Vui lòng trả lời: Mô tả màu sắc", missingRequired.getMessage());
-
-        // UTC095 - omitted optional questions are skipped without error
-        List<ClaimAnswer> snapshots = service.validateAndSnapshot(post, submitWith(
+    void utc094_validate_duplicateQuestionCodeThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalid(
                 new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Trắng")),
                 new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
                 new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo"))));
-        assertEquals(3, snapshots.size());
     }
 
-    // UTC096, UTC097 - validateAndSnapshot rejects TEXT answers exceeding 2000 chars or non-textual values
     @Test
-    void validateAndSnapshot_whenTextTooLongOrNonTextual_throwsInvalid() {
-        stubActiveQuestionnaire();
+    void utc095_validate_answeringDescriptionQuestionThrowsInvalid() {
+        List<ClaimQuestion> withExisting = new ArrayList<>(categoryQuestions);
+        withExisting.add(question(99L, categoryTemplate, "Q_DESC_EXISTING", "Mô tả", "DESCRIPTION", true, 3, null, null, false));
+        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(withExisting);
 
-        // UTC096 - 2001-char TEXT exceeds max 2000 and throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("a".repeat(2001))),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
-                .getErrorCode());
-
-        // UTC097 - numeric IntNode for TEXT question throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", IntNode.valueOf(123)),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
-                .getErrorCode());
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalidWithBase(new ClaimAnswerRequest("Q_DESC_EXISTING", TextNode.valueOf("Duplicate desc"))));
     }
 
-    // UTC100, UTC102, UTC103, UTC104 - validateAndSnapshot validates CHOICE details, unexpected fields, and object format
     @Test
-    void validateAndSnapshot_whenChoiceDetailsInvalid_throwsInvalid() {
-        ArrayNode withReqDetails = options(option("Khác", "Khác", true), option("Không", "Không", false));
-        List<ClaimQuestion> customCommon = List.of(
-                commonQuestions.get(0),
-                question(12L, commonTemplate, "Q_COMMON_2", "Phụ kiện", "CHOICE", true, 2, withReqDetails, null, false),
-                commonQuestions.get(2),
-                commonQuestions.get(3));
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.of(commonTemplate));
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.of(categoryTemplate));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(customCommon);
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(categoryQuestions);
-
-        // UTC100 - detailsRequired option missing details throws CLAIM_QUESTIONNAIRE_INVALID
-        AppException missingDetails = assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Khác", "  ")),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))));
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, missingDetails.getErrorCode());
-
-        // UTC102 - details passed when not allowed throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", "Chi tiết thừa")),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
-                .getErrorCode());
-
-        // UTC103 - unknown property inside CHOICE object throws CLAIM_QUESTIONNAIRE_INVALID
-        ObjectNode extraFieldChoice = choice("Không", null);
-        extraFieldChoice.put("extra", "bad");
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", extraFieldChoice),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
-                .getErrorCode());
-
-        // UTC104 - string value instead of CHOICE object throws CLAIM_QUESTIONNAIRE_INVALID
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", TextNode.valueOf("Không")),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))))
-                .getErrorCode());
-    }
-
-    // UTC105, UTC108 - validateAndSnapshot formats LOST_DATE for UNKNOWN and APPROXIMATE precisions
-    @Test
-    void validateAndSnapshot_whenLostDateUnknownOrApproximate_createsExpectedSnapshots() {
-        stubActiveQuestionnaire();
-
-        // UTC105 - UNKNOWN precision snapshot text
-        ObjectNode unknownDate = mapper.createObjectNode().put("precision", "UNKNOWN");
-        List<ClaimAnswer> unknownRes = service.validateAndSnapshot(post, submitWith(
-                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+    void utc096_validate_blankRequiredTextThrowsInvalidWithLabel() {
+        AppException ex = assertThrows(AppException.class, () -> service.validateAndSnapshot(post, submitWith(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("   ")),
                 new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")),
-                new ClaimAnswerRequest("Q_CAT_2", unknownDate)));
-        assertFalse(unknownRes.get(3).getAnswerText().isBlank());
-
-        // UTC108 - APPROXIMATE precision snapshot text
-        ObjectNode approxDate = mapper.createObjectNode().put("precision", "APPROXIMATE").put("date", "2026-01-15");
-        List<ClaimAnswer> approxRes = service.validateAndSnapshot(post, submitWith(
-                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")),
-                new ClaimAnswerRequest("Q_CAT_2", approxDate)));
-        assertEquals("Khoảng ngày 15/01/2026 (giờ Việt Nam)", approxRes.get(3).getAnswerText());
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))));
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, ex.getErrorCode());
+        assertEquals("Vui lòng trả lời: Mô tả màu sắc", ex.getMessage());
     }
 
-    // UTC106, UTC109, UTC110, UTC111, UTC112, UTC113 - validateAndSnapshot rejects invalid or future LOST_DATE values
     @Test
-    void validateAndSnapshot_whenLostDateInvalidOrInFuture_throwsInvalid() {
-        stubActiveQuestionnaire();
-        ZoneId vn = ZoneId.of("Asia/Ho_Chi_Minh");
-        String tomorrow = LocalDate.now(vn).plusDays(1).toString();
-        ZonedDateTime nowVn = ZonedDateTime.now(vn);
-        String today = nowVn.toLocalDate().toString();
+    void utc097_validate_omittedOptionalQuestionsSkipped() {
+        assertEquals(3, service.validateAndSnapshot(post, submitWith(baseAnswers())).size());
+    }
+
+    @Test
+    void utc098_validate_text2001ThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalid(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("a".repeat(2001))),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo"))));
+    }
+
+    @Test
+    void utc099_validate_numericValueForTextThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalid(
+                new ClaimAnswerRequest("Q_COMMON_1", IntNode.valueOf(123)),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo"))));
+    }
+
+    // ---------------------------------------------------------------- CHOICE
+
+    @Test
+    void utc100_validate_choiceWithoutDetailsAccepted() {
+        List<ClaimAnswer> snapshots = service.validateAndSnapshot(post, submitWith(baseAnswers()));
+        assertEquals("Không", snapshots.get(1).getAnswerText());
+    }
+
+    @Test
+    void utc101_validate_unknownChoiceOptionThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalid(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("INVALID_CHOICE", null)),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Ảnh"))));
+    }
+
+    @Test
+    void utc102_validate_requiredDetailsMissingThrowsInvalid() {
+        stubDetailsRequiredChoice();
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalidChoice(choice("Khác", "  ")));
+    }
+
+    @Test
+    void utc103_validate_choiceWithDetailsFormatsLabelAndDetails() {
+        List<ClaimAnswer> snapshots = service.validateAndSnapshot(post, submitWith(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("Có", "Bao da đen")),
+                new ClaimAnswerRequest("Q_COMMON_3", TextNode.valueOf("Sạc 20W")),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo"))));
+        assertEquals("Có\nBao da đen", snapshots.get(1).getAnswerText());
+    }
+
+    @Test
+    void utc104_validate_detailsWhenNotAllowedThrowsInvalid() {
+        stubDetailsRequiredChoice();
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalidChoice(choice("Không", "Chi tiết thừa")));
+    }
+
+    @Test
+    void utc105_validate_unknownPropertyInChoiceThrowsInvalid() {
+        stubDetailsRequiredChoice();
+        ObjectNode extraField = choice("Không", null);
+        extraField.put("extra", "bad");
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalidChoice(extraField));
+    }
+
+    @Test
+    void utc106_validate_plainStringForChoiceThrowsInvalid() {
+        stubDetailsRequiredChoice();
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalidChoice(TextNode.valueOf("Không")));
+    }
+
+    // ---------------------------------------------------------------- LOST_DATE
+
+    @Test
+    void utc107_validate_lostDateUnknownCreatesSnapshot() {
+        assertFalse(lostDateSnapshot(mapper.createObjectNode().put("precision", "UNKNOWN")).isBlank());
+    }
+
+    @Test
+    void utc108_validate_lostDateUnknownWithDateThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalidLostDate(mapper.createObjectNode().put("precision", "UNKNOWN").put("date", "2026-01-15")));
+    }
+
+    @Test
+    void utc109_validate_lostDateExactFormatsDateAndTime() {
+        ObjectNode exact = mapper.createObjectNode().put("precision", "EXACT").put("date", "2026-01-15").put("time", "14:30");
+        assertEquals("Ngày 15/01/2026, lúc 14:30 (giờ Việt Nam)", lostDateSnapshot(exact));
+    }
+
+    @Test
+    void utc110_validate_lostDateApproximateFormatsDate() {
+        ObjectNode approx = mapper.createObjectNode().put("precision", "APPROXIMATE").put("date", "2026-01-15");
+        assertEquals("Khoảng ngày 15/01/2026 (giờ Việt Nam)", lostDateSnapshot(approx));
+    }
+
+    @Test
+    void utc111_validate_lostDateUnsupportedPrecisionThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalidLostDate(mapper.createObjectNode().put("precision", "APPROX")));
+    }
+
+    @Test
+    void utc112_validate_lostDateWrongFormatThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalidLostDate(mapper.createObjectNode().put("precision", "EXACT").put("date", "15/01/2026")));
+    }
+
+    @Test
+    void utc113_validate_lostDateNonexistentCalendarDateThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalidLostDate(mapper.createObjectNode().put("precision", "EXACT").put("date", "2026-02-30")));
+    }
+
+    @Test
+    void utc114_validate_lostDateTomorrowThrowsInvalid() {
+        String tomorrow = LocalDate.now(VN).plusDays(1).toString();
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalidLostDate(mapper.createObjectNode().put("precision", "EXACT").put("date", tomorrow)));
+    }
+
+    @Test
+    void utc115_validate_lostDateFutureTimeTodayThrowsInvalid() {
+        ZonedDateTime nowVn = ZonedDateTime.now(VN);
         LocalTime futureTime = nowVn.toLocalTime().isBefore(LocalTime.of(23, 58))
                 ? nowVn.toLocalTime().plusMinutes(1)
                 : LocalTime.of(23, 59, 59);
-
-        List<ObjectNode> badDates = List.of(
-                // UTC106 - UNKNOWN precision with date field rejected
-                mapper.createObjectNode().put("precision", "UNKNOWN").put("date", "2026-01-15"),
-                // UTC109 - unsupported precision value rejected
-                mapper.createObjectNode().put("precision", "APPROX"),
-                // UTC110 - wrong date format dd/MM/yyyy rejected
-                mapper.createObjectNode().put("precision", "EXACT").put("date", "15/01/2026"),
-                // UTC111 - non-existent calendar date 2026-02-30 rejected
-                mapper.createObjectNode().put("precision", "EXACT").put("date", "2026-02-30"),
-                // UTC112 - future date tomorrow (VN) rejected
-                mapper.createObjectNode().put("precision", "EXACT").put("date", tomorrow),
-                // UTC113 - future time today (VN) rejected
-                mapper.createObjectNode().put("precision", "EXACT").put("date", today)
-                        .put("time", futureTime.toString().substring(0, 5)));
-
-        for (ObjectNode badDate : badDates) {
-            assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, assertThrows(AppException.class,
-                    () -> service.validateAndSnapshot(post, submitWith(
-                            new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                            new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                            new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")),
-                            new ClaimAnswerRequest("Q_CAT_2", badDate))))
-                    .getErrorCode());
-        }
+        ObjectNode futureToday = mapper.createObjectNode().put("precision", "EXACT")
+                .put("date", nowVn.toLocalDate().toString())
+                .put("time", futureTime.toString().substring(0, 5));
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalidLostDate(futureToday));
     }
 
-    // UTC114 - validateAndSnapshot rejects answers submitted for hidden conditional questions
-    @Test
-    void validateAndSnapshot_whenHiddenQuestionAnswered_throwsInvalid() {
-        stubActiveQuestionnaire();
+    // ---------------------------------------------------------------- visibility & template integrity
 
-        AppException ex = assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_COMMON_3", TextNode.valueOf("Ẩn")),
-                        new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")))));
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, ex.getErrorCode());
+    @Test
+    void utc116_validate_answeringHiddenQuestionThrowsInvalid() {
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID,
+                invalidWithBase(new ClaimAnswerRequest("Q_COMMON_3", TextNode.valueOf("Ẩn"))));
     }
 
-    // UTC116, UTC117 - validateAndSnapshot throws CLAIM_QUESTIONNAIRE_UNAVAILABLE on visibility cycles or unsupported inputType
     @Test
-    void validateAndSnapshot_whenVisibilityCycleOrUnsupportedInputType_throwsUnavailable() {
-        // UTC116 - visibility cycle A <-> B throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
-        ClaimQuestion qA = question(11L, commonTemplate, "Q_A", "A", "TEXT", false, 1, null, visibility("Q_B", "x"),
-                false);
-        ClaimQuestion qB = question(12L, commonTemplate, "Q_B", "B", "TEXT", false, 2, null, visibility("Q_A", "x"),
-                false);
-        when(templates.findFirstByCodeAndActiveTrueOrderByVersionDesc("COMMON"))
-                .thenReturn(Optional.of(commonTemplate));
-        when(templates.findFirstByCategory_CategoryIdAndActiveTrueOrderByVersionDesc(3L))
-                .thenReturn(Optional.of(categoryTemplate));
+    void utc117_validate_hiddenRequiredQuestionSkipped() {
+        List<ClaimAnswer> ok = service.validateAndSnapshot(post, submitWith(baseAnswers()));
+        assertEquals(3, ok.size());
+        assertTrue(ok.stream().noneMatch(a -> a.getQuestionCode().equals("Q_COMMON_3")));
+
+        // once visible ("Có"), the same required question must be answered
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_INVALID, invalid(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("Có", null)),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo"))));
+    }
+
+    @Test
+    void utc118_validate_visibilityCycleThrowsUnavailable() {
+        ClaimQuestion qA = question(11L, commonTemplate, "Q_A", "A", "TEXT", false, 1, null, visibility("Q_B", "x"), false);
+        ClaimQuestion qB = question(12L, commonTemplate, "Q_B", "B", "TEXT", false, 2, null, visibility("Q_A", "x"), false);
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L))
                 .thenReturn(List.of(qA, qB, commonQuestions.get(0), commonQuestions.get(3)));
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(categoryQuestions);
 
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith())).getErrorCode());
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, code(() -> service.validateAndSnapshot(post, submitWith())));
+    }
 
-        // UTC117 - unsupported inputType "FILE" throws CLAIM_QUESTIONNAIRE_UNAVAILABLE
-        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(commonQuestions);
+    @Test
+    void utc119_validate_unsupportedInputTypeThrowsUnavailable() {
         when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(2L)).thenReturn(List.of(
                 question(30L, categoryTemplate, "Q_FILE", "Ảnh", "FILE", true, 1, null, null, false)));
 
-        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, assertThrows(AppException.class,
-                () -> service.validateAndSnapshot(post, submitWith(
-                        new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
-                        new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
-                        new ClaimAnswerRequest("Q_FILE", TextNode.valueOf("f.png")))))
-                .getErrorCode());
+        assertEquals(ErrorCode.CLAIM_QUESTIONNAIRE_UNAVAILABLE, code(() -> service.validateAndSnapshot(post, submitWith(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
+                new ClaimAnswerRequest("Q_FILE", TextNode.valueOf("f.png"))))));
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private static ErrorCode code(Executable call) {
+        return assertThrows(AppException.class, call).getErrorCode();
+    }
+
+    /** Minimal valid answer set: required TEXT, CHOICE "Không" (hides Q_COMMON_3), category TEXT. */
+    private ClaimAnswerRequest[] baseAnswers() {
+        return new ClaimAnswerRequest[]{
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+                new ClaimAnswerRequest("Q_COMMON_2", choice("Không", null)),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo"))};
+    }
+
+    private ErrorCode invalid(ClaimAnswerRequest... answers) {
+        return code(() -> service.validateAndSnapshot(post, submitWith(answers)));
+    }
+
+    private ErrorCode invalidWithBase(ClaimAnswerRequest extra) {
+        List<ClaimAnswerRequest> all = new ArrayList<>(List.of(baseAnswers()));
+        all.add(extra);
+        return invalid(all.toArray(ClaimAnswerRequest[]::new));
+    }
+
+    private ErrorCode invalidChoice(JsonNode choiceValue) {
+        return invalid(
+                new ClaimAnswerRequest("Q_COMMON_1", TextNode.valueOf("Đen")),
+                new ClaimAnswerRequest("Q_COMMON_2", choiceValue),
+                new ClaimAnswerRequest("Q_CAT_1", TextNode.valueOf("Mèo")));
+    }
+
+    private ErrorCode invalidLostDate(ObjectNode lostDate) {
+        return invalidWithBase(new ClaimAnswerRequest("Q_CAT_2", lostDate));
+    }
+
+    private String lostDateSnapshot(ObjectNode lostDate) {
+        List<ClaimAnswerRequest> all = new ArrayList<>(List.of(baseAnswers()));
+        all.add(new ClaimAnswerRequest("Q_CAT_2", lostDate));
+        return service.validateAndSnapshot(post, submitWith(all.toArray(ClaimAnswerRequest[]::new))).get(3).getAnswerText();
+    }
+
+    /** Q_COMMON_2 becomes a CHOICE whose "Khác" option requires details and which allows none otherwise. */
+    private void stubDetailsRequiredChoice() {
+        ArrayNode withReqDetails = options(option("Khác", "Khác", true), option("Không", "Không", false));
+        when(questions.findByTemplate_IdOrderBySortOrderAscIdAsc(1L)).thenReturn(List.of(
+                commonQuestions.get(0),
+                question(12L, commonTemplate, "Q_COMMON_2", "Phụ kiện", "CHOICE", true, 2, withReqDetails, null, false),
+                commonQuestions.get(2),
+                commonQuestions.get(3)));
     }
 
     private SubmitClaimRequest submitWith(ClaimAnswerRequest... answers) {

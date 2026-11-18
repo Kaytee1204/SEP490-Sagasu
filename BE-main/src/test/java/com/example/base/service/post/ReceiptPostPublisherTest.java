@@ -33,7 +33,7 @@ class ReceiptPostPublisherTest {
     @InjectMocks
     private ReceiptPostPublisher publisher;
 
-    // UTC080 - publishFromReceipt: valid WALK_IN draft with 2 public & 1 sensitive image publishes 2 ordered public images
+    // UTC087 - publishFromReceipt: valid WALK_IN draft with 2 public & 1 sensitive image publishes 2 ordered public images
     @Test
     void publishFromReceipt_whenValidWithTwoPublicAndOneSensitiveImage_publishesTwoOrderedImages() {
         Account officer = officer(AccountRole.APPROVER, AccountStatus.ACTIVE);
@@ -61,7 +61,7 @@ class ReceiptPostPublisherTest {
         verify(posts).saveAndFlush(any(Post.class));
     }
 
-    // UTC081 - publishFromReceipt: officer with role USER throws IllegalStateException
+    // UTC088 - publishFromReceipt: officer with role USER throws IllegalStateException
     @Test
     void publishFromReceipt_whenOfficerRoleIsUser_throwsIllegalStateException() {
         Account officer = officer(AccountRole.USER, AccountStatus.ACTIVE);
@@ -73,7 +73,7 @@ class ReceiptPostPublisherTest {
         assertEquals("Only an unposted direct intake can be published", ex.getMessage());
     }
 
-    // UTC082 - publishFromReceipt: receipt with postId already set throws IllegalStateException
+    // UTC089 - publishFromReceipt: receipt with postId already set throws IllegalStateException
     @Test
     void publishFromReceipt_whenPostIdAlreadySet_throwsIllegalStateException() {
         Account officer = officer(AccountRole.APPROVER, AccountStatus.ACTIVE);
@@ -84,7 +84,7 @@ class ReceiptPostPublisherTest {
         assertThrows(IllegalStateException.class, () -> publisher.publishFromReceipt(receipt, officer));
     }
 
-    // UTC083 - publishFromReceipt: receipt reviewStatus=REJECTED throws IllegalStateException
+    // UTC090 - publishFromReceipt: receipt reviewStatus=REJECTED throws IllegalStateException
     @Test
     void publishFromReceipt_whenReviewStatusRejected_throwsIllegalStateException() {
         Account officer = officer(AccountRole.APPROVER, AccountStatus.ACTIVE);
@@ -95,7 +95,7 @@ class ReceiptPostPublisherTest {
         assertThrows(IllegalStateException.class, () -> publisher.publishFromReceipt(receipt, officer));
     }
 
-    // UTC084 - publishFromReceipt: receipt storageLocation=null throws IllegalStateException
+    // UTC091 - publishFromReceipt: receipt storageLocation=null throws IllegalStateException
     @Test
     void publishFromReceipt_whenStorageLocationNull_throwsIllegalStateException() {
         Account officer = officer(AccountRole.APPROVER, AccountStatus.ACTIVE);
@@ -106,7 +106,7 @@ class ReceiptPostPublisherTest {
         assertThrows(IllegalStateException.class, () -> publisher.publishFromReceipt(receipt, officer));
     }
 
-    // UTC085 - publishFromReceipt: all sensitive receipt images throws IllegalStateException
+    // UTC092 - publishFromReceipt: all sensitive receipt images throws IllegalStateException
     @Test
     void publishFromReceipt_whenAllImagesSensitive_throwsIllegalStateException() {
         Account officer = officer(AccountRole.APPROVER, AccountStatus.ACTIVE);
@@ -121,7 +121,7 @@ class ReceiptPostPublisherTest {
     private static Account officer(AccountRole role, AccountStatus status) {
         Account a = new Account();
         a.setId(2L);
-        a.setEmail("approver@fpt.edu.vn");
+        a.setEmail("approver@gmail.com");
         a.setFullName("Approver");
         a.setRole(role);
         a.setStatus(status);

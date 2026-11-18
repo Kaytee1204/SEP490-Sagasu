@@ -34,7 +34,7 @@ class PostPrivateIdentifiersServiceTest {
     @InjectMocks
     private PostPrivateIdentifiersService service;
 
-    // UTC074 - read: post owner receives stored privateIdentifiers value
+    // UTC080 - read: post owner receives stored privateIdentifiers value
     @Test
     void read_whenOwnerWithValue_returnsValue() {
         Account owner = account(5L, AccountStatus.ACTIVE);
@@ -47,7 +47,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals("IMEI 123", dto.privateIdentifiers());
     }
 
-    // UTC075 - read: null privateIdentifiers returns empty string
+    // UTC081 - read: null privateIdentifiers returns empty string
     @Test
     void read_whenOwnerWithNullIdentifiers_returnsEmptyString() {
         Account owner = account(5L, AccountStatus.ACTIVE);
@@ -59,7 +59,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals("", dto.privateIdentifiers());
     }
 
-    // UTC076 - read: non-owner throws POST_OWNER_REQUIRED
+    // UTC082 - read: non-owner throws POST_OWNER_REQUIRED
     @Test
     void read_whenNotOwner_throwsPostOwnerRequired() {
         Account other = account(6L, AccountStatus.ACTIVE);
@@ -71,7 +71,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals(ErrorCode.POST_OWNER_REQUIRED, ex.getErrorCode());
     }
 
-    // UTC079 - read: SUSPENDED account throws FORBIDDEN
+    // UTC085 - read: SUSPENDED account throws FORBIDDEN
     @Test
     void read_whenUserSuspended_throwsForbidden() {
         Account suspended = account(5L, AccountStatus.SUSPENDED);
@@ -82,7 +82,7 @@ class PostPrivateIdentifiersServiceTest {
         assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
     }
 
-    // UTC077 - update: post owner updates trimmed privateIdentifiers and flushes
+    // UTC083 - update: post owner updates trimmed privateIdentifiers and flushes
     @Test
     void update_whenOwner_updatesIdentifiersAndFlushes() {
         Account owner = account(5L, AccountStatus.ACTIVE);
@@ -95,7 +95,7 @@ class PostPrivateIdentifiersServiceTest {
         verify(posts).flush();
     }
 
-    // UTC078 - update: non-owner throws POST_OWNER_REQUIRED
+    // UTC084 - update: non-owner throws POST_OWNER_REQUIRED
     @Test
     void update_whenNotOwner_throwsPostOwnerRequired() {
         Account other = account(6L, AccountStatus.ACTIVE);
@@ -109,7 +109,7 @@ class PostPrivateIdentifiersServiceTest {
 
     // Supplementary (PostPrivateIdentifiersService.update): non-positive postId throws POST_ID_INVALID
     @Test
-    void update_whenInvalidPostId_throwsPostIdInvalid() {
+    void utc086_update_whenInvalidPostId_throwsPostIdInvalid() {
         Account owner = account(5L, AccountStatus.ACTIVE);
 
         AppException ex = assertThrows(AppException.class,
@@ -121,7 +121,7 @@ class PostPrivateIdentifiersServiceTest {
     private static Account account(Long id, AccountStatus status) {
         Account a = new Account();
         a.setId(id);
-        a.setEmail("u" + id + "@fpt.edu.vn");
+        a.setEmail("u" + id + "@gmail.com");
         a.setFullName("User " + id);
         a.setRole(AccountRole.USER);
         a.setStatus(status);

@@ -423,7 +423,7 @@ class OfficeClaimServiceTest {
     // ─── submit ────────────────────────────────────────────────────────────────
 
     /**
-     * UTC016 - UTC028 require a real TransactionTemplate execution.
+     * The submit tests below require a real TransactionTemplate execution.
      * We use MockedConstruction to intercept new TransactionTemplate(transactions).
      */
     @Test

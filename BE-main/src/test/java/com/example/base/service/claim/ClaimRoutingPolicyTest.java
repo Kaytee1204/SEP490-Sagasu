@@ -8,8 +8,6 @@ import com.example.base.entity.Claim;
 import com.example.base.entity.ItemReceipt;
 import com.example.base.entity.Post;
 import com.example.base.entity.StorageLocation;
-import com.example.base.exception.AppException;
-import com.example.base.exception.ErrorCode;
 import com.example.base.repository.ItemReceiptRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -25,16 +23,15 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** One test per UTC of sheet "Claim" for ClaimRoutingPolicy (UTC071-UTC082). */
 @ExtendWith(MockitoExtension.class)
 class ClaimRoutingPolicyTest {
 
@@ -46,202 +43,161 @@ class ClaimRoutingPolicyTest {
     @InjectMocks
     private ClaimRoutingPolicy policy;
 
-    // UTC069 - canSubmit returns true for P2P visible OPEN FOUND post without receipt
+    private final Account owner = account(10L, AccountRole.USER);
+    private final Account claimant = account(20L, AccountRole.USER);
+    private final Account approver = account(30L, AccountRole.APPROVER);
+
     @Test
-    void canSubmit_whenP2pVisibleOpenFoundPost_returnsTrue() {
-        Post post = foundPost(1L, account(10L, AccountRole.USER), "P2P");
-        assertTrue(policy.canSubmit(post));
+    void utc071_canSubmit_p2pVisibleOpenFoundPostReturnsTrue() {
+        assertTrue(policy.canSubmit(foundPost(1L, "P2P")));
     }
 
-    // UTC073 - canSubmit returns false when deletedAt is set (plus Supplementary checks for LOST/CLOSED/HIDDEN)
     @Test
-    void canSubmit_whenLostOrHiddenOrClosedOrDeleted_returnsFalse() {
-        Account owner = account(10L, AccountRole.USER);
-        Category cat = category(1L);
-
-        // Supplementary (ClaimRoutingPolicy.canSubmit): non-FOUND (LOST) post returns false
-        Post lost = Post.lost(owner, cat, "Lost", "Desc", "Hall", OffsetDateTime.now().minusDays(1));
-        assertFalse(policy.canSubmit(lost));
-
-        // Supplementary (ClaimRoutingPolicy.canSubmit): CLOSED post returns false
-        Post closed = foundPost(2L, owner, "P2P");
-        ReflectionTestUtils.setField(closed, "status", "CLOSED");
-        assertFalse(policy.canSubmit(closed));
-
-        // Supplementary (ClaimRoutingPolicy.canSubmit): HIDDEN moderation post returns false
-        Post hidden = foundPost(3L, owner, "P2P");
-        ReflectionTestUtils.setField(hidden, "moderationStatus", "HIDDEN");
-        assertFalse(policy.canSubmit(hidden));
-
-        // UTC073 - deletedAt set returns false
-        Post deleted = foundPost(4L, owner, "P2P");
-        ReflectionTestUtils.setField(deleted, "deletedAt", OffsetDateTime.now());
-        assertFalse(policy.canSubmit(deleted));
+    void utc072_canSubmit_p2pPostWithReceiptReturnsFalse() {
+        Post p2p = foundPost(3L, "P2P");
+        when(receipts.findByPostId(3L)).thenReturn(Optional.of(officeReceipt(3L)));
+        assertFalse(policy.canSubmit(p2p));
     }
 
-    // UTC071, UTC072 - canSubmit checks OFFICE receipt existence and storage status
     @Test
-    void canSubmit_whenOfficePostWithOrWithoutReceivedReceipt_returnsExpectedResult() {
-        Account owner = account(10L, AccountRole.USER);
-        Post officePost = foundPost(5L, owner, "OFFICE");
+    void utc073_canSubmit_officePostWithStoredReceiptReturnsTrue() {
+        when(receipts.findByPostId(5L)).thenReturn(Optional.of(officeReceipt(5L)));
+        assertTrue(policy.canSubmit(foundPost(5L, "OFFICE")));
+    }
 
-        // Supplementary (ClaimRoutingPolicy.canSubmit): OFFICE post without receipt returns false
+    @Test
+    void utc074_canSubmit_officePostWithoutActiveReceiptReturnsFalse() {
+        Post officePost = foundPost(5L, "OFFICE");
         when(receipts.findByPostId(5L)).thenReturn(Optional.empty());
         assertFalse(policy.canSubmit(officePost));
 
-        // UTC071 - OFFICE post with accepted in-storage receipt returns true
-        ItemReceipt stored = officeReceipt(5L, account(99L, AccountRole.MANAGER), category(1L));
-        when(receipts.findByPostId(5L)).thenReturn(Optional.of(stored));
-        assertTrue(policy.canSubmit(officePost));
-
-        // UTC072 - OFFICE post with closed/returned receipt returns false
-        ReflectionTestUtils.setField(stored, "status", "CLOSED");
+        ItemReceipt closed = officeReceipt(5L);
+        ReflectionTestUtils.setField(closed, "status", "CLOSED");
+        when(receipts.findByPostId(5L)).thenReturn(Optional.of(closed));
         assertFalse(policy.canSubmit(officePost));
     }
 
-    // UTC075 - matches rejects P2P claimType on OFFICE custody post and verifies active state
     @Test
-    void matches_checksCustodyModePostStatusAndOfficeReceiptVerification() {
-        Account owner = account(10L, AccountRole.USER);
-        Account claimant = account(20L, AccountRole.USER);
-        Account approver = account(30L, AccountRole.APPROVER);
+    void utc075_canSubmit_deletedOrUnclaimablePostReturnsFalse() {
+        Post deleted = foundPost(4L, "P2P");
+        ReflectionTestUtils.setField(deleted, "deletedAt", OffsetDateTime.now());
+        assertFalse(policy.canSubmit(deleted));
 
-        Post p2pPost = foundPost(1L, owner, "P2P");
+        // other non-claimable shapes: LOST type, CLOSED status, HIDDEN moderation
+        assertFalse(policy.canSubmit(Post.lost(owner, category(), "Lost", "Desc", "Hall", OffsetDateTime.now().minusDays(1))));
+        Post closed = foundPost(2L, "P2P");
+        ReflectionTestUtils.setField(closed, "status", "CLOSED");
+        assertFalse(policy.canSubmit(closed));
+        Post hidden = foundPost(3L, "P2P");
+        ReflectionTestUtils.setField(hidden, "moderationStatus", "HIDDEN");
+        assertFalse(policy.canSubmit(hidden));
+    }
+
+    @Test
+    void utc076_canSubmit_moderationPendingReturnsFalse() {
+        Post pending = foundPost(4L, "P2P");
+        ReflectionTestUtils.setField(pending, "moderationStatus", "PENDING");
+        assertFalse(policy.canSubmit(pending));
+        verifyNoInteractions(receipts);
+    }
+
+    @Test
+    void utc077_matches_p2pClaimTypeOnOfficePostReturnsFalse() {
+        Post p2pPost = foundPost(1L, "P2P");
         Claim p2pClaim = Claim.submit(p2pPost, claimant, "desc", null);
         when(receipts.findByPostId(1L)).thenReturn(Optional.empty());
-
-        // Supplementary (ClaimRoutingPolicy.matches): verifies P2P post status matches allowed set
         assertTrue(policy.matches(p2pClaim, Set.of("OPEN")));
         assertFalse(policy.matches(p2pClaim, Set.of("RESERVED")));
         p2pPost.reserveForClaim();
         assertTrue(policy.matches(p2pClaim, Set.of("RESERVED")));
 
-        // Supplementary (ClaimRoutingPolicy.matches): verifies OFFICE claim matches stored receipt
-        Post officePost = foundPost(2L, owner, "OFFICE");
-        ItemReceipt stored = officeReceipt(2L, approver, category(1L));
+        Post officePost = foundPost(2L, "OFFICE");
+        ItemReceipt stored = officeReceipt(2L);
         Claim officeClaim = Claim.submit(officePost, claimant, "desc", null, stored);
         when(receipts.findByPostId(2L)).thenReturn(Optional.of(stored));
         assertTrue(policy.matches(officeClaim, Set.of("OPEN")));
 
-        // UTC075 - claimType P2P on OFFICE custody post returns false
         ReflectionTestUtils.setField(officeClaim, "claimType", "P2P");
         assertFalse(policy.matches(officeClaim, Set.of("OPEN")));
     }
 
-    // UTC076, UTC077, UTC078 - reviewer authorizes P2P post owner or OFFICE approver and rejects claimant
     @Test
-    void reviewer_distinguishesP2pPostOwnerFromOfficeApproverOnly() {
-        Account owner = account(10L, AccountRole.USER);
-        Account claimant = account(20L, AccountRole.USER);
-        Account approver = account(30L, AccountRole.APPROVER);
-        Account manager = account(35L, AccountRole.MANAGER);
-        Account admin = account(40L, AccountRole.ADMIN);
-
-        Post p2pPost = foundPost(1L, owner, "P2P");
-        Claim p2pClaim = Claim.submit(p2pPost, claimant, "Mine", null);
-
-        // UTC076 - P2P claim reviewed by post owner returns true
+    void utc078_reviewer_p2pPostOwnerReturnsTrue() {
+        Claim p2pClaim = Claim.submit(foundPost(1L, "P2P"), claimant, "Mine", null);
         assertTrue(policy.reviewer(p2pClaim, owner));
-        // UTC078 - actor is claimant returns false
-        assertFalse(policy.reviewer(p2pClaim, claimant));
         assertFalse(policy.reviewer(p2pClaim, approver));
-
-        Claim officeClaim = BeanUtils.instantiateClass(Claim.class);
-        ReflectionTestUtils.setField(officeClaim, "claimType", "OFFICE");
-        ReflectionTestUtils.setField(officeClaim, "post", p2pPost);
-        ReflectionTestUtils.setField(officeClaim, "claimant", claimant);
-
-        // Supplementary (ClaimRoutingPolicy.reviewer): OFFICE claim rejects P2P post owner
-        assertFalse(policy.reviewer(officeClaim, owner));
-        // UTC077 - OFFICE claim reviewed by APPROVER returns true (MANAGER/ADMIN false)
-        assertTrue(policy.reviewer(officeClaim, approver));
-        assertFalse(policy.reviewer(officeClaim, manager));
-        assertFalse(policy.reviewer(officeClaim, admin));
     }
 
-    // UTC079 - lockReceipt returns null when absent for P2P and acquires PESSIMISTIC_WRITE lock when present
     @Test
-    void lockReceipt_forMissingReturnsNullAndForPresentRefreshesPessimisticWrite() {
-        Account owner = account(10L, AccountRole.USER);
-        Post p2p = foundPost(1L, owner, "P2P");
-        when(receipts.findByPostId(1L)).thenReturn(Optional.empty());
-        assertNull(policy.lockReceipt(p2p));
-        verify(receipts).findByPostId(1L);
+    void utc079_reviewer_officeClaimOnlyApproverReturnsTrue() {
+        Claim officeClaim = officeClaim();
+        assertTrue(policy.reviewer(officeClaim, approver));
+        assertFalse(policy.reviewer(officeClaim, owner));
+        assertFalse(policy.reviewer(officeClaim, account(35L, AccountRole.MANAGER)));
+        assertFalse(policy.reviewer(officeClaim, account(40L, AccountRole.ADMIN)));
+    }
 
-        // UTC079 - existing receipt is locked via entityManager.refresh PESSIMISTIC_WRITE
-        Post office = foundPost(2L, owner, "OFFICE");
-        ItemReceipt stored = officeReceipt(2L, account(99L, AccountRole.APPROVER), category(1L));
+    @Test
+    void utc080_reviewer_claimantReturnsFalse() {
+        Claim p2pClaim = Claim.submit(foundPost(1L, "P2P"), claimant, "Mine", null);
+        assertFalse(policy.reviewer(p2pClaim, claimant));
+    }
+
+    @Test
+    void utc081_lockReceipt_existingReceiptRefreshedWithPessimisticWrite() {
+        ItemReceipt stored = officeReceipt(2L);
         when(receipts.findByPostId(2L)).thenReturn(Optional.of(stored));
 
-        ItemReceipt locked = policy.lockReceipt(office);
-        assertSame(stored, locked);
+        assertSame(stored, policy.lockReceipt(foundPost(2L, "OFFICE")));
         verify(entityManager).refresh(stored, LockModeType.PESSIMISTIC_WRITE);
     }
 
-    // UTC080 - lockReceipt returns null without refresh when receipt is missing
     @Test
-    void lockReceipt_whenOfficeReceiptMissing_returnsNullWithoutLockRefresh() {
-        Account owner = account(10L, AccountRole.USER);
-        Post office = foundPost(2L, owner, "OFFICE");
+    void utc082_lockReceipt_missingReceiptReturnsNullWithoutRefresh() {
         when(receipts.findByPostId(2L)).thenReturn(Optional.empty());
-
-        assertNull(policy.lockReceipt(office));
+        assertNull(policy.lockReceipt(foundPost(2L, "OFFICE")));
         verifyNoInteractions(entityManager);
     }
 
-    // UTC070 - canSubmit returns false when P2P post already has a receipt
-    @Test
-    void canSubmit_whenP2pPostHasExistingReceipt_returnsFalse() {
-        Account owner = account(10L, AccountRole.USER);
-        Account officer = account(11L, AccountRole.APPROVER);
-        Post p2p = foundPost(3L, owner, "P2P");
-        when(receipts.findByPostId(3L)).thenReturn(Optional.of(officeReceipt(3L, officer, category(1L))));
-
-        assertFalse(policy.canSubmit(p2p));
-    }
-
-    // UTC074 - canSubmit returns false when post moderationStatus is PENDING
-    @Test
-    void canSubmit_whenPostModerationPending_returnsFalse() {
-        Account owner = account(10L, AccountRole.USER);
-        Post pending = foundPost(4L, owner, "P2P");
-        ReflectionTestUtils.setField(pending, "moderationStatus", "PENDING");
-
-        assertFalse(policy.canSubmit(pending));
-        verifyNoInteractions(receipts);
+    private Claim officeClaim() {
+        Claim c = BeanUtils.instantiateClass(Claim.class);
+        ReflectionTestUtils.setField(c, "claimType", "OFFICE");
+        ReflectionTestUtils.setField(c, "post", foundPost(1L, "P2P"));
+        ReflectionTestUtils.setField(c, "claimant", claimant);
+        return c;
     }
 
     private static Account account(Long id, AccountRole role) {
         Account a = new Account();
         a.setId(id);
-        a.setEmail("u" + id + "@fpt.edu.vn");
+        a.setEmail("u" + id + "@gmail.com");
         a.setFullName("User " + id);
         a.setRole(role);
         a.setStatus(AccountStatus.ACTIVE);
         return a;
     }
 
-    private static Category category(Long id) {
+    private static Category category() {
         Category c = new Category();
-        ReflectionTestUtils.setField(c, "categoryId", id);
+        ReflectionTestUtils.setField(c, "categoryId", 1L);
         c.setName("Wallet");
         return c;
     }
 
-    private static Post foundPost(Long id, Account owner, String custodyMode) {
-        Post p = Post.found(owner, category(1L), "Title", "Desc", "Hall A",
+    private Post foundPost(Long id, String custodyMode) {
+        Post p = Post.found(owner, category(), "Title", "Desc", "Hall A",
                 OffsetDateTime.now().minusDays(1), custodyMode, null);
         ReflectionTestUtils.setField(p, "id", id);
         ReflectionTestUtils.setField(p, "moderationStatus", "VISIBLE");
         return p;
     }
 
-    private static ItemReceipt officeReceipt(Long postId, Account officer, Category cat) {
+    private static ItemReceipt officeReceipt(Long postId) {
+        Account officer = account(99L, AccountRole.APPROVER);
         ItemReceipt r = ItemReceipt.walkInDraft("VP-1", officer);
-        r.edit(cat, "Title", "Desc", "Good", "Hall A", OffsetDateTime.now().minusDays(1), null, null);
+        r.edit(category(), "Title", "Desc", "Good", "Hall A", OffsetDateTime.now().minusDays(1), null, null);
         r.assignLocation(StorageLocation.create("A-01", "Shelf A1", null));
         r.receiveAndPublish(officer, postId);
         return r;
     }
 }
-

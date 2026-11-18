@@ -97,7 +97,7 @@ class ChatAttachmentServiceTest {
 
         claimant = new Account();
         claimant.setId(20L);
-        claimant.setEmail("claimant@fpt.edu.vn");
+        claimant.setEmail("claimant@gmail.com");
         claimant.setFullName("Claimant");
         claimant.setRole(AccountRole.USER);
         claimant.setStatus(AccountStatus.ACTIVE);
@@ -105,7 +105,7 @@ class ChatAttachmentServiceTest {
 
         Account finder = new Account();
         finder.setId(10L);
-        finder.setEmail("finder@fpt.edu.vn");
+        finder.setEmail("finder@gmail.com");
         finder.setFullName("Finder");
         finder.setRole(AccountRole.USER);
         finder.setStatus(AccountStatus.ACTIVE);
@@ -123,7 +123,7 @@ class ChatAttachmentServiceTest {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
 
-    // UTC057 - send with body text and PDF attachment persists MIXED message, saves attachment, and notifies
+    // UTC050 - send with body text and PDF attachment persists MIXED message, saves attachment, and notifies
     @Test
     void send_whenValidAttachments_uploadsPersistsMessageAndNotifies() {
         UUID reqId = UUID.randomUUID();
@@ -156,7 +156,7 @@ class ChatAttachmentServiceTest {
         verify(chatMessageService).notifyChatRecipient(eq(conversation), eq(20L), anyString());
     }
 
-    // UTC059 - send with duplicate clientMessageId and matching attachment hash reuses existing without upload
+    // UTC052 - send with duplicate clientMessageId and matching attachment hash reuses existing without upload
     @Test
     void send_whenDuplicateClientMessageId_reusesExistingWithoutUploading() {
         UUID reqId = UUID.randomUUID();
@@ -186,7 +186,7 @@ class ChatAttachmentServiceTest {
 
     // Supplementary (ChatAttachmentService.send): cleans up uploaded keys when DB transaction fails after upload
     @Test
-    void send_whenTransactionFailsAfterUpload_deletesUploadedKeys() {
+    void utc059_send_whenTransactionFailsAfterUpload_deletesUploadedKeys() {
         UUID reqId = UUID.randomUUID();
         List<MultipartFile> files = List.of(new MockMultipartFile("files", "a.jpg", "image/jpeg", new byte[]{1}));
         List<ChatAttachmentValidator.Upload> uploads = List.of(
@@ -206,7 +206,7 @@ class ChatAttachmentServiceTest {
         verify(storage).delete(anyString());
     }
 
-    // UTC062 - download returns bytes, filename, and content type when attachment belongs to conversation
+    // UTC055 - download returns bytes, filename, and content type when attachment belongs to conversation
     @Test
     void download_whenR2EnabledAndAttachmentBelongsToConversation_returnsBytes() {
         ChatAttachment att = new ChatAttachment(900L, "chat/800/file.pdf", "receipt.pdf", "application/pdf", 4L, "h", 0);
@@ -231,7 +231,7 @@ class ChatAttachmentServiceTest {
         assertEquals("application/pdf", dl.mime());
     }
 
-    // UTC063 - download throws CHAT_NOT_FOUND when attachment belongs to a different conversation
+    // UTC056 - download throws CHAT_NOT_FOUND when attachment belongs to a different conversation
     @Test
     void download_whenAttachmentBelongsToOtherConversation_throwsChatNotFound() {
         ChatAttachment att = new ChatAttachment(999L, "chat/801/file.pdf", "receipt.pdf", "application/pdf", 4L, "h", 0);
@@ -248,7 +248,7 @@ class ChatAttachmentServiceTest {
                 assertThrows(AppException.class, () -> service.download(800L, 55L, user)).getErrorCode());
     }
 
-    // UTC064 - download throws STORAGE_UNAVAILABLE when R2 / S3Client is disabled or absent
+    // UTC057 - download throws STORAGE_UNAVAILABLE when R2 / S3Client is disabled or absent
     @Test
     void download_whenStorageDisabled_throwsStorageUnavailable() {
         ChatAttachment att = new ChatAttachment(900L, "chat/800/file.pdf", "receipt.pdf", "application/pdf", 4L, "h", 0);
@@ -266,7 +266,7 @@ class ChatAttachmentServiceTest {
                 assertThrows(AppException.class, () -> service.download(800L, 55L, user)).getErrorCode());
     }
 
-    // UTC056 - send with body=null and 2 PNG images persists ATTACHMENT message and sends fallback preview notification
+    // UTC049 - send with body=null and 2 PNG images persists ATTACHMENT message and sends fallback preview notification
     @Test
     void send_whenBodyNullWithTwoPngImages_savesAttachmentMessageAndNotifiesFallbackPreview() {
         UUID reqId = UUID.randomUUID();
@@ -304,17 +304,15 @@ class ChatAttachmentServiceTest {
                 "Đã gửi hình ảnh/tệp đính kèm trong cuộc trò chuyện.");
     }
 
-    // UTC058, UTC060, UTC061 - send rejects null request, mismatched duplicate hash, and cleans up keys when 2nd upload fails
     @Test
-    void send_whenRequestNullOrHashDiffersOrSecondUploadFails_handlesErrorsAndCleansUp() {
-        List<MultipartFile> files = List.of(
-                new MockMultipartFile("files", "a.png", "image/png", new byte[] { 1 }),
-                new MockMultipartFile("files", "b.png", "image/png", new byte[] { 2 }));
-        // UTC058 - request=null throws CHAT_INPUT_INVALID
+    void utc051_send_nullRequestThrowsInputInvalid() {
         assertEquals(ErrorCode.CHAT_INPUT_INVALID,
-                assertThrows(AppException.class, () -> service.send(800L, null, files, user)).getErrorCode());
+                assertThrows(AppException.class, () -> service.send(800L, null, twoPngFiles(), user)).getErrorCode());
+    }
 
-        // UTC060 - duplicate clientMessageId with different attachment hash throws CHAT_DUPLICATE_PAYLOAD
+    @Test
+    void utc053_send_duplicateIdWithDifferentHashThrowsDuplicatePayload() {
+        List<MultipartFile> files = twoPngFiles();
         UUID dupId = UUID.randomUUID();
         ChatMessage existing = new ChatMessage(800L, 20L, 1L, dupId, "ATTACHMENT", null);
         ReflectionTestUtils.setField(existing, "id", 911L);
@@ -332,8 +330,14 @@ class ChatAttachmentServiceTest {
                 assertThrows(AppException.class, () -> service.send(800L, new SendChatRequest(dupId, null), files, user))
                         .getErrorCode());
         verify(storage, never()).put(anyString(), any(), anyString());
+    }
 
-        // UTC061 - storage.put failure on second file cleans up uploaded keys and rethrows
+    @Test
+    void utc054_send_secondUploadFailureDeletesUploadedKeys() {
+        List<MultipartFile> files = twoPngFiles();
+        when(policy.actor(user)).thenReturn(claimant);
+        when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
+        when(chatMessageService.text(null)).thenReturn(null);
         UUID failId = UUID.randomUUID();
         when(messages.findByConversationIdAndSenderIdAndClientMessageId(800L, 20L, failId))
                 .thenReturn(Optional.empty());
@@ -348,7 +352,13 @@ class ChatAttachmentServiceTest {
         verify(storage, times(2)).delete(anyString());
     }
 
-    // UTC065 - download throws STORAGE_UNAVAILABLE when S3 getObject fails
+    private static List<MultipartFile> twoPngFiles() {
+        return List.of(
+                new MockMultipartFile("files", "a.png", "image/png", new byte[] { 1 }),
+                new MockMultipartFile("files", "b.png", "image/png", new byte[] { 2 }));
+    }
+
+    // UTC058 - download throws STORAGE_UNAVAILABLE when S3 getObject fails
     @Test
     void download_whenS3ClientThrows_throwsStorageUnavailable() {
         ChatAttachment att = new ChatAttachment(900L, "chat/800/a.png", "a.png", "image/png", 3L, "h1", 0);

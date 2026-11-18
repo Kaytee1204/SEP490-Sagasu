@@ -95,7 +95,7 @@ class ApproverIntakeServiceTest {
         a.setRole(role);
         a.setStatus(status);
         a.setFullName(name);
-        a.setEmail("u" + id + "@fpt.edu.vn");
+        a.setEmail("u" + id + "@gmail.com");
         a.setPasswordHash("hash");
         return a;
     }

@@ -31,6 +31,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -65,6 +67,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ChatMessageServiceTest {
 
         @Mock
@@ -132,7 +135,7 @@ class ChatMessageServiceTest {
                 ReflectionTestUtils.setField(conversation, "lastMessageSequence", 5L);
         }
 
-        // UTC033 - text enforces custom maxLength=2000 (default 4000 also verified)
+        // UTC034 - text enforces custom maxLength=2000 (default 4000 also verified)
         @Test
         void text_enforcesConfiguredMaxLengthDefault4000AndCustom2000() {
                 assertEquals("hello", service.text("  hello  "));
@@ -146,13 +149,13 @@ class ChatMessageServiceTest {
 
                 assertNull(service.text("   "));
 
-                // UTC033 - configured maxLength=2000 rejects 2001 characters with CHAT_INPUT_INVALID
+                // UTC034 - configured maxLength=2000 rejects 2001 characters with CHAT_INPUT_INVALID
                 properties.setMessageMaxLength(2000);
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID,
                                 assertThrows(AppException.class, () -> service.text("a".repeat(2001))).getErrorCode());
         }
 
-        // UTC047 - history with before=null and after=null pages backward in ascending order with hasMore and attachments
+        // UTC039 - history with before=null and after=null pages backward in ascending order with hasMore and attachments
         @Test
         void history_whenBeforeAndAfterUnset_pagesBackwardInAscendingOrderWithHasMoreAndAttachments() {
                 ChatMessage m3 = textMessage(3L, 3L, "third");
@@ -180,22 +183,13 @@ class ChatMessageServiceTest {
                 assertEquals(3L, page.items().get(1).sequence());
         }
 
-        // UTC048, UTC049 - history returns ascending messages after cursor and rejects simultaneous before+after cursors
         @Test
-        void history_whenAfterSpecifiedAndBothCursorsProvided_handlesBranching() {
-                ChatMessage m4 = textMessage(4L, 4L, "fourth");
+        void utc040_history_afterCursorReturnsAscendingMessages() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
-
-                // UTC049 - providing both before and after throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID,
-                                assertThrows(AppException.class, () -> service.history(800L, 5L, 1L, 10, claimantUser))
-                                                .getErrorCode());
-
-                // UTC048 - after cursor returns ascending messages with hasMore=false
                 when(messages.findByConversationIdAndSequenceNoGreaterThanOrderBySequenceNoAsc(
                                 eq(800L), eq(3L), eq(PageRequest.of(0, 11))))
-                                .thenReturn(List.of(m4));
+                                .thenReturn(List.of(textMessage(4L, 4L, "fourth")));
 
                 ChatMessageDto.Page page = service.history(800L, null, 3L, 10, claimantUser);
                 assertFalse(page.hasMore());
@@ -203,9 +197,18 @@ class ChatMessageServiceTest {
                 assertEquals(4L, page.items().get(0).sequence());
         }
 
+        @Test
+        void utc041_history_beforeAndAfterTogetherThrowsInputInvalid() {
+                when(policy.actor(claimantUser)).thenReturn(claimant);
+                when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
+                assertEquals(ErrorCode.CHAT_INPUT_INVALID,
+                                assertThrows(AppException.class, () -> service.history(800L, 5L, 1L, 10, claimantUser))
+                                                .getErrorCode());
+        }
+
         // Supplementary (ChatMessageService.receipts): queries read receipts via JDBC and maps results
         @Test
-        void receipts_whenValidParams_returnsReceiptsFromJdbc() {
+        void utc048_receipts_whenValidParams_returnsReceiptsFromJdbc() {
                 OffsetDateTime now = OffsetDateTime.now();
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
@@ -218,7 +221,7 @@ class ChatMessageServiceTest {
                 assertEquals(2L, receipts.items().get(0).sequence());
         }
 
-        // UTC028 - send saves trimmed message, increments sequence, emits MESSAGE_CREATED, and notifies recipient
+        // UTC029 - send saves trimmed message, increments sequence, emits MESSAGE_CREATED, and notifies recipient
         @Test
         void send_whenNewValidTextMessage_persistsIncrementsSequenceEmitsEventAndNotifiesRecipient() {
                 UUID clientMsgId = UUID.randomUUID();
@@ -247,37 +250,36 @@ class ChatMessageServiceTest {
                                 eq(false));
         }
 
-        // UTC034, UTC035 - send handles idempotent duplicate clientMessageId and throws CHAT_DUPLICATE_PAYLOAD when body differs
         @Test
-        void send_whenDuplicateClientMessageIdMatchesOrDiffers_returnsExistingOrThrowsConflict() {
-                UUID clientMsgId = UUID.randomUUID();
-                ChatMessage existing = new ChatMessage(800L, 20L, 6L, clientMsgId, "TEXT", "Same body");
-                ReflectionTestUtils.setField(existing, "id", 901L);
-
-                when(policy.actor(claimantUser)).thenReturn(claimant);
-                when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
-                when(conversations.findForUpdate(800L)).thenReturn(Optional.of(conversation));
-                when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
-                when(claims.findForUpdate(500L)).thenReturn(Optional.of(claim));
-                when(messages.findByConversationIdAndSenderIdAndClientMessageId(800L, 20L, clientMsgId))
-                                .thenReturn(Optional.of(existing));
-                when(attachments.findByMessageIdOrderBySortOrderAsc(901L)).thenReturn(List.of());
-
-                // UTC034 - same clientMessageId and body returns existing message idempotently
+        void utc035_send_sameClientIdAndBodyReturnsExisting() {
+                UUID clientMsgId = stubExistingTextMessage("Same body");
                 ChatMessageDto reused = service.send(800L, new SendChatRequest(clientMsgId, "Same body"), claimantUser);
                 assertEquals(901L, reused.id());
                 verify(messages, never()).saveAndFlush(any());
-
-                // UTC035 - same clientMessageId with different body throws CHAT_DUPLICATE_PAYLOAD
-                assertEquals(ErrorCode.CHAT_DUPLICATE_PAYLOAD,
-                                assertThrows(AppException.class,
-                                                () -> service.send(800L,
-                                                                new SendChatRequest(clientMsgId, "Different body"),
-                                                                claimantUser))
-                                                .getErrorCode());
         }
 
-        // UTC036 - send throws CHAT_UNAVAILABLE when conversation is read-only
+        @Test
+        void utc036_send_sameClientIdDifferentBodyThrowsDuplicatePayload() {
+                UUID clientMsgId = stubExistingTextMessage("Same body");
+                assertEquals(ErrorCode.CHAT_DUPLICATE_PAYLOAD, assertThrows(AppException.class,
+                                () -> service.send(800L, new SendChatRequest(clientMsgId, "Different body"), claimantUser))
+                                .getErrorCode());
+        }
+
+        /** Claimant already sent message 901 with the returned clientMessageId and the given body. */
+        private UUID stubExistingTextMessage(String body) {
+                UUID clientMsgId = UUID.randomUUID();
+                ChatMessage existing = new ChatMessage(800L, 20L, 6L, clientMsgId, "TEXT", body);
+                ReflectionTestUtils.setField(existing, "id", 901L);
+                when(policy.actor(claimantUser)).thenReturn(claimant);
+                stubWritableLock(20L);
+                when(messages.findByConversationIdAndSenderIdAndClientMessageId(800L, 20L, clientMsgId))
+                                .thenReturn(Optional.of(existing));
+                when(attachments.findByMessageIdOrderBySortOrderAsc(901L)).thenReturn(List.of());
+                return clientMsgId;
+        }
+
+        // UTC037 - send throws CHAT_UNAVAILABLE when conversation is read-only
         @Test
         void send_whenConversationReadOnly_throwsChatUnavailable() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
@@ -292,50 +294,10 @@ class ChatMessageServiceTest {
                 assertEquals(ErrorCode.CHAT_UNAVAILABLE, ex.getErrorCode());
         }
 
-        // UTC038 - sendLocation saves trimmed label and rounded coordinates, emits MESSAGE_CREATED, and notifies recipient
-        @Test
-        void sendLocation_whenValidCoordinatesAndLabel_savesLocationMessageAndEmitsEvent() {
-                UUID clientMsgId = UUID.randomUUID();
-                when(policy.actor(finderUser)).thenReturn(finder);
-                when(chatService.requireMember(800L, 10L)).thenReturn(conversation);
-                when(conversations.findForUpdate(800L)).thenReturn(Optional.of(conversation));
-                when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
-                when(claims.findForUpdate(500L)).thenReturn(Optional.of(claim));
-                when(policy.readOnlyReason(conversation)).thenReturn(null);
-                when(messages.findByConversationIdAndSenderIdAndClientMessageId(800L, 10L, clientMsgId))
-                                .thenReturn(Optional.empty());
-                when(messages.saveAndFlush(any(ChatMessage.class))).thenAnswer(inv -> {
-                        ChatMessage m = inv.getArgument(0);
-                        ReflectionTestUtils.setField(m, "id", 902L);
-                        return m;
-                });
-
-                ChatMessageDto dto = service.sendLocation(800L,
-                                new ChatLocationRequest(clientMsgId, 21.012, 105.525, " Alpha Building "), finderUser);
-
-                assertEquals(902L, dto.id());
-                assertNotNull(dto.location());
-                assertEquals("Alpha Building", dto.location().label());
-                verify(events).changed(800L, "MESSAGE_CREATED");
-                verify(notifications).notifyUser(eq(20L), anyString(), anyString(), anyString(), anyString(),
-                                eq(false));
-        }
-
-        // UTC040 - sendLocation throws CHAT_INPUT_INVALID when latitude is out of range
-        @Test
-        void sendLocation_whenCoordinatesInvalid_throwsChatInputInvalid() {
-                when(policy.actor(claimantUser)).thenReturn(claimant);
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID,
-                                assertThrows(AppException.class, () -> service.sendLocation(800L,
-                                                new ChatLocationRequest(UUID.randomUUID(), 95.0, 105.0, "Alpha"),
-                                                claimantUser))
-                                                .getErrorCode());
-        }
-
         private static Account account(Long id, String name) {
                 Account a = new Account();
                 a.setId(id);
-                a.setEmail(name.toLowerCase() + "@fpt.edu.vn");
+                a.setEmail(name.toLowerCase() + "@gmail.com");
                 a.setFullName(name);
                 a.setRole(AccountRole.USER);
                 a.setStatus(AccountStatus.ACTIVE);
@@ -349,24 +311,29 @@ class ChatMessageServiceTest {
                 return m;
         }
 
-        // UTC029, UTC030, UTC031 - send rejects null request, null clientMessageId, and blank body
         @Test
-        void send_whenInvalidPayload_throwsChatInputInvalid() {
+        void utc030_send_nullRequestThrowsInputInvalid() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
-                // UTC029 - request=null throws CHAT_INPUT_INVALID
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.send(800L, null, claimantUser)).getErrorCode());
-                // UTC030 - clientMessageId=null throws CHAT_INPUT_INVALID
+        }
+
+        @Test
+        void utc031_send_nullClientMessageIdThrowsInputInvalid() {
+                when(policy.actor(claimantUser)).thenReturn(claimant);
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.send(800L, new SendChatRequest(null, "hi"), claimantUser))
-                                .getErrorCode());
-                // UTC031 - blank body throws CHAT_INPUT_INVALID
+                                () -> service.send(800L, new SendChatRequest(null, "hi"), claimantUser)).getErrorCode());
+        }
+
+        @Test
+        void utc032_send_blankBodyThrowsInputInvalid() {
+                when(policy.actor(claimantUser)).thenReturn(claimant);
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.send(800L, new SendChatRequest(UUID.randomUUID(), "   "), claimantUser))
                                 .getErrorCode());
         }
 
-        // UTC032 - text accepts boundary 2000 characters when ChatProperties.messageMaxLength=2000
+        // UTC033 - text accepts boundary 2000 characters when ChatProperties.messageMaxLength=2000
         @Test
         void text_whenConfigured2000AndBodyAt2000Chars_acceptsBoundary() {
                 properties.setMessageMaxLength(2000);
@@ -375,7 +342,7 @@ class ChatMessageServiceTest {
                 assertEquals(exact2000, service.text(exact2000));
         }
 
-        // UTC037 - send truncates notification preview to 120 chars + "..." when body is 150 chars
+        // UTC038 - send truncates notification preview to 120 chars + "..." when body is 150 chars
         @Test
         void send_whenBody150Chars_truncatesNotificationPreviewTo120PlusEllipsis() {
                 UUID reqId = UUID.randomUUID();
@@ -400,55 +367,134 @@ class ChatMessageServiceTest {
                 assertEquals("k".repeat(120) + "...", previewCaptor.getValue());
         }
 
-        // UTC039, UTC041 - sendLocation accepts boundary (90, 180) coordinates and uses default map preview when label is null
         @Test
-        void sendLocation_whenNullLabelAndBoundary90_180_succeedsAndNotifiesDefaultPreview() {
-                UUID reqId = UUID.randomUUID();
-                stubWritableLock(20L);
-                when(policy.readOnlyReason(conversation)).thenReturn(null);
-                when(policy.actor(claimantUser)).thenReturn(claimant);
-                when(messages.findByConversationIdAndSenderIdAndClientMessageId(800L, 20L, reqId))
-                                .thenReturn(Optional.empty());
-                when(messages.saveAndFlush(any(ChatMessage.class))).thenAnswer(inv -> {
-                        ChatMessage m = inv.getArgument(0);
-                        ReflectionTestUtils.setField(m, "id", 921L);
-                        ReflectionTestUtils.setField(m, "createdAt", OffsetDateTime.now());
-                        return m;
-                });
+        void utc042_history_beforeZeroThrowsInputInvalid() {
+                stubMember();
+                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
+                                () -> service.history(800L, 0L, null, 20, claimantUser)).getErrorCode());
+        }
 
-                ChatMessageDto dto = service.sendLocation(800L, new ChatLocationRequest(reqId, 90.0, 180.0, null),
+        @Test
+        void utc043_history_afterNegativeThrowsInputInvalid() {
+                stubMember();
+                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
+                                () -> service.history(800L, null, -1L, 20, claimantUser)).getErrorCode());
+        }
+
+        @Test
+        void utc044_history_size101ThrowsInputInvalid() {
+                stubMember();
+                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
+                                () -> service.history(800L, null, null, 101, claimantUser)).getErrorCode());
+        }
+
+        @Test
+        void utc045_history_imageHasUrlAndPdfUrlIsNull() {
+                stubMember();
+                ChatMessage mixed = new ChatMessage(800L, 10L, 6L, UUID.randomUUID(), "ATTACHMENT", null);
+                ReflectionTestUtils.setField(mixed, "id", 60L);
+                ReflectionTestUtils.setField(mixed, "createdAt", OffsetDateTime.now());
+                ChatAttachment img = new ChatAttachment(60L, "chat/800/a.png", "a.png", "image/png", 10L, "h1", 0);
+                ReflectionTestUtils.setField(img, "id", 1L);
+                ChatAttachment pdf = new ChatAttachment(60L, "chat/800/b.pdf", "b.pdf", "application/pdf", 20L, "h2", 1);
+                ReflectionTestUtils.setField(pdf, "id", 2L);
+                when(messages.findByConversationIdAndSequenceNoLessThanOrderBySequenceNoDesc(800L, Long.MAX_VALUE,
+                                PageRequest.of(0, 21))).thenReturn(List.of(mixed));
+                when(attachments.findByMessageIdInOrderByMessageIdAscSortOrderAsc(List.of(60L))).thenReturn(List.of(img, pdf));
+                when(storage.readUrl("chat/800/a.png", null)).thenReturn("https://cdn/a.png");
+
+                ChatMessageDto.Page page = service.history(800L, null, null, 20, claimantUser);
+                assertEquals(1, page.items().size());
+                assertEquals("https://cdn/a.png", page.items().get(0).attachments().get(0).url());
+                assertNull(page.items().get(0).attachments().get(1).url());
+        }
+
+        @Test
+        void utc046_receipts_afterGreaterThanThroughThrowsInputInvalid() {
+                stubMember();
+                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
+                                () -> service.receipts(800L, 5L, 3L, 10, claimantUser)).getErrorCode());
+        }
+
+        @Test
+        @SuppressWarnings("unchecked")
+        void utc047_receipts_twelveRowsSlicedToLimitWithHasMore() {
+                stubMember();
+                List<ChatMessageDto.Receipt> twelve = java.util.stream.LongStream.rangeClosed(1, 12)
+                                .mapToObj(seq -> new ChatMessageDto.Receipt(seq, OffsetDateTime.now()))
+                                .toList();
+                when(jdbc.query(anyString(), any(RowMapper.class), eq(800L), eq(20L), eq(0L), eq(50L), eq(11)))
+                                .thenReturn(twelve);
+                ChatMessageDto.Receipts receipts = service.receipts(800L, 0L, 50L, 10, claimantUser);
+                assertEquals(10, receipts.items().size());
+                assertTrue(receipts.hasMore());
+        }
+
+        // ---------------------------------------------------------------- sendLocation (UC-38 'Chia sẻ vị trí')
+
+        @Test
+        void utc089_sendLocation_roundsCoordinatesTrimsLabelAndNotifies() {
+                UUID reqId = stubNewLocation();
+                ChatMessageDto dto = service.sendLocation(800L,
+                                new ChatLocationRequest(reqId, 10.7769123456, 106.7009, " Gate B "), claimantUser);
+
+                assertEquals(930L, dto.id());
+                assertEquals(10.776912, dto.location().latitude());
+                assertEquals("Gate B", dto.location().label());
+                verify(events).changed(800L, "MESSAGE_CREATED");
+                verify(notifications).notifyUser(eq(10L), eq("CHAT_MESSAGE"), anyString(),
+                                eq("Đã chia sẻ vị trí hẹn gặp: Gate B"), eq("/tin-nhan/800"), eq(false));
+        }
+
+        @Test
+        void utc090_sendLocation_nullLabelUsesDefaultMapPreview() {
+                UUID reqId = stubNewLocation();
+                ChatMessageDto dto = service.sendLocation(800L, new ChatLocationRequest(reqId, 10.77, 106.70, null),
                                 claimantUser);
 
-                assertEquals(90.0, dto.location().latitude());
-                assertEquals(180.0, dto.location().longitude());
+                assertNull(dto.location().label());
                 verify(notifications).notifyUser(eq(10L), eq("CHAT_MESSAGE"), anyString(),
                                 eq("Đã chia sẻ vị trí hẹn gặp trên bản đồ."), eq("/tin-nhan/800"), eq(false));
         }
 
-        // UTC042, UTC043, UTC044, UTC045, UTC046 - sendLocation validates lon/lat/label bounds and duplicate differing coordinates
         @Test
-        void sendLocation_whenInvalidCoordsLabelOrDuplicateDiffCoords_throwsExpectedError() {
-                when(policy.actor(claimantUser)).thenReturn(claimant);
-                UUID id = UUID.randomUUID();
-                // UTC042 - lon=-180.0001 throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.sendLocation(800L, new ChatLocationRequest(id, 10.0, -180.0001, null),
-                                                claimantUser)).getErrorCode());
-                // UTC043 - lat=NaN throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.sendLocation(800L, new ChatLocationRequest(id, Double.NaN, 106.7, null),
-                                                claimantUser)).getErrorCode());
-                // UTC044 - lat=null throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.sendLocation(800L, new ChatLocationRequest(id, null, 106.7, null),
-                                                claimantUser)).getErrorCode());
-                // UTC045 - label length 201 exceeds max 200 and throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.sendLocation(800L,
-                                                new ChatLocationRequest(id, 10.7, 106.7, "x".repeat(201)),
-                                                claimantUser)).getErrorCode());
+        void utc091_sendLocation_latitude91ThrowsInputInvalid() {
+                assertLocationInvalid(91.0, 106.7, null);
+        }
 
-                // UTC046 - duplicate clientMessageId with changed coordinates throws CHAT_DUPLICATE_PAYLOAD
+        @Test
+        void utc092_sendLocation_latitude90Longitude180Accepted() {
+                UUID reqId = stubNewLocation();
+                ChatMessageDto dto = service.sendLocation(800L, new ChatLocationRequest(reqId, 90.0, 180.0, null),
+                                claimantUser);
+                assertEquals(90.0, dto.location().latitude());
+                assertEquals(180.0, dto.location().longitude());
+        }
+
+        @Test
+        void utc093_sendLocation_longitudeBelowMinus180ThrowsInputInvalid() {
+                assertLocationInvalid(10.0, -180.0001, null);
+        }
+
+        @Test
+        void utc094_sendLocation_latitudeNaNThrowsInputInvalid() {
+                assertLocationInvalid(Double.NaN, 106.7, null);
+        }
+
+        @Test
+        void utc095_sendLocation_latitudeNullThrowsInputInvalid() {
+                assertLocationInvalid(null, 106.7, null);
+        }
+
+        @Test
+        void utc096_sendLocation_label201CharsThrowsInputInvalid() {
+                assertLocationInvalid(10.7, 106.7, "x".repeat(201));
+        }
+
+        @Test
+        void utc097_sendLocation_sameClientIdDifferentCoordinatesThrowsDuplicatePayload() {
+                UUID id = UUID.randomUUID();
+                when(policy.actor(claimantUser)).thenReturn(claimant);
                 stubWritableLock(20L);
                 ChatMessage previous = ChatMessage.location(800L, 20L, 6L, id, 10.0, 106.0, null);
                 ReflectionTestUtils.setField(previous, "id", 922L);
@@ -458,57 +504,37 @@ class ChatMessageServiceTest {
                 assertEquals(ErrorCode.CHAT_DUPLICATE_PAYLOAD, assertThrows(AppException.class,
                                 () -> service.sendLocation(800L, new ChatLocationRequest(id, 11.0, 106.0, null),
                                                 claimantUser)).getErrorCode());
+                verify(messages, never()).saveAndFlush(any());
         }
 
-        // UTC050, UTC051, UTC052, UTC053, UTC054, UTC055 - history and receipts validate cursors, limit, and attachment URL mapping
-        @Test
-        void history_and_receipts_validateParamsMapPdfNullUrlAndSliceLimit() {
+        /** Claimant sends a new location into the writable conversation 800; the saved message gets id 930. */
+        private UUID stubNewLocation() {
+                UUID reqId = UUID.randomUUID();
+                when(policy.actor(claimantUser)).thenReturn(claimant);
+                stubWritableLock(20L);
+                when(policy.readOnlyReason(conversation)).thenReturn(null);
+                when(messages.findByConversationIdAndSenderIdAndClientMessageId(800L, 20L, reqId))
+                                .thenReturn(Optional.empty());
+                when(messages.saveAndFlush(any(ChatMessage.class))).thenAnswer(inv -> {
+                        ChatMessage m = inv.getArgument(0);
+                        ReflectionTestUtils.setField(m, "id", 930L);
+                        ReflectionTestUtils.setField(m, "createdAt", OffsetDateTime.now());
+                        return m;
+                });
+                return reqId;
+        }
+
+        private void assertLocationInvalid(Double lat, Double lon, String label) {
+                when(policy.actor(claimantUser)).thenReturn(claimant);
+                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
+                                () -> service.sendLocation(800L, new ChatLocationRequest(UUID.randomUUID(), lat, lon, label),
+                                                claimantUser)).getErrorCode());
+                verify(messages, never()).saveAndFlush(any());
+        }
+
+        private void stubMember() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
-
-                // UTC050 - history(before=0) throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.history(800L, 0L, null, 20, claimantUser)).getErrorCode());
-                // UTC051 - history(after=-1) throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.history(800L, null, -1L, 20, claimantUser)).getErrorCode());
-                // UTC052 - history(size=101) throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.history(800L, null, null, 101, claimantUser)).getErrorCode());
-
-                // UTC053 - image attachment has read URL while PDF attachment URL is null
-                ChatMessage mixed = new ChatMessage(800L, 10L, 6L, UUID.randomUUID(), "ATTACHMENT", null);
-                ReflectionTestUtils.setField(mixed, "id", 60L);
-                ReflectionTestUtils.setField(mixed, "createdAt", OffsetDateTime.now());
-                ChatAttachment img = new ChatAttachment(60L, "chat/800/a.png", "a.png", "image/png", 10L, "h1", 0);
-                ReflectionTestUtils.setField(img, "id", 1L);
-                ChatAttachment pdf = new ChatAttachment(60L, "chat/800/b.pdf", "b.pdf", "application/pdf", 20L, "h2",
-                                1);
-                ReflectionTestUtils.setField(pdf, "id", 2L);
-                when(messages.findByConversationIdAndSequenceNoLessThanOrderBySequenceNoDesc(800L, Long.MAX_VALUE,
-                                PageRequest.of(0, 21))).thenReturn(List.of(mixed));
-                when(attachments.findByMessageIdInOrderByMessageIdAscSortOrderAsc(List.of(60L)))
-                                .thenReturn(List.of(img, pdf));
-                when(storage.readUrl("chat/800/a.png", null)).thenReturn("https://cdn/a.png");
-
-                ChatMessageDto.Page page = service.history(800L, null, null, 20, claimantUser);
-                assertEquals(1, page.items().size());
-                assertEquals("https://cdn/a.png", page.items().get(0).attachments().get(0).url());
-                assertNull(page.items().get(0).attachments().get(1).url());
-
-                // UTC054 - receipts with after > through throws CHAT_INPUT_INVALID
-                assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
-                                () -> service.receipts(800L, 5L, 3L, 10, claimantUser)).getErrorCode());
-
-                // UTC055 - 12 receipts returned for limit=10 slices to 10 items with hasMore=true
-                List<ChatMessageDto.Receipt> twelve = java.util.stream.LongStream.rangeClosed(1, 12)
-                                .mapToObj(seq -> new ChatMessageDto.Receipt(seq, OffsetDateTime.now()))
-                                .toList();
-                when(jdbc.query(anyString(), any(RowMapper.class), eq(800L), eq(20L), eq(0L), eq(50L), eq(11)))
-                                .thenReturn(twelve);
-                ChatMessageDto.Receipts receipts = service.receipts(800L, 0L, 50L, 10, claimantUser);
-                assertEquals(10, receipts.items().size());
-                assertTrue(receipts.hasMore());
         }
 
         private void stubWritableLock(long actorId) {

@@ -29,40 +29,36 @@ class ChatAttachmentValidatorTest {
 
     // Supplementary (ChatProperties): verifies default max length 4000 chars, max 5 files, 25MB total
     @Test
-    void defaultChatProperties_usesFourThousandCharsAndTwentyFiveMegabytesTotal() {
+    void utc074_defaultChatProperties_usesFourThousandCharsAndTwentyFiveMegabytesTotal() {
         ChatProperties defaults = new ChatProperties();
         assertEquals(4000, defaults.getMessageMaxLength());
         assertEquals(5, defaults.getAttachmentMaxCount());
         assertEquals(25L * 1024 * 1024, defaults.getTotalMaxBytes());
     }
 
-    // UTC067, UTC068 - validate detects PNG and 1-page PDF types and computes SHA-256 hashes
     @Test
-    void validate_whenValidPngJpgAndPdf_detectsActualTypesAndComputesSha256() throws IOException {
-        ChatAttachmentValidator validator = new ChatAttachmentValidator(new ChatProperties());
-        List<MultipartFile> files = List.of(
-                // UTC067 - valid PNG image detected as image/png
-                new MockMultipartFile("files", "photo.png", "application/octet-stream", createImageBytes("png")),
-                // UTC068 - valid 1-page PDF detected as application/pdf
-                new MockMultipartFile("files", "doc.pdf", "application/pdf", createPdfBytes(false))
-        );
-
-        List<ChatAttachmentValidator.Upload> uploads = validator.validate(files);
-
-        assertEquals(2, uploads.size());
+    void utc061_validate_pngDetectedAndHashed() throws IOException {
+        List<ChatAttachmentValidator.Upload> uploads = validator().validate(List.of(
+                new MockMultipartFile("files", "photo.png", "application/octet-stream", createImageBytes("png"))));
         assertEquals("image/png", uploads.get(0).mime());
         assertEquals("png", uploads.get(0).extension());
         assertEquals(64, uploads.get(0).hash().length());
-        assertEquals("application/pdf", uploads.get(1).mime());
-        assertEquals("pdf", uploads.get(1).extension());
     }
 
-    // UTC074 - validate rejects encrypted PDF (plus Supplementary corrupted PDF and unsupported .txt)
+    @Test
+    void utc062_validate_onePagePdfDetected() throws IOException {
+        List<ChatAttachmentValidator.Upload> uploads = validator().validate(List.of(
+                new MockMultipartFile("files", "doc.pdf", "application/pdf", createPdfBytes(false))));
+        assertEquals("application/pdf", uploads.get(0).mime());
+        assertEquals("pdf", uploads.get(0).extension());
+    }
+
+    // UTC068 - validate rejects encrypted PDF (plus Supplementary corrupted PDF and unsupported .txt)
     @Test
     void validate_whenEncryptedOrCorruptedPdfOrUnsupportedFile_throwsChatAttachmentInvalid() throws IOException {
         ChatAttachmentValidator validator = new ChatAttachmentValidator(new ChatProperties());
 
-        // UTC074 - encrypted PDF throws CHAT_ATTACHMENT_INVALID
+        // UTC068 - encrypted PDF throws CHAT_ATTACHMENT_INVALID
         MultipartFile encryptedPdf = new MockMultipartFile(
                 "files", "secret.pdf", "application/pdf", createPdfBytes(true));
         assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
@@ -81,7 +77,7 @@ class ChatAttachmentValidatorTest {
                 assertThrows(AppException.class, () -> validator.validate(List.of(text))).getErrorCode());
     }
 
-    // UTC071 - validate rejects attachment count exceeding configured maximum
+    // UTC065 - validate rejects attachment count exceeding configured maximum
     @Test
     void validate_whenCountOrIndividualOrTotalSizeExceeded_throwsChatAttachmentInvalid() throws IOException {
         ChatProperties props = new ChatProperties();
@@ -93,7 +89,7 @@ class ChatAttachmentValidatorTest {
         byte[] smallPng = createImageBytes("png");
         assertTrue(smallPng.length > 50);
 
-        // UTC071 - file count exceeding attachmentMaxCount throws CHAT_ATTACHMENT_INVALID
+        // UTC065 - file count exceeding attachmentMaxCount throws CHAT_ATTACHMENT_INVALID
         MultipartFile f1 = new MockMultipartFile("files", "1.png", "image/png", smallPng);
         MultipartFile f2 = new MockMultipartFile("files", "2.png", "image/png", smallPng);
 
@@ -131,14 +127,73 @@ class ChatAttachmentValidatorTest {
         }
     }
 
-    // UTC066, UTC078, UTC079 - validate handles valid 800x600 JPEG, path-sanitized filenames, and null filename fallback
     @Test
-    void validate_whenValidJpegAndFilenamesWithSlashesOrNull_returnsUploadWithSanitizedName() throws IOException {
-        ChatAttachmentValidator validator = new ChatAttachmentValidator(new ChatProperties());
-        // UTC066 - valid 800x600 JPEG image
-        byte[] jpeg = createImageBytes("jpg", 800, 600);
+    void utc060_validate_jpeg800x600Accepted() throws IOException {
+        List<ChatAttachmentValidator.Upload> uploads = validator().validate(List.of(
+                new MockMultipartFile("files", "photo.jpg", "image/jpeg", createImageBytes("jpg", 800, 600))));
+        assertEquals("image/jpeg", uploads.get(0).mime());
+        assertEquals("jpg", uploads.get(0).extension());
+        assertEquals(64, uploads.get(0).hash().length());
+    }
+
+    @Test
+    void utc063_validate_nullFilesThrowsInvalid() {
+        assertInvalid(validator(), null);
+    }
+
+    @Test
+    void utc064_validate_emptyFilesThrowsInvalid() {
+        assertInvalid(validator(), List.of());
+    }
+
+    @Test
+    void utc066_validate_gifRejected() throws IOException {
+        assertInvalid(validator(), List.of(new MockMultipartFile("files", "anim.gif", "image/gif", createImageBytes("gif"))));
+    }
+
+    @Test
+    void utc067_validate_textRenamedToJpgRejected() {
+        assertInvalid(validator(), List.of(new MockMultipartFile("files", "fake.jpg", "image/jpeg",
+                "not a jpeg".getBytes(StandardCharsets.UTF_8))));
+    }
+
+    @Test
+    void utc069_validate_imageOverImageMaxBytesRejected() throws IOException {
         byte[] png = createImageBytes("png");
-        // UTC079 - null originalFilename defaults to attachment.<ext>
+        ChatProperties props = new ChatProperties();
+        props.setImageMaxBytes(Math.max(1L, png.length - 1L));
+        assertInvalid(new ChatAttachmentValidator(props), List.of(new MockMultipartFile("files", "a.png", "image/png", png)));
+    }
+
+    @Test
+    void utc070_validate_totalOverTotalMaxBytesRejected() throws IOException {
+        byte[] png = createImageBytes("png");
+        ChatProperties props = new ChatProperties();
+        props.setImageMaxBytes(png.length + 100L);
+        props.setTotalMaxBytes(png.length * 2L - 1L);
+        assertInvalid(new ChatAttachmentValidator(props), List.of(
+                new MockMultipartFile("files", "1.png", "image/png", png),
+                new MockMultipartFile("files", "2.png", "image/png", png)));
+    }
+
+    @Test
+    void utc071_validate_over20MegapixelsRejected() throws IOException {
+        BufferedImage huge = new BufferedImage(5000, 5000, BufferedImage.TYPE_BYTE_BINARY);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(huge, "png", out);
+        assertInvalid(validator(), List.of(new MockMultipartFile("files", "huge.png", "image/png", out.toByteArray())));
+    }
+
+    @Test
+    void utc072_validate_slashesInFilenameSanitized() throws IOException {
+        List<ChatAttachmentValidator.Upload> uploads = validator().validate(List.of(
+                new MockMultipartFile("files", "a/b\\c.jpg", "image/jpeg", createImageBytes("jpg"))));
+        assertEquals("a_b_c.jpg", uploads.get(0).name());
+    }
+
+    @Test
+    void utc073_validate_nullFilenameDefaultsToAttachmentExt() throws IOException {
+        byte[] png = createImageBytes("png");
         MultipartFile nullNamePng = new MultipartFile() {
             @Override public String getName() { return "files"; }
             @Override public String getOriginalFilename() { return null; }
@@ -149,72 +204,16 @@ class ChatAttachmentValidatorTest {
             @Override public InputStream getInputStream() { return new ByteArrayInputStream(png); }
             @Override public void transferTo(File dest) {}
         };
-
-        List<ChatAttachmentValidator.Upload> uploads = validator.validate(List.of(
-                // UTC078 - slashes in filename sanitized with underscores
-                new MockMultipartFile("files", "a/b\\c.jpg", "image/jpeg", jpeg),
-                nullNamePng));
-
-        assertEquals(2, uploads.size());
-        assertEquals("image/jpeg", uploads.get(0).mime());
-        assertEquals("jpg", uploads.get(0).extension());
-        assertEquals(64, uploads.get(0).hash().length());
-        assertEquals("a_b_c.jpg", uploads.get(0).name());
-        assertEquals("attachment.png", uploads.get(1).name());
+        assertEquals("attachment.png", validator().validate(List.of(nullNamePng)).get(0).name());
     }
 
-    // UTC069, UTC070, UTC072, UTC073, UTC075, UTC076, UTC077 - validate rejects null/empty, GIF, spoofed jpg, oversized image/total, and >20MP images
-    @Test
-    void validate_whenNullEmptyGifTextAsJpgSizeExceededOrHugePixels_throwsChatAttachmentInvalid()
-            throws IOException {
-        ChatAttachmentValidator validator = new ChatAttachmentValidator(new ChatProperties());
+    private static ChatAttachmentValidator validator() {
+        return new ChatAttachmentValidator(new ChatProperties());
+    }
 
-        // UTC069 - files=null throws CHAT_ATTACHMENT_INVALID
+    private static void assertInvalid(ChatAttachmentValidator validator, List<MultipartFile> files) {
         assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
-                assertThrows(AppException.class, () -> validator.validate(null)).getErrorCode());
-        // UTC070 - files=[] throws CHAT_ATTACHMENT_INVALID
-        assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
-                assertThrows(AppException.class, () -> validator.validate(List.of())).getErrorCode());
-
-        // UTC072 - GIF image throws CHAT_ATTACHMENT_INVALID
-        byte[] gif = createImageBytes("gif");
-        assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
-                assertThrows(AppException.class, () -> validator.validate(List.of(
-                        new MockMultipartFile("files", "anim.gif", "image/gif", gif)))).getErrorCode());
-
-        // UTC073 - text file renamed to .jpg throws CHAT_ATTACHMENT_INVALID
-        assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
-                assertThrows(AppException.class, () -> validator.validate(List.of(
-                        new MockMultipartFile("files", "fake.jpg", "image/jpeg",
-                                "not a jpeg".getBytes(StandardCharsets.UTF_8))))).getErrorCode());
-
-        // UTC075 - image exceeding imageMaxBytes throws CHAT_ATTACHMENT_INVALID
-        byte[] png = createImageBytes("png");
-        ChatProperties smallImageLimit = new ChatProperties();
-        smallImageLimit.setImageMaxBytes(Math.max(1L, png.length - 1L));
-        ChatAttachmentValidator imageLimitValidator = new ChatAttachmentValidator(smallImageLimit);
-        assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
-                assertThrows(AppException.class, () -> imageLimitValidator.validate(List.of(
-                        new MockMultipartFile("files", "a.png", "image/png", png)))).getErrorCode());
-
-        // UTC076 - total size exceeding totalMaxBytes throws CHAT_ATTACHMENT_INVALID
-        ChatProperties totalLimit = new ChatProperties();
-        totalLimit.setImageMaxBytes(png.length + 100L);
-        totalLimit.setTotalMaxBytes(png.length * 2L - 1L);
-        ChatAttachmentValidator totalLimitValidator = new ChatAttachmentValidator(totalLimit);
-        assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
-                assertThrows(AppException.class, () -> totalLimitValidator.validate(List.of(
-                        new MockMultipartFile("files", "1.png", "image/png", png),
-                        new MockMultipartFile("files", "2.png", "image/png", png)))).getErrorCode());
-
-        // UTC077 - 5000x5000 (25MP > 20,000,000 pixels) throws CHAT_ATTACHMENT_INVALID
-        BufferedImage huge = new BufferedImage(5000, 5000, BufferedImage.TYPE_BYTE_BINARY);
-        ByteArrayOutputStream hugeOut = new ByteArrayOutputStream();
-        ImageIO.write(huge, "png", hugeOut);
-        assertEquals(ErrorCode.CHAT_ATTACHMENT_INVALID,
-                assertThrows(AppException.class, () -> validator.validate(List.of(
-                        new MockMultipartFile("files", "huge.png", "image/png", hugeOut.toByteArray()))))
-                        .getErrorCode());
+                assertThrows(AppException.class, () -> validator.validate(files)).getErrorCode());
     }
 
     private static byte[] createImageBytes(String format, int width, int height) throws IOException {
@@ -224,4 +223,3 @@ class ChatAttachmentValidatorTest {
         return out.toByteArray();
     }
 }
-

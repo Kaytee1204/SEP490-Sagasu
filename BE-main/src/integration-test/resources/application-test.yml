@@ -1,0 +1,10 @@
+# Profile for JUnit integration tests: separate DB, no SQL spam, no R2.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sagasu_test
+  jpa:
+    show-sql: false
+app:
+  storage:
+    r2:
+      enabled: false

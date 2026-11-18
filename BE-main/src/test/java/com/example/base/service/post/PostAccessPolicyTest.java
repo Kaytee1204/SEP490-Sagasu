@@ -42,7 +42,7 @@ class PostAccessPolicyTest {
 
     // Supplementary (PostAccessPolicy.requireActiveAccount): expired validUntil throws FORBIDDEN
     @Test
-    void requireActiveAccount_whenExpired_throwsForbidden() {
+    void utc008_requireActiveAccount_whenExpired_throwsForbidden() {
         CustomUserDetails user = user(7L, AccountRole.USER, AccountStatus.ACTIVE,
                 null, OffsetDateTime.now().minusMinutes(1));
         AppException ex = assertThrows(AppException.class, () -> PostAccessPolicy.requireActiveAccount(user));
@@ -58,19 +58,19 @@ class PostAccessPolicyTest {
 
     // Supplementary (PostAccessPolicy.requireAuthor): null role throws NullPointerException
     @Test
-    void requireAuthor_whenRoleNull_throwsNullPointerException() {
+    void utc009_requireAuthor_whenRoleNull_throwsNullPointerException() {
         CustomUserDetails user = user(7L, null, AccountStatus.ACTIVE, null, null);
         assertThrows(NullPointerException.class, () -> PostAccessPolicy.requireAuthor(user));
     }
 
-    // UTC005, UTC007 - requireValidPostId: postId=0 and postId=-1 throw POST_ID_INVALID
     @Test
-    void requireValidPostId_whenZeroOrNegative_throwsPostIdInvalid() {
-        // UTC005 - postId=0
+    void utc005_requireValidPostId_zeroThrowsPostIdInvalid() {
         AppException zero = assertThrows(AppException.class, () -> PostAccessPolicy.requireValidPostId(0L));
         assertEquals(ErrorCode.POST_ID_INVALID, zero.getErrorCode());
+    }
 
-        // UTC007 - postId=-1
+    @Test
+    void utc007_requireValidPostId_negativeThrowsPostIdInvalid() {
         AppException negative = assertThrows(AppException.class, () -> PostAccessPolicy.requireValidPostId(-1L));
         assertEquals(ErrorCode.POST_ID_INVALID, negative.getErrorCode());
     }
@@ -85,7 +85,7 @@ class PostAccessPolicyTest {
                                           OffsetDateTime lockedUntil, OffsetDateTime validUntil) {
         Account account = new Account();
         account.setId(id);
-        account.setEmail("user" + id + "@fpt.edu.vn");
+        account.setEmail("user" + id + "@gmail.com");
         account.setFullName("User " + id);
         account.setRole(role);
         account.setStatus(status);

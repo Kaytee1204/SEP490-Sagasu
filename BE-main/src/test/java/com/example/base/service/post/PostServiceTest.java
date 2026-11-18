@@ -63,7 +63,7 @@ class PostServiceTest {
     @InjectMocks
     private PostService service;
 
-    // UTC061 - getActiveCategories returns ordered active CategoryDto list
+    // UTC067 - getActiveCategories returns ordered active CategoryDto list
     @Test
     void getActiveCategories_whenPresent_returnsOrderedDtos() {
         Category c1 = category(1L, "Books");
@@ -75,14 +75,14 @@ class PostServiceTest {
         assertEquals(List.of(new CategoryDto(1L, "Books"), new CategoryDto(2L, "Wallet")), result);
     }
 
-    // UTC062 - getActiveCategories returns empty list when no active categories exist
+    // UTC068 - getActiveCategories returns empty list when no active categories exist
     @Test
     void getActiveCategories_whenEmpty_returnsEmptyList() {
         when(categories.findByActiveTrueOrderByNameAscCategoryIdAsc()).thenReturn(List.of());
         assertTrue(service.getActiveCategories().isEmpty());
     }
 
-    // UTC063 - listVisible with empty filter queries findVisibleIds and attaches office receipts
+    // UTC069 - listVisible with empty filter queries findVisibleIds and attaches office receipts
     @Test
     void listVisible_whenEmptyFilter_usesFindVisibleIdsAndAttachesOfficeReceipts() {
         Account owner = account(5L);
@@ -109,7 +109,7 @@ class PostServiceTest {
         verify(posts, never()).searchVisibleIds(any(), any(), any(), any(), any(), any(), any());
     }
 
-    // UTC064 - listVisible with filter uses searchVisibleIds
+    // UTC070 - listVisible with filter uses searchVisibleIds
     @Test
     void listVisible_whenFilterProvided_usesSearchVisibleIds() {
         PostSearchFilter filter = new PostSearchFilter("wallet", null, "LOST", "", null, null);
@@ -123,18 +123,19 @@ class PostServiceTest {
         verify(receipts, never()).findPublicIntakes(anyList());
     }
 
-    // UTC065, UTC066 - listVisible throws POST_PAGINATION_INVALID on invalid page or size
     @Test
-    void listVisible_whenInvalidPagination_throwsPostPaginationInvalid() {
-        // UTC065 - page < 1 throws POST_PAGINATION_INVALID
+    void utc071_listVisible_pageZeroThrowsPaginationInvalid() {
         assertEquals(ErrorCode.POST_PAGINATION_INVALID,
                 assertThrows(AppException.class, () -> service.listVisible(0, 20, PostSearchFilter.empty())).getErrorCode());
-        // UTC066 - size < 1 throws POST_PAGINATION_INVALID
+    }
+
+    @Test
+    void utc072_listVisible_sizeZeroThrowsPaginationInvalid() {
         assertEquals(ErrorCode.POST_PAGINATION_INVALID,
                 assertThrows(AppException.class, () -> service.listVisible(1, 0, PostSearchFilter.empty())).getErrorCode());
     }
 
-    // UTC067 - listVisible returns empty page and skips batch fetch and receipt lookup when no visible IDs
+    // UTC073 - listVisible returns empty page and skips batch fetch and receipt lookup when no visible IDs
     @Test
     void listVisible_whenNoVisibleIds_skipsBatchFetchAndReceipts() {
         var pageable = PageRequest.of(0, 20);
@@ -148,7 +149,7 @@ class PostServiceTest {
         verify(receipts, never()).findPublicIntakes(anyList());
     }
 
-    // UTC068 - getDetailForViewer sets canRequestHandover=false when visible post has null viewer
+    // UTC074 - getDetailForViewer sets canRequestHandover=false when visible post has null viewer
     @Test
     void getDetailForViewer_whenVisibleAndNullViewer_setsCanRequestHandoverFalse() {
         Account owner = account(5L);
@@ -164,7 +165,7 @@ class PostServiceTest {
         verify(posts, never()).findOwnDetail(eq(10L), anyLong());
     }
 
-    // UTC069 - getDetailForViewer falls back to findOwnDetail for PENDING post owned by viewer
+    // UTC075 - getDetailForViewer falls back to findOwnDetail for PENDING post owned by viewer
     @Test
     void getDetailForViewer_whenPendingOwnedByViewer_fallsBackToFindOwnDetail() {
         Account owner = account(5L);
@@ -179,7 +180,7 @@ class PostServiceTest {
         assertEquals(expected, service.getDetailForViewer(10L, 5L));
     }
 
-    // UTC070 - getDetailForViewer throws POST_NOT_VISIBLE when PENDING post is viewed by non-owner
+    // UTC076 - getDetailForViewer throws POST_NOT_VISIBLE when PENDING post is viewed by non-owner
     @Test
     void getDetailForViewer_whenPendingViewedByOther_throwsPostNotVisible() {
         when(posts.findVisibleDetail(10L)).thenReturn(Optional.empty());
@@ -189,26 +190,31 @@ class PostServiceTest {
         assertEquals(ErrorCode.POST_NOT_VISIBLE, ex.getErrorCode());
     }
 
-    // UTC071, UTC072 - getDetailForViewer checks receipt existence when owner and handover-eligible
     @Test
-    void getDetailForViewer_whenOwnerAndHandoverEligible_checksReceiptExistence() {
-        Account owner = account(5L);
-        Post post = foundPost(10L, owner, category(3L, "Wallet"));
-        PostDetailDto dtoTrue = mock(PostDetailDto.class);
-        PostDetailDto dtoFalse = mock(PostDetailDto.class);
+    void utc077_getDetailForViewer_ownerWithoutReceiptCanRequestHandover() {
+        Post post = foundPost(10L, account(5L), category(3L, "Wallet"));
+        PostDetailDto expected = mock(PostDetailDto.class);
         when(posts.findVisibleDetail(10L)).thenReturn(Optional.of(post));
         when(receipts.findPublicIntakes(List.of(10L))).thenReturn(List.of());
-        when(receipts.existsByPostId(10L)).thenReturn(false, true);
-        when(mapper.toDetail(post, 5L, null, true)).thenReturn(dtoTrue);
-        when(mapper.toDetail(post, 5L, null, false)).thenReturn(dtoFalse);
+        when(receipts.existsByPostId(10L)).thenReturn(false);
+        when(mapper.toDetail(post, 5L, null, true)).thenReturn(expected);
 
-        // UTC071 - no existing receipt returns canRequestHandover=true
-        assertEquals(dtoTrue, service.getDetailForViewer(10L, 5L));
-        // UTC072 - existing receipt returns canRequestHandover=false
-        assertEquals(dtoFalse, service.getDetailForViewer(10L, 5L));
+        assertEquals(expected, service.getDetailForViewer(10L, 5L));
     }
 
-    // UTC073 - getDetailForViewer throws POST_ID_INVALID when postId <= 0
+    @Test
+    void utc078_getDetailForViewer_ownerWithReceiptCannotRequestHandover() {
+        Post post = foundPost(10L, account(5L), category(3L, "Wallet"));
+        PostDetailDto expected = mock(PostDetailDto.class);
+        when(posts.findVisibleDetail(10L)).thenReturn(Optional.of(post));
+        when(receipts.findPublicIntakes(List.of(10L))).thenReturn(List.of());
+        when(receipts.existsByPostId(10L)).thenReturn(true);
+        when(mapper.toDetail(post, 5L, null, false)).thenReturn(expected);
+
+        assertEquals(expected, service.getDetailForViewer(10L, 5L));
+    }
+
+    // UTC079 - getDetailForViewer throws POST_ID_INVALID when postId <= 0
     @Test
     void getDetailForViewer_whenInvalidId_throwsPostIdInvalid() {
         AppException ex = assertThrows(AppException.class, () -> service.getDetailForViewer(-1L, 5L));
@@ -219,7 +225,7 @@ class PostServiceTest {
     private static Account account(Long id) {
         Account a = new Account();
         a.setId(id);
-        a.setEmail("u" + id + "@fpt.edu.vn");
+        a.setEmail("u" + id + "@gmail.com");
         a.setFullName("User " + id);
         a.setRole(AccountRole.USER);
         a.setStatus(AccountStatus.ACTIVE);

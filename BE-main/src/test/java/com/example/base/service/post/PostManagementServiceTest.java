@@ -3,6 +3,7 @@ package com.example.base.service.post;
 import com.example.base.dto.post.CreatedPostDto;
 import com.example.base.dto.post.DeletePostRequest;
 import com.example.base.dto.post.EditPostDto;
+import com.example.base.dto.post.MyPostDto;
 import com.example.base.dto.post.MyPostPageDto;
 import com.example.base.dto.post.UpdatePostRequest;
 import com.example.base.entity.Account;
@@ -33,6 +34,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -64,6 +67,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PostManagementServiceTest {
 
     @Mock
@@ -102,9 +106,86 @@ class PostManagementServiceTest {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
 
-    // UTC025, UTC031, UTC032, UTC033, UTC034, UTC035 - listMine ordering, thumbnails, pending counts, edit/delete locks and reasons
     @Test
-    void listMine_whenAuthorHasThreePosts_preservesOrderMapsThumbnailsAndPendingCounts() {
+    void utc031_listMine_preservesIdOrder() {
+        MyPostPageDto result = listThreePosts();
+        assertEquals(3, result.content().size());
+        assertEquals(List.of(13L, 11L, 12L), result.content().stream().map(c -> c.id()).toList());
+    }
+
+    @Test
+    void utc032_listMine_pageZeroThrowsPaginationInvalid() {
+        assertEquals(ErrorCode.POST_PAGINATION_INVALID,
+                assertThrows(AppException.class, () -> service.listMine(0, 10, "ALL", user)).getErrorCode());
+    }
+
+    @Test
+    void utc033_listMine_size101ThrowsPaginationInvalid() {
+        assertEquals(ErrorCode.POST_PAGINATION_INVALID,
+                assertThrows(AppException.class, () -> service.listMine(1, 101, "ALL", user)).getErrorCode());
+    }
+
+    @Test
+    void utc034_listMine_size100PendingFilterAccepted() {
+        when(posts.findMyIds(5L, "PENDING", PageRequest.of(0, 100)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
+        assertTrue(service.listMine(1, 100, "PENDING", user).content().isEmpty());
+        verify(posts).findMyIds(5L, "PENDING", PageRequest.of(0, 100));
+    }
+
+    @Test
+    void utc035_listMine_unsupportedFilterThrowsFilterInvalid() {
+        assertEquals(ErrorCode.POST_FILTER_INVALID,
+                assertThrows(AppException.class, () -> service.listMine(1, 10, "DELETED", user)).getErrorCode());
+    }
+
+    @Test
+    void utc036_listMine_nullFilterThrowsFilterInvalid() {
+        assertEquals(ErrorCode.POST_FILTER_INVALID,
+                assertThrows(AppException.class, () -> service.listMine(1, 10, null, user)).getErrorCode());
+    }
+
+    @Test
+    void utc037_listMine_activeClaimBlocksEditing() {
+        MyPostDto withClaim = listThreePosts().content().get(1);
+        assertFalse(withClaim.canEdit());
+        assertEquals("Bài đã có yêu cầu nhận đồ", withClaim.editBlockedReason());
+    }
+
+    @Test
+    void utc038_listMine_closedPostHasNotOpenReason() {
+        assertEquals("Bài không còn ở trạng thái mở", listThreePosts().content().get(2).editBlockedReason());
+    }
+
+    @Test
+    void utc039_listMine_hiddenPostHasModerationReason() {
+        assertEquals("Bài đã bị ẩn bởi kiểm duyệt", listThreePosts().content().get(0).editBlockedReason());
+    }
+
+    @Test
+    void utc040_listMine_pendingOrApprovedClaimBlocksDeletion() {
+        MyPostDto withClaim = listThreePosts().content().get(1);
+        assertFalse(withClaim.canDelete());
+        assertEquals("Bài còn yêu cầu nhận đồ đang chờ duyệt hoặc đã được chấp thuận", withClaim.deleteBlockedReason());
+        assertEquals(2L, withClaim.pendingClaimCount());
+    }
+
+    @Test
+    void utc041_listMine_thumbnailIsFirstSortedImage() {
+        assertEquals("https://cdn/k1", listThreePosts().content().get(1).thumbnailUrl());
+    }
+
+    @Test
+    void utc042_listMine_emptyPageSkipsSecondaryQueries() {
+        when(posts.findMyIds(5L, "ALL", PageRequest.of(0, 10)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        assertTrue(service.listMine(1, 10, "ALL", user).content().isEmpty());
+        verify(posts, never()).findMyByIds(anyList(), eq(5L));
+        verify(entityManager, never()).createQuery(anyString(), eq(Tuple.class));
+    }
+
+    /** Owner has posts [13 HIDDEN, 11 OPEN with 2 images + active claims, 12 CLOSED]. */
+    private MyPostPageDto listThreePosts() {
         Post p1 = foundPost(11L, owner, category);
         addImage(p1, 1L, "k1", 0);
         addImage(p1, 2L, "k2", 1);
@@ -113,73 +194,19 @@ class PostManagementServiceTest {
         Post p3 = foundPost(13L, owner, category);
         ReflectionTestUtils.setField(p3, "moderationStatus", "HIDDEN");
 
-        // UTC025 - listMine preserves findMyIds order [13, 11, 12]
-        Page<Long> idPage = new PageImpl<>(List.of(13L, 11L, 12L), PageRequest.of(0, 10), 3);
-        when(posts.findMyIds(5L, "ALL", PageRequest.of(0, 10))).thenReturn(idPage);
+        when(posts.findMyIds(5L, "ALL", PageRequest.of(0, 10)))
+                .thenReturn(new PageImpl<>(List.of(13L, 11L, 12L), PageRequest.of(0, 10), 3));
         when(posts.findMyByIds(List.of(13L, 11L, 12L), 5L)).thenReturn(List.of(p1, p2, p3));
-        mockPendingCounts(List.of(tuple(11L, 2L)));
+        Tuple pending = tuple(11L, 2L);
+        mockPendingCounts(List.of(pending));
         when(storage.readUrl("k1", null)).thenReturn("https://cdn/k1");
         when(claims.existsByPost_Id(anyLong())).thenAnswer(inv -> Long.valueOf(11L).equals(inv.getArgument(0)));
         when(claims.existsByPost_IdAndStatusIn(anyLong(), eq(Set.of("PENDING", "NEEDS_INFO", "APPROVED"))))
                 .thenAnswer(inv -> Long.valueOf(11L).equals(inv.getArgument(0)));
-
-        MyPostPageDto result = service.listMine(1, 10, "ALL", user);
-
-        assertEquals(3, result.content().size());
-        assertEquals(13L, result.content().get(0).id());
-        // UTC033 - moderation=HIDDEN sets editBlockedReason
-        assertEquals("Bài đã bị ẩn bởi kiểm duyệt", result.content().get(0).editBlockedReason());
-        assertEquals(11L, result.content().get(1).id());
-        // UTC035 - thumbnail maps to readUrl of first sorted image
-        assertEquals("https://cdn/k1", result.content().get(1).thumbnailUrl());
-        // UTC031 - active claim disables editing with blocked reason
-        assertFalse(result.content().get(1).canEdit());
-        assertEquals("Bài đã có yêu cầu nhận đồ", result.content().get(1).editBlockedReason());
-        // UTC034 - pending/approved claim disables deletion with blocked reason
-        assertFalse(result.content().get(1).canDelete());
-        assertEquals("Bài còn yêu cầu nhận đồ đang chờ duyệt hoặc đã được chấp thuận", result.content().get(1).deleteBlockedReason());
-        assertEquals(2L, result.content().get(1).pendingClaimCount());
-        assertEquals(12L, result.content().get(2).id());
-        // UTC032 - status=CLOSED sets non-open editBlockedReason
-        assertEquals("Bài không còn ở trạng thái mở", result.content().get(2).editBlockedReason());
+        return service.listMine(1, 10, "ALL", user);
     }
 
-    // UTC026, UTC027, UTC029, UTC030 - listMine throws POST_PAGINATION_INVALID or POST_FILTER_INVALID on bad inputs
-    @Test
-    void listMine_whenInvalidPaginationOrFilter_throwsExpectedErrorCode() {
-        // UTC026 - page=0 throws POST_PAGINATION_INVALID
-        AppException p0 = assertThrows(AppException.class, () -> service.listMine(0, 10, "ALL", user));
-        assertEquals(ErrorCode.POST_PAGINATION_INVALID, p0.getErrorCode());
-
-        // UTC027 - size=101 throws POST_PAGINATION_INVALID
-        AppException s101 = assertThrows(AppException.class, () -> service.listMine(1, 101, "ALL", user));
-        assertEquals(ErrorCode.POST_PAGINATION_INVALID, s101.getErrorCode());
-
-        // UTC029 - unsupported filter="DELETED" throws POST_FILTER_INVALID
-        AppException badFilter = assertThrows(AppException.class, () -> service.listMine(1, 10, "DELETED", user));
-        assertEquals(ErrorCode.POST_FILTER_INVALID, badFilter.getErrorCode());
-
-        // UTC030 - filter=null throws POST_FILTER_INVALID
-        AppException nullFilter = assertThrows(AppException.class, () -> service.listMine(1, 10, null, user));
-        assertEquals(ErrorCode.POST_FILTER_INVALID, nullFilter.getErrorCode());
-    }
-
-    // UTC028, UTC036 - listMine accepts size=100 PENDING filter and skips batch queries on empty page
-    @Test
-    void listMine_whenBoundarySize100AndPendingFilterAndEmptyPage_skipsSecondaryQueries() {
-        // UTC028 - boundary page=1, size=100, filter="PENDING" accepted
-        when(posts.findMyIds(5L, "PENDING", PageRequest.of(0, 100)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
-
-        MyPostPageDto result = service.listMine(1, 100, "PENDING", user);
-
-        // UTC036 - empty ID page skips findMyByIds and pending counts query
-        assertTrue(result.content().isEmpty());
-        verify(posts, never()).findMyByIds(anyList(), eq(5L));
-        verify(entityManager, never()).createQuery(anyString(), eq(Tuple.class));
-    }
-
-    // UTC037 - getForEdit returns EditPostDto with image URLs for editable owner
+    // UTC043 - getForEdit returns EditPostDto with image URLs for editable owner
     @Test
     void getForEdit_whenEditableOwner_returnsEditPostDtoWithImageUrls() {
         Post post = foundPost(10L, owner, category);
@@ -194,39 +221,45 @@ class PostManagementServiceTest {
         assertEquals("https://cdn/k1", dto.images().get(0).url());
     }
 
-    // UTC038, UTC039, UTC040, UTC041, UTC042 - getForEdit throws expected error codes when unauthorized, blocked, or invalid postId
     @Test
-    void getForEdit_whenNotOwnerOrBlocked_throwsExpectedException() {
-        // UTC038 - post not owned by user throws POST_OWNER_REQUIRED
+    void utc044_getForEdit_notOwnerThrowsOwnerRequired() {
         when(posts.findManagedDetail(10L, 5L)).thenReturn(Optional.empty());
         assertEquals(ErrorCode.POST_OWNER_REQUIRED,
                 assertThrows(AppException.class, () -> service.getForEdit(10L, user)).getErrorCode());
+    }
 
-        // UTC039 - post linked to item receipt throws POST_NOT_EDITABLE
-        Post post = foundPost(10L, owner, category);
-        when(posts.findManagedDetail(10L, 5L)).thenReturn(Optional.of(post));
+    @Test
+    void utc045_getForEdit_postWithReceiptThrowsNotEditable() {
+        when(posts.findManagedDetail(10L, 5L)).thenReturn(Optional.of(foundPost(10L, owner, category)));
         when(receipts.existsByPostId(10L)).thenReturn(true);
         assertEquals(ErrorCode.POST_NOT_EDITABLE,
                 assertThrows(AppException.class, () -> service.getForEdit(10L, user)).getErrorCode());
+    }
 
-        // UTC040 - post with existing claim throws CLAIM_POST_EDIT_BLOCKED
-        when(receipts.existsByPostId(10L)).thenReturn(false);
+    @Test
+    void utc046_getForEdit_postWithClaimThrowsEditBlocked() {
+        when(posts.findManagedDetail(10L, 5L)).thenReturn(Optional.of(foundPost(10L, owner, category)));
         when(claims.existsByPost_Id(10L)).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_POST_EDIT_BLOCKED,
                 assertThrows(AppException.class, () -> service.getForEdit(10L, user)).getErrorCode());
+    }
 
-        // UTC041 - post status=RETURNED throws POST_NOT_EDITABLE
-        when(claims.existsByPost_Id(10L)).thenReturn(false);
+    @Test
+    void utc047_getForEdit_returnedPostThrowsNotEditable() {
+        Post post = foundPost(10L, owner, category);
         ReflectionTestUtils.setField(post, "status", "RETURNED");
+        when(posts.findManagedDetail(10L, 5L)).thenReturn(Optional.of(post));
         assertEquals(ErrorCode.POST_NOT_EDITABLE,
                 assertThrows(AppException.class, () -> service.getForEdit(10L, user)).getErrorCode());
+    }
 
-        // UTC042 - postId=0 throws POST_ID_INVALID
+    @Test
+    void utc048_getForEdit_postIdZeroThrowsIdInvalid() {
         assertEquals(ErrorCode.POST_ID_INVALID,
                 assertThrows(AppException.class, () -> service.getForEdit(0L, user)).getErrorCode());
     }
 
-    // UTC043 - update keeps specified existing images, uploads new ones in order, and deletes removed keys after commit
+    // UTC049 - update keeps specified existing images, uploads new ones in order, and deletes removed keys after commit
     @Test
     void update_whenKeepingImagesAndAddingNew_reordersDeletesRemovedAfterCommit() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
@@ -264,59 +297,64 @@ class PostManagementServiceTest {
         verify(storage, never()).delete("k3");
     }
 
-    // UTC044, UTC045, UTC046, UTC047, UTC049, UTC050 - update throws expected error codes on stale timestamp, invalid images, custody, category, or image limit
+    private static final OffsetDateTime UPDATED_AT = OffsetDateTime.now().minusMinutes(5);
+
     @Test
-    void update_whenValidationFails_throwsExpectedErrors() {
-        OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
+    void utc050_update_staleTimestampThrowsStale() {
+        stubThreeImagePost();
+        assertEquals(ErrorCode.POST_STALE, updateError(3L, null, List.of(1L), UPDATED_AT.minusSeconds(1)));
+    }
+
+    @Test
+    void utc051_update_duplicateKeptImageIdsThrowsImagesInvalid() {
+        stubThreeImagePost();
+        assertEquals(ErrorCode.POST_IMAGES_INVALID, updateError(3L, null, List.of(1L, 1L), UPDATED_AT));
+    }
+
+    @Test
+    void utc052_update_foreignKeptImageIdThrowsImagesInvalid() {
+        stubThreeImagePost();
+        assertEquals(ErrorCode.POST_IMAGES_INVALID, updateError(3L, null, List.of(1L, 99L), UPDATED_AT));
+    }
+
+    @Test
+    void utc053_update_moreThanFiveImagesThrowsCountExceeded() {
+        stubThreeImagePost();
+        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
+        ValidatedImage img = new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 10, 10, "h");
+        when(validator.validate(any())).thenReturn(List.of(img, img, img));
+        assertEquals(ErrorCode.IMAGE_COUNT_EXCEEDED, updateError(3L, null, List.of(1L, 2L, 3L), UPDATED_AT));
+    }
+
+    @Test
+    void utc055_update_inactiveCategoryThrowsCategoryUnavailable() {
+        stubThreeImagePost();
+        when(categories.existsByCategoryIdAndActiveTrue(9L)).thenReturn(false);
+        assertEquals(ErrorCode.POST_CATEGORY_UNAVAILABLE, updateError(9L, null, List.of(1L), UPDATED_AT));
+    }
+
+    @Test
+    void utc056_update_custodyChangeToOfficeRequiresHandover() {
+        stubThreeImagePost();
+        assertEquals(ErrorCode.POST_CUSTODY_CHANGE_REQUIRES_HANDOVER, updateError(3L, "OFFICE", List.of(1L), UPDATED_AT));
+    }
+
+    private void stubThreeImagePost() {
         Post post = foundPost(10L, owner, category);
-        ReflectionTestUtils.setField(post, "updatedAt", updatedAt);
+        ReflectionTestUtils.setField(post, "updatedAt", UPDATED_AT);
         addImage(post, 1L, "k1", 0);
         addImage(post, 2L, "k2", 1);
         addImage(post, 3L, "k3", 2);
         when(posts.findManagedDetail(10L, 5L)).thenReturn(Optional.of(post));
-
-        // UTC044 - stale expectedUpdatedAt throws POST_STALE
-        UpdatePostRequest stale = new UpdatePostRequest("T", "D", 3L, "L", OffsetDateTime.now().minusDays(1),
-                null, List.of(1L), updatedAt.minusSeconds(1), null);
-        assertEquals(ErrorCode.POST_STALE,
-                assertThrows(AppException.class, () -> service.update(10L, stale, List.of(), user)).getErrorCode());
-
-        // UTC045 - duplicate keptImageIds throws POST_IMAGES_INVALID
-        UpdatePostRequest dup = new UpdatePostRequest("T", "D", 3L, "L", OffsetDateTime.now().minusDays(1),
-                null, List.of(1L, 1L), updatedAt, null);
-        assertEquals(ErrorCode.POST_IMAGES_INVALID,
-                assertThrows(AppException.class, () -> service.update(10L, dup, List.of(), user)).getErrorCode());
-
-        // UTC046 - keptImageId not belonging to post throws POST_IMAGES_INVALID
-        UpdatePostRequest foreign = new UpdatePostRequest("T", "D", 3L, "L", OffsetDateTime.now().minusDays(1),
-                null, List.of(1L, 99L), updatedAt, null);
-        assertEquals(ErrorCode.POST_IMAGES_INVALID,
-                assertThrows(AppException.class, () -> service.update(10L, foreign, List.of(), user)).getErrorCode());
-
-        // UTC050 - custody change from P2P to OFFICE requires handover
-        UpdatePostRequest custody = new UpdatePostRequest("T", "D", 3L, "L", OffsetDateTime.now().minusDays(1),
-                "OFFICE", List.of(1L), updatedAt, null);
-        assertEquals(ErrorCode.POST_CUSTODY_CHANGE_REQUIRES_HANDOVER,
-                assertThrows(AppException.class, () -> service.update(10L, custody, List.of(), user)).getErrorCode());
-
-        // UTC049 - inactive category throws POST_CATEGORY_UNAVAILABLE
-        when(categories.existsByCategoryIdAndActiveTrue(9L)).thenReturn(false);
-        UpdatePostRequest badCat = new UpdatePostRequest("T", "D", 9L, "L", OffsetDateTime.now().minusDays(1),
-                null, List.of(1L), updatedAt, null);
-        assertEquals(ErrorCode.POST_CATEGORY_UNAVAILABLE,
-                assertThrows(AppException.class, () -> service.update(10L, badCat, List.of(), user)).getErrorCode());
-
-        // UTC047 - total images (3 kept + 3 new = 6 > 5) throws IMAGE_COUNT_EXCEEDED
-        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
-        UpdatePostRequest tooMany = new UpdatePostRequest("T", "D", 3L, "L", OffsetDateTime.now().minusDays(1),
-                null, List.of(1L, 2L, 3L), updatedAt, null);
-        ValidatedImage img = new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 10, 10, "h");
-        when(validator.validate(any())).thenReturn(List.of(img, img, img));
-        assertEquals(ErrorCode.IMAGE_COUNT_EXCEEDED,
-                assertThrows(AppException.class, () -> service.update(10L, tooMany, List.of(), user)).getErrorCode());
     }
 
-    // UTC048 - update succeeds at boundary of 5 total kept and newly uploaded images
+    private ErrorCode updateError(Long categoryId, String custodyMode, List<Long> keptImageIds, OffsetDateTime expectedUpdatedAt) {
+        UpdatePostRequest req = new UpdatePostRequest("T", "D", categoryId, "L", OffsetDateTime.now().minusDays(1),
+                custodyMode, keptImageIds, expectedUpdatedAt, null);
+        return assertThrows(AppException.class, () -> service.update(10L, req, List.of(), user)).getErrorCode();
+    }
+
+    // UTC054 - update succeeds at boundary of 5 total kept and newly uploaded images
     @Test
     void update_whenTotalFiveImages_succeeds() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
@@ -342,7 +380,7 @@ class PostManagementServiceTest {
         assertEquals(5, post.getImages().size());
     }
 
-    // UTC051 - update deletes only newly uploaded image keys if transaction throws after upload
+    // UTC057 - update deletes only newly uploaded image keys if transaction throws after upload
     @Test
     void update_whenTransactionThrowsAfterUpload_cleansUpOnlyNewKeys() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
@@ -364,7 +402,7 @@ class PostManagementServiceTest {
         verify(storage).delete(org.mockito.ArgumentMatchers.startsWith("posts/5/"));
     }
 
-    // UTC052 - update completes successfully even if cleanup of removed storage keys throws
+    // UTC058 - update completes successfully even if cleanup of removed storage keys throws
     @Test
     void update_whenRemovedImageCleanupThrows_stillReturnsSuccess() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
@@ -387,14 +425,9 @@ class PostManagementServiceTest {
         assertEquals(10L, dto.id());
     }
 
-    // UTC053, UTC055 - delete soft-deletes owned post when no active claim exists or only REJECTED claims exist
     @Test
-    void delete_whenValidOrOnlyRejectedClaims_softDeletesAndFlushes() {
-        Post post = foundPost(10L, owner, category);
-        when(posts.findManagedForUpdate(10L, 5L)).thenReturn(Optional.of(post));
-        when(receipts.existsByPostId(10L)).thenReturn(false);
-        when(claims.existsByPost_IdAndStatusIn(10L, Set.of("PENDING", "NEEDS_INFO", "APPROVED"))).thenReturn(false);
-
+    void utc059_delete_ownedPostSoftDeletedWithTrimmedReason() {
+        Post post = deletablePost();
         service.delete(10L, new DeletePostRequest("  Found it myself  "), user);
 
         assertNotNull(post.getDeletedAt());
@@ -403,36 +436,57 @@ class PostManagementServiceTest {
         verify(posts).flush();
     }
 
-    // UTC054, UTC056, UTC057, UTC058 - delete throws expected errors when blocked by ownership, soft-delete, receipt, or PENDING claim
     @Test
-    void delete_whenBlockedOrInvalid_throwsExpectedErrors() {
-        // UTC058 - post not owned by actor throws POST_OWNER_REQUIRED
-        when(posts.findManagedForUpdate(10L, 5L)).thenReturn(Optional.empty());
-        assertEquals(ErrorCode.POST_OWNER_REQUIRED,
-                assertThrows(AppException.class, () -> service.delete(10L, new DeletePostRequest("x"), user)).getErrorCode());
-
-        // UTC057 - already soft-deleted post (deletedAt != null) throws POST_OWNER_REQUIRED
-        Post deletedPost = foundPost(10L, owner, category);
-        ReflectionTestUtils.setField(deletedPost, "deletedAt", OffsetDateTime.now());
-        when(posts.findManagedForUpdate(10L, 5L)).thenReturn(Optional.of(deletedPost));
-        assertEquals(ErrorCode.POST_OWNER_REQUIRED,
-                assertThrows(AppException.class, () -> service.delete(10L, new DeletePostRequest("x"), user)).getErrorCode());
-
-        // UTC056 - post linked to receipt throws POST_NOT_EDITABLE
-        Post post = foundPost(10L, owner, category);
-        when(posts.findManagedForUpdate(10L, 5L)).thenReturn(Optional.of(post));
-        when(receipts.existsByPostId(10L)).thenReturn(true);
-        assertEquals(ErrorCode.POST_NOT_EDITABLE,
-                assertThrows(AppException.class, () -> service.delete(10L, new DeletePostRequest("x"), user)).getErrorCode());
-
-        // UTC054 - post with active PENDING claim throws CLAIM_POST_DELETE_BLOCKED
-        when(receipts.existsByPostId(10L)).thenReturn(false);
-        when(claims.existsByPost_IdAndStatusIn(10L, Set.of("PENDING", "NEEDS_INFO", "APPROVED"))).thenReturn(true);
-        assertEquals(ErrorCode.CLAIM_POST_DELETE_BLOCKED,
-                assertThrows(AppException.class, () -> service.delete(10L, new DeletePostRequest("x"), user)).getErrorCode());
+    void utc060_delete_pendingClaimThrowsDeleteBlocked() {
+        deletablePost();
+        when(claims.existsByPost_IdAndStatusIn(10L, ACTIVE_CLAIMS)).thenReturn(true);
+        assertEquals(ErrorCode.CLAIM_POST_DELETE_BLOCKED, deleteError());
     }
 
-    // UTC059 - requestOfficeHandover delegates to OfficeTransferService and flushes post repository
+    @Test
+    void utc061_delete_onlyRejectedClaimsStillDeletes() {
+        Post post = deletablePost();
+        service.delete(10L, new DeletePostRequest("No longer needed"), user);
+        assertNotNull(post.getDeletedAt());
+        verify(claims).existsByPost_IdAndStatusIn(10L, ACTIVE_CLAIMS);
+    }
+
+    @Test
+    void utc062_delete_postWithReceiptThrowsNotEditable() {
+        deletablePost();
+        when(receipts.existsByPostId(10L)).thenReturn(true);
+        assertEquals(ErrorCode.POST_NOT_EDITABLE, deleteError());
+    }
+
+    @Test
+    void utc063_delete_alreadyDeletedPostThrowsOwnerRequired() {
+        Post post = deletablePost();
+        ReflectionTestUtils.setField(post, "deletedAt", OffsetDateTime.now());
+        assertEquals(ErrorCode.POST_OWNER_REQUIRED, deleteError());
+    }
+
+    @Test
+    void utc064_delete_notOwnedPostThrowsOwnerRequired() {
+        when(posts.findManagedForUpdate(10L, 5L)).thenReturn(Optional.empty());
+        assertEquals(ErrorCode.POST_OWNER_REQUIRED, deleteError());
+    }
+
+    private static final Set<String> ACTIVE_CLAIMS = Set.of("PENDING", "NEEDS_INFO", "APPROVED");
+
+    /** Owned post 10 without receipt or active claim (claims default to REJECTED-only / none). */
+    private Post deletablePost() {
+        Post post = foundPost(10L, owner, category);
+        when(posts.findManagedForUpdate(10L, 5L)).thenReturn(Optional.of(post));
+        when(receipts.existsByPostId(10L)).thenReturn(false);
+        when(claims.existsByPost_IdAndStatusIn(10L, ACTIVE_CLAIMS)).thenReturn(false);
+        return post;
+    }
+
+    private ErrorCode deleteError() {
+        return assertThrows(AppException.class, () -> service.delete(10L, new DeletePostRequest("x"), user)).getErrorCode();
+    }
+
+    // UTC065 - requestOfficeHandover delegates to OfficeTransferService and flushes post repository
     @Test
     void requestOfficeHandover_delegatesToOfficeTransferServiceAndFlushes() {
         Post post = foundPost(10L, owner, category);
@@ -444,7 +498,7 @@ class PostManagementServiceTest {
         verify(posts).flush();
     }
 
-    // UTC060 - requestOfficeHandover propagates AppException thrown by OfficeTransferService
+    // UTC066 - requestOfficeHandover propagates AppException thrown by OfficeTransferService
     @Test
     void requestOfficeHandover_whenOfficeTransferThrows_propagatesException() {
         when(officeTransfers.request(10L, user)).thenThrow(new AppException(ErrorCode.BAD_REQUEST, "err"));
@@ -472,7 +526,7 @@ class PostManagementServiceTest {
     private static Account account(Long id) {
         Account a = new Account();
         a.setId(id);
-        a.setEmail("owner" + id + "@fpt.edu.vn");
+        a.setEmail("owner" + id + "@gmail.com");
         a.setFullName("Owner " + id);
         a.setRole(AccountRole.USER);
         a.setStatus(AccountStatus.ACTIVE);

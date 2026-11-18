@@ -82,7 +82,7 @@ class PostCreationServiceTest {
     void setUp() {
         author = new Account();
         author.setId(7L);
-        author.setEmail("author@fpt.edu.vn");
+        author.setEmail("author@gmail.com");
         author.setFullName("Author");
         author.setRole(AccountRole.USER);
         author.setStatus(AccountStatus.ACTIVE);
@@ -95,7 +95,7 @@ class PostCreationServiceTest {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
 
-    // UTC014 - createLost valid request with 2 images trims text and persists ordered images
+    // UTC018 - createLost valid request with 2 images trims text and persists ordered images
     @Test
     void createLost_whenValidWithTwoImages_createsTrimmedPostWithOrderedImages() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -140,7 +140,7 @@ class PostCreationServiceTest {
         assertTrue(saved.getImages().get(1).getStorageKey().matches("posts/7/[0-9a-f\\-]+\\.jpg"));
     }
 
-    // UTC015 - createLost with no images creates post with zero images
+    // UTC019 - createLost with no images creates post with zero images
     @Test
     void createLost_whenNoImages_createsPostWithZeroImages() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -162,7 +162,7 @@ class PostCreationServiceTest {
         verifyNoInteractions(storage);
     }
 
-    // UTC016 - createLost throws when selected category is inactive without uploading images
+    // UTC020 - createLost throws when selected category is inactive without uploading images
     @Test
     void createLost_whenCategoryInactive_throwsWithoutUploading() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -177,7 +177,7 @@ class PostCreationServiceTest {
         verifyNoInteractions(validator, storage);
     }
 
-    // UTC017 - createLost propagates exception when validator rejects unsupported file
+    // UTC021 - createLost propagates exception when validator rejects unsupported file
     @Test
     void createLost_whenValidatorRejectsFile_propagatesException() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -196,7 +196,7 @@ class PostCreationServiceTest {
         verifyNoInteractions(storage);
     }
 
-    // UTC018 - createLost deletes both uploaded keys when second storage put fails
+    // UTC022 - createLost deletes both uploaded keys when second storage put fails
     @Test
     void createLost_whenSecondStoragePutFails_cleansUpBothKeysAndRethrows() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -218,7 +218,7 @@ class PostCreationServiceTest {
         verify(storage, times(2)).delete(anyString());
     }
 
-    // UTC019 - createLost throws FORBIDDEN and cleans up uploaded images when account locked mid-request
+    // UTC023 - createLost throws FORBIDDEN and cleans up uploaded images when account locked mid-request
     @Test
     void createLost_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImages() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -238,7 +238,7 @@ class PostCreationServiceTest {
         verify(storage, times(1)).delete(anyString());
     }
 
-    // UTC020 - createLost throws UNAUTHORIZED when principal user is null
+    // UTC024 - createLost throws UNAUTHORIZED when principal user is null
     @Test
     void createLost_whenUserNull_throwsUnauthorized() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -251,7 +251,7 @@ class PostCreationServiceTest {
         assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
     }
 
-    // UTC021 - createLost stores trimmed privateIdentifiers on newly created post
+    // UTC025 - createLost stores trimmed privateIdentifiers on newly created post
     @Test
     void createLost_whenPrivateIdentifiersProvided_storesTrimmedIdentifiers() {
         CreateLostPostRequest request = new CreateLostPostRequest(
@@ -277,7 +277,7 @@ class PostCreationServiceTest {
     // Supplementary (PostCreationService.createLost): existing clientRequestId returns cached post without uploading
     @Test
     @SuppressWarnings("unchecked")
-    void createLost_whenRequestIdAlreadyProcessed_returnsExistingWithoutUpload() {
+    void utc026_createLost_whenRequestIdAlreadyProcessed_returnsExistingWithoutUpload() {
         UUID reqId = UUID.randomUUID();
         CreateLostPostRequest request = new CreateLostPostRequest(
                 reqId, "Lost wallet", "Black", 3L, "Hall A",
@@ -295,7 +295,7 @@ class PostCreationServiceTest {
     // Supplementary (PostCreationService.createLost): concurrent duplicate clientRequestId reuses persisted post and deletes uploaded images
     @Test
     @SuppressWarnings("unchecked")
-    void createLost_whenConcurrentRequestIdWinsInsideTransaction_reusesExistingAndDeletesUploadedImages() {
+    void utc027_createLost_whenConcurrentRequestIdWinsInsideTransaction_reusesExistingAndDeletesUploadedImages() {
         UUID reqId = UUID.randomUUID();
         CreateLostPostRequest request = new CreateLostPostRequest(
                 reqId, "Lost wallet", "Black", 3L, "Hall A",
@@ -319,7 +319,7 @@ class PostCreationServiceTest {
         verify(posts, never()).saveAndFlush(any());
     }
 
-    // UTC022 - createFound with custodyMode=null and new clientRequestId creates P2P FOUND post and records request
+    // UTC028 - createFound with custodyMode=null and new clientRequestId creates P2P FOUND post and records request
     @Test
     @SuppressWarnings("unchecked")
     void createFound_whenValidWithNullCustodyAndNewRequestId_createsP2pFoundPostAndRecordsRequest() {
@@ -350,7 +350,7 @@ class PostCreationServiceTest {
         verify(jdbc).update(anyString(), eq(7L), eq(reqId), eq(103L));
     }
 
-    // UTC023 - createFound throws POST_CUSTODY_INVALID when custodyMode="OFFICE"
+    // UTC029 - createFound throws POST_CUSTODY_INVALID when custodyMode="OFFICE"
     @Test
     void createFound_whenCustodyOffice_throwsPostCustodyInvalid() {
         CreateFoundPostRequest request = new CreateFoundPostRequest(
@@ -363,7 +363,7 @@ class PostCreationServiceTest {
         assertEquals(ErrorCode.POST_CUSTODY_INVALID, ex.getErrorCode());
     }
 
-    // UTC024 - createFound throws POST_HANDOVER_TIME_DISABLED when handoverRequestedAt is provided
+    // UTC030 - createFound throws POST_HANDOVER_TIME_DISABLED when handoverRequestedAt is provided
     @Test
     void createFound_whenHandoverRequestedAtProvided_throwsPostHandoverTimeDisabled() {
         CreateFoundPostRequest request = new CreateFoundPostRequest(

@@ -30,13 +30,13 @@ class EmailServiceTest {
     @InjectMocks
     private EmailService service;
 
-    // UTC071 - Configured mailPassword sends OTP email with subject containing OTP and body containing purpose
+    // UTC056 - Configured mailPassword sends OTP email with subject containing OTP and body containing purpose
     @Test
     void sendOtpEmail_whenMailPasswordConfigured_sendsMessageWithOtpAndPurpose() {
         ReflectionTestUtils.setField(service, "mailPassword", "app-secret-123");
         ReflectionTestUtils.setField(service, "fromEmail", "noreply@sagasu.vn");
 
-        boolean sent = service.sendOtpEmail("a@fpt.edu.vn", "123456", OtpPurpose.LOGIN);
+        boolean sent = service.sendOtpEmail("usertest@gmail.com", "123456", OtpPurpose.LOGIN);
 
         assertTrue(sent);
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
@@ -49,39 +49,39 @@ class EmailServiceTest {
         assertTrue("noreply@sagasu.vn".equals(msg.getFrom()));
     }
 
-    // UTC072, UTC073 - Blank or placeholder mailPassword returns false without invoking mailSender
     @Test
-    void sendOtpEmail_whenPasswordBlankOrPlaceholder_returnsFalseWithoutSending() {
-        // UTC072 - Blank mailPassword skips SMTP
+    void utc057_sendOtpEmail_whenPasswordBlank_returnsFalseWithoutSending() {
         ReflectionTestUtils.setField(service, "mailPassword", "");
-        assertFalse(service.sendOtpEmail("a@fpt.edu.vn", "123456", OtpPurpose.LOGIN));
-
-        // UTC073 - Placeholder "YOUR_GMAIL_APP_PASSWORD" skips SMTP
-        ReflectionTestUtils.setField(service, "mailPassword", "YOUR_GMAIL_APP_PASSWORD");
-        assertFalse(service.sendOtpEmail("a@fpt.edu.vn", "123456", OtpPurpose.LOGIN));
-
+        assertFalse(service.sendOtpEmail("usertest@gmail.com", "123456", OtpPurpose.LOGIN));
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
     }
 
-    // UTC074 - MailSendException from mailSender is swallowed and returns false
+    @Test
+    void utc058_sendOtpEmail_whenPasswordPlaceholder_returnsFalseWithoutSending() {
+        ReflectionTestUtils.setField(service, "mailPassword", "YOUR_GMAIL_APP_PASSWORD");
+        assertFalse(service.sendOtpEmail("usertest@gmail.com", "123456", OtpPurpose.LOGIN));
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    // UTC059 - MailSendException from mailSender is swallowed and returns false
     @Test
     void sendOtpEmail_whenMailSenderThrowsMailSendException_swallowsExceptionAndReturnsFalse() {
         ReflectionTestUtils.setField(service, "mailPassword", "app-secret-123");
         ReflectionTestUtils.setField(service, "fromEmail", "noreply@sagasu.vn");
         doThrow(new MailSendException("SMTP unavailable")).when(mailSender).send(any(SimpleMailMessage.class));
 
-        boolean sent = service.sendOtpEmail("a@fpt.edu.vn", "123456", OtpPurpose.LOGIN);
+        boolean sent = service.sendOtpEmail("usertest@gmail.com", "123456", OtpPurpose.LOGIN);
 
         assertFalse(sent);
     }
 
-    // UTC075 - Blank fromEmail sends email without calling setFrom
+    // UTC060 - Blank fromEmail sends email without calling setFrom
     @Test
     void sendOtpEmail_whenFromEmailBlank_sendsWithoutSettingFrom() {
         ReflectionTestUtils.setField(service, "mailPassword", "app-secret-123");
         ReflectionTestUtils.setField(service, "fromEmail", "");
 
-        boolean sent = service.sendOtpEmail("a@fpt.edu.vn", "123456", OtpPurpose.CHANGE_PASSWORD);
+        boolean sent = service.sendOtpEmail("usertest@gmail.com", "123456", OtpPurpose.CHANGE_PASSWORD);
 
         assertTrue(sent);
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);

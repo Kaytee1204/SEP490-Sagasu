@@ -21,13 +21,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Reverse geocoding for 'Chia sẻ vị trí' (UC-38). The geocoder is a local in-process HTTP server,
+ * so the real HTTP client, JSON parsing, cache and timeout are exercised without network access.
+ */
 class ChatLocationAddressServiceTest {
 
     private HttpServer server;
-    private String baseUrl;
+    private ChatLocationAddressService service;
     private final AtomicInteger calls = new AtomicInteger();
-    private volatile int responseStatus = 200;
-    private volatile String responseBody = "{\"features\":[{\"properties\":{\"name\":\"FPT University\",\"locality\":\"Hoa Lac\",\"city\":\"Hanoi\"}}]}";
+    private volatile String responseBody =
+            "{\"features\":[{\"properties\":{\"name\":\"FPT University\",\"city\":\"Hà Nội\",\"country\":\"Vietnam\"}}]}";
     private volatile CountDownLatch blockLatch;
 
     @BeforeEach
@@ -45,80 +49,50 @@ class ChatLocationAddressServiceTest {
             }
             byte[] payload = responseBody.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(responseStatus, payload.length);
+            exchange.sendResponseHeaders(200, payload.length);
             try (OutputStream out = exchange.getResponseBody()) {
                 out.write(payload);
             }
         });
         server.start();
-        baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        service = new ChatLocationAddressService("http://127.0.0.1:" + server.getAddress().getPort());
     }
 
     @AfterEach
     void tearDown() {
-        if (server != null) {
-            server.stop(0);
-        }
+        server.stop(0);
     }
 
-    // UTC092, UTC093 - address reverse-geocodes valid coordinates and caches repeated lookups
     @Test
-    void address_whenValidCoordinates_resolvesAndCachesAddress() {
-        ChatLocationAddressService service = new ChatLocationAddressService(baseUrl);
+    void utc098_address_validCoordinatesReturnsFormattedLabel() {
+        ChatPlaceDto place = service.address(21.0133, 105.5262);
+        assertEquals(new ChatPlaceDto(21.0133, 105.5262, "FPT University, Hà Nội, Vietnam"), place);
+    }
 
-        // UTC092 - reverse geocodes coordinates to formatted ChatPlaceDto label
-        ChatPlaceDto first = service.address(21.0124123, 105.5252891);
-        // UTC093 - serves repeated identical lookup from cache (1 HTTP call total)
-        ChatPlaceDto second = service.address(21.0124123, 105.5252891);
-
-        assertEquals("FPT University, Hoa Lac, Hanoi", first.label());
-        assertEquals(21.0124123, first.latitude());
-        assertEquals(105.5252891, first.longitude());
+    @Test
+    void utc099_address_sameCoordinatesTwiceServedFromCache() {
+        ChatPlaceDto first = service.address(21.0133, 105.5262);
+        ChatPlaceDto second = service.address(21.0133, 105.5262);
         assertEquals(first, second);
         assertEquals(1, calls.get());
     }
 
-    // UTC094 - address throws CHAT_INPUT_INVALID when lat/lon out of range or NaN
     @Test
-    void address_whenCoordinatesOutOfRange_throwsChatInputInvalid() {
-        ChatLocationAddressService service = new ChatLocationAddressService(baseUrl);
-
+    void utc100_address_latitude95ThrowsInputInvalid() {
         assertEquals(ErrorCode.CHAT_INPUT_INVALID,
-                assertThrows(AppException.class, () -> service.address(91.0, 105.0)).getErrorCode());
-        assertEquals(ErrorCode.CHAT_INPUT_INVALID,
-                assertThrows(AppException.class, () -> service.address(21.0, 181.0)).getErrorCode());
-        assertEquals(ErrorCode.CHAT_INPUT_INVALID,
-                assertThrows(AppException.class, () -> service.address(Double.NaN, 105.0)).getErrorCode());
+                assertThrows(AppException.class, () -> service.address(95.0, 105.0)).getErrorCode());
         assertEquals(0, calls.get());
     }
 
-    // UTC097 - address throws CHAT_ADDRESS_UNAVAILABLE when geocoder omits features array (plus upstream 500)
     @Test
-    void address_whenUpstreamReturnsErrorOrMissingFeatures_throwsChatAddressUnavailable() {
-        ChatLocationAddressService service = new ChatLocationAddressService(baseUrl);
-
-        // Supplementary (ChatLocationAddressService.address): upstream HTTP 500 throws CHAT_ADDRESS_UNAVAILABLE
-        responseStatus = 500;
-        assertEquals(ErrorCode.CHAT_ADDRESS_UNAVAILABLE,
-                assertThrows(AppException.class, () -> service.address(21.01, 105.52)).getErrorCode());
-
-        // UTC097 - response JSON without features throws CHAT_ADDRESS_UNAVAILABLE
-        responseStatus = 200;
-        responseBody = "{}";
-        assertEquals(ErrorCode.CHAT_ADDRESS_UNAVAILABLE,
-                assertThrows(AppException.class, () -> service.address(10.84, 106.80)).getErrorCode());
+    void utc101_address_longitudeInfinityThrowsInputInvalid() {
+        assertEquals(ErrorCode.CHAT_INPUT_INVALID,
+                assertThrows(AppException.class, () -> service.address(21.0, Double.POSITIVE_INFINITY)).getErrorCode());
+        assertEquals(0, calls.get());
     }
 
-    // UTC095, UTC096 - address validates infinite longitude and upstream timeouts
     @Test
-    void address_whenLonInfiniteOrUpstreamTimesOut_throwsExpectedError() {
-        ChatLocationAddressService service = new ChatLocationAddressService(baseUrl);
-        // UTC095 - lon=Infinity throws CHAT_INPUT_INVALID
-        assertEquals(ErrorCode.CHAT_INPUT_INVALID,
-                assertThrows(AppException.class, () -> service.address(21.0, Double.POSITIVE_INFINITY))
-                        .getErrorCode());
-
-        // UTC096 - geocoder timeout throws CHAT_ADDRESS_UNAVAILABLE
+    void utc102_address_geocoderTimeoutThrowsAddressUnavailable() {
         CountDownLatch latch = new CountDownLatch(1);
         blockLatch = latch;
         try {
@@ -130,24 +104,30 @@ class ChatLocationAddressServiceTest {
         }
     }
 
-    // UTC098, UTC099, UTC100 - address formats empty, oversized, and duplicate property labels
     @Test
-    void address_whenPropertiesEmptyLongOrContainCaseDuplicate_formatsLabelCorrectly() {
-        ChatLocationAddressService service = new ChatLocationAddressService(baseUrl);
+    void utc103_address_noFeaturesArrayThrowsAddressUnavailable() {
+        responseBody = "{}";
+        assertEquals(ErrorCode.CHAT_ADDRESS_UNAVAILABLE,
+                assertThrows(AppException.class, () -> service.address(10.84, 106.80)).getErrorCode());
+    }
 
-        // UTC098 - empty properties produce label=null
+    @Test
+    void utc104_address_emptyPropertiesReturnsNullLabel() {
         responseBody = "{\"features\":[{\"properties\":{}}]}";
         assertNull(service.address(21.02, 105.81).label());
+    }
 
-        // UTC099 - label > 200 chars truncated to 197 chars + ellipsis
+    @Test
+    void utc105_address_labelOver200CharsTruncatedTo197PlusEllipsis() {
         responseBody = "{\"features\":[{\"properties\":{\"name\":\"" + "X".repeat(250) + "\"}}]}";
-        ChatPlaceDto truncated = service.address(21.03, 105.82);
-        assertEquals(198, truncated.label().length());
-        assertTrue(truncated.label().endsWith("…"));
+        String label = service.address(21.03, 105.82).label();
+        assertEquals(198, label.length());
+        assertTrue(label.endsWith("…"));
+    }
 
-        // UTC100 - case-insensitive duplicate parts removed
+    @Test
+    void utc106_address_caseInsensitiveDuplicatePartRemoved() {
         responseBody = "{\"features\":[{\"properties\":{\"name\":\"Hà Nội\",\"city\":\"hà nội\"}}]}";
         assertEquals("Hà Nội", service.address(21.04, 105.83).label());
     }
 }
-

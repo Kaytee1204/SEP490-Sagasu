@@ -73,7 +73,7 @@ class ChatConversationServiceTest {
 
     // Supplementary (ChatConversationService.canOpen): delegates eligibility check to ChatAccessPolicy
     @Test
-    void canOpen_delegatesToPolicy() {
+    void utc084_canOpen_delegatesToPolicy() {
         when(policy.eligible(claim)).thenReturn(true);
         assertTrue(service.canOpen(claim));
 
@@ -81,7 +81,7 @@ class ChatConversationServiceTest {
         assertFalse(service.canOpen(claim));
     }
 
-    // UTC085 - forApprovedClaim creates conversation and FINDER + CLAIMANT participants for eligible claim
+    // UTC080 - forApprovedClaim creates conversation and FINDER + CLAIMANT participants for eligible claim
     @Test
     void forApprovedClaim_whenNewConversation_createsConversationAndTwoParticipants() {
         when(policy.eligible(claim)).thenReturn(true);
@@ -98,7 +98,7 @@ class ChatConversationServiceTest {
         verify(participants, times(2)).save(any(ChatParticipant.class));
     }
 
-    // UTC086 - forApprovedClaim updates existing conversation with newer claim without duplicating participants
+    // UTC081 - forApprovedClaim updates existing conversation with newer claim without duplicating participants
     @Test
     void forApprovedClaim_whenExistingConversation_updatesLatestClaimWithoutDuplicatingParticipants() {
         ChatConversation existing = new ChatConversation(claim);
@@ -119,7 +119,7 @@ class ChatConversationServiceTest {
         verify(events).changed(800L, "CONVERSATION_UPDATED");
     }
 
-    // UTC087 - forApprovedClaim throws CHAT_UNAVAILABLE when claim is ineligible
+    // UTC082 - forApprovedClaim throws CHAT_UNAVAILABLE when claim is ineligible
     @Test
     void forApprovedClaim_whenNotEligible_throwsChatUnavailable() {
         when(policy.eligible(claim)).thenReturn(false);
@@ -131,7 +131,7 @@ class ChatConversationServiceTest {
 
     // Supplementary (ChatConversationService.notifyChanged): emits CONVERSATION_UPDATED when conversation exists
     @Test
-    void notifyChanged_whenConversationExists_emitsConversationUpdatedEvent() {
+    void utc085_notifyChanged_whenConversationExists_emitsConversationUpdatedEvent() {
         ChatConversation existing = new ChatConversation(claim);
         ReflectionTestUtils.setField(existing, "id", 800L);
         when(conversations.findByPost_IdAndClaimant_Id(100L, 20L)).thenReturn(Optional.of(existing));
@@ -141,7 +141,7 @@ class ChatConversationServiceTest {
         verify(events).changed(800L, "CONVERSATION_UPDATED");
     }
 
-    // UTC088 - notifyChanged publishes no event when conversation does not exist
+    // UTC083 - notifyChanged publishes no event when conversation does not exist
     @Test
     void notifyChanged_whenNoConversationExists_publishesNoEvent() {
         when(conversations.findByPost_IdAndClaimant_Id(100L, 20L)).thenReturn(Optional.empty());
@@ -154,7 +154,7 @@ class ChatConversationServiceTest {
     private static Account account(Long id, String name) {
         Account a = new Account();
         a.setId(id);
-        a.setEmail(name.toLowerCase() + "@fpt.edu.vn");
+        a.setEmail(name.toLowerCase() + "@gmail.com");
         a.setFullName(name);
         a.setRole(AccountRole.USER);
         a.setStatus(AccountStatus.ACTIVE);

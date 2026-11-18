@@ -6,9 +6,7 @@ import com.example.base.entity.AccountStatus;
 import com.example.base.entity.Category;
 import com.example.base.entity.ChatConversation;
 import com.example.base.entity.Claim;
-import com.example.base.entity.ItemReceipt;
 import com.example.base.entity.Post;
-import com.example.base.entity.StorageLocation;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.repository.AccountRepository;
@@ -53,19 +51,19 @@ class ChatAccessPolicyTest {
         assertSame(active, policy.actor(new CustomUserDetails(active)));
     }
 
-    // UTC002, UTC003 - actor throws UNAUTHORIZED when null or FORBIDDEN when suspended/locked
     @Test
-    void actor_whenNullOrLockedOrMissing_throwsUnauthorizedOrForbidden() {
-        // UTC002 - null principal throws UNAUTHORIZED
+    void utc002_actor_nullPrincipalThrowsUnauthorized() {
         assertEquals(ErrorCode.UNAUTHORIZED,
                 assertThrows(AppException.class, () -> policy.actor(null)).getErrorCode());
+    }
 
-        // UTC003 - suspended account throws FORBIDDEN
+    @Test
+    void utc003_actor_suspendedOrLockedAccountThrowsForbidden() {
         Account suspended = account(5L, AccountStatus.SUSPENDED, null, null);
         assertEquals(ErrorCode.FORBIDDEN,
                 assertThrows(AppException.class, () -> policy.actor(new CustomUserDetails(suspended))).getErrorCode());
 
-        // Supplementary (ChatAccessPolicy.actor): DB-locked account throws FORBIDDEN
+        // principal looks active but the DB row is locked
         Account activePrincipal = account(6L, AccountStatus.ACTIVE, null, null);
         Account lockedInDb = account(6L, AccountStatus.ACTIVE, OffsetDateTime.now().plusHours(2), null);
         when(accounts.findById(6L)).thenReturn(Optional.of(lockedInDb));
@@ -75,7 +73,7 @@ class ChatAccessPolicyTest {
 
     // Supplementary (ChatAccessPolicy.active): checks null, status, lock window, and validUntil
     @Test
-    void active_checksStatusLockAndValidity() {
+    void utc012_active_checksStatusLockAndValidity() {
         assertThrows(NullPointerException.class, () -> policy.active(null));
         assertTrue(policy.active(account(1L, AccountStatus.ACTIVE, null, OffsetDateTime.now().plusDays(1))));
         assertFalse(policy.active(account(2L, AccountStatus.SUSPENDED, null, null)));
@@ -83,53 +81,62 @@ class ChatAccessPolicyTest {
         assertFalse(policy.active(account(4L, AccountStatus.ACTIVE, null, OffsetDateTime.now().minusMinutes(10))));
     }
 
-    // UTC005, UTC006, UTC008, UTC009, UTC010 - eligible and readOnlyReason evaluate claim type, state, and receipt
     @Test
-    void eligible_and_readOnlyReason_evaluateClaimAndPostAndAccounts() {
+    void utc005_eligible_approvedP2pClaimWithoutReceipt() {
+        assertTrue(policy.eligible(approvedClaim()));
+    }
+
+    @Test
+    void utc006_eligible_postWithReceiptIsIneligible() {
+        when(receipts.existsByPostId(100L)).thenReturn(true);
+        assertFalse(policy.eligible(approvedClaim()));
+    }
+
+    @Test
+    void utc008_eligible_officeClaimIsIneligible() {
+        Claim approved = approvedClaim();
+        Claim officeClaim = BeanUtils.instantiateClass(Claim.class);
+        ReflectionTestUtils.setField(officeClaim, "claimType", "OFFICE");
+        ReflectionTestUtils.setField(officeClaim, "status", "APPROVED");
+        ReflectionTestUtils.setField(officeClaim, "post", approved.getPost());
+        ReflectionTestUtils.setField(officeClaim, "claimant", approved.getClaimant());
+        assertFalse(policy.eligible(officeClaim));
+    }
+
+    @Test
+    void utc009_readOnlyReason_eligibleClaimWithActiveParticipantsIsNull() {
+        assertNull(policy.readOnlyReason(new ChatConversation(approvedClaim())));
+    }
+
+    @Test
+    void utc010_readOnlyReason_cancelledClaimReturnsMessage() {
+        Claim claim = approvedClaim();
+        ChatConversation conv = new ChatConversation(claim);
+        claim.review("CANCELLED");
+        assertFalse(policy.eligible(claim));
+        String reason = policy.readOnlyReason(conv);
+        assertTrue(reason != null && !reason.isBlank());
+    }
+
+    /** APPROVED P2P claim on RESERVED post 100 (finder 10, claimant 20). */
+    private static Claim approvedClaim() {
         Account finder = account(10L, AccountStatus.ACTIVE, null, null);
         Account claimant = account(20L, AccountStatus.ACTIVE, null, null);
         Category cat = new Category();
         ReflectionTestUtils.setField(cat, "categoryId", 1L);
         cat.setName("Wallet");
-
         Post post = Post.found(finder, cat, "Wallet", "Desc", "Hall", OffsetDateTime.now().minusDays(1), "P2P", null);
         ReflectionTestUtils.setField(post, "id", 100L);
         ReflectionTestUtils.setField(post, "status", "RESERVED");
-
-        // UTC005 - approved P2P claim without receipt is eligible
         Claim claim = Claim.submit(post, claimant, "Mine", null);
         claim.review("APPROVED");
-        assertTrue(policy.eligible(claim));
-
-        // UTC009 - eligible claim with active participants returns readOnlyReason=null
-        ChatConversation conv = new ChatConversation(claim);
-        assertNull(policy.readOnlyReason(conv));
-
-        // UTC010 - cancelled claim returns non-blank read-only reason message
-        claim.review("CANCELLED");
-        assertFalse(policy.eligible(claim));
-        assertTrue(policy.readOnlyReason(conv) != null && !policy.readOnlyReason(conv).isBlank());
-
-        // UTC008 - OFFICE claim is ineligible
-        claim.review("APPROVED");
-        Claim officeClaim = BeanUtils.instantiateClass(Claim.class);
-        ReflectionTestUtils.setField(officeClaim, "claimType", "OFFICE");
-        ReflectionTestUtils.setField(officeClaim, "status", "APPROVED");
-        ReflectionTestUtils.setField(officeClaim, "post", post);
-        ReflectionTestUtils.setField(officeClaim, "claimant", claimant);
-        assertFalse(policy.eligible(officeClaim));
-
-        // UTC006 - claim whose post already has an ItemReceipt is ineligible
-        ItemReceipt receipt = ItemReceipt.walkInDraft("VP-1", finder);
-        receipt.assignLocation(StorageLocation.create("A1", "Shelf 1", null));
-        when(receipts.existsByPostId(100L)).thenReturn(true);
-        assertFalse(policy.eligible(claim));
+        return claim;
     }
 
     private static Account account(Long id, AccountStatus status, OffsetDateTime lockedUntil, OffsetDateTime validUntil) {
         Account a = new Account();
         a.setId(id);
-        a.setEmail("u" + id + "@fpt.edu.vn");
+        a.setEmail("u" + id + "@gmail.com");
         a.setFullName("User " + id);
         a.setRole(AccountRole.USER);
         a.setStatus(status);
