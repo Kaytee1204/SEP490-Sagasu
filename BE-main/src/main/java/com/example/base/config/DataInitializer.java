@@ -190,16 +190,43 @@ public class DataInitializer {
                 accountRepository.save(thirdUser);
             }
 
+            // 4b. Seed tài khoản APPROVER: tuelam332@gmail.com / 123
+            String approverEmail = "tuelam332@gmail.com";
+            Account approverUser = accountRepository.findByEmailIgnoreCase(approverEmail).orElse(null);
+            if (approverUser == null) {
+                approverUser = new Account();
+                approverUser.setFullName("Tuệ Lâm (Approver)");
+                approverUser.setEmail(approverEmail);
+                approverUser.setPasswordHash(passwordEncoder.encode("123"));
+                approverUser.setRole(AccountRole.APPROVER);
+                approverUser.setStatus(AccountStatus.ACTIVE);
+                approverUser.setMustChangePassword(false);
+                approverUser.setCreatedBy(admin);
+                accountRepository.save(approverUser);
+            } else {
+                if (!StringUtils.hasText(approverUser.getFullName())) {
+                    approverUser.setFullName("Tuệ Lâm (Approver)");
+                }
+                approverUser.setPasswordHash(passwordEncoder.encode("123"));
+                approverUser.setRole(AccountRole.APPROVER);
+                approverUser.setStatus(AccountStatus.ACTIVE);
+                approverUser.setMustChangePassword(false);
+                approverUser.setFailedLoginCount(0);
+                approverUser.setLockedUntil(null);
+                accountRepository.save(approverUser);
+            }
+
             // 5. Tự động đồng bộ 4.203 bài đăng R2 Dataset (LOST + FOUND) cho mọi môi trường (Local & Render Staging)
             seedR2DatasetPostsIfMissing(dataSource);
 
             log.info("==================================================================");
             log.info("[SEED DATA - KhanhTB]");
-            log.info("1. ADMIN   -> email: admin | password: 123");
-            log.info("2. MANAGER -> email: {} | password: 123", managerEmail);
-            log.info("3. USER    -> email: user  | password: 123");
-            log.info("4. USER    -> email: {} | password: 123", thirdEmail);
-            log.info("Swagger UI : http://localhost:8080/swagger-ui.html");
+            log.info("1. ADMIN    -> email: admin | password: 123");
+            log.info("2. MANAGER  -> email: {} | password: 123", managerEmail);
+            log.info("3. APPROVER -> email: {} | password: 123", approverEmail);
+            log.info("4. USER     -> email: user  | password: 123");
+            log.info("5. USER     -> email: {} | password: 123", thirdEmail);
+            log.info("Swagger UI  : http://localhost:8080/swagger-ui.html");
             log.info("==================================================================");
         };
     }
