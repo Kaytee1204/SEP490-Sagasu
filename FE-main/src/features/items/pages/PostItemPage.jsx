@@ -200,7 +200,7 @@ function PostComposer() {
 
   async function submit() {
     if (inFlight.current || processing || changingType.current || completed.current) return;
-    if (!navigator.onLine) return setSubmitError('Đang mất mạng. Hãy kết nối lại rồi bấm Đăng tin.');
+    if (!navigator.onLine) return setSubmitError('Đang mất mạng. Hãy kết nối lại rồi bấm Đăng bài.');
     const validation = attempted ? '' : validateDetails();
     if (validation) return setSubmitError(validation);
     inFlight.current = true;
@@ -236,16 +236,16 @@ function PostComposer() {
   }
 
   if (!['USER', 'APPROVER', 'MANAGER', 'ADMIN'].includes(user?.role)) return <main className="container" style={{ paddingBlock: 60 }}>
-    <h1>{isFound ? 'Đăng tin nhặt được' : 'Đăng tin mất đồ'}</h1><p>Vui lòng đăng nhập bằng tài khoản hợp lệ để đăng bài.</p>
+    <h1>{isFound ? 'Đăng bài nhặt được' : 'Đăng bài mất đồ'}</h1><p>Vui lòng đăng nhập bằng tài khoản hợp lệ để đăng bài.</p>
   </main>;
 
   const review = { ...formData, images: images.map(image => image.preview), categoryName: categories?.find(c => String(c.id) === formData.categoryId)?.name };
   return <main className="post-create-page post-create-compact">
     <div className="container post-create-container">
 
-      <h1 className="post-create-title">{isFound ? 'Đăng tin nhặt được' : 'Đăng tin mất đồ'}</h1>
+      <h1 className="post-create-title">{isFound ? 'Đăng bài nhặt được' : 'Đăng bài mất đồ'}</h1>
       {!pendingDraft && draftStatus.startsWith("Không") && <p className="claim-alert" role="alert">{draftStatus}</p>}
-      {!online && <p className="claim-alert" role="status">Đang ngoại tuyến. Bạn vẫn có thể soạn và lưu nháp trên máy; kết nối lại để đăng tin.</p>}
+      {!online && <p className="claim-alert" role="status">Đang ngoại tuyến. Bạn vẫn có thể soạn và lưu nháp trên máy; kết nối lại để đăng bài.</p>}
       {pendingDraft && <RestoreDraftDialog attempted={pendingDraft.attempted} onRestore={restoreDraft} onDiscard={discardDraft} />}
       {(created || submitError) && <PostSubmitResultDialog post={created} error={submitError} onClose={() => {
         if (created) navigate(`/chi-tiet/${created.id}`, { replace: true });
@@ -267,7 +267,7 @@ function PostComposer() {
             <aside className="post-create-live"><LivePostPreview formData={review} postType={isFound ? 'found' : 'lost'} authorName={user?.fullName || user?.username} /></aside>
           </fieldset>
           <div className="post-create-actions"><span>Không đưa thông tin bí mật vào nội dung công khai.</span>
-          <button type="submit" className="btn btn-primary" disabled={submitting || processing || switchingType || Boolean(created) || !draftLoaded || Boolean(pendingDraft) || !online || (!attempted && !categories?.length)}>{processing ? 'Đang xử lý ảnh…' : switchingType ? 'Đang chuyển…' : submitting ? 'Đang đăng…' : attempted ? 'Thử đăng lại' : 'Đăng tin'}</button></div>
+          <button type="submit" className="btn btn-primary" disabled={submitting || processing || switchingType || Boolean(created) || !draftLoaded || Boolean(pendingDraft) || !online || (!attempted && !categories?.length)}>{processing ? 'Đang xử lý ảnh…' : switchingType ? 'Đang chuyển…' : submitting ? 'Đang đăng…' : attempted ? 'Thử đăng lại' : 'Đăng bài'}</button></div>
         </form>
       </div>
     </div>

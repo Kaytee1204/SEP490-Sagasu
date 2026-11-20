@@ -92,7 +92,7 @@ export function ClaimStatusPanel({ claim, showProgress = false }) {
   const waitingForAnotherClaim = showProgress && claim.status === 'PENDING' && claim.postStatus === 'RESERVED';
   const pendingDescription = waitingForAnotherClaim
     ? 'Một yêu cầu khác đã được chấp thuận. Bạn có thể theo dõi tình trạng hồ sơ của mình tại đây.'
-    : 'Người xét duyệt sẽ kiểm tra căn cứ của bạn và gửi thông báo khi có kết quả.';
+    : 'Staff sẽ kiểm tra căn cứ của bạn và gửi thông báo khi có kết quả.';
   const copy = {
     PENDING: [claim.canReview ? 'Yêu cầu đang chờ bạn xét duyệt' : 'Đang chờ xét duyệt', claim.canReview ? 'Đối chiếu các căn cứ bên dưới trước khi chấp thuận người nhận.' : pendingDescription],
     APPROVED: ['Yêu cầu đã được chấp thuận', 'Theo dõi hướng dẫn của bên tiếp nhận để nhận lại món đồ.'],

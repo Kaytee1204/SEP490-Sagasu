@@ -35,7 +35,7 @@ import './ProfilePage.css';
 const ROLE_LABELS = {
   ADMIN: 'Quản trị viên',
   MANAGER: 'Quản lý tổ chức',
-  APPROVER: 'Kiểm duyệt viên',
+  APPROVER: 'Staff',
   USER: 'Thành viên',
 };
 
@@ -141,7 +141,7 @@ export default function ProfilePage() {
   }, [activeModal, wantsPassword, setSearchParams]);
 
   const rawName = user?.fullName || user?.name || user?.email || 'Người dùng';
-  const displayName = String(rawName).replace(/\s*\((manager|admin|user|approver)\)\s*$/i, '').trim();
+  const displayName = String(rawName).replace(/\s*\((manager|admin|user|approver|staff)\)\s*$/i, '').trim();
   const displayEmail = user?.email || 'Chưa cập nhật';
   const displayPhone = user?.phone ? String(user.phone).trim() : '';
   const displayRole = user?.role ? String(user.role).toUpperCase() : 'USER';
@@ -529,7 +529,7 @@ export default function ProfilePage() {
                         >
                           <option value="ADMIN">Quản trị viên (ADMIN)</option>
                           <option value="MANAGER">Quản lý tổ chức (MANAGER)</option>
-                          <option value="APPROVER">Kiểm duyệt viên (APPROVER)</option>
+                          <option value="APPROVER">Staff (STAFF)</option>
                           <option value="USER">Thành viên (USER)</option>
                         </select>
                       </div>

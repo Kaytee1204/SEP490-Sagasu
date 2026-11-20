@@ -1,14 +1,17 @@
 .account-shell {
   display: flex;
   flex: 1;
-  min-height: calc(100vh - var(--navbar-offset, 68px));
+  align-items: flex-start;
+  min-height: calc(100dvh - var(--navbar-offset, 68px));
   background: #f8f9fc;
 }
 
 .account-sidebar {
   position: sticky;
+  align-self: flex-start;
   top: var(--navbar-offset, 68px);
-  height: calc(100vh - var(--navbar-offset, 68px));
+  height: calc(100dvh - var(--navbar-offset, 68px));
+  max-height: calc(100dvh - var(--navbar-offset, 68px));
   width: 244px;
   flex-shrink: 0;
   display: flex;
@@ -16,10 +19,9 @@
   justify-content: space-between;
   background: #ffffff;
   border-right: 1px solid #edf0f5;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   z-index: 20;
-  transition: width 200ms ease, top 200ms ease, height 200ms ease;
+  transition: width 200ms ease, top 200ms ease, height 200ms ease, max-height 200ms ease;
 }
 
 .account-sidebar.is-collapsed {
@@ -29,6 +31,10 @@
 .account-sidebar-upper {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .account-sidebar-top {
@@ -204,7 +210,11 @@
 }
 
 .account-sidebar-footer {
-  padding: 14px 14px 18px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  padding: 12px 14px 16px;
+  border-top: 1px solid #f1f5f9;
   background: #ffffff;
 }
 

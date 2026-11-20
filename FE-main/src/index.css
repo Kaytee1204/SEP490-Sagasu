@@ -1486,9 +1486,9 @@ body {
 
 /* === RESPONSIVE BREAKPOINTS (Desktop baseline preserved 100%) === */
 
-/* Prevent horizontal page dragging across all viewports */
+/* Prevent horizontal page dragging without breaking position: sticky */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
 }
 

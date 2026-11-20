@@ -19,8 +19,9 @@ export default function AdminSidebar({ pendingReportsCount = 0, navBadges = {}, 
     navigate('/dang-nhap');
   };
 
-  const displayName = String(user?.fullName || user?.email || 'Quản trị viên').replace(/\s*\((Manager|Admin)\)/gi, '');
-  const displayRole = user?.role || 'ADMIN';
+  const displayName = String(user?.fullName || user?.email || 'Quản trị viên').replace(/\s*\((Manager|Admin|Approver|Staff)\)/gi, '').trim();
+  const rawRole = user?.role ? String(user.role).toUpperCase() : 'ADMIN';
+  const displayRole = rawRole === 'APPROVER' ? 'STAFF' : rawRole;
   const avatarSrc = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
 
   const sidebarContent = (

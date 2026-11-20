@@ -290,7 +290,7 @@ export default function AdminAuditLogsPage() {
               <option value="ALL">Mọi vai trò (Role)</option>
               <option value="ADMIN">ADMIN</option>
               <option value="MANAGER">MANAGER</option>
-              <option value="APPROVER">APPROVER</option>
+              <option value="APPROVER">STAFF</option>
               <option value="USER">USER</option>
             </select>
           </div>
@@ -400,7 +400,7 @@ export default function AdminAuditLogsPage() {
                             ROLE_BADGES[log.actorRole] || ROLE_BADGES.USER
                           }`}
                         >
-                          {log.actorRole}
+                          {log.actorRole === 'APPROVER' ? 'STAFF' : log.actorRole}
                         </span>
                       </div>
                     </td>
@@ -500,7 +500,7 @@ export default function AdminAuditLogsPage() {
                   <div className="text-xs font-semibold text-slate-400">Người thực hiện</div>
                   <div className="mt-0.5 flex items-center gap-1.5 font-semibold text-slate-900">
                     <UserCheck size={14} className="text-teal-700" />
-                    {selectedLog.actorName} ({selectedLog.actorRole})
+                    {selectedLog.actorName} ({selectedLog.actorRole === 'APPROVER' ? 'STAFF' : selectedLog.actorRole})
                   </div>
                   <div className="text-xs text-slate-500">{selectedLog.actorEmail}</div>
                 </div>

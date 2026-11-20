@@ -103,9 +103,9 @@ export default function MyPostsPage({ embedded = false }) {
 
   const Wrapper = embedded ? 'section' : 'main';
   return <Wrapper className={`my-posts-page my-posts-dashboard ${embedded ? 'my-posts-embedded' : 'container'}`}
-    aria-label={embedded ? 'Tin đăng của tôi' : undefined}>
+    aria-label={embedded ? 'Bài đăng của tôi' : undefined}>
 
-    {!embedded && <header className="my-posts-heading"><h1>Tin đăng của tôi</h1></header>}
+    {!embedded && <header className="my-posts-heading"><h1>Bài đăng của tôi</h1></header>}
     <MyPostsFilterBar filter={filter} filters={FILTERS} onSelectFilter={handleFilterChange}
       statusCounts={statusCounts} typeCounts={typeCounts}
       postType={postType} postTypes={POST_TYPES} onSelectPostType={handlePostTypeChange} />

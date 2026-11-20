@@ -375,7 +375,7 @@ export default function AdminOverviewPage() {
               <div className="font-extrabold text-slate-800">{byRole.USER ?? 0}</div>
             </div>
             <div className="rounded-lg bg-teal-50/70 p-1.5 text-center">
-              <div className="text-slate-500">APPROVER</div>
+              <div className="text-slate-500">STAFF</div>
               <div className="font-extrabold text-teal-700">{byRole.APPROVER ?? 0}</div>
             </div>
             <div className="rounded-lg bg-sky-50/70 p-1.5 text-center">

@@ -14,7 +14,7 @@ const HANDLING = { RESERVED: 'Đang xử lý nhận đồ', RETURNED: 'Đã trao
 export default function MyPostCard({ post, onDelete }) {
   const [imageFailed, setImageFailed] = useState(false);
   const location = useLocation();
-  const fromState = { from: `${location.pathname}${location.search}`, fromLabel: 'Tin đăng của tôi' };
+  const fromState = { from: `${location.pathname}${location.search}`, fromLabel: 'Bài đăng của tôi' };
   const isLost = post.postType === 'LOST';
   const hasPendingClaims = !isLost && post.pendingClaimCount > 0;
   const moderation = MODERATION[post.moderationStatus] || { label: post.moderationStatus, icon: Clock3 };

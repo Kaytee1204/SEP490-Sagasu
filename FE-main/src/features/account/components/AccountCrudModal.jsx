@@ -182,7 +182,7 @@ export default function AccountCrudModal({
                 }}
               >
                 <option value="USER">USER (Sinh viên)</option>
-                <option value="APPROVER">APPROVER (Phòng ban phê duyệt)</option>
+                <option value="APPROVER">STAFF (Nhân viên tiếp nhận)</option>
                 {isPureAdmin && <option value="MANAGER">MANAGER (Quản lý)</option>}
                 {isPureAdmin && <option value="ADMIN">ADMIN (Quản trị viên)</option>}
               </select>

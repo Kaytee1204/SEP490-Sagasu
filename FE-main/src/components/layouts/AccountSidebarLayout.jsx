@@ -215,9 +215,11 @@ export default function AccountSidebarLayout() {
     });
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     await logout();
-    navigate('/dang-nhap');
+    navigate('/dang-nhap', { replace: true });
   };
 
   return (

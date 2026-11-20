@@ -189,7 +189,7 @@ export default function ProfileSidebarCard({
                       <option value="ADMIN">ADMIN</option>
                       <option value="MANAGER">MANAGER</option>
                       <option value="USER">USER</option>
-                      <option value="APPROVER">APPROVER</option>
+                      <option value="APPROVER">STAFF</option>
                     </select>
                   ) : (
                     <input
@@ -452,7 +452,7 @@ export default function ProfileSidebarCard({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Package size={15} strokeWidth={1.8} />
-              Đăng tin mới
+              Đăng bài mới
             </div>
             <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
           </Link>

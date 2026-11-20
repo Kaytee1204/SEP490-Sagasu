@@ -49,7 +49,7 @@ export default function AdminHeader({ onMenuClick }) {
       </div>
       <div className="flex items-center gap-2.5">
         {isApprover ? (
-          <span className="hidden shrink-0 rounded-md bg-teal-50 px-2.5 py-1 text-sm font-semibold text-teal-800 sm:inline">Người xét duyệt</span>
+          <span className="hidden shrink-0 rounded-md bg-teal-50 px-2.5 py-1 text-sm font-semibold text-teal-800 sm:inline">Staff</span>
         ) : (
           <button type="button" onClick={triggerRefresh} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-zinc-200 bg-white text-zinc-600 text-[13px] font-medium hover:bg-zinc-50 transition-colors">
             <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />

@@ -73,7 +73,7 @@ export default function AccountFilterBar({
             <option value="ALL">Tất cả Role</option>
             <option value="ADMIN">ADMIN</option>
             <option value="MANAGER">MANAGER</option>
-            <option value="APPROVER">APPROVER</option>
+            <option value="APPROVER">STAFF</option>
             <option value="USER">USER</option>
           </select>
         </div>

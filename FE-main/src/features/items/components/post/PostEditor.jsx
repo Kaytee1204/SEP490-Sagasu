@@ -26,7 +26,7 @@ export default function PostEditor({ id, onReload }) {
   const location = useLocation();
   const from = location.state?.from;
   const backUrl = typeof from === 'string' && /^\/(?!\/)/.test(from) ? from : '/tin-dang-cua-toi';
-  const backLabel = location.state?.fromLabel || 'Tin đăng của tôi';
+  const backLabel = location.state?.fromLabel || 'Bài đăng của tôi';
   const [loaded,setLoaded]=useState(null);
   const [form,setForm]=useState(null);
   const [kept,setKept]=useState([]);

@@ -26,17 +26,20 @@ function AvatarDropdown() {
   };
 
   const rawName = user?.fullName || user?.name || user?.email || 'Người dùng';
-  const displayName = String(rawName).replace(/\s*\((manager|admin|user|approver)\)\s*$/i, '').trim();
+  const displayName = String(rawName).replace(/\s*\((manager|admin|user|approver|staff)\)\s*$/i, '').trim();
   const displayEmail = user?.email || '';
   const displayOrg = user?.organizationName || user?.unitName || 'Trường Đại học FPT';
 
   const roleLabels = {
     ADMIN: 'Quản trị viên',
     MANAGER: 'Quản lý tổ chức',
-    OFFICER: 'Cán bộ tiếp nhận',
+    APPROVER: 'Staff',
+    OFFICER: 'Staff',
     USER: 'Thành viên',
   };
-  const roleName = user?.role ? (roleLabels[String(user.role).toUpperCase()] || user.role) : 'Thành viên';
+  const rawRole = user?.role ? String(user.role).toUpperCase() : 'USER';
+  const shortRoleBadge = rawRole === 'APPROVER' ? 'STAFF' : rawRole;
+  const roleName = roleLabels[rawRole] || shortRoleBadge;
 
   const avatarSrc = user?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
 
@@ -83,7 +86,7 @@ function AvatarDropdown() {
         <div className="hidden sm:flex flex-col items-start leading-[1.15]">
           <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{displayName}</span>
           <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase' }}>
-            {user?.role || 'USER'}
+            {shortRoleBadge}
           </span>
         </div>
         <ChevronDown
@@ -290,7 +293,7 @@ export default function Navbar() {
 
                 <Link to="/dang-tin" className="btn btn-accent btn-sm hidden xs:inline-flex" id="nav-post-btn">
                   <Plus size={15} />
-                  <span className="hidden sm:inline">Đăng tin</span>
+                  <span className="hidden sm:inline">Đăng bài</span>
                 </Link>
 
                 <AvatarDropdown />
@@ -377,7 +380,7 @@ export default function Navbar() {
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50/70 hover:bg-teal-50 transition-colors"
                 >
                   <Plus size={18} className="text-teal-600" />
-                  <span>Đăng tin tìm / nhặt đồ</span>
+                  <span>Đăng bài tìm / nhặt đồ</span>
                 </Link>
               </div>
 

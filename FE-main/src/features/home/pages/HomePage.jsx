@@ -67,7 +67,7 @@ const UTILITY_CARDS = [
   },
   {
     title: 'Đăng bài tìm đồ',
-    desc: 'Đăng tin tìm đồ nhanh chóng',
+    desc: 'Đăng bài tìm đồ nhanh chóng',
     to: '/dang-tin',
     icon: Plus,
     tone: 'mint',

@@ -6,7 +6,7 @@ import { claimActivityReason, date, labels, progressLabels } from "../officeUtil
 const events = {
   SUBMIT: ["Tạo hồ sơ"],
   APPROVE: ["Duyệt yêu cầu", "Người duyệt", "Căn cứ phê duyệt"],
-  REJECT: ["Từ chối yêu cầu", "Người xét duyệt", "Lý do từ chối"],
+  REJECT: ["Từ chối yêu cầu", "Staff", "Lý do từ chối"],
   REQUEST_INFO: ["Yêu cầu bổ sung thông tin", "Người yêu cầu bổ sung", "Nội dung văn phòng cần làm rõ"],
   RESUBMIT: ["Đã bổ sung thông tin", "Người bổ sung"],
   CANCEL: ["Hủy yêu cầu", "Người hủy", "Lý do hủy"],

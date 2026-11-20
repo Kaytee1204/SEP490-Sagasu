@@ -49,7 +49,7 @@ export const labels = {
   FOUND: "Nhặt được",
   LOST: "Thất lạc",
   USER: "Người dùng",
-  APPROVER: "Nhân viên tiếp nhận",
+  APPROVER: "Staff",
   MANAGER: "Quản lý",
   ADMIN: "Quản trị viên",
   TAKE: "Nhận xử lý",
