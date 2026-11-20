@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   User,
@@ -13,6 +13,8 @@ import {
   AlertCircle,
   CheckCircle,
   ShieldCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function ProfileSidebarCard({
@@ -28,6 +30,25 @@ export default function ProfileSidebarCard({
   feedback,
   showQuickActions = true,
 }) {
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const eyeToggleStyle = {
+    position: 'absolute',
+    right: '10px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'none',
+    border: 'none',
+    padding: '4px',
+    cursor: 'pointer',
+    color: '#64748b',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+
   const disabledInputStyle = {
     background: '#f1f5f9',
     color: '#64748b',
@@ -207,26 +228,66 @@ export default function ProfileSidebarCard({
 
               {/* Đổi mật khẩu */}
               <div className="input-group">
+                <label className="input-label" htmlFor="edit-current-password">
+                  Mật khẩu hiện tại{' '}
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                    (bắt buộc nếu đổi mật khẩu)
+                  </span>
+                </label>
+                <div className="input-icon-wrap" style={{ position: 'relative' }}>
+                  <span className="input-icon">
+                    <Lock size={14} />
+                  </span>
+                  <input
+                    id="edit-current-password"
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    className="input"
+                    placeholder="Nhập mật khẩu hiện tại"
+                    value={formValues.currentPassword || ''}
+                    onChange={(e) => onChangeForm({ ...formValues, currentPassword: e.target.value })}
+                    style={{ paddingRight: '38px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword((v) => !v)}
+                    style={eyeToggleStyle}
+                    aria-label={showCurrentPassword ? 'Ẩn mật khẩu hiện tại' : 'Hiện mật khẩu hiện tại'}
+                  >
+                    {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="input-group">
                 <label className="input-label" htmlFor="edit-new-password">
                   Mật khẩu mới{' '}
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                    (8-16 ký tự, có ký tự đặc biệt)
+                    (8-16 ký tự, có ký tự đặc biệt, khác mật khẩu cũ)
                   </span>
                 </label>
-                <div className="input-icon-wrap">
+                <div className="input-icon-wrap" style={{ position: 'relative' }}>
                   <span className="input-icon">
                     <Lock size={14} />
                   </span>
                   <input
                     id="edit-new-password"
-                    type="password"
+                    type={showNewPassword ? 'text' : 'password'}
                     className="input"
                     minLength={8}
                     maxLength={16}
                     placeholder="8-16 ký tự, có ký tự đặc biệt (VD: Abc@1234)"
                     value={formValues.newPassword || ''}
                     onChange={(e) => onChangeForm({ ...formValues, newPassword: e.target.value })}
+                    style={{ paddingRight: '38px' }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((v) => !v)}
+                    style={eyeToggleStyle}
+                    aria-label={showNewPassword ? 'Ẩn mật khẩu mới' : 'Hiện mật khẩu mới'}
+                  >
+                    {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
                 </div>
               </div>
 
@@ -235,20 +296,29 @@ export default function ProfileSidebarCard({
                   <label className="input-label" htmlFor="edit-confirm-password">
                     Xác nhận mật khẩu mới
                   </label>
-                  <div className="input-icon-wrap">
+                  <div className="input-icon-wrap" style={{ position: 'relative' }}>
                     <span className="input-icon">
                       <Lock size={14} />
                     </span>
                     <input
                       id="edit-confirm-password"
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       className="input"
                       placeholder="Nhập lại mật khẩu mới"
                       value={formValues.confirmPassword || ''}
                       onChange={(e) =>
                         onChangeForm({ ...formValues, confirmPassword: e.target.value })
                       }
+                      style={{ paddingRight: '38px' }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      style={eyeToggleStyle}
+                      aria-label={showConfirmPassword ? 'Ẩn xác nhận mật khẩu' : 'Hiện xác nhận mật khẩu'}
+                    >
+                      {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </div>
                 </div>
               )}

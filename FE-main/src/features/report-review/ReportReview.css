@@ -277,6 +277,28 @@
   border-color: #b0dcd3;
   color: #066862;
 }
+.rr-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 21px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.rr-tab-count.is-urgent {
+  background: #fef3c7;
+  color: #b45309;
+}
+.rr-tabs button.active .rr-tab-count {
+  background: rgba(6, 104, 98, 0.14);
+  color: #066862;
+}
 .rr-stack {
   display: flex;
   flex-direction: column;

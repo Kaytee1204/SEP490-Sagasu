@@ -581,6 +581,17 @@ class ClaimServiceTest {
     }
 
     @Test
+    void review_approvedOpensAppealWindowForOtherPendingClaimants() {
+        Claim approved = reviewableClaim(550L);
+
+        ClaimResultDto result = service.review(550L, new ReviewClaimRequest("APPROVED", "Matched details", 0L), finderUser);
+
+        assertEquals("APPROVED", result.status());
+        verify(appeals).open(approved);
+        verify(notifications).notifyUser(eq(20L), eq("CLAIM_APPROVED"), anyString(), anyString(), anyString(), eq(true));
+    }
+
+    @Test
     void utc050_review_rejectedSavesActivityAndNotifiesWithReason() {
         reviewableClaim(553L);
         ClaimResultDto result = service.review(553L, new ReviewClaimRequest("REJECTED", "Wrong colour", 0L), finderUser);

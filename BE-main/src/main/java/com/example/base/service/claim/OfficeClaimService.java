@@ -216,6 +216,9 @@ public class OfficeClaimService {
                         "/van-phong/claims/" + c.getId(),true);
                 }
             }
+            if("APPROVED".equals(request.decision())) {
+                notifyOtherOfficeClaimants(c);
+            }
             return new Committed(c.getId(),c.getStatus(),a!=null);
         });
         String delivery="NOT_REQUIRED";
@@ -251,6 +254,30 @@ public class OfficeClaimService {
             person(actor) + " đã gửi thông tin bổ sung cho hồ sơ \"" + c.getPost().getTitle() + "\".",
             "/approver/office-claims/" + c.getId(),false);
     }
+    private void notifyOtherOfficeClaimants(Claim approved) {
+        List<Claim> others = claims.findOtherActiveClaims(approved.getPost().getId(), approved.getId(), List.of("PENDING", "NEEDS_INFO"));
+        if (others == null || others.isEmpty()) return;
+        Long approvedClaimantId = approved.getClaimant() != null ? approved.getClaimant().getId() : null;
+        Set<Long> notified = new HashSet<>();
+        for (Claim other : others) {
+            if (other.getClaimant() == null) continue;
+            Long recipientId = other.getClaimant().getId();
+            if (recipientId == null || Objects.equals(recipientId, approvedClaimantId) || !notified.add(recipientId)) {
+                continue;
+            }
+            notifications.notifyUser(
+                    recipientId,
+                    "CLAIM_ITEM_RESERVED",
+                    "Đồ vật bạn yêu cầu đang được văn phòng hẹn trao trả (#" + other.getId() + ")",
+                    "Món đồ \"" + approved.getPost().getTitle()
+                            + "\" hiện đang trong quá trình hẹn xác minh và trao trả cho một người yêu cầu khác tại văn phòng. Hồ sơ #"
+                            + other.getId() + " của bạn vẫn được giữ nguyên nếu lịch hẹn hiện tại không hoàn tất.",
+                    "/van-phong/claims/" + other.getId(),
+                    false
+            );
+        }
+    }
+
     private String recipient(Claim c) { return c.getClaimantEmail()!=null?c.getClaimantEmail():c.getClaimant()==null?null:c.getClaimant().getEmail(); }
     private Claim office(long id) { return claims.findById(id).filter(c->"OFFICE".equals(c.getClaimType())).orElseThrow(()->new AppException(ErrorCode.CLAIM_NOT_FOUND)); }
     private Claim locked(long id) {

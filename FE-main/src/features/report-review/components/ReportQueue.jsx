@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { Search, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { ErrorBox, Empty } from "./Shared";
 import { labels, reportTargets } from "../format";
+import { reviewApi } from "../api";
 import useReviewResource from "../hooks/useReviewResource";
 const defaults = { page: 1, status: "ALL", kind: "ALL", target: "ALL", q: "", queue: "ALL" };
 const queues = { ALL: "Tất cả", UNASSIGNED: "Chưa nhận xử lý", MINE: "Tôi phụ trách", WAITING: "Chờ phản hồi", REPLIED: "Có phản hồi cần xem" };
@@ -31,6 +32,33 @@ export default function ReportQueue({ onOpen }) {
     return () => clearTimeout(timer);
   }, [search, params, setParams]);
   const { data, error } = useReviewResource("queue", filters, reload);
+  const [queueCounts, setQueueCounts] = useState({});
+  useEffect(() => {
+    let active = true;
+    const keys = Object.keys(queues);
+    Promise.allSettled(
+      keys.map((queueKey) =>
+        reviewApi.list({
+          page: 1,
+          status: filters.status,
+          kind: filters.kind,
+          target: filters.target,
+          q: filters.q,
+          queue: queueKey,
+        }),
+      ),
+    ).then((settled) => {
+      if (!active) return;
+      const next = {};
+      keys.forEach((key, idx) => {
+        const item = settled[idx];
+        next[key] = item?.status === "fulfilled" ? Number(item.value?.totalElements ?? 0) : 0;
+      });
+      setQueueCounts(next);
+    });
+    return () => { active = false; };
+  }, [filters.status, filters.kind, filters.target, filters.q, reload]);
+
   const filter = (key, value) => setParams(old => {
     const next = new URLSearchParams(old);
     if (key !== "page") next.delete("page");
@@ -41,7 +69,16 @@ export default function ReportQueue({ onOpen }) {
   return (
     <section className="rr-card rr-queue">
       <nav className="rr-tabs" aria-label="Việc cần xử lý">
-        {Object.entries(queues).map(([value,label]) => <button key={value} aria-pressed={filters.queue===value} className={filters.queue===value ? "active" : ""} onClick={() => filter("queue",value)}>{label}</button>)}
+        {Object.entries(queues).map(([value,label]) => {
+          const count = queueCounts[value];
+          const isUrgent = (value === "UNASSIGNED" || value === "REPLIED") && typeof count === "number" && count > 0;
+          return <button key={value} aria-pressed={filters.queue===value} className={filters.queue===value ? "active" : ""} onClick={() => filter("queue",value)}>
+            <span>{label}</span>
+            {typeof count === "number" && (
+              <span className={`rr-tab-count ${isUrgent ? "is-urgent" : ""}`}>{count}</span>
+            )}
+          </button>;
+        })}
       </nav>
       <label className="rr-mobile-queue">
         Việc cần xử lý

@@ -5,7 +5,7 @@ import ImageUploadButton from '@/components/common/ImageUploadButton';
 
 export default function StepImagesUpload({ images, imageNames = [], fileInputRef, onUpload, onRemove, compact = false, disabled = false }) {
   if (compact) return <div className="post-upload-compact">
-    <div className="post-upload-heading"><span>Hình ảnh ({images.length}/5)</span><small>{IMAGE_FORMATS} · tối đa 5 MB/ảnh</small></div>
+    <div className="post-upload-heading"><span>Hình ảnh <span style={{ color: '#dc2626' }}>*</span> ({images.length}/5)</span><small>Bắt buộc tối thiểu 1 ảnh · {IMAGE_FORMATS} · tối đa 5 MB/ảnh</small></div>
     <div className="post-upload-strip">
       {images.map((src, index) => <div className="post-upload-thumb" key={src}>
         <img src={src} alt={`Ảnh đã chọn ${index + 1}`} title={imageNames[index]} />
@@ -110,7 +110,7 @@ export default function StepImagesUpload({ images, imageNames = [], fileInputRef
                 marginBottom: '8px',
               }}
             >
-              {images.length === 0 ? 'Bấm để chọn ảnh (không bắt buộc)' : 'Thêm ảnh khác'}
+              {images.length === 0 ? 'Bấm để chọn ảnh (bắt buộc tối thiểu 1 ảnh)' : 'Thêm ảnh khác'}
             </div>
             <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
               {IMAGE_FORMATS}. Tối đa 5 MB/ảnh.

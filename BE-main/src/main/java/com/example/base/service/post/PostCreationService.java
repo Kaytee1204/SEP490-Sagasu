@@ -63,6 +63,9 @@ public class PostCreationService {
             throw new AppException(ErrorCode.POST_CATEGORY_UNAVAILABLE);
         }
         List<ValidatedImage> images = validator.validate(files);
+        if (images.isEmpty()) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng tải lên ít nhất 1 hình ảnh cho bài đăng.");
+        }
         List<String> uploadedKeys = new ArrayList<>();
 
         try {

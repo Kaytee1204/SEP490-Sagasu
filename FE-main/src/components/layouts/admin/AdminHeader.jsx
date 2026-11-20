@@ -18,6 +18,7 @@ export default function AdminHeader({ onMenuClick }) {
 
   const getBreadcrumb = () => {
     // DaiHV: office claim processing has moved to the Approver workspace.
+    if (location.pathname.startsWith('/approver/news')) return 'Tin tức hệ thống';
     if (location.pathname.startsWith('/approver/office-claims')) return 'Yêu cầu nhận đồ';
     if (location.pathname.startsWith('/admin/transfers')) return 'Theo dõi chuyển giao';
     if (location.pathname.startsWith('/approver/transfers')) return 'Yêu cầu tiếp nhận đồ';

@@ -24,6 +24,14 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     @Query("select c from Claim c where c.post.id=:postId and c.status='PENDING' order by c.id")
     java.util.List<Claim> findWaitingForReturn(@Param("postId") long postId);
 
+    @EntityGraph(attributePaths = {"claimant"})
+    @Query("select c from Claim c where c.post.id=:postId and c.id<>:excludeClaimId and c.status in :statuses order by c.id")
+    java.util.List<Claim> findOtherActiveClaims(
+            @Param("postId") long postId,
+            @Param("excludeClaimId") long excludeClaimId,
+            @Param("statuses") Collection<String> statuses
+    );
+
     Optional<Claim> findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(long postId, String status);
     boolean existsByPost_Id(Long postId);
     boolean existsByPost_IdAndStatusIn(Long postId, Collection<String> statuses);

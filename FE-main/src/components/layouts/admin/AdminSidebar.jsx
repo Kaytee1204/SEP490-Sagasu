@@ -4,7 +4,7 @@ import { ArrowUpRight, LogOut, X } from 'lucide-react';
 import { ADMIN_NAV_SECTIONS } from './adminNavConfig';
 import { useAuth } from '@/context/AuthContext';
 
-export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, onClose = () => {} }) {
+export default function AdminSidebar({ pendingReportsCount = 0, navBadges = {}, isOpen = false, onClose = () => {} }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -58,7 +58,16 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
             {section.items.filter((item) => !item.roles || item.roles.includes(user?.role)).map((item) => {
               const active = isItemActive(item.path, item.exact);
               const Icon = item.icon;
-              const hasBadge = item.badgeKey === 'pendingReports' && pendingReportsCount > 0;
+              const badgeCount = item.badgeKey
+                ? (navBadges[item.badgeKey] ?? (item.badgeKey === 'pendingReports' ? pendingReportsCount : 0))
+                : 0;
+              const hasBadge = badgeCount > 0;
+              const badgeToneClass =
+                item.badgeTone === 'danger'
+                  ? 'bg-rose-500 text-white'
+                  : item.badgeTone === 'warning'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'bg-slate-700 text-slate-200';
               return (
                 <Link
                   key={item.path}
@@ -76,8 +85,8 @@ export default function AdminSidebar({ pendingReportsCount = 0, isOpen = false, 
                     <span className={item.wrapLabel ? 'whitespace-normal leading-5' : 'truncate'}>{item.label}</span>
                   </div>
                   {hasBadge && (
-                    <span className="text-[11px] font-bold bg-rose-500 text-white px-2 py-0.5 rounded-full min-w-5 text-center">
-                      {pendingReportsCount}
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full min-w-5 text-center shrink-0 ${badgeToneClass}`}>
+                      {badgeCount > 99 ? '99+' : badgeCount}
                     </span>
                   )}
                 </Link>

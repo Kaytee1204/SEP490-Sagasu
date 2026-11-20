@@ -1,14 +1,53 @@
 // src/components/layouts/admin/adminNavConfig.js
-import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield } from 'lucide-react';
+import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield, Newspaper } from 'lucide-react';
 
 export const ADMIN_NAV_SECTIONS = [
   {
     title: 'Tiếp nhận & trao trả',
     // DaiHV integration: physical receipt of items transferred from existing posts.
-    items: [{ label: 'Yêu cầu nhận đồ', path: '/approver/office-claims', icon: FileCheck, roles: ['APPROVER'] },
-      { label: 'Yêu cầu tiếp nhận đồ thất lạc', path: '/approver/transfers', icon: Package, roles: ['APPROVER'], wrapLabel: true },
-      { label: 'Hồ sơ tiếp nhận', path: '/approver/receipts', icon: ClipboardList, roles: ['APPROVER'] },
-      { label: 'Đồ đang lưu kho', path: '/approver/storage', icon: Warehouse, roles: ['APPROVER'] }],
+    items: [
+      {
+        label: 'Yêu cầu nhận đồ',
+        path: '/approver/office-claims',
+        icon: FileCheck,
+        badgeKey: 'pendingOfficeClaims',
+        badgeTone: 'danger',
+        roles: ['APPROVER'],
+      },
+      {
+        label: 'Yêu cầu tiếp nhận đồ thất lạc',
+        path: '/approver/transfers',
+        icon: Package,
+        badgeKey: 'pendingTransfers',
+        badgeTone: 'danger',
+        roles: ['APPROVER'],
+        wrapLabel: true,
+      },
+      {
+        label: 'Hồ sơ tiếp nhận',
+        path: '/approver/receipts',
+        icon: ClipboardList,
+        badgeKey: 'draftReceipts',
+        badgeTone: 'warning',
+        roles: ['APPROVER'],
+      },
+      {
+        label: 'Đồ đang lưu kho',
+        path: '/approver/storage',
+        icon: Warehouse,
+        badgeKey: 'storedItems',
+        badgeTone: 'neutral',
+        roles: ['APPROVER'],
+      },
+      {
+        label: 'Tin tức hệ thống',
+        path: '/approver/news',
+        icon: Newspaper,
+        badgeKey: 'newsArticles',
+        badgeTone: 'neutral',
+        roles: ['APPROVER'],
+      },
+    ],
   },
   {
     title: 'Tổng quan',
@@ -27,12 +66,28 @@ export const ADMIN_NAV_SECTIONS = [
     items: [
       { label: 'Danh mục', path: '/admin/categories', icon: Tags, roles: ['MANAGER'] },
       { label: 'Lý do báo cáo', path: '/admin/report-reasons', icon: FileWarning, roles: ['ADMIN', 'MANAGER'] },
-      { label: 'Kho & vị trí lưu trữ', path: '/admin/storage', icon: Warehouse, roles: ['MANAGER'] },
-      { label: 'Theo dõi chuyển giao', path: '/admin/transfers', icon: Package, roles: ['MANAGER'] },
+      {
+        label: 'Kho & vị trí lưu trữ',
+        path: '/admin/storage',
+        icon: Warehouse,
+        badgeKey: 'storedItems',
+        badgeTone: 'neutral',
+        roles: ['MANAGER'],
+      },
+      {
+        label: 'Theo dõi chuyển giao',
+        path: '/admin/transfers',
+        icon: Package,
+        badgeKey: 'pendingTransfers',
+        badgeTone: 'warning',
+        roles: ['MANAGER'],
+      },
       {
         label: 'Tin đăng',
         path: '/admin/items',
         icon: Package,
+        badgeKey: 'pendingPosts',
+        badgeTone: 'warning',
         roles: ['MANAGER'],
       },
       {
@@ -41,6 +96,7 @@ export const ADMIN_NAV_SECTIONS = [
         path: '/admin/reports',
         icon: AlertTriangle,
         badgeKey: 'pendingReports',
+        badgeTone: 'danger',
         roles: ['MANAGER'],
       },
       {

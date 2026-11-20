@@ -5,23 +5,81 @@ import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 import { useAuth } from '@/context/AuthContext';
 import { reviewApi } from '@/features/report-review/api';
+import { officeApi } from '@/features/office/api/officeApi';
+import { workflowApi } from '@/features/office/api/workflowApi';
+import { approverApi } from '@/features/approver/api/approverApi';
+import { newsApi } from '@/features/news/api/newsApi';
+
+function readTotal(settled) {
+  if (settled?.status !== 'fulfilled') return 0;
+  return Number(settled.value?.totalElements ?? 0) || 0;
+}
 
 export default function AdminLayout() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  // DaiHV integration: report badges reflect the real queue, only for the responsible role.
-  const {user}=useAuth();const location=useLocation();
-  const [pendingReportsCount,setPendingReportsCount]=useState(0);
-  useEffect(()=>{
-    let active=true;
-    const load=()=>{if(user?.role==='MANAGER')reviewApi.list({status:'OPEN'}).then(r=>{if(active)setPendingReportsCount(r.totalElements);}).catch(()=>{if(active)setPendingReportsCount(0);});else setPendingReportsCount(0);};
-    load();window.addEventListener('report-review-changed',load);
-    return()=>{active=false;window.removeEventListener('report-review-changed',load);};
-  },[user?.role,location.pathname]);
+  const { user } = useAuth();
+  const location = useLocation();
+  const [navBadges, setNavBadges] = useState({});
+
+  useEffect(() => {
+    let active = true;
+    const role = user?.role ? String(user.role).toUpperCase() : '';
+
+    const load = async () => {
+      if (role === 'MANAGER') {
+        const [reportsRes, postsRes, transfersRes, storedRes] = await Promise.allSettled([
+          reviewApi.list({ status: 'OPEN' }),
+          officeApi.posts({ page: 1, moderation: 'PENDING' }),
+          workflowApi.transfers({ page: 1, status: 'PENDING', mine: false }),
+          officeApi.stored({ page: 1 }),
+        ]);
+        if (!active) return;
+        setNavBadges({
+          pendingReports: readTotal(reportsRes),
+          pendingPosts: readTotal(postsRes),
+          pendingTransfers: readTotal(transfersRes),
+          storedItems: readTotal(storedRes),
+        });
+      } else if (role === 'APPROVER') {
+        const [claimsRes, transfersRes, receiptsRes, storedRes, newsRes] = await Promise.allSettled([
+          officeApi.claims({ page: 1, status: 'PENDING' }, false),
+          workflowApi.transfers({ page: 1, status: 'PENDING', mine: false }),
+          approverApi.list({ page: 1, filter: 'DRAFT' }),
+          officeApi.stored({ page: 1 }),
+          newsApi.listForApprover({ page: 1, size: 1 }),
+        ]);
+        if (!active) return;
+        setNavBadges({
+          pendingOfficeClaims: readTotal(claimsRes),
+          pendingTransfers: readTotal(transfersRes),
+          draftReceipts: readTotal(receiptsRes),
+          storedItems: readTotal(storedRes),
+          newsArticles: readTotal(newsRes),
+        });
+      } else {
+        if (active) setNavBadges({});
+      }
+    };
+
+    load();
+    window.addEventListener('report-review-changed', load);
+    window.addEventListener('sagasu-counts-changed', load);
+    window.addEventListener('focus', load);
+    return () => {
+      active = false;
+      window.removeEventListener('report-review-changed', load);
+      window.removeEventListener('sagasu-counts-changed', load);
+      window.removeEventListener('focus', load);
+    };
+  }, [user?.role, location.pathname]);
+
+  const pendingReportsCount = navBadges.pendingReports || 0;
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
       <AdminSidebar
         pendingReportsCount={pendingReportsCount}
+        navBadges={navBadges}
         isOpen={isMobileOpen}
         onClose={() => setIsMobileOpen(false)}
       />

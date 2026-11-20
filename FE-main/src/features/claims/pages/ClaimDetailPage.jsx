@@ -91,7 +91,12 @@ function ClaimDetail({ postId, id }) {
     finally { inFlight.current = false; setBusy(false); }
   }
   const returnTo = location.state?.claimListReturn;
-  const listPath = typeof returnTo === 'string' && (returnTo === '/claim-cua-toi' || returnTo.startsWith('/claim-cua-toi?'))
+  const isSafeReturn = typeof returnTo === 'string' && (
+    returnTo === '/claim-cua-toi'
+    || returnTo.startsWith('/claim-cua-toi?')
+    || /^\/bai-dang\/[1-9]\d*\/claims(?:\?.*)?$/.test(returnTo)
+  );
+  const listPath = isSafeReturn
     ? returnTo : claim?.claimType === 'OFFICE' ? `/claim-cua-toi?view=${String(user?.id) === String(claim.claimantId) ? 'sent' : 'office'}`
       : postClaimsPath(postId, 'ALL', String(user?.id) === String(claim?.claimantId) ? 'sent' : 'received');
   const showHandover = claim?.claimType === 'P2P' && ['APPROVED', 'COMPLETED'].includes(claim.status);

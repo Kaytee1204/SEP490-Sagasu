@@ -20,8 +20,8 @@ export async function submitClaim(postId, request, images, retryId) {
   return data(apiClient.upload(path, form));
 }
 
-export const getGroupedClaims = (page = 1, status = 'ALL', sent = false, postId = null) =>
-  data(apiClient.get(`/claims/grouped?${new URLSearchParams({page: String(page), size: '8', status, sent: String(sent), ...(postId ? { postId } : {})})}`));
+export const getGroupedClaims = (page = 1, status = 'ALL', sent = false, postId = null, size = 8) =>
+  data(apiClient.get(`/claims/grouped?${new URLSearchParams({ page: String(page), size: String(size), status, sent: String(sent), ...(postId ? { postId } : {}) })}`));
 
 export const revokeClaimApproval = (id, request) => data(apiClient.post(`/claims/${encodeURIComponent(id)}/revoke-approval`, request));
 

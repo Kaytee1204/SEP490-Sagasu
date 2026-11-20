@@ -70,6 +70,33 @@ export default function MyPostsPage({ embedded = false }) {
     setSearchParams(updated, { replace: true });
   };
 
+  const [statusCounts, setStatusCounts] = useState({});
+  const [typeCounts, setTypeCounts] = useState({});
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    Promise.all([
+      Promise.allSettled(FILTERS.map((opt) => getMyPosts(1, opt.key, postType))),
+      Promise.allSettled(POST_TYPES.map((opt) => getMyPosts(1, 'ALL', opt.key))),
+    ]).then(([filterRes, typeRes]) => {
+      if (cancelled) return;
+      const nextStatus = {};
+      FILTERS.forEach((opt, idx) => {
+        const item = filterRes[idx];
+        nextStatus[opt.key] = item?.status === 'fulfilled' ? Number(item.value?.totalElements ?? 0) : 0;
+      });
+      const nextType = {};
+      POST_TYPES.forEach((opt, idx) => {
+        const item = typeRes[idx];
+        nextType[opt.key] = item?.status === 'fulfilled' ? Number(item.value?.totalElements ?? 0) : 0;
+      });
+      setStatusCounts(nextStatus);
+      setTypeCounts(nextType);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id, postType, attempt]);
+
   const handlePageChange = (nextPage) => syncState(nextPage, filter, postType);
   const handleFilterChange = (nextFilter) => syncState(1, nextFilter, postType);
   const handlePostTypeChange = (nextPostType) => syncState(1, filter, nextPostType);
@@ -80,6 +107,7 @@ export default function MyPostsPage({ embedded = false }) {
 
     {!embedded && <header className="my-posts-heading"><h1>Tin đăng của tôi</h1></header>}
     <MyPostsFilterBar filter={filter} filters={FILTERS} onSelectFilter={handleFilterChange}
+      statusCounts={statusCounts} typeCounts={typeCounts}
       postType={postType} postTypes={POST_TYPES} onSelectPostType={handlePostTypeChange} />
     <MyPostList key={`${user?.id}:${page}:${filter}:${postType}:${attempt}`} page={page} filter={filter} postType={postType} onPage={handlePageChange}
       onReload={() => setAttempt(n => n + 1)} onResetFilter={() => syncState(1, 'ALL', 'ALL')} />
@@ -100,6 +128,7 @@ function MyPostList({ page, filter, postType, onPage, onReload, onResetFilter })
 
   async function afterDelete() {
     setPostToDelete(null); setNotice('Đã ẩn bài đăng.');
+    window.dispatchEvent(new Event('sagasu-counts-changed'));
     try {
       const data = await getMyPosts(page, filter, postType);
       if (!data.content.length && page > 1) onPage(page - 1);

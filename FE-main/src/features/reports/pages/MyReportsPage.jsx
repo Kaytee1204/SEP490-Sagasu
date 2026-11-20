@@ -18,6 +18,23 @@ function MyReports() {
   const [type, setType] = useState('ALL');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [statusCounts, setStatusCounts] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const keys = ['ALL', ...Object.keys(statuses)];
+    Promise.allSettled(keys.map((key) => getMyReports(1, key, type))).then((settled) => {
+      if (cancelled) return;
+      const next = {};
+      keys.forEach((key, idx) => {
+        const item = settled[idx];
+        next[key] = item?.status === 'fulfilled' ? Number(item.value?.totalElements ?? 0) : 0;
+      });
+      setStatusCounts(next);
+    });
+    return () => { cancelled = true; };
+  }, [type]);
+
   useEffect(() => {
     let cancelled = false;
     setResult(null);
@@ -51,9 +68,17 @@ function MyReports() {
       <div className="reports-status-row">
       <span className="reports-filter-label">Trạng thái</span>
       <div className="claims-filters" role="group" aria-label="Trạng thái báo cáo">
-        {Object.entries({ALL:'Tất cả', ...statuses}).map(([value, label]) =>
-          <button type="button" key={value} className={`chip ${status === value ? 'active' : ''}`} aria-pressed={status === value}
-            onClick={() => { setStatus(value); setPage(1); }}>{label}</button>)}
+        {Object.entries({ALL:'Tất cả', ...statuses}).map(([value, label]) => {
+          const count = statusCounts[value];
+          const isPending = (value === 'OPEN' || value === 'IN_REVIEW') && typeof count === 'number' && count > 0;
+          return <button type="button" key={value} className={`chip ${status === value ? 'active' : ''}`} aria-pressed={status === value}
+            onClick={() => { setStatus(value); setPage(1); }}>
+            <span>{label}</span>
+            {typeof count === 'number' && (
+              <span className={`reports-chip-count ${isPending ? 'is-pending' : ''}`}>{count}</span>
+            )}
+          </button>;
+        })}
       </div>
       </div>
     </div>

@@ -191,6 +191,7 @@ function PostComposer() {
   function validateDetails() {
     if (!formData.itemName.trim() || !formData.description.trim() || !formData.location.trim()
       || !formData.categoryId || !formData.date || !formData.time) return 'Vui lòng nhập đầy đủ thông tin.';
+    if (!images.length) return 'Vui lòng tải lên ít nhất 1 hình ảnh cho bài đăng.';
     const timestamp = new Date(`${formData.date}T${formData.time}:00+07:00`).getTime();
     if (!Number.isFinite(timestamp) || timestamp > Date.now()) return 'Thời gian xảy ra không được ở tương lai (giờ Việt Nam).';
     if (!categories?.some(category => String(category.id) === formData.categoryId)) return 'Vui lòng chọn danh mục hợp lệ.';

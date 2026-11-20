@@ -22,6 +22,10 @@
 .my-posts-filters > button > svg { flex-shrink: 0; }
 .my-posts-filters > button:hover { color: #286957; background: #f0f7f3; }
 .my-posts-filters > button.active { background: #216f61; border-color: #216f61; color: #fff; box-shadow: 0 2px 5px #173c350d; }
+.my-posts-tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 19px; padding: 0 6px; border-radius: 999px; background: rgba(33, 111, 97, 0.1); color: #2b5c4f; font-size: .71rem; font-weight: 700; line-height: 1; }
+.my-posts-tab-count.is-pending { background: #fef3c7; color: #b45309; }
+.my-posts-filters > button.active .my-posts-tab-count { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.my-post-type-tabs > button.active .my-posts-tab-count { background: rgba(33, 111, 86, 0.12); color: inherit; }
 .my-posts-results-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .my-posts-results-heading h2 { margin: 0; color: #476759; font-size: .88rem; font-weight: 650; }
 .my-posts-results-heading > span { display: inline-flex; align-items: center; gap: 6px; color: #6c8176; font-size: .73rem; }

@@ -140,26 +140,20 @@ class PostCreationServiceTest {
         assertTrue(saved.getImages().get(1).getStorageKey().matches("posts/7/[0-9a-f\\-]+\\.jpg"));
     }
 
-    // UTC019 - createLost with no images creates post with zero images
+    // UTC019 - createLost with no images throws BAD_REQUEST because at least 1 image is required
     @Test
-    void createLost_whenNoImages_createsPostWithZeroImages() {
+    void createLost_whenNoImages_throwsBadRequest() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost keys", "Silver", 3L, "Hall B",
                 OffsetDateTime.now().minusHours(5), null);
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
         when(validator.validate(List.of())).thenReturn(List.of());
-        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
-        when(categories.findActiveForPostCreation(3L)).thenReturn(Optional.of(category));
-        when(posts.saveAndFlush(any(Post.class))).thenAnswer(inv -> {
-            Post p = inv.getArgument(0);
-            ReflectionTestUtils.setField(p, "id", 101L);
-            return p;
-        });
 
-        CreatedPostDto result = service.createLost(request, List.of(), user);
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createLost(request, List.of(), user));
 
-        assertEquals(101L, result.id());
-        verifyNoInteractions(storage);
+        assertEquals(ErrorCode.BAD_REQUEST, ex.getErrorCode());
+        verifyNoInteractions(storage, posts);
     }
 
     // UTC020 - createLost throws when selected category is inactive without uploading images
@@ -258,7 +252,9 @@ class PostCreationServiceTest {
                 null, "Lost phone", "Blue", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), "  Serial ABC123  ");
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
-        when(validator.validate(any())).thenReturn(List.of());
+        when(validator.validate(any())).thenReturn(List.of(
+                new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 100, 100, "h1")
+        ));
         when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
         when(categories.findActiveForPostCreation(3L)).thenReturn(Optional.of(category));
         when(posts.saveAndFlush(any(Post.class))).thenAnswer(inv -> {
@@ -331,7 +327,9 @@ class PostCreationServiceTest {
                 .thenReturn(List.of(), List.of());
         doNothing().when(jdbc).query(anyString(), any(RowCallbackHandler.class), eq("7:" + reqId));
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
-        when(validator.validate(any())).thenReturn(List.of());
+        when(validator.validate(any())).thenReturn(List.of(
+                new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 100, 100, "h1")
+        ));
         when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
         when(categories.findActiveForPostCreation(3L)).thenReturn(Optional.of(category));
         when(posts.saveAndFlush(any(Post.class))).thenAnswer(inv -> {

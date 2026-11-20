@@ -261,6 +261,10 @@ public class AuthService {
 
         validateAccountObjectAndVerifyOtp(account, request.getOtp().trim(), OtpPurpose.CHANGE_PASSWORD);
 
+        if (passwordEncoder.matches(request.getNewPassword(), account.getPasswordHash())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
+
         account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         account.setMustChangePassword(false);
         account.setFailedLoginCount(0);
@@ -428,6 +432,10 @@ public class AuthService {
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
 
         validateAccountObjectAndVerifyOtp(account, request.getOtp().trim(), OtpPurpose.FORGOT_PASSWORD);
+
+        if (passwordEncoder.matches(request.getNewPassword(), account.getPasswordHash())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
 
         // DaiHV integration: reset credentials only unlocks automatic password-failure locks,
         // not an administrative suspension imposed while resolving a report.

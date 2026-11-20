@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bookmark, FileText, HandHelping, Flag, MessageCircle, Plus, LogOut, User, LayoutDashboard, ChevronDown, Menu, X, Home, Search } from 'lucide-react';
+import { Bookmark, FileText, HandHelping, Flag, MessageCircle, KeyRound, Plus, LogOut, User, LayoutDashboard, ChevronDown, Menu, X, Home, Search } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import SagasuLogo from '@/assets/Sagasu_logo_color.svg';
 import ChatBadgeLink from '@/features/chat/components/ChatBadgeLink';
@@ -42,6 +42,7 @@ function AvatarDropdown() {
 
   const menuItems = [
     { icon: User, label: 'Hồ sơ cá nhân', to: '/ho-so' },
+    { icon: KeyRound, label: 'Đổi mật khẩu', to: '/ho-so?action=password' },
     { icon: FileText, label: 'Bài đăng của tôi', to: '/bai-dang-cua-toi' },
     { icon: Bookmark, label: 'Bài đăng đã lưu', to: '/bai-dang-da-luu' },
     { icon: HandHelping, label: 'Yêu cầu nhận đồ', to: '/claim-cua-toi' },
@@ -193,7 +194,7 @@ function AvatarDropdown() {
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, user, isAdmin, isApprover, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isApprover, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const lastScrollYRef = useRef(0);
@@ -395,6 +396,14 @@ export default function Navbar() {
                     <span>Hồ sơ cá nhân</span>
                   </Link>
                   <Link
+                    to="/ho-so?action=password"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <KeyRound size={16} className="text-slate-400" />
+                    <span>Đổi mật khẩu</span>
+                  </Link>
+                  <Link
                     to="/bai-dang-cua-toi"
                     onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -402,16 +411,39 @@ export default function Navbar() {
                     <FileText size={16} className="text-slate-400" />
                     <span>Bài đăng của tôi</span>
                   </Link>
-                  <Link to="/claim-cua-toi" onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">
-                    <HandHelping size={16} className="text-slate-400" /><span>Yêu cầu nhận đồ</span>
+                  <Link
+                    to="/bai-dang-da-luu"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <Bookmark size={16} className="text-slate-400" />
+                    <span>Bài đăng đã lưu</span>
                   </Link>
-                  <Link to="/bai-dang-da-luu" onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">
-                    <Bookmark size={16} className="text-slate-400" /><span>Bài đăng đã lưu</span>
+                  <Link
+                    to="/claim-cua-toi"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <HandHelping size={16} className="text-slate-400" />
+                    <span>Yêu cầu nhận đồ</span>
                   </Link>
-                    <Link to="/bao-cao-cua-toi" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"><Flag size={16} className="text-slate-400" /><span>Báo cáo của tôi</span></Link>
-                    {isAdmin && (
+                  <Link
+                    to="/bao-cao-cua-toi"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <Flag size={16} className="text-slate-400" />
+                    <span>Báo cáo của tôi</span>
+                  </Link>
+                  <Link
+                    to="/tin-nhan"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <MessageCircle size={16} className="text-slate-400" />
+                    <span>Tin nhắn</span>
+                  </Link>
+                  {isAdmin && (
                     <Link
                       to="/admin"
                       onClick={() => setMobileMenuOpen(false)}

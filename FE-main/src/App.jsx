@@ -12,11 +12,12 @@ import MyPostsPage from '@/features/items/pages/MyPostsPage';
 import EditPostPage from '@/features/items/pages/EditPostPage';
 import ClaimItemPage from '@/features/items/pages/ClaimItemPage';
 import MyClaimsPage from '@/features/claims/pages/MyClaimsPage';
-import PostClaimsPage from '@/features/claims/components/PostClaimsRedirect';
+import PostClaimsPage from '@/features/claims/pages/PostClaimsPage';
 import ClaimDetailPage from '@/features/claims/pages/ClaimDetailPage';
 import LegacyClaimRedirect from '@/features/claims/components/LegacyClaimRedirect';
 import AdminLayout from '@/components/layouts/admin/AdminLayout';
 import MainLayout from '@/components/layouts/MainLayout';
+import AccountSidebarLayout from '@/components/layouts/AccountSidebarLayout';
 import PostAdministration from '@/features/office/pages/PostAdministration';
 import StaffPostDetail from '@/features/office/pages/StaffPostDetail';
 import StoragePage from '@/features/office/pages/StoragePage';
@@ -40,6 +41,7 @@ import CategoryManagementPage from '@/features/category/pages/CategoryManagement
 import ReceiptQueuePage from '@/features/approver/pages/ReceiptQueuePage';
 import IntakeFormPage from '@/features/approver/pages/IntakeFormPage';
 import IntakeDetailPage from '@/features/approver/pages/IntakeDetailPage';
+import ApproverNewsPage from '@/features/approver/pages/ApproverNewsPage';
 import ChatPage from '@/features/chat/pages/ChatPage';
 import MyReportsPage from '@/features/reports/pages/MyReportsPage';
 import ReportDetailPage from '@/features/reports/pages/ReportDetailPage';
@@ -95,25 +97,32 @@ function AppRoutes() {
 
       {/* ── CLIENT ROUTES (Navbar + Footer tự động từ MainLayout) ── */}
       <Route element={<MainLayout />}>
-        <Route path="/van-phong/claims" element={<ProtectedRoute><OfficeClaimList mine /></ProtectedRoute>} />
-        <Route path="/van-phong/chuyen-giao" element={<ProtectedRoute><OfficeTransfers mine /></ProtectedRoute>} />
-        <Route path="/van-phong/chuyen-giao/:id" element={<ProtectedRoute><OfficeTransferDetailPage mine /></ProtectedRoute>} />
-        <Route path="/van-phong/claims/:id" element={<ProtectedRoute><OfficeClaimDetail mine /></ProtectedRoute>} />
+        {/* ── ACCOUNT WORKSPACE ROUTES (Sidebar trái: Hồ sơ, Bài đăng, Đã lưu, Yêu cầu nhận đồ, Báo cáo, Tin nhắn) ── */}
+        <Route element={<ProtectedRoute><AccountSidebarLayout /></ProtectedRoute>}>
+          <Route path="/ho-so" element={<ProfilePage />} />
+          <Route path="/tin-dang-cua-toi" element={<MyPostsPage />} />
+          <Route path="/bai-dang-cua-toi" element={<MyPostsPage />} />
+          <Route path="/bai-dang-da-luu" element={<SavedPostsPage />} />
+          <Route path="/claim-cua-toi" element={<MyClaimsPage />} />
+          <Route path="/claims/:id" element={<LegacyClaimRedirect />} />
+          <Route path="/bai-dang/:postId/claims/:claimId" element={<ClaimDetailPage />} />
+          <Route path="/bai-dang/:id/claims" element={<PostClaimsPage />} />
+          <Route path="/van-phong/claims" element={<OfficeClaimList mine />} />
+          <Route path="/van-phong/claims/:id" element={<OfficeClaimDetail mine />} />
+          <Route path="/van-phong/chuyen-giao" element={<OfficeTransfers mine />} />
+          <Route path="/van-phong/chuyen-giao/:id" element={<OfficeTransferDetailPage mine />} />
+          <Route path="/bao-cao-cua-toi" element={<MyReportsPage />} />
+          <Route path="/bao-cao-trao-doi" element={<ReportExchangesPage />} />
+          <Route path="/ket-qua-bao-cao" element={<ReportExchangesPage resultsView />} />
+          <Route path="/bao-cao/:id" element={<ReportDetailPage />} />
+          <Route path="/tin-nhan" element={<ChatPage />} />
+          <Route path="/tin-nhan/:conversationId" element={<ChatPage />} />
+        </Route>
+
         <Route path="/van-phong/xac-minh/:id" element={<ProtectedRoute><OfficeClaimForm /></ProtectedRoute>} />
-        <Route path="/tin-nhan" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-        <Route path="/tin-nhan/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-        <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
-        <Route path="/bao-cao-cua-toi" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
-        <Route path="/bao-cao-trao-doi" element={<ProtectedRoute><ReportExchangesPage /></ProtectedRoute>} />
-        <Route path="/ket-qua-bao-cao" element={<ProtectedRoute><ReportExchangesPage resultsView /></ProtectedRoute>} />
-        <Route path="/bao-cao/:id" element={<ProtectedRoute><ReportDetailPage /></ProtectedRoute>} />
-        <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />
-        <Route path="/bai-dang/:postId/claims/:claimId" element={<ProtectedRoute><ClaimDetailPage /></ProtectedRoute>} />
-        <Route path="/bai-dang/:id/claims" element={<ProtectedRoute><PostClaimsPage /></ProtectedRoute>} />
         <Route path="/sua-tin/:id" element={<ProtectedRoute><EditPostPage /></ProtectedRoute>} />
         <Route path="/" element={<RootHomeRoute />} />
         <Route path="/tim-kiem" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
-        <Route path="/bai-dang-da-luu" element={<ProtectedRoute><SavedPostsPage /></ProtectedRoute>} />
         <Route path="/chi-tiet/:id" element={<ProtectedRoute><ItemDetailPage /></ProtectedRoute>} />
 
         <Route
@@ -145,30 +154,6 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <ClaimItemPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/ho-so"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/tin-dang-cua-toi"
-          element={
-            <ProtectedRoute>
-              <MyPostsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/bai-dang-cua-toi"
-          element={
-            <ProtectedRoute>
-              <MyPostsPage />
             </ProtectedRoute>
           }
         />
@@ -215,6 +200,7 @@ function AppRoutes() {
         <Route path="receipts/new" element={<IntakeFormPage />} />
         <Route path="receipts/:id/edit" element={<IntakeFormPage />} />
         <Route path="receipts/:id" element={<IntakeDetailPage />} />
+        <Route path="news" element={<ApproverNewsPage />} />
       </Route>
       <Route path="/dashboard" element={<Navigate to={postLoginRedirect} replace />} />
       <Route path="/quan-tri" element={<Navigate to="/admin" replace />} />

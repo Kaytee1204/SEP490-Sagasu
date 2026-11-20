@@ -69,6 +69,10 @@
 .reports-heading p { color:#6a8388; font-size:.9rem; }
 .reports-dashboard .reports-toolbar { background:#fff; border:1px solid #d7e5e3; border-radius:16px; padding:16px; }
 .reports-dashboard .claims-filters { display:flex; flex-wrap:wrap; gap:8px; }
+.reports-dashboard .claims-filters .chip { display:inline-flex; align-items:center; gap:7px; }
+.reports-chip-count { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:19px; padding:0 6px; border-radius:999px; background:rgba(28, 112, 112, 0.11); color:#1f5858; font-size:.72rem; font-weight:700; line-height:1; }
+.reports-chip-count.is-pending { background:#fef3c7; color:#b45309; }
+.reports-dashboard .claims-filters .chip.active .reports-chip-count { background:rgba(255, 255, 255, 0.24); color:#ffffff; }
 .reports-page .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; font-size:.85rem; }
 .report-account-list { display:grid; gap:14px; margin-top:14px; }
 .report-account-group { background:#fff; border:1px solid #d7e5e3; border-radius:16px; overflow:hidden; }

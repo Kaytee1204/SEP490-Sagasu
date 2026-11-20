@@ -1,4 +1,4 @@
-import { ShieldCheck } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import SmartMatchHero from '../components/SmartMatchHero';
 import SmartMatchCard from '../components/SmartMatchCard';
 import SmartMatchHelpCard from '../components/SmartMatchHelpCard';
@@ -44,44 +44,70 @@ export default function SmartMatchPage() {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       <main style={{ flex: 1, background: 'var(--bg-canvas)' }}>
-        {/* ── SUCCESS HERO ── */}
         <SmartMatchHero postedItem={POSTED_ITEM} />
 
-        {/* ── AI MATCH RESULTS ── */}
-        <div className="container" style={{ padding: '60px var(--space-6) 100px' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '28px' }}>
+        <div className="container" style={{ padding: '48px var(--space-6) 88px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <ShieldCheck size={28} style={{ color: 'var(--status-found)' }} />
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: '12px',
+                  background: '#eff6ff',
+                  color: '#2563eb',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                <Trophy size={20} />
+              </div>
               <div>
-                <h2 className="text-heading" style={{ margin: 0 }}>Gợi ý thông minh (AI Ranking)</h2>
-                <div style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-                  Đã tìm thấy <strong style={{ color: 'var(--text-primary)' }}>{AI_MATCHES.length} kết quả</strong> được phân màu theo thứ hạng Top 1 – Top 2 – Top 3.
+                <h2 className="text-heading" style={{ margin: 0, fontSize: '1.2rem' }}>Bảng xếp hạng kết quả tìm kiếm</h2>
+                <div style={{ fontSize: '0.86rem', color: '#64748b', marginTop: '2px' }}>
+                  Tìm thấy <strong style={{ color: '#2563eb' }}>{AI_MATCHES.length}</strong> bài đăng FOUND phù hợp nhất được sắp xếp theo mức độ tương đồng.
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '0.75rem', fontWeight: 700 }}>
-              <span style={{ padding: '4px 10px', borderRadius: 999, background: '#fef3c7', color: '#b45309', border: '1px solid #f59e0b' }}>
-                Top 1: Vàng Hoàng Kim
+            <div
+              style={{
+                display: 'inline-flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '16px',
+                padding: '9px 16px',
+                borderRadius: '10px',
+                background: '#f8fafc',
+                border: '1px solid #eef2f6',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: '#334155',
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308' }} /> Top 1 (Vàng)
               </span>
-              <span style={{ padding: '4px 10px', borderRadius: 999, background: '#e0e7ff', color: '#3730a3', border: '1px solid #818cf8' }}>
-                Top 2: Tím Indigo
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1' }} /> Top 2 (Tím)
               </span>
-              <span style={{ padding: '4px 10px', borderRadius: 999, background: '#ffedd5', color: '#c2410c', border: '1px solid #fb923c' }}>
-                Top 3: Đồng Ánh Cam
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f97316' }} /> Top 3 (Cam)
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8' }} /> Top 4+
               </span>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: '20px' }}>
             {AI_MATCHES.map((item, i) => (
-              <div key={item.id} style={{ animationDelay: `${i * 0.1}s` }}>
+              <div key={item.id} style={{ animationDelay: `${i * 0.08}s` }}>
                 <SmartMatchCard item={item} rank={i + 1} />
               </div>
             ))}
           </div>
 
-          {/* Help notice if not found */}
           <SmartMatchHelpCard />
         </div>
       </main>

@@ -74,6 +74,7 @@ public class SecurityConfig {
                         // DaiHV: token-only intake appointment responses, without exposing other office APIs.
                         .requestMatchers(HttpMethod.POST, "/api/office-intake-invitations/preview", "/api/office-intake-invitations/respond").permitAll()
                         .requestMatchers(HttpMethod.GET, "/ws/chat").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/news", "/api/news/**").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/accounts/import/template",

@@ -188,6 +188,11 @@ public class AccountService {
                     throw new AppException(ErrorCode.INVALID_CREDENTIALS, "Mật khẩu hiện tại không chính xác");
                 }
             }
+            if (passwordEncoder.matches(trimmedPass, actor.getPasswordHash())
+                    || (StringUtils.hasText(request.getCurrentPassword())
+                    && trimmedPass.equals(request.getCurrentPassword().trim()))) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
+            }
             actor.setPasswordHash(passwordEncoder.encode(trimmedPass));
             actor.setMustChangePassword(false);
         }
