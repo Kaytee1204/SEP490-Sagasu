@@ -28,6 +28,7 @@ public class ClaimService {
     private static final Set<String> ACTIVE_STATUSES = Set.of("PENDING", "APPROVED");
     private static final Set<String> RETRYABLE_STATUSES = Set.of("REJECTED", "CANCELLED");
     private final ClaimRepository claims;
+    private final P2pClaimAppealService appeals;
     private final ClaimDailyLimit dailyLimit;
     private final ClaimActivityRepository activities;
     private final PostRepository posts;
@@ -248,6 +249,9 @@ public class ClaimService {
         if (!routing.matches(claim, Set.of("OPEN")) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
         if ("APPROVED".equals(request.decision())) {
             if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) throw stateChanged();
+            if (appeals.hasUnresolvedAppeal(post.getId())) {
+                throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Vui lòng chờ kết quả kháng cáo trước khi chấp thuận người nhận.");
+            }
             post.reserveForClaim();
         }
         claim.review(request.decision());
@@ -256,11 +260,13 @@ public class ClaimService {
                 "APPROVED".equals(request.decision()) ? "APPROVE" : "REJECT", "PENDING", request.reason()));
         claims.flush();
         if ("APPROVED".equals(request.decision())) {
+            var deadline = appeals.open(claim);
             notifications.notifyUser(
                     claim.getClaimant().getId(),
                     "CLAIM_APPROVED",
                     "Yêu cầu nhận đồ #" + claim.getId() + " đã được chấp nhận",
-                    "Chủ bài đăng \"" + post.getTitle() + "\" đã chấp nhận yêu cầu nhận đồ của bạn. Bạn có thể nhắn tin trao đổi trực tiếp để hẹn nhận lại đồ.",
+                    "Chủ bài đăng \"" + post.getTitle() + "\" đã chấp nhận yêu cầu nhận đồ của bạn. Bạn có thể nhắn tin trao đổi trực tiếp."
+                            + (deadline == null ? "" : " Hãy chờ hết thời hạn kháng cáo 24 giờ và chờ xử lý mọi kháng cáo trước khi giao đồ."),
                     "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
                     true
             );
@@ -289,10 +295,16 @@ public class ClaimService {
                 || request.reason().length() > 2000) throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
         requireVersion(claim, request.expectedVersion());
         if (!revocable(claim)) throw stateChanged();
+        var window = appeals.handoverWindow(claim);
+        if (window != null && window.state() == P2pClaimAppealService.State.REVIEW_REQUIRED
+                && !Boolean.TRUE.equals(request.custodyConfirmed())) {
+            throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Vui lòng xác nhận bạn vẫn đang giữ món đồ.");
+        }
         claim.review("PENDING");
         post.reopenAfterClaimCancellation();
         activities.save(new ClaimActivity(claim, actor, "REVOKE_APPROVAL", "APPROVED", request.reason()));
         claims.flush();
+        appeals.reopen(claim);
         chatConversations.notifyChanged(claim);
         notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_APPROVAL_REVOKED",
                 "Đã thu hồi chấp thuận yêu cầu nhận đồ #" + claim.getId(),
@@ -307,57 +319,8 @@ public class ClaimService {
                 && routing.matches(claim, Set.of("RESERVED")) && !handovers.existsByClaimId(claim.getId())
                 && !Boolean.TRUE.equals(entityManager.createNativeQuery(
                     "select exists(select 1 from report_hold where post_id=:postId and released_at is null)")
-                    .setParameter("postId", claim.getPost().getId()).getSingleResult());
-    }
-
-    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
-    public ClaimComparisonDto comparison(long postId, int page, int size, String status, CustomUserDetails user) {
-        Account actor = activeActor(user);
-        Post post = post(postId);
-        if (!Objects.equals(post.getAccount().getId(), actor.getId())
-                || !"FOUND".equals(post.getPostType()) || !"P2P".equals(post.getCustodyMode())) throw missing();
-        if (!Set.of("ALL", "PENDING", "APPROVED").contains(Objects.toString(status, "")))
-            throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
-        if (size > 10) throw new AppException(ErrorCode.POST_PAGINATION_INVALID);
-        var paging = pageable(page, size);
-        String where = " from Claim c where c.post.id=:postId and c.claimType='P2P'"
-                + " and c.status in ('PENDING','APPROVED') and (:status='ALL' or c.status=:status)";
-        var candidates = entityManager.createQuery("select c" + where.replace(" from Claim c where", " from Claim c join fetch c.claimant where"), Claim.class)
-                .setParameter("postId", postId).setParameter("status", status)
-                .getResultList();
-        long total = candidates.size();
-        if (candidates.isEmpty() || paging.getOffset() >= total) return new ClaimComparisonDto(List.of(), page, size, total, (int) Math.ceil((double) total / size));
-        // Score the whole item's queue before pagination. Fetch images only for the selected page.
-        var allAnswers = entityManager.createQuery("select a from ClaimAnswer a join fetch a.question q join fetch q.template where a.claim.id in :ids order by a.sortOrder, a.id", ClaimAnswer.class)
-                .setParameter("ids", candidates.stream().map(Claim::getId).toList()).getResultList();
-        var answers = allAnswers.stream()
-                .collect(java.util.stream.Collectors.groupingBy(a -> a.getClaim().getId()));
-        var templateIds = allAnswers.stream().map(a -> a.getQuestion().getTemplate().getId()).distinct().toList();
-        var definitions = templateIds.isEmpty() ? List.<ClaimQuestion>of() : entityManager.createQuery(
-                "select q from ClaimQuestion q join fetch q.template where q.template.id in :ids order by q.sortOrder, q.id", ClaimQuestion.class)
-                .setParameter("ids", templateIds).getResultList();
-        Map<Long, ClaimComparisonDto.Completion> completeness = new HashMap<>();
-        for (var claim : candidates) {
-            var claimAnswers = answers.getOrDefault(claim.getId(), List.of());
-            var originalTemplates = claimAnswers.stream().map(a -> a.getQuestion().getTemplate().getId()).collect(java.util.stream.Collectors.toSet());
-            completeness.put(claim.getId(), ClaimReviewCompleteness.calculate(claim.getDescription(), claimAnswers,
-                    definitions.stream().filter(q -> originalTemplates.contains(q.getTemplate().getId())).toList()));
-        }
-        var entries = candidates.stream().sorted(ClaimReviewCompleteness.order(completeness))
-                .skip(paging.getOffset()).limit(size).toList();
-        var ids = entries.stream().map(Claim::getId).toList();
-        var images = entityManager.createQuery("select e from ClaimEvidence e where e.claim.id in :ids order by e.sortOrder, e.id", ClaimEvidence.class)
-                .setParameter("ids", ids).getResultList().stream()
-                .collect(java.util.stream.Collectors.groupingBy(e -> e.getClaim().getId()));
-        var content = entries.stream().map(c -> new ClaimComparisonDto.Entry(c.getId(), postId, name(c.getClaimant()),
-                c.getStatus(), c.getCreatedAt(), c.getDescription(),
-                answers.getOrDefault(c.getId(), List.of()).stream().map(a -> new ClaimComparisonDto.Answer(
-                    a.getQuestionCode(), a.getQuestionLabel(), a.getAnswerText(),
-                    a.getTemplateCode(), a.getTemplateVersion(), a.getQuestion().isRequired(), a.getSortOrder())).toList(),
-                images.getOrDefault(c.getId(), List.of()).stream().map(e -> new ClaimDetailDto.EvidenceDto(
-                    e.getId(), storage.readUrl(e.getStorageKey(), null), e.getOriginalName(), e.getMimeType(), e.getSizeBytes())).toList(),
-                completeness.get(c.getId()))).toList();
-        return new ClaimComparisonDto(content, page, size, total, (int) Math.ceil((double) total / size));
+                    .setParameter("postId", claim.getPost().getId()).getSingleResult())
+                && !appeals.hasUnresolvedAppeal(claim.getPost().getId());
     }
 
     @Transactional
@@ -380,6 +343,7 @@ public class ClaimService {
         if ("APPROVED".equals(previous) && "RESERVED".equals(post.getStatus())
                 && !claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) {
             post.reopenAfterClaimCancellation();
+            appeals.reopen(claim);
         }
         notifications.notifyUser(
                 post.getAccount().getId(),

@@ -36,10 +36,11 @@ public class ReportService {
     public record Activity(String action,String status,String note,OffsetDateTime at) {}
     public record Detail(long id,String kind,String targetType,long targetId,String description,String status,
             String resolutionNote,OffsetDateTime createdAt,List<Evidence> evidence,List<Activity> activities,String targetLabel,
-            String reasonCode,String reasonLabel,TargetAccount targetAccount) {
+            String reasonCode,String reasonLabel,TargetAccount targetAccount,String reportType) {
         public Detail(long id,String kind,String targetType,long targetId,String description,String status,
                 String resolutionNote,OffsetDateTime createdAt,List<Evidence> evidence,List<Activity> activities,String targetLabel) {
-            this(id,kind,targetType,targetId,description,status,resolutionNote,createdAt,evidence,activities,targetLabel,null,null,null);
+            this(id,kind,targetType,targetId,description,status,resolutionNote,createdAt,evidence,activities,targetLabel,null,null,null,
+                    "HANDOVER_ISSUE".equals(kind)?kind:targetType);
         }
     }
     public record TargetAccount(Long id,String name) {}
@@ -126,7 +127,7 @@ public class ReportService {
     public Page mine(int page,String status,String type,CustomUserDetails user) {
         long actor=actors.actor(user).getId();
         if(page<1 || page>1000000 || !Set.of("ALL","OPEN","IN_REVIEW","RESOLVED","REJECTED").contains(Objects.toString(status,""))
-                || !Set.of("ALL","POST","USER","CLAIM","MESSAGE","HANDOVER_ISSUE").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
+                || !Set.of("ALL","POST","USER","CLAIM","MESSAGE","HANDOVER_ISSUE","CLAIM_APPEAL").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
         var paging=PageRequest.of(page-1,12);
         var result=reports.findMine(actor,status,type,paging);
         return new Page(result.stream().map(this::detail).toList(),result.getTotalPages(),result.getTotalElements());
@@ -156,7 +157,14 @@ public class ReportService {
     public Detail detail(Report report) {
         var evidence=jdbc.query("select * from report_evidence where report_id=? order by sort_order",(rs,n)->new Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),report.getId());
         var activities=jdbc.query("select action,to_status,public_note,created_at from report_activity where report_id=? and (public_note is not null or action='CREATE') order by activity_id",(rs,n)->new Activity(rs.getString(1),rs.getString(2),rs.getString(3),rs.getObject(4,OffsetDateTime.class)),report.getId());
-        return new Detail(report.getId(),report.getKind(),report.targetType(),report.targetId(),report.additionalDescription(),report.getStatus(),report.getResolutionNote(),report.getCreatedAt(),evidence,activities,targetLabel(report),report.getReasonCode(),report.getReasonLabelSnapshot(),targetAccount(report));
+        return new Detail(report.getId(),report.getKind(),report.targetType(),report.targetId(),report.additionalDescription(),report.getStatus(),report.getResolutionNote(),report.getCreatedAt(),evidence,activities,targetLabel(report),report.getReasonCode(),report.getReasonLabelSnapshot(),targetAccount(report),reportType(report));
+    }
+
+    private String reportType(Report report) {
+        if (!"HANDOVER_ISSUE".equals(report.getKind())) return report.targetType();
+        boolean appeal = Boolean.TRUE.equals(jdbc.queryForObject(
+                "select exists(select 1 from p2p_claim_appeal where report_id=?)", Boolean.class, report.getId()));
+        return appeal ? "CLAIM_APPEAL" : "HANDOVER_ISSUE";
     }
     private TargetAccount targetAccount(Report report) {
         String sql = switch (report.targetType()) {

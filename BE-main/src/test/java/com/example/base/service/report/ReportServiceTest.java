@@ -374,6 +374,19 @@ class ReportServiceTest {
     }
 
     @Test
+    void mine_labelsLinkedAppealWithItsOwnReportType() {
+        Report report = withId(new Report(7L, "HANDOVER_ISSUE", "CLAIM", 10L, "x", reqId, "h"), 5L);
+        when(reports.findMine(eq(7L), eq("ALL"), eq("CLAIM_APPEAL"), any()))
+                .thenReturn(new PageImpl<>(List.of(report)));
+        when(jdbc.queryForObject(contains("from p2p_claim_appeal"), eq(Boolean.class), eq(5L))).thenReturn(true);
+
+        var detail = service.mine(1, "ALL", "CLAIM_APPEAL", user).content().getFirst();
+
+        assertThat(detail.reportType()).isEqualTo("CLAIM_APPEAL");
+        assertThat(detail.kind()).isEqualTo("HANDOVER_ISSUE");
+    }
+
+    @Test
     void utc129_reasonOptions_handoverIssueOnPost_invalid() {
         Post p0 = post("VISIBLE", 99L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
         assertCode(() -> service.reasonOptions("POST", 10L, true, user), ErrorCode.WORKFLOW_INPUT_INVALID);

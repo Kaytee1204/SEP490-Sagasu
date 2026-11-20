@@ -1,5 +1,5 @@
 import '@/styles/Workspace.css';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, ClipboardCheck, XCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -7,6 +7,7 @@ import { getPostDetail } from '@/features/items/api/postApi';
 import { getClaimOnPost, reviewClaim, cancelClaim } from '../api/claimApi';
 import { evidenceUrl, validClaimId, postClaimsPath } from '../utils/claimUtils';
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
+import ClaimAppealPanel from '../components/ClaimAppealPanel';
 import { ClaimActivityTimeline, ClaimDetailSummary, ClaimParticipantPanel, ClaimStatusPanel, ClaimVerificationPanel } from '../components/ClaimDetailPanels';
 import RejectClaimDialog from '../components/RejectClaimDialog';
 import CancelClaimDialog from '../components/CancelClaimDialog';
@@ -15,6 +16,7 @@ import ApproveClaimDialog from '../components/ApproveClaimDialog';
 import ReportButton from '@/features/reports/components/ReportButton';
 import HandoverPanel from '@/features/handover/components/HandoverPanel';
 import { useChat } from '@/features/chat/hooks/useChat';
+import { useNotifications } from '@/features/notifications/NotificationProvider';
 import '../styles/Claims.css';
 import './ClaimDetailPage.css';
 
@@ -27,6 +29,8 @@ export default function ClaimDetailPage() {
 
 function ClaimDetail({ postId, id }) {
   const {revision}=useChat();
+  const { items } = useNotifications();
+  const claimNotification = items.find(item => item.targetUrl === `/bai-dang/${postId}/claims/${id}`)?.id;
   const { user } = useAuth();
   const location = useLocation();
   const [claim, setClaim] = useState(null);
@@ -43,6 +47,9 @@ function ClaimDetail({ postId, id }) {
   const [revokeOpen, setRevokeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
+  const refreshClaim = useCallback(() => {
+    return getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
+  }, [postId, id]);
   const [focusRevision,setFocusRevision]=useState(0);
   useEffect(()=>{
     const refetch=()=>{if(document.visibilityState==='visible')setFocusRevision(value=>value+1);};
@@ -63,10 +70,14 @@ function ClaimDetail({ postId, id }) {
     getClaimOnPost(postId, id).then(data => { if (!cancelled) { setClaim(data); setError(''); } })
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [postId, id,revision,focusRevision]);
+  }, [postId, id,revision,focusRevision,claimNotification]);
+  const loadedClaimId = claim?.id;
+  const canRevokeApproval = claim?.canRevokeApproval;
   useEffect(() => {
-    if (claim && location.hash === '#handover') document.getElementById('handover')?.scrollIntoView({ block: 'start' });
-  }, [claim?.id, location.hash]);
+    if (!loadedClaimId || !['#handover', '#review-approval'].includes(location.hash)) return;
+    const section = location.hash === '#review-approval' && canRevokeApproval ? 'review-approval' : 'handover';
+    document.getElementById(section)?.scrollIntoView({ block: 'start' });
+  }, [loadedClaimId, location.hash, canRevokeApproval]);
   async function act(action, reviewDecision = decision) {
     if (inFlight.current) return;
     if (action === 'review' && !reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; }
@@ -84,6 +95,7 @@ function ClaimDetail({ postId, id }) {
     ? returnTo : claim?.claimType === 'OFFICE' ? `/claim-cua-toi?view=${String(user?.id) === String(claim.claimantId) ? 'sent' : 'office'}`
       : postClaimsPath(postId, 'ALL', String(user?.id) === String(claim?.claimantId) ? 'sent' : 'received');
   const showHandover = claim?.claimType === 'P2P' && ['APPROVED', 'COMPLETED'].includes(claim.status);
+  const isClaimant = claim && String(user?.id) === String(claim.claimantId);
   return <main className="container claims-page claim-detail-page">
     <nav className="claim-detail-navigation" aria-label="Điều hướng yêu cầu nhận đồ">
       <Link to={listPath}><ArrowLeft size={17} aria-hidden="true" />Về danh sách yêu cầu</Link><span>Chi tiết yêu cầu nhận đồ</span>
@@ -95,7 +107,10 @@ function ClaimDetail({ postId, id }) {
       <ClaimDetailSummary claim={claim} post={post} />
       <div className="claim-detail-layout">
         <div className="claim-detail-main">
-          {showHandover ? <HandoverPanel claim={claim} onChanged={()=>getClaimOnPost(postId,id).then(setClaim).catch(e=>setError(e.message))}/> : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} />}
+          {showHandover ? <HandoverPanel claim={claim} onChanged={refreshClaim} showSubmission={isClaimant} />
+            : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} showProgress={isClaimant && claim.claimType === 'P2P'} />}
+          {claim.claimType === 'P2P' && claim.status === 'PENDING' && isClaimant &&
+            <ClaimAppealPanel claim={claim} focusRevision={focusRevision} notificationId={claimNotification} />}
           {claim.claimType === 'OFFICE' && <p className="claim-detail-office-note">Món đồ do văn phòng tiếp nhận lưu giữ. Hồ sơ và việc nhận đồ được xử lý qua bên tiếp nhận.</p>}
           <ClaimVerificationPanel claim={claim} onPreviewImage={setPreviewImageId} />
         </div>
@@ -111,7 +126,7 @@ function ClaimDetail({ postId, id }) {
           <button type="button" className="btn btn-ghost claim-detail-reject" disabled={busy} onClick={() => setRejectOpen(true)}><XCircle size={18} aria-hidden="true" />Từ chối yêu cầu</button>
         </div> : <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu kết quả xét duyệt'}</button>}
       </form>}
-      {claim.canRevokeApproval && <section className="claim-panel claim-detail-review">
+      {canRevokeApproval && <section id="review-approval" className="claim-panel claim-detail-review">
         <h2>Xét duyệt lại người nhận</h2><p>Thu hồi chấp thuận nếu cần kiểm tra lại căn cứ trước khi giao đồ.</p>
         <button type="button" className="btn btn-ghost" onClick={() => setRevokeOpen(true)}>Thu hồi chấp thuận</button>
       </section>}

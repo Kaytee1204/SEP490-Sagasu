@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ArrowUpRight, Building2, ChevronDown, Clock3, Filter, History, Inbox, Send, UserRound, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import ClaimEvidenceComparison from '../components/ClaimEvidenceComparison';
 import Pagination from '@/components/common/Pagination';
 import { getGroupedClaims } from '../api/claimApi';
 import { CLAIM_STATUS, claimDate, validClaimId, claimDetailPath, evidenceUrl } from '../utils/claimUtils';
@@ -159,7 +158,7 @@ function ClaimRow({ claim, incoming, showPost = false }) {
 function ClaimRows({ claims, incoming, collapseHistory = true, latestOnly = false, showPost = false }) {
   const sorted = [...claims].sort((a, b) => (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || b.id - a.id);
   const active = latestOnly ? sorted.slice(0, 1) : sorted.filter(c => !HISTORY_STATUSES.includes(c.status))
-    .sort((a, b) => Number(b.status === 'PENDING') - Number(a.status === 'PENDING'));
+    .sort((a, b) => Number(b.status === 'APPROVED') - Number(a.status === 'APPROVED'));
   const activeIds = new Set(active.map(c => c.id));
   const history = sorted.filter(c => !activeIds.has(c.id));
   if (!collapseHistory) return <div className="claim-row-list">{sorted.map(claim => <ClaimRow key={claim.id} claim={claim} incoming={incoming} showPost={showPost} />)}</div>;
@@ -177,7 +176,6 @@ function ClaimPostGroup({ group, incoming, status, expanded, onToggle }) {
   const pendingCount = visible.filter(claim => claim.status === 'PENDING').length;
   const latestClaim = visible[0];
   const listId = `claim-post-group-${group.postId}`;
-  const compare = incoming && ['ALL', 'PENDING', 'APPROVED'].includes(status) && visible.some(c => ['PENDING', 'APPROVED'].includes(c.status));
   return <article className={`claim-panel claim-post-group ${expanded ? 'is-expanded' : ''} ${incoming && pendingCount > 0 ? 'has-pending' : ''}`}>
     <button type="button" className="claim-group-toggle" aria-expanded={expanded} aria-controls={expanded ? listId : undefined} onClick={() => onToggle(!expanded)}>
       <ClaimPostThumbnail url={group.postThumbnailUrl} title={group.postTitle} />
@@ -191,8 +189,7 @@ function ClaimPostGroup({ group, incoming, status, expanded, onToggle }) {
     {expanded && <div id={listId} className="claim-group-expanded">
       <header className="claim-group-content-heading"><h3>{incoming ? 'Yêu cầu nhận đồ trên bài này' : 'Yêu cầu của bạn'}</h3>
         <Link className="claim-group-post-link" to={`/chi-tiet/${group.postId}`}>Xem bài đăng<ArrowUpRight size={15} aria-hidden="true" /></Link></header>
-      {compare && <ClaimEvidenceComparison key={`${group.postId}:${status}`} postId={group.postId} status={status} />}
-      <ClaimRows claims={compare ? visible.filter(c => !['PENDING', 'APPROVED'].includes(c.status)) : visible} incoming={incoming} collapseHistory={status === 'ALL'} latestOnly={!incoming} />
+      <ClaimRows claims={visible} incoming={incoming} collapseHistory={status === 'ALL'} latestOnly={!incoming} />
     </div>}
   </article>;
 }

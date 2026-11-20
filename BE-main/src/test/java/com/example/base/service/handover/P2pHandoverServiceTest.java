@@ -20,6 +20,7 @@ import com.example.base.security.CustomUserDetails;
 import com.example.base.service.chat.ChatAccessPolicy;
 import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.claim.ClaimRoutingPolicy;
+import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.report.ReportService;
 import com.example.base.service.report.WorkflowImages;
@@ -98,6 +99,9 @@ class P2pHandoverServiceTest {
         private PlatformTransactionManager transactions;
         @Mock
         private NotificationService notifications;
+
+        @Mock
+        private P2pClaimAppealService appeals;
 
         @InjectMocks
         private P2pHandoverService service;
@@ -185,6 +189,29 @@ class P2pHandoverServiceTest {
                 assertFalse(detail.canReportIssue());
                 assertTrue(detail.evidence().isEmpty());
                 assertNull(detail.issue());
+        }
+
+        @Test
+        void handoverIsBlockedWhileAppealsAreBeingReviewed() {
+                UUID requestId = UUID.randomUUID();
+                var window = new P2pClaimAppealService.HandoverWindow(
+                                OffsetDateTime.now().minusHours(1), P2pClaimAppealService.State.UNDER_REVIEW);
+                when(actors.actor(finderUser)).thenReturn(finder);
+                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
+                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
+                when(appeals.handoverWindow(approvedClaim)).thenReturn(window);
+                var prepared = new WorkflowImages.Prepared(List.of(), List.of(), "hash");
+                when(images.prepare(anyString(), eq(List.of()))).thenReturn(prepared);
+
+                var detail = service.detail(500L, finderUser);
+                assertFalse(detail.canRecord());
+                assertEquals(window, detail.appealWindow());
+
+                AppException failure = assertThrows(AppException.class, () -> service.record(500L,
+                                new P2pHandoverService.RecordRequest(null, 2L, requestId), List.of(), finderUser));
+
+                assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, failure.getErrorCode());
+                verify(images, org.mockito.Mockito.never()).upload(anyString(), any());
         }
 
         // UTC002 - detail: claimant viewing WAITING_CONFIRMATION gets canConfirm=true, canReportIssue=true & evidence

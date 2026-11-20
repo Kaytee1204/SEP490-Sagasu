@@ -23,8 +23,13 @@ export async function submitClaim(postId, request, images, retryId) {
 export const getGroupedClaims = (page = 1, status = 'ALL', sent = false, postId = null) =>
   data(apiClient.get(`/claims/grouped?${new URLSearchParams({page: String(page), size: '8', status, sent: String(sent), ...(postId ? { postId } : {})})}`));
 
-export const getClaimComparison = (postId, page = 1, status = 'ALL') => data(apiClient.get(
-  `/posts/${encodeURIComponent(postId)}/claims/comparison?${new URLSearchParams({ page: String(page), size: '5', status })}`));
-export const getClaimSummary = (postId, page = 1, status = 'ALL') => data(apiClient.post(
-  `/posts/${encodeURIComponent(postId)}/claims/summary?${new URLSearchParams({ page: String(page), size: '5', status })}`, {}));
 export const revokeClaimApproval = (id, request) => data(apiClient.post(`/claims/${encodeURIComponent(id)}/revoke-approval`, request));
+
+export const getClaimAppeal = id => data(apiClient.get(`/claims/${encodeURIComponent(id)}/appeal`));
+
+export function submitClaimAppeal(id, request, images) {
+  const form = new FormData();
+  form.append('data', new Blob([JSON.stringify(request)], { type: 'application/json' }));
+  images.forEach(image => form.append('images', image));
+  return data(apiClient.upload(`/claims/${encodeURIComponent(id)}/appeal`, form));
+}

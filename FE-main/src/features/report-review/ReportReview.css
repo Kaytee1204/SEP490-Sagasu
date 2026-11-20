@@ -590,12 +590,28 @@
 .exchange-controls { padding:18px 20px; border:1px solid #dae6de; background:#fff; border-radius:17px; margin-bottom:20px; }
 .exchange-controls-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid #e8eee9; font-weight:650; color:#3e6250; }
 .report-exchanges button { min-height:38px; padding:8px 12px; border-radius:9px; font-size:.78rem; }
-.exchange-filter-label { display:block; margin-bottom:7px; color:#647a69; font-size:.73rem; }
 .report-exchanges .rr-tabs { display:flex; flex-wrap:wrap; gap:7px; margin:0; padding:0; border:0; position:static; background:transparent; }
-.report-exchanges .rr-tabs button { border:1px solid #dce6de; color:#617968; }
-.report-exchanges .rr-tabs button.active { background:#216e55; border-color:#216e55; color:white; }
+.report-exchanges .rr-tabs > a { min-height:40px; padding:8px 12px; border:1px solid #d1e0d7; color:#3d604f; font-size:.78rem; font-weight:600; }
+.report-exchanges .rr-tabs > a:hover { background:#edf6f1; }
+.report-exchanges .rr-tabs > a[aria-current=page] { background:#216e55; border-color:#216e55; color:#fff; }
 .report-exchanges .exchange-list { gap:14px; }
 .report-exchanges .exchange-inquiry { padding:20px; border-color:#dce7de; }
+.exchange-report-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:start; gap:8px 14px; }
+.exchange-report-number, .exchange-report-date { color:#536c61; }
+.exchange-report-number { display:block; font-size:.73rem; margin-bottom:3px; }
+.exchange-report-meta { display:grid; gap:4px; margin:10px 0 0; }
+.exchange-report-meta > div { display:flex; flex-wrap:wrap; gap:2px 8px; }
+.exchange-report-meta dt { color:#536c61; }
+.exchange-report-meta dd { margin:0; font-weight:600; min-width:0; overflow-wrap:anywhere; }
+.exchange-report-date { display:block; margin-top:8px; }
+.exchange-report-note h3 { margin:0 0 5px; }
+.exchange-report-note p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.report-exchanges .exchange-report-note:last-child { margin-bottom:0; }
+.exchange-appeal-next { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; border-top:1px solid #dce7de; margin-top:14px; padding-top:14px; }
+.exchange-appeal-next > div { flex:1 1 280px; min-width:0; }
+.exchange-appeal-next h3 { margin:0 0 4px; }
+.exchange-appeal-next p { margin:0; color:#536c61; }
+.exchange-appeal-next .btn { gap:6px; }
 .report-exchanges h2 { font-size:1rem; margin:0; }
 .report-exchanges h3 { font-size:.88rem; }
 .report-exchanges small { font-size:.73rem; }

@@ -74,6 +74,7 @@
 .claim-detail-earlier-activity > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 12px; min-height: 40px; font-size: .75rem; color: #4b795d; cursor: pointer; list-style: none; }
 .claim-detail-earlier-activity > summary::-webkit-details-marker { display: none; }
 .claim-detail-page .claim-detail-review { gap: 14px; border-color: #bed9c9; }
+#review-approval { scroll-margin-top: 85px; }
 .claim-detail-review > p { margin: 0; font-size: .8rem; color: #768979; line-height: 1.65; }
 .claim-detail-review .claim-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 .claim-detail-review .btn { display: inline-flex; width: 100%; justify-content: center; font-size: .82rem; padding-inline: 10px; }
@@ -86,6 +87,7 @@
 .claim-detail-office-cancel { display: grid; gap: 10px; font-size: .8rem; }
 .claim-detail-office-cancel h2 { font-size: .9rem; }
 .claim-detail-page .claim-detail-state { display: flex; align-items: flex-start; gap: 14px; }
+.claim-detail-state-body { flex: 1; min-width: 0; }
 .claim-detail-state > svg { flex-shrink: 0; margin-top: 2px; color: #839886; }
 .claim-detail-state p { margin: 6px 0 0; font-size: .85rem; color: #718274; line-height: 1.7; }
 .claim-detail-state .btn { display: inline-flex; margin-top: 16px; }
@@ -121,3 +123,11 @@
   .claim-detail-page .claim-evidence { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 10px; }
   .claim-detail-state .btn { width: 100%; }
 }
+.claim-appeal-panel { display: grid; gap: 12px; }
+.claim-appeal-panel h2 { display: flex; align-items: center; gap: 8px; }
+.claim-appeal-panel > .btn, .claim-appeal-images .image-upload-control { justify-self: start; }
+.claim-appeal-disclosure summary { width: fit-content; color: #18665f; cursor: pointer; font-weight: 700; }
+.claim-appeal-disclosure form { margin-top: 14px; }
+.claim-appeal-images, .claim-appeal-file-list { display: grid; gap: 8px; }
+.claim-appeal-file-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
+.claim-appeal-file-list button { flex-shrink: 0; }

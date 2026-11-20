@@ -25,15 +25,6 @@
 .handover-heading-icon { display: grid; place-items: center; flex: 0 0 42px; height: 42px; border-radius: 12px; color: #31795f; background: #eaf6ee; }
 .handover-panel .handover-heading h2 { margin: 0; }
 .handover-heading p { margin: 3px 0 0; color: #7b8f7d; font-size: .78rem; }
-.handover-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0; margin: 24px 0; list-style: none; }
-.handover-steps li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; font-size: .73rem; line-height: 1.5; color: #697e69; }
-.handover-steps li:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: calc(50% + 20px); width: calc(100% - 30px); height: 1px; background: #e0e9df; }
-.handover-step-marker { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid #d7e2d5; border-radius: 50%; background: #f8fbf7; color: #94a491; font-size: .75rem; font-weight: 650; z-index: 1; }
-.handover-steps .is-done { color: #426c50; }
-.handover-steps .is-done .handover-step-marker { color: #fff; border-color: #408867; background: #408867; }
-.handover-steps li.is-done:not(:last-child)::after { background: #a9cdb1; }
-.handover-steps .is-current { color: #397e54; font-weight: 650; }
-.handover-steps .is-current .handover-step-marker { border: 2px solid #5d9c70; color: #397e54; background: #f5fbf4; box-shadow: 0 0 0 4px #eff7ed; }
 .handover-current-step { display: flex; align-items: flex-start; gap: 12px; padding: 18px; border: 1px solid #cfe1cd; border-radius: 13px; background: #f4faf1; }
 .handover-current-step > svg { flex-shrink: 0; margin-top: 2px; color: #629567; }
 .handover-current-content { min-width: 0; flex: 1; }
@@ -61,8 +52,6 @@
 .handover-issue-summary > p { margin: 7px 0; color: #9b8a69; font-size: .8rem; }
 @media(max-width:600px) {
   .handover-heading { align-items: flex-start; }
-  .handover-steps { gap: 6px; margin: 22px 0; }
-  .handover-steps li { font-size: .68rem; }
   .handover-current-step { padding: 14px; gap: 10px; }
   .handover-next-actions { flex-direction: column; }
   .handover-next-actions .btn { width: 100%; padding-inline: 10px; }

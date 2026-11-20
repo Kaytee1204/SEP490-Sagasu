@@ -158,16 +158,6 @@ public class ClaimController {
         return response(200, service.review(id, request, user));
     }
 
-    @GetMapping("/posts/{postId}/claims/comparison")
-    @Operation(summary = "[6.14] Chủ bài đăng đối chiếu căn cứ của các yêu cầu P2P đang xử lý",
-            description = "Chờ duyệt trước, sau đó tỷ lệ câu hỏi đã trả lời giảm dần; cùng tỷ lệ thì mới nhất trước. Tính cả câu tùy chọn theo bộ câu hỏi gốc và nhánh áp dụng, không tính ảnh. Mức độ hoàn thành không xác minh quyền sở hữu. Sắp xếp trước khi phân trang.")
-    public ResponseEntity<ApiResponse<ClaimComparisonDto>> comparison(
-            @PathVariable long postId, @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "5") int size, @RequestParam(defaultValue = "ALL") String status,
-            @AuthenticationPrincipal CustomUserDetails user) {
-        return response(200, service.comparison(postId, page, size, status, user));
-    }
-
     @PostMapping("/claims/{id}/revoke-approval")
     @Operation(summary = "[6.15] Thu hồi chấp thuận P2P trước khi ghi nhận giao đồ")
     public ResponseEntity<ApiResponse<ClaimResultDto>> revokeApproval(

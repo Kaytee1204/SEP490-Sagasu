@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, BadgeCheck, ChevronDown, CircleCheck, CircleX, Clock3, FileCheck2, History, Images, ListChecks, MapPin, Package, UserRound } from 'lucide-react';
-import { CLAIM_ACTION, CLAIM_STATUS, claimDate, evidenceUrl } from '../utils/claimUtils';
+import { CLAIM_ACTION, CLAIM_STATUS, P2P_CLAIM_STEPS, claimDate, evidenceUrl } from '../utils/claimUtils';
 import ClaimAnswerSummary from './ClaimAnswerSummary';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
+import WorkflowSteps from '@/components/common/WorkflowSteps';
 
 function PostCover({ url, title }) {
   const [failed, setFailed] = useState(false);
@@ -87,9 +88,13 @@ export function ClaimActivityTimeline({ activities = [] }) {
   </section>;
 }
 
-export function ClaimStatusPanel({ claim }) {
+export function ClaimStatusPanel({ claim, showProgress = false }) {
+  const waitingForAnotherClaim = showProgress && claim.status === 'PENDING' && claim.postStatus === 'RESERVED';
+  const pendingDescription = waitingForAnotherClaim
+    ? 'Một yêu cầu khác đã được chấp thuận. Bạn có thể theo dõi tình trạng hồ sơ của mình tại đây.'
+    : 'Người xét duyệt sẽ kiểm tra căn cứ của bạn và gửi thông báo khi có kết quả.';
   const copy = {
-    PENDING: [claim.canReview ? 'Yêu cầu đang chờ bạn xét duyệt' : 'Đang chờ xét duyệt', claim.canReview ? 'Đối chiếu các căn cứ bên dưới trước khi chấp thuận người nhận.' : 'Người xét duyệt sẽ kiểm tra căn cứ của bạn và gửi thông báo khi có kết quả.'],
+    PENDING: [claim.canReview ? 'Yêu cầu đang chờ bạn xét duyệt' : 'Đang chờ xét duyệt', claim.canReview ? 'Đối chiếu các căn cứ bên dưới trước khi chấp thuận người nhận.' : pendingDescription],
     APPROVED: ['Yêu cầu đã được chấp thuận', 'Theo dõi hướng dẫn của bên tiếp nhận để nhận lại món đồ.'],
     REJECTED: ['Yêu cầu chưa được chấp thuận', 'Xem lý do trong lịch sử xử lý để biết căn cứ cần làm rõ.'],
     CANCELLED: ['Yêu cầu đã được hủy', 'Nội dung, bằng chứng và lịch sử xử lý vẫn được lưu trong hồ sơ này.'],
@@ -97,9 +102,21 @@ export function ClaimStatusPanel({ claim }) {
     COMPLETED: ['Đã hoàn tất nhận đồ', 'Quá trình nhận đồ của yêu cầu này đã hoàn tất.'],
   };
   const [title, description] = copy[claim.status] || [CLAIM_STATUS[claim.status] || claim.status, 'Theo dõi kết quả xử lý trong hồ sơ này.'];
+  const ended = ['REJECTED', 'CANCELLED', 'CLOSED'].includes(claim.status);
+  const finalActivity = ended ? claim.activities?.findLast(event => event.toStatus === claim.status) : null;
+  const approvedBeforeEnding = finalActivity?.fromStatus === 'APPROVED';
+  const recordedBeforeEnding = approvedBeforeEnding && claim.activities.some(event => event.action === 'HANDOVER');
+  const completedSteps = recordedBeforeEnding ? 3 : approvedBeforeEnding ? 2 : 1;
+  const stepState = ended ? 'stopped' : waitingForAnotherClaim ? 'paused' : 'active';
   const StatusIcon = claim.status === 'PENDING' ? Clock3 : ['APPROVED', 'COMPLETED'].includes(claim.status) ? CircleCheck : CircleX;
   return <section className={`claim-panel claim-detail-state claim-detail-state-${claim.status}`} aria-label="Trạng thái xử lý">
-    <StatusIcon size={24} aria-hidden="true" /><div><h2>{title}</h2><p>{description}</p>
+    <StatusIcon size={24} aria-hidden="true" /><div className="claim-detail-state-body">
+      <h2>{showProgress ? 'Tiến trình nhận đồ' : title}</h2>
+      {showProgress && <>
+        <WorkflowSteps label="Các bước nhận đồ" steps={P2P_CLAIM_STEPS} completed={completedSteps} state={stepState} />
+        <strong>{title}</strong>
+      </>}
+      <p>{description}</p>
       {claim.canRetry && <Link className="btn btn-primary" to={`/xac-minh/${claim.postId}?retryOf=${claim.id}`}>Gửi yêu cầu mới<ArrowUpRight size={16} aria-hidden="true" /></Link>}
     </div>
   </section>;

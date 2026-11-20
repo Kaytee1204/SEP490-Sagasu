@@ -1,22 +1,3 @@
-// Use each dossier's original question version, including conditional required questions.
-export function comparisonCriteria(entries) {
-  const criteria = new Map();
-  for (const claim of entries) {
-    for (const answer of claim.answers || []) {
-      if (!answer.required) continue;
-      const key = `${answer.templateCode}:${answer.templateVersion}:${answer.questionCode}`;
-      if (criteria.has(key)) continue;
-      const commonLabels = { C1: 'Bạn có nhớ ngày mất đồ không?', C2: 'Địa điểm mất đồ' };
-      criteria.set(key, {
-        key, templateCode: answer.templateCode, templateVersion: answer.templateVersion,
-        questionCode: answer.questionCode, sortOrder: answer.sortOrder,
-        label: answer.templateCode === 'COMMON' ? (commonLabels[answer.questionCode] || answer.questionLabel) : answer.questionLabel,
-      });
-    }
-  }
-  criteria.set('description', { key: 'description', label: 'Căn cứ nhận đồ', description: true, sortOrder: 30 });
-  return [...criteria.values()].sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
-}
 export function handoverVerificationHint(answers = []) {
   const template = answers.find(a => a.templateCode !== 'COMMON')?.templateCode;
   if (['PHONE', 'LAPTOP', 'ELECTRONICS'].includes(template)) return 'Trước khi giao, nhờ người nhận tự mở khóa thiết bị hoặc đối chiếu thông tin sở hữu với máy thực tế. Không yêu cầu cung cấp mật khẩu, PIN hay OTP.';

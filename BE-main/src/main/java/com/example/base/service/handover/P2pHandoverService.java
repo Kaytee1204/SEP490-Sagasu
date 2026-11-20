@@ -6,6 +6,7 @@ import com.example.base.exception.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.chat.*;
 import com.example.base.service.claim.ClaimRoutingPolicy;
+import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.report.*;
 import jakarta.persistence.*;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import java.time.OffsetDateTime;
 public class P2pHandoverService {
     // DaiHV integration: Manager holds and resolved disputes must be respected by the existing P2P flow.
     private final ReportHoldGuard reportHolds;
+    private final P2pClaimAppealService appeals;
     private final P2pHandoverRepository handovers;
     private final ClaimRepository claims;
     private final PostRepository posts;
@@ -44,7 +46,8 @@ public class P2pHandoverService {
         }
     }
     public record Detail(Long id,long claimId,String status,String note,OffsetDateTime recordedAt,OffsetDateTime confirmedAt,
-        long version,boolean canRecord,boolean canConfirm,boolean canReportIssue,List<ReportService.Evidence> evidence,ReportService.Detail issue,boolean heldForReview) {}
+        long version,boolean canRecord,boolean canConfirm,boolean canReportIssue,List<ReportService.Evidence> evidence,ReportService.Detail issue,
+        boolean heldForReview,P2pClaimAppealService.HandoverWindow appealWindow) {}
     @Transactional(readOnly=true)
     public Detail detail(long claimId,CustomUserDetails user) {
         long actor=actors.actor(user).getId(); Claim claim=claim(claimId); participant(claim,actor);
@@ -92,7 +95,12 @@ public class P2pHandoverService {
         activities.save(new ClaimActivity(c,account,"CONFIRM_RECEIPT","APPROVED",null));
         for(Claim other:claims.findWaitingForReturn(c.getPost().getId())) {
             other.closeAfterReturn();activities.save(new ClaimActivity(other,account,"AUTO_CLOSE","PENDING","ITEM_RETURNED"));
+            notifications.notifyUser(other.getClaimant().getId(), "CLAIM_CLOSED",
+                "Món đồ đã được trao trả", "Yêu cầu của bạn cho bài «" + c.getPost().getTitle()
+                    + "» đã đóng sau khi hoàn tất trao trả.",
+                "/bai-dang/" + c.getPost().getId() + "/claims/" + other.getId(), false);
         }
+        appeals.close(c);
         claims.flush();handovers.flush();conversations.notifyChanged(c);
         notifications.notifyUser(c.getPost().getAccount().getId(),"HANDOVER_COMPLETED",
             "Người nhận đã xác nhận nhận đồ thành công (#" + c.getId() + ")",
@@ -154,6 +162,10 @@ public class P2pHandoverService {
         reportHolds.requireAvailable(c.getPost().getId());
         if(c.getPost().getAccount().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
         if(!ready(c)||c.getVersion()!=version||handovers.existsByClaimId(c.getId()))throw changed();
+        var window = appeals.handoverWindow(c);
+        if (window != null && window.blocksHandover()) {
+            throw new AppException(ErrorCode.HANDOVER_STATE_CHANGED, "Bàn giao đang tạm dừng do kháng cáo. Vui lòng kiểm tra tiến trình nhận đồ.");
+        }
     }
     private boolean ready(Claim c) {return !c.isOffice()&&"APPROVED".equals(c.getStatus())&&routing.matches(c,Set.of("RESERVED"));}
     private void participant(Claim c,long actor) {
@@ -168,11 +180,14 @@ public class P2pHandoverService {
     private Detail dto(Claim c,P2pHandover h,long actor) {
         Long reportId=h==null?null:issueId(h.getId());
         ReportService.Detail issue=reportId==null?null:reports.detail(reportRepository.findById(reportId).orElseThrow(this::changed));
-        boolean canRespond=h!=null&&"WAITING_CONFIRMATION".equals(h.getStatus())&&ready(c)&&c.getClaimant().getId()==actor&&reportId==null&&!reportHolds.held(c.getPost().getId());
+        boolean ready = ready(c);
+        boolean held = reportHolds.held(c.getPost().getId());
+        var appealWindow = h == null && ready ? appeals.handoverWindow(c) : null;
+        boolean canRespond=h!=null&&"WAITING_CONFIRMATION".equals(h.getStatus())&&ready&&c.getClaimant().getId()==actor&&reportId==null&&!held;
         var evidence=h==null?List.<ReportService.Evidence>of():jdbc.query("select * from p2p_handover_evidence where handover_id=? order by sort_order",(rs,n)->new ReportService.Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),h.getId());
         return new Detail(h==null?null:h.getId(),c.getId(),h==null?"NOT_RECORDED":h.getStatus(),h==null?null:h.getNote(),h==null?null:h.getRecordedAt(),h==null?null:h.getConfirmedAt(),h==null?0:h.getVersion(),
-            h==null&&ready(c)&&c.getPost().getAccount().getId()==actor&&!reportHolds.held(c.getPost().getId()),
-            canRespond,canRespond,evidence,issue,reportHolds.held(c.getPost().getId()));
+            h==null&&ready&&c.getPost().getAccount().getId()==actor&&!held&&(appealWindow==null||!appealWindow.blocksHandover()),
+            canRespond,canRespond,evidence,issue,held,appealWindow);
     }
     private AppException invalid(){return new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);}
     private AppException changed(){return new AppException(ErrorCode.HANDOVER_STATE_CHANGED);}

@@ -44,6 +44,9 @@
 .report-card-bottom { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:18px; font-size:.82rem; color:#58747b; }
 .report-card-bottom > span { color:#1c7070; font-weight:600; }
 .report-detail-fields { display:grid; gap:20px; margin-top:24px; }
+.report-progress { margin-top:18px; padding:16px; border:1px solid #e1ece8; border-radius:12px; background:#f8fbf9; }
+.report-progress h2 { font-size:.95rem; color:#214a3f; }
+.report-progress p { margin:0; font-size:.85rem; color:#3f6252; }
 .report-detail-fields dt { font-size:.82rem; color:#58747b; margin-bottom:6px; }
 .report-detail-fields dd { margin:0; overflow-wrap:anywhere; }
 .report-description { white-space:pre-wrap; }

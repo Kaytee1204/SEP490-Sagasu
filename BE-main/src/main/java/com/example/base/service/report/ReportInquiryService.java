@@ -21,6 +21,35 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class ReportInquiryService {
 
+  private static final String PARTICIPANT_REPORT_COLUMNS = """
+      r.report_id, r.status, r.resolution_note,
+      case
+        when appeal.report_id is not null then 'CLAIM_APPEAL'
+        when r.kind = 'HANDOVER_ISSUE' then 'HANDOVER_ISSUE'
+        when r.post_id is not null then 'POST'
+        when r.claim_id is not null then 'CLAIM'
+        when r.message_id is not null then 'MESSAGE'
+        when r.reported_account_id is not null then 'USER'
+      end as report_type,
+      coalesce(nullif(btrim(p.title), ''), nullif(btrim(a.full_name), '')) as report_subject,
+      coalesce(r.post_id, c.post_id, conversation.post_id, r.reported_account_id) as report_subject_id,
+      case when appeal.report_id is null then r.reason_label_snapshot end as report_reason,
+      case when p.account_id = ? then approved.claim_id end as finder_approved_claim_id
+      """;
+
+  private static final String PARTICIPANT_REPORT_JOINS = """
+      left join p2p_claim_appeal appeal on appeal.report_id = r.report_id
+      left join claim c on c.claim_id = r.claim_id
+      left join chat_message m on m.message_id = r.message_id
+      left join chat_conversation conversation on conversation.conversation_id = m.conversation_id
+      left join post p on p.post_id = coalesce(r.post_id, c.post_id, conversation.post_id)
+      left join accounts a on a.id = r.reported_account_id
+      left join p2p_claim_approval approval on approval.approval_id = appeal.approval_id and approval.closed_at is null
+      left join claim approved on approved.claim_id = approval.approved_claim_id and approved.post_id = p.post_id
+          and approved.status = 'APPROVED' and approved.claim_type = 'P2P'
+          and p.status = 'RESERVED' and p.custody_mode = 'P2P'
+      """;
+
   private final OfficeAccess access;
   private final ReportReviewService reviews;
   private final ReportContextService context;
@@ -93,10 +122,14 @@ public class ReportInquiryService {
   @Transactional(readOnly = true)
   public List<Map<String, Object>> mine(CustomUserDetails user) {
     long actor = access.require(user).getId();
-    var rows = jdbc.queryForList(
-      "select i.inquiry_id,i.report_id,i.question,i.created_at,i.response,i.responded_at,r.status,r.resolution_note from report_inquiry i join report r using(report_id) where i.recipient_id=? order by i.created_at desc limit 100",
-      actor
-    );
+    var rows = jdbc.queryForList("""
+        select i.inquiry_id, i.question, i.created_at, i.response, i.responded_at, %s
+        from report_inquiry i join report r using (report_id)
+        %s
+        where i.recipient_id = ?
+        order by i.created_at desc
+        limit 100
+        """.formatted(PARTICIPANT_REPORT_COLUMNS, PARTICIPANT_REPORT_JOINS), actor, actor);
     rows.forEach(r ->
       r.put(
         "evidence",
@@ -114,10 +147,14 @@ public class ReportInquiryService {
   @Transactional(readOnly = true)
   public List<Map<String, Object>> results(CustomUserDetails user) {
     long actor = access.require(user).getId();
-    return jdbc.queryForList(
-      "select r.report_id,r.status,r.resolution_note,r.resolved_at from report r join report_recipient x using(report_id) where x.account_id=? order by r.resolved_at desc limit 100",
-      actor
-    );
+    return jdbc.queryForList("""
+        select r.resolved_at, %s
+        from report r join report_recipient x using (report_id)
+        %s
+        where x.account_id = ?
+        order by r.resolved_at desc
+        limit 100
+        """.formatted(PARTICIPANT_REPORT_COLUMNS, PARTICIPANT_REPORT_JOINS), actor, actor);
   }
 
   public Map<String, Object> reply(

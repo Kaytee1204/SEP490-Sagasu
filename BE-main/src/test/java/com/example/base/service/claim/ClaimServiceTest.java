@@ -126,6 +126,9 @@ class ClaimServiceTest {
     @Mock
     private NotificationService notifications;
 
+    @Mock
+    private P2pClaimAppealService appeals;
+
     @InjectMocks
     private ClaimService service;
 

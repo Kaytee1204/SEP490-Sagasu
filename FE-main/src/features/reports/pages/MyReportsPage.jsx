@@ -1,6 +1,6 @@
 import '@/styles/Workspace.css';
 import { useEffect, useState } from 'react';
-import { UserRound, ChevronDown, ArrowUpRight, Clock3, Flag, MessageSquare, FileText, ClipboardCheck, Handshake } from 'lucide-react';
+import { UserRound, ChevronDown, ArrowUpRight, Clock3, Flag, MessageSquare, FileText, ClipboardCheck, Handshake, Scale } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
@@ -37,7 +37,7 @@ function MyReports() {
     groups.get(key).reports.push(report);
   }
   return <main className="container reports-page reports-dashboard">
-    <div className="reports-heading"><div><h1>Báo cáo của tôi</h1><p>Theo dõi báo cáo và sự cố bàn giao bạn đã gửi.</p></div>
+    <div className="reports-heading"><div><h1>Báo cáo của tôi</h1><p>Báo cáo vi phạm, sự cố bàn giao và kháng cáo do bạn gửi.</p></div>
     </div>
     <div className="reports-toolbar">
       <div className="reports-navigation">
@@ -46,7 +46,7 @@ function MyReports() {
             {Object.entries({ALL:'Tất cả loại', ...reportTypes}).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <Link className="btn btn-ghost" to="/bao-cao-trao-doi"><MessageSquare size={16}/> Trao đổi & kết quả xử lý<ArrowUpRight size={15}/></Link>
+        <Link className="btn btn-ghost" to="/bao-cao-trao-doi"><MessageSquare size={16}/> Trao đổi & kết quả liên quan<ArrowUpRight size={15}/></Link>
       </div>
       <div className="reports-status-row">
       <span className="reports-filter-label">Trạng thái</span>
@@ -73,7 +73,7 @@ function MyReports() {
   </main>;
 }
 
-const targetIcons = { POST: FileText, USER: UserRound, CLAIM: ClipboardCheck, MESSAGE: MessageSquare, HANDOVER_ISSUE: Handshake };
+const targetIcons = { POST: FileText, USER: UserRound, CLAIM: ClipboardCheck, MESSAGE: MessageSquare, HANDOVER_ISSUE: Handshake, CLAIM_APPEAL: Scale };
 function ReportAccountGroup({ group }) {
   const [expanded, setExpanded] = useState(false);
   const pending = group.reports.filter(report => ['OPEN', 'IN_REVIEW'].includes(report.status)).length;
@@ -82,7 +82,7 @@ function ReportAccountGroup({ group }) {
       <span className="report-account-avatar"><UserRound size={23}/></span>
       <div className="report-account-info">
         <h2>{group.account?.name || 'Không còn thông tin tài khoản'}</h2>
-        {pending > 0 && <span className="report-state report-state-OPEN report-group-pending">{pending} báo cáo chờ xử lý</span>}
+        {pending > 0 && <span className="report-state report-state-OPEN report-group-pending">{pending} báo cáo chưa có kết luận</span>}
         <p>{group.reports.length} báo cáo</p>
       </div>
       <button type="button" className="btn btn-ghost" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
@@ -97,7 +97,7 @@ function ReportAccountGroup({ group }) {
           <div className="report-entry-meta"><span className="report-kind-badge">{reportTypes[type] || 'Báo cáo'}</span>
             <span className={'report-state report-state-' + report.status}>{statuses[report.status] || report.status}</span><span>#{report.id}</span></div>
           <h3>{type === 'USER' ? 'Báo cáo tài khoản ' + (report.targetLabel || group.account?.name || '') : report.targetLabel || 'Nội dung #' + report.targetId}</h3>
-          <p><strong>Lý do:</strong> {report.reasonLabel || 'Chưa phân loại (báo cáo cũ)'}</p>
+          {type !== 'CLAIM_APPEAL' && <p><strong>Lý do:</strong> {report.reasonLabel || 'Chưa phân loại (báo cáo cũ)'}</p>}
           {report.description && <p className="report-entry-description">{report.description}</p>}
           <time dateTime={report.createdAt}><Clock3 size={14}/> Gửi lúc {date(report.createdAt)}</time>
         </div>

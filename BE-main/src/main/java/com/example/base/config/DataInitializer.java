@@ -85,7 +85,8 @@ public class DataInitializer {
             // DaiHV: append-only office supplements and Manager case grouping.
             "db/migrations/24_office_supplements_report_cases.sql",
             "db/migrations/25_p2p_revoke_approval.sql",
-            "db/migrations/26_saved_posts.sql"
+            "db/migrations/26_saved_posts.sql",
+            "db/migrations/27_p2p_claim_appeals.sql"
     );
 
     @Bean

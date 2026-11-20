@@ -1,0 +1,60 @@
+.workflow-steps {
+  --step-gap: 8px;
+  display: flex;
+  gap: var(--step-gap);
+  padding: 0;
+  margin: 20px 0;
+  list-style: none;
+}
+
+.workflow-steps > li {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  text-align: center;
+  font-size: .78rem;
+  line-height: 1.45;
+  color: #627668;
+}
+
+.workflow-steps > li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: calc(50% + 20px);
+  width: max(0px, calc(100% + var(--step-gap) - 40px));
+  height: 1px;
+  background: #dde8df;
+}
+
+.workflow-step-marker {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  border: 1px solid #d9e4dc;
+  border-radius: 50%;
+  background: #f5f8f5;
+  color: #647a69;
+  font-weight: 650;
+}
+
+.workflow-steps .is-done { color: #35634b; }
+.workflow-steps .is-done::after { background: #a9cdb1; }
+.workflow-steps .is-done .workflow-step-marker { color: #fff; border-color: #387e5e; background: #387e5e; }
+.workflow-steps .is-active { color: #276647; font-weight: 650; }
+.workflow-steps .is-active .workflow-step-marker { border: 2px solid #5d9c70; background: #f4faf4; }
+.workflow-steps .is-paused { color: #7d5828; font-weight: 650; }
+.workflow-steps .is-paused .workflow-step-marker { color: #7d5828; border-color: #e4c797; background: #fff5e3; }
+.workflow-steps .is-stopped { color: #9c4834; font-weight: 650; }
+.workflow-steps .is-stopped .workflow-step-marker { color: #9c4834; border-color: #e6b9ac; background: #fdf0eb; }
+
+@media (max-width: 540px) {
+  .workflow-steps { --step-gap: 5px; }
+  .workflow-steps > li { font-size: .7rem; }
+}

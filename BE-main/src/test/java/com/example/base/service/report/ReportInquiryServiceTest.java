@@ -135,7 +135,7 @@ class ReportInquiryServiceTest {
     void utc105_results_returnsResolvedReportsForRecipient() {
         rows(jdbc, "from report r join report_recipient", row("report_id", 5L, "status", "RESOLVED"));
         assertThat(service.results(claimantUser)).hasSize(1);
-        verify(jdbc).queryForList(contains("report_recipient"), eq(7L));
+        verify(jdbc).queryForList(contains("report_recipient"), eq(7L), eq(7L));
     }
 
     // ---------- reply ----------

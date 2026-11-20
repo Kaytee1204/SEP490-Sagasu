@@ -30,7 +30,6 @@ import OfficeTransferDetailPage from '@/features/office/pages/OfficeTransferDeta
 import CounterIntakePage from '@/features/office/pages/CounterIntakePage';
 import StorageLocationsPage from '@/features/office/pages/StorageLocationsPage';
 import ReportReviewDetailPage from '@/features/report-review/pages/ReportReviewDetailPage';
-import ReportResultsPage from '@/features/report-review/pages/ReportResultsPage';
 import AdminReportsPage from '@/features/admin/pages/AdminReportsPage';
 import AdminOverviewPage from '@/features/admin/pages/AdminOverviewPage';
 import ReportReasonsManagementPage from '@/features/admin/pages/ReportReasonsManagementPage';
@@ -106,7 +105,7 @@ function AppRoutes() {
         <Route path="/claim-cua-toi" element={<ProtectedRoute><MyClaimsPage /></ProtectedRoute>} />
         <Route path="/bao-cao-cua-toi" element={<ProtectedRoute><MyReportsPage /></ProtectedRoute>} />
         <Route path="/bao-cao-trao-doi" element={<ProtectedRoute><ReportExchangesPage /></ProtectedRoute>} />
-        <Route path="/ket-qua-bao-cao" element={<ProtectedRoute><ReportResultsPage /></ProtectedRoute>} />
+        <Route path="/ket-qua-bao-cao" element={<ProtectedRoute><ReportExchangesPage resultsView /></ProtectedRoute>} />
         <Route path="/bao-cao/:id" element={<ProtectedRoute><ReportDetailPage /></ProtectedRoute>} />
         <Route path="/claims/:id" element={<ProtectedRoute><LegacyClaimRedirect /></ProtectedRoute>} />
         <Route path="/bai-dang/:postId/claims/:claimId" element={<ProtectedRoute><ClaimDetailPage /></ProtectedRoute>} />

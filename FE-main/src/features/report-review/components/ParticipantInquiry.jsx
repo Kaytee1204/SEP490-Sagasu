@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { reviewApi } from "../api";
-import { Badge, ErrorBox, Gallery } from "./Shared";
+import { ErrorBox, Gallery } from "./Shared";
+import ParticipantReportCard from "./ParticipantReportCard";
 import { date } from "../format";
 import useImageUploads from '@/hooks/useImageUploads';
 import ImageUploadButton from "@/components/common/ImageUploadButton";
@@ -43,13 +44,11 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
     } catch (problem) { setError(problem.message); }
   }
   return (
-    <section className="rr-card exchange-inquiry">
-      <div className="rr-row">
-        <h2>Báo cáo #{i.report_id}</h2>
-        <Badge value={i.status} />
+    <ParticipantReportCard report={i} timestamp={`Yêu cầu bổ sung lúc ${date(i.created_at)}`}>
+      <div className="rr-callout exchange-report-note">
+        <h3>Yêu cầu từ quản lý</h3>
+        <p>{i.question}</p>
       </div>
-      <small>Yêu cầu bổ sung lúc {date(i.created_at)}</small>
-      <p className="rr-callout">{i.question}</p>
       {i.responded_at ? (
         <>
           <h3>Thông tin bạn đã gửi</h3>
@@ -102,8 +101,11 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
         <p>Vụ việc đã kết thúc, không cần gửi thêm thông tin.</p>
       )}
       {i.resolution_note && (
-        <p className="rr-callout">Kết luận: {i.resolution_note}</p>
+        <div className="rr-callout exchange-report-note">
+          <h3>Kết luận xử lý</h3>
+          <p>{i.resolution_note}</p>
+        </div>
       )}
-    </section>
+    </ParticipantReportCard>
   );
 }

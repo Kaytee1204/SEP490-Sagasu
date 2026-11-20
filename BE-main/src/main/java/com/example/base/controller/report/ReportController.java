@@ -38,7 +38,7 @@ public class ReportController {
     @GetMapping("/mine")
     @Operation(
             summary = "[13.2] Danh sách các báo cáo do tôi đã gửi (phân trang, lọc trạng thái và loại)",
-            description = "Lọc theo status (ALL, OPEN, IN_REVIEW, RESOLVED, REJECTED) và type (ALL, POST, USER, CLAIM, MESSAGE, HANDOVER_ISSUE)."
+            description = "Lọc theo status (ALL, OPEN, IN_REVIEW, RESOLVED, REJECTED) và type (ALL, POST, USER, CLAIM, MESSAGE, HANDOVER_ISSUE, CLAIM_APPEAL)."
     )
     public ResponseEntity<?> mine(
             @RequestParam(defaultValue = "1") int page,
