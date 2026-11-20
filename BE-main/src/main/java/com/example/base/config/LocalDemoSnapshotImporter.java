@@ -180,8 +180,8 @@ final class LocalDemoSnapshotImporter {
                     SELECT 1 FROM claim WHERE post_id = ? AND status = 'APPROVED' LIMIT 1
                     """);
              PreparedStatement psClaim = conn.prepareStatement("""
-                    INSERT INTO claim (post_id, claimant_id, claim_type, status, description, evidence_note, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING claim_id
+                    INSERT INTO claim (post_id, claimant_id, created_by, claim_type, submission_channel, status, description, evidence_note, version, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 'ONLINE', ?, ?, ?, 0, ?, ?) RETURNING claim_id
                     """);
              PreparedStatement psAnswer = conn.prepareStatement("""
                     INSERT INTO claim_answer (claim_id, question_id, question_code, question_label, answer_text, section_title, template_code, template_version, sort_order, created_at)
@@ -192,8 +192,8 @@ final class LocalDemoSnapshotImporter {
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """);
              PreparedStatement psHandover = conn.prepareStatement("""
-                    INSERT INTO p2p_handover (claim_id, recorded_by, confirmed_by, status, note, recorded_at, confirmed_at, created_at, updated_at, client_request_id, request_hash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::uuid, ?)
+                    INSERT INTO p2p_handover (claim_id, recorded_by, confirmed_by, status, note, recorded_at, confirmed_at, created_at, updated_at, client_request_id, request_hash, version)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::uuid, ?, 0)
                     """)) {
 
             for (JsonNode c : claimsNode) {
@@ -221,79 +221,88 @@ final class LocalDemoSnapshotImporter {
                 Timestamp createdAt = parseTs(text(c, "createdAt"));
                 Timestamp updatedAt = parseTs(text(c, "updatedAt"));
 
-                psClaim.setLong(1, postId);
-                psClaim.setLong(2, claimantId);
-                psClaim.setString(3, StringUtils.hasText(text(c, "claimType")) ? text(c, "claimType") : "P2P");
-                psClaim.setString(4, desiredStatus);
-                psClaim.setString(5, nonNull(text(c, "description")));
-                setNullableString(psClaim, 6, text(c, "evidenceNote"));
-                psClaim.setTimestamp(7, createdAt);
-                psClaim.setTimestamp(8, updatedAt);
+                Savepoint sp = conn.setSavepoint();
+                try {
+                    psClaim.setLong(1, postId);
+                    psClaim.setLong(2, claimantId);
+                    psClaim.setLong(3, claimantId);
+                    psClaim.setString(4, StringUtils.hasText(text(c, "claimType")) ? text(c, "claimType") : "P2P");
+                    psClaim.setString(5, desiredStatus);
+                    psClaim.setString(6, nonNull(text(c, "description")));
+                    setNullableString(psClaim, 7, text(c, "evidenceNote"));
+                    psClaim.setTimestamp(8, createdAt);
+                    psClaim.setTimestamp(9, updatedAt);
 
-                long newClaimId;
-                try (ResultSet rs = psClaim.executeQuery()) {
-                    rs.next();
-                    newClaimId = rs.getLong(1);
-                }
-                insertedClaims++;
-
-                JsonNode answers = c.path("answers");
-                if (answers.isArray()) {
-                    for (JsonNode a : answers) {
-                        String tpl = text(a, "templateCode");
-                        String qCode = text(a, "questionCode");
-                        Long qId = questionIds.get(tpl + "::" + qCode);
-                        if (qId == null) continue;
-                        psAnswer.setLong(1, newClaimId);
-                        psAnswer.setLong(2, qId);
-                        psAnswer.setString(3, qCode);
-                        psAnswer.setString(4, nonNull(text(a, "questionLabel")));
-                        psAnswer.setString(5, nonNull(text(a, "answerText")));
-                        psAnswer.setString(6, nonNull(text(a, "sectionTitle")));
-                        psAnswer.setString(7, nonNull(tpl));
-                        psAnswer.setInt(8, a.path("templateVersion").asInt(1));
-                        psAnswer.setInt(9, a.path("sortOrder").asInt(0));
-                        psAnswer.setTimestamp(10, parseTs(text(a, "createdAt")));
-                        psAnswer.addBatch();
+                    long newClaimId;
+                    try (ResultSet rs = psClaim.executeQuery()) {
+                        rs.next();
+                        newClaimId = rs.getLong(1);
                     }
-                    psAnswer.executeBatch();
-                }
+                    insertedClaims++;
 
-                JsonNode activities = c.path("activities");
-                if (activities.isArray()) {
-                    for (JsonNode act : activities) {
-                        Long actorId = lookupEmail(accountIds, text(act, "actorEmail"));
-                        if (actorId == null) actorId = claimantId;
-                        psActivity.setLong(1, newClaimId);
-                        psActivity.setLong(2, actorId);
-                        psActivity.setString(3, nonNull(text(act, "action")));
-                        setNullableString(psActivity, 4, text(act, "fromStatus"));
-                        psActivity.setString(5, nonNull(text(act, "toStatus")));
-                        setNullableString(psActivity, 6, text(act, "reason"));
-                        psActivity.setTimestamp(7, parseTs(text(act, "createdAt")));
-                        psActivity.addBatch();
+                    JsonNode answers = c.path("answers");
+                    if (answers.isArray()) {
+                        for (JsonNode a : answers) {
+                            String tpl = text(a, "templateCode");
+                            String qCode = text(a, "questionCode");
+                            Long qId = questionIds.get(tpl + "::" + qCode);
+                            if (qId == null) continue;
+                            psAnswer.setLong(1, newClaimId);
+                            psAnswer.setLong(2, qId);
+                            psAnswer.setString(3, qCode);
+                            psAnswer.setString(4, nonNull(text(a, "questionLabel")));
+                            psAnswer.setString(5, nonNull(text(a, "answerText")));
+                            psAnswer.setString(6, nonNull(text(a, "sectionTitle")));
+                            psAnswer.setString(7, nonNull(tpl));
+                            psAnswer.setInt(8, a.path("templateVersion").asInt(1));
+                            psAnswer.setInt(9, a.path("sortOrder").asInt(0));
+                            psAnswer.setTimestamp(10, parseTs(text(a, "createdAt")));
+                            psAnswer.addBatch();
+                        }
+                        psAnswer.executeBatch();
                     }
-                    psActivity.executeBatch();
-                }
 
-                JsonNode h = c.path("handover");
-                if (h.isObject() && "APPROVED".equals(desiredStatus)) {
-                    Long recBy = lookupEmail(accountIds, text(h, "recordedByEmail"));
-                    if (recBy != null) {
-                        psHandover.setLong(1, newClaimId);
-                        psHandover.setLong(2, recBy);
-                        setNullableLong(psHandover, 3, lookupEmail(accountIds, text(h, "confirmedByEmail")));
-                        psHandover.setString(4, StringUtils.hasText(text(h, "status")) ? text(h, "status") : "WAITING_CONFIRMATION");
-                        setNullableString(psHandover, 5, text(h, "note"));
-                        psHandover.setTimestamp(6, parseTs(text(h, "recordedAt")));
-                        setNullableTs(psHandover, 7, text(h, "confirmedAt"));
-                        psHandover.setTimestamp(8, parseTs(text(h, "createdAt")));
-                        psHandover.setTimestamp(9, parseTs(text(h, "updatedAt")));
-                        String reqId = text(h, "clientRequestId");
-                        psHandover.setString(10, StringUtils.hasText(reqId) ? reqId : UUID.randomUUID().toString());
-                        psHandover.setString(11, StringUtils.hasText(text(h, "requestHash")) ? text(h, "requestHash") : UUID.randomUUID().toString());
-                        psHandover.executeUpdate();
+                    JsonNode activities = c.path("activities");
+                    if (activities.isArray()) {
+                        for (JsonNode act : activities) {
+                            Long actorId = lookupEmail(accountIds, text(act, "actorEmail"));
+                            if (actorId == null) actorId = claimantId;
+                            psActivity.setLong(1, newClaimId);
+                            psActivity.setLong(2, actorId);
+                            psActivity.setString(3, nonNull(text(act, "action")));
+                            setNullableString(psActivity, 4, text(act, "fromStatus"));
+                            psActivity.setString(5, nonNull(text(act, "toStatus")));
+                            setNullableString(psActivity, 6, text(act, "reason"));
+                            psActivity.setTimestamp(7, parseTs(text(act, "createdAt")));
+                            psActivity.addBatch();
+                        }
+                        psActivity.executeBatch();
                     }
+
+                    JsonNode h = c.path("handover");
+                    if (h.isObject() && "APPROVED".equals(desiredStatus)) {
+                        Long recBy = lookupEmail(accountIds, text(h, "recordedByEmail"));
+                        if (recBy != null) {
+                            psHandover.setLong(1, newClaimId);
+                            psHandover.setLong(2, recBy);
+                            setNullableLong(psHandover, 3, lookupEmail(accountIds, text(h, "confirmedByEmail")));
+                            psHandover.setString(4, StringUtils.hasText(text(h, "status")) ? text(h, "status") : "WAITING_CONFIRMATION");
+                            setNullableString(psHandover, 5, text(h, "note"));
+                            psHandover.setTimestamp(6, parseTs(text(h, "recordedAt")));
+                            setNullableTs(psHandover, 7, text(h, "confirmedAt"));
+                            psHandover.setTimestamp(8, parseTs(text(h, "createdAt")));
+                            psHandover.setTimestamp(9, parseTs(text(h, "updatedAt")));
+                            String reqId = text(h, "clientRequestId");
+                            psHandover.setString(10, StringUtils.hasText(reqId) ? reqId : UUID.randomUUID().toString());
+                            psHandover.setString(11, StringUtils.hasText(text(h, "requestHash")) ? text(h, "requestHash") : UUID.randomUUID().toString());
+                            psHandover.executeUpdate();
+                        }
+                    }
+                    conn.releaseSavepoint(sp);
+                } catch (Exception claimEx) {
+                    conn.rollback(sp);
+                    insertedClaims = Math.max(0, insertedClaims - 1);
+                    log.warn("[DEMO SNAPSHOT] Bỏ qua 1 claim mẫu ({}): {}", text(c, "claimantEmail"), claimEx.getMessage());
                 }
             }
 
