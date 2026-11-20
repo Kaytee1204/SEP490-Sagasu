@@ -26,24 +26,28 @@ final class LocalDemoSnapshotImporter {
     private LocalDemoSnapshotImporter() {
     }
 
+    static void syncAccountsOnly(
+            AccountRepository accountRepository,
+            PasswordEncoder passwordEncoder,
+            ObjectMapper objectMapper
+    ) {
+        JsonNode root = readSnapshot(objectMapper);
+        if (root == null) return;
+        try {
+            syncAccounts(root.path("accounts"), accountRepository, passwordEncoder);
+        } catch (Exception e) {
+            log.warn("[DEMO SNAPSHOT] Lỗi đồng bộ accounts: {}", e.getMessage());
+        }
+    }
+
     static void importIfNeeded(
             DataSource dataSource,
             AccountRepository accountRepository,
             PasswordEncoder passwordEncoder,
             ObjectMapper objectMapper
     ) {
-        ClassPathResource resource = new ClassPathResource(SNAPSHOT_PATH);
-        if (!resource.exists()) {
-            return;
-        }
-
-        JsonNode root;
-        try (InputStream in = resource.getInputStream()) {
-            root = objectMapper.readTree(in);
-        } catch (Exception e) {
-            log.warn("[DEMO SNAPSHOT] Không đọc được {}: {}", SNAPSHOT_PATH, e.getMessage());
-            return;
-        }
+        JsonNode root = readSnapshot(objectMapper);
+        if (root == null) return;
 
         try {
             syncAccounts(root.path("accounts"), accountRepository, passwordEncoder);
@@ -55,11 +59,24 @@ final class LocalDemoSnapshotImporter {
             Map<String, Long> accountIds = loadAccountIdsByEmail(conn);
             Map<String, Long> postIds = loadPostIdsByTitle(conn);
 
-            importNewsIfEmpty(conn, root.path("newsArticles"), accountIds);
-            importClaimsIfEmpty(conn, root.path("claims"), root.path("postStatusOverrides"), accountIds, postIds);
+            importNewsIdempotently(conn, root.path("newsArticles"), accountIds);
+            importClaimsIdempotently(conn, root.path("claims"), root.path("postStatusOverrides"), accountIds, postIds);
             importNotificationsIfEmpty(conn, root.path("notifications"), accountIds);
         } catch (Exception e) {
             log.warn("[DEMO SNAPSHOT] Bỏ qua import snapshot: {}", e.getMessage());
+        }
+    }
+
+    private static JsonNode readSnapshot(ObjectMapper objectMapper) {
+        ClassPathResource resource = new ClassPathResource(SNAPSHOT_PATH);
+        if (!resource.exists()) {
+            return null;
+        }
+        try (InputStream in = resource.getInputStream()) {
+            return objectMapper.readTree(in);
+        } catch (Exception e) {
+            log.warn("[DEMO SNAPSHOT] Không đọc được {}: {}", SNAPSHOT_PATH, e.getMessage());
+            return null;
         }
     }
 
@@ -96,9 +113,16 @@ final class LocalDemoSnapshotImporter {
         }
     }
 
-    private static void importNewsIfEmpty(Connection conn, JsonNode newsNode, Map<String, Long> accountIds) throws SQLException {
+    private static void importNewsIdempotently(Connection conn, JsonNode newsNode, Map<String, Long> accountIds) throws SQLException {
         if (!newsNode.isArray() || newsNode.isEmpty()) return;
-        if (countRows(conn, "news_article") > 0) return;
+
+        Set<String> existingTitles = new HashSet<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT LOWER(title) FROM news_article")) {
+            while (rs.next()) {
+                existingTitles.add(rs.getString(1));
+            }
+        }
 
         int inserted = 0;
         try (PreparedStatement ps = conn.prepareStatement("""
@@ -108,6 +132,8 @@ final class LocalDemoSnapshotImporter {
             for (JsonNode n : newsNode) {
                 String title = text(n, "title");
                 if (!StringUtils.hasText(title)) continue;
+                if (existingTitles.contains(title.toLowerCase(Locale.ROOT))) continue;
+
                 Timestamp createdAt = parseTs(text(n, "createdAt"));
                 Timestamp updatedAt = parseTs(text(n, "updatedAt"));
                 Long authorId = lookupEmail(accountIds, text(n, "authorEmail"));
@@ -123,16 +149,17 @@ final class LocalDemoSnapshotImporter {
                 ps.setTimestamp(9, createdAt);
                 ps.setTimestamp(10, updatedAt);
                 ps.addBatch();
+                existingTitles.add(title.toLowerCase(Locale.ROOT));
                 inserted++;
             }
             if (inserted > 0) {
                 ps.executeBatch();
-                log.info("[DEMO SNAPSHOT] Đã import {} bài tin tức hệ thống.", inserted);
+                log.info("[DEMO SNAPSHOT] Đã import bổ sung {} bài tin tức hệ thống.", inserted);
             }
         }
     }
 
-    private static void importClaimsIfEmpty(
+    private static void importClaimsIdempotently(
             Connection conn,
             JsonNode claimsNode,
             JsonNode statusOverridesNode,
@@ -140,14 +167,19 @@ final class LocalDemoSnapshotImporter {
             Map<String, Long> postIds
     ) throws SQLException {
         if (!claimsNode.isArray() || claimsNode.isEmpty()) return;
-        if (countRows(conn, "claim") > 0) return;
 
         Map<String, Long> questionIds = loadQuestionIds(conn);
         int insertedClaims = 0;
 
         boolean origAuto = conn.getAutoCommit();
         conn.setAutoCommit(false);
-        try (PreparedStatement psClaim = conn.prepareStatement("""
+        try (PreparedStatement psCheckClaim = conn.prepareStatement("""
+                    SELECT 1 FROM claim WHERE post_id = ? AND claimant_id = ? AND status IN ('PENDING', 'APPROVED') LIMIT 1
+                    """);
+             PreparedStatement psCheckApproved = conn.prepareStatement("""
+                    SELECT 1 FROM claim WHERE post_id = ? AND status = 'APPROVED' LIMIT 1
+                    """);
+             PreparedStatement psClaim = conn.prepareStatement("""
                     INSERT INTO claim (post_id, claimant_id, claim_type, status, description, evidence_note, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING claim_id
                     """);
@@ -169,13 +201,30 @@ final class LocalDemoSnapshotImporter {
                 Long claimantId = lookupEmail(accountIds, text(c, "claimantEmail"));
                 if (postId == null || claimantId == null) continue;
 
+                // Per-claim idempotency: skip if this claimant already has an active claim on this post
+                psCheckClaim.setLong(1, postId);
+                psCheckClaim.setLong(2, claimantId);
+                try (ResultSet rs = psCheckClaim.executeQuery()) {
+                    if (rs.next()) continue;
+                }
+
+                String desiredStatus = StringUtils.hasText(text(c, "status")) ? text(c, "status") : "PENDING";
+                if ("APPROVED".equals(desiredStatus)) {
+                    psCheckApproved.setLong(1, postId);
+                    try (ResultSet rs = psCheckApproved.executeQuery()) {
+                        if (rs.next()) {
+                            desiredStatus = "PENDING";
+                        }
+                    }
+                }
+
                 Timestamp createdAt = parseTs(text(c, "createdAt"));
                 Timestamp updatedAt = parseTs(text(c, "updatedAt"));
 
                 psClaim.setLong(1, postId);
                 psClaim.setLong(2, claimantId);
                 psClaim.setString(3, StringUtils.hasText(text(c, "claimType")) ? text(c, "claimType") : "P2P");
-                psClaim.setString(4, StringUtils.hasText(text(c, "status")) ? text(c, "status") : "PENDING");
+                psClaim.setString(4, desiredStatus);
                 psClaim.setString(5, nonNull(text(c, "description")));
                 setNullableString(psClaim, 6, text(c, "evidenceNote"));
                 psClaim.setTimestamp(7, createdAt);
@@ -228,7 +277,7 @@ final class LocalDemoSnapshotImporter {
                 }
 
                 JsonNode h = c.path("handover");
-                if (h.isObject()) {
+                if (h.isObject() && "APPROVED".equals(desiredStatus)) {
                     Long recBy = lookupEmail(accountIds, text(h, "recordedByEmail"));
                     if (recBy != null) {
                         psHandover.setLong(1, newClaimId);
@@ -248,8 +297,8 @@ final class LocalDemoSnapshotImporter {
                 }
             }
 
-            if (statusOverridesNode.isArray()) {
-                try (PreparedStatement psPost = conn.prepareStatement("UPDATE post SET status = ? WHERE post_id = ?")) {
+            if (insertedClaims > 0 && statusOverridesNode.isArray()) {
+                try (PreparedStatement psPost = conn.prepareStatement("UPDATE post SET status = ? WHERE post_id = ? AND status = 'OPEN'")) {
                     for (JsonNode ov : statusOverridesNode) {
                         Long postId = postIds.get(text(ov, "postTitle"));
                         String status = text(ov, "status");
@@ -265,7 +314,7 @@ final class LocalDemoSnapshotImporter {
 
             conn.commit();
             if (insertedClaims > 0) {
-                log.info("[DEMO SNAPSHOT] Đã import {} yêu cầu nhận đồ (claims) kèm câu trả lời và lịch sử.", insertedClaims);
+                log.info("[DEMO SNAPSHOT] Đã import bổ sung {} yêu cầu nhận đồ (claims) kèm câu trả lời và lịch sử.", insertedClaims);
             }
         } catch (Exception e) {
             conn.rollback();

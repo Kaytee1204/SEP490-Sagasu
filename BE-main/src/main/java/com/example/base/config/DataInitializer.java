@@ -38,22 +38,22 @@ public class DataInitializer {
     private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     private static final List<String> DEFAULT_CATEGORIES = List.of(
-            "Äiá»‡n thoáº¡i",
-            "MÃ¡y tÃ­nh xÃ¡ch tay",
-            "VÃ­ tiá»n & Giáº¥y tá» cÃ¡ nhÃ¢n",
-            "ChÃ¬a khÃ³a",
-            "Balo, TÃºi xÃ¡ch",
-            "Trang phá»¥c (Clothing & Apparel)",
-            "Phá»¥ kiá»‡n vÃ  Trang sá»©c",
-            "VÄƒn phÃ²ng pháº©m",
-            "Äá»“ dÃ¹ng cÃ¡ nhÃ¢n",
-            "Äá»“ dÃ¹ng khÃ¡c",
-            "Äá»“ dÃ¹ng tráº» em",
-            "MÃ¡y tÃ­nh & Thiáº¿t bá»‹ Ä‘iá»‡n tá»­",
-            "KÃ­nh máº¯t",
-            "GiÃ y dÃ©p",
-            "Giáº¥y tá» & Tháº»",
-            "BÃ¬nh nÆ°á»›c"
+            "Điện thoại",
+            "Máy tính xách tay",
+            "Ví tiền & Giấy tờ cá nhân",
+            "Chìa khóa",
+            "Balo, Túi xách",
+            "Trang phục (Clothing & Apparel)",
+            "Phụ kiện và Trang sức",
+            "Văn phòng phẩm",
+            "Đồ dùng cá nhân",
+            "Đồ dùng khác",
+            "Đồ dùng trẻ em",
+            "Máy tính & Thiết bị điện tử",
+            "Kính mắt",
+            "Giày dép",
+            "Giấy tờ & Thẻ",
+            "Bình nước"
     );
 
     private static final List<String> SQL_MIGRATIONS = List.of(
@@ -99,16 +99,16 @@ public class DataInitializer {
             ObjectMapper objectMapper
     ) {
         return args -> {
-            // 0. Chuáº©n hÃ³a role cÅ©, táº¡o cá»™t search_document cho báº£ng post, Ä‘áº£m báº£o 16 danh má»¥c vÃ  cháº¡y migrations SQL
+            // 0. Chuẩn hóa role cũ, tạo cột search_document cho bảng post, đảm bảo 16 danh mục và chạy migrations SQL
             migrateLegacyAccountRoles(dataSource);
             ensureCoreSchemaAndDefaults(dataSource);
             runSqlMigrations(dataSource);
 
-            // 1. Seed tÃ i khoáº£n ADMIN: admin / 123
+            // 1. Seed tài khoản ADMIN: admin / 123
             Account admin = accountRepository.findByEmailIgnoreCase("admin").orElse(null);
             if (admin == null) {
                 admin = new Account();
-                admin.setFullName("Quáº£n trá»‹ viÃªn");
+                admin.setFullName("Quản trị viên");
                 admin.setEmail("admin");
                 admin.setPasswordHash(passwordEncoder.encode("123"));
                 admin.setRole(AccountRole.ADMIN);
@@ -117,7 +117,7 @@ public class DataInitializer {
                 admin = accountRepository.save(admin);
             } else {
                 if (!StringUtils.hasText(admin.getFullName())) {
-                    admin.setFullName("Quáº£n trá»‹ viÃªn");
+                    admin.setFullName("Quản trị viên");
                 }
                 admin.setPasswordHash(passwordEncoder.encode("123"));
                 admin.setRole(AccountRole.ADMIN);
@@ -128,12 +128,12 @@ public class DataInitializer {
                 admin = accountRepository.save(admin);
             }
 
-            // 2. Seed tÃ i khoáº£n MANAGER: khanhtrinh1204@gmail.com / 123
+            // 2. Seed tài khoản MANAGER: khanhtrinh1204@gmail.com / 123
             String managerEmail = "khanhtrinh1204@gmail.com";
             Account manager = accountRepository.findByEmailIgnoreCase(managerEmail).orElse(null);
             if (manager == null) {
                 manager = new Account();
-                manager.setFullName("KhÃ¡nh Trá»‹nh");
+                manager.setFullName("Khánh Trịnh");
                 manager.setEmail(managerEmail);
                 manager.setPasswordHash(passwordEncoder.encode("123"));
                 manager.setRole(AccountRole.MANAGER);
@@ -145,7 +145,7 @@ public class DataInitializer {
                 if (!StringUtils.hasText(manager.getFullName())
                         || manager.getFullName().contains("(Manager)")
                         || manager.getFullName().contains("(MANAGER)")) {
-                    manager.setFullName("KhÃ¡nh Trá»‹nh");
+                    manager.setFullName("Khánh Trịnh");
                 }
                 if (manager.isMustChangePassword()) {
                     manager.setPasswordHash(passwordEncoder.encode("123"));
@@ -157,11 +157,11 @@ public class DataInitializer {
                 accountRepository.save(manager);
             }
 
-            // 3. Seed tÃ i khoáº£n USER: user / 123
+            // 3. Seed tài khoản USER: user / 123
             Account testUser = accountRepository.findByEmailIgnoreCase("user").orElse(null);
             if (testUser == null) {
                 testUser = new Account();
-                testUser.setFullName("NgÆ°á»i dÃ¹ng Test (User)");
+                testUser.setFullName("Người dùng Test (User)");
                 testUser.setEmail("user");
                 testUser.setPasswordHash(passwordEncoder.encode("123"));
                 testUser.setRole(AccountRole.USER);
@@ -179,7 +179,7 @@ public class DataInitializer {
                 accountRepository.save(testUser);
             }
 
-            // 4. Seed tÃ i khoáº£n USER: kayfrancistee@gmail.com / 123
+            // 4. Seed tài khoản USER: kayfrancistee@gmail.com / 123
             String thirdEmail = "kayfrancistee@gmail.com";
             Account thirdUser = accountRepository.findByEmailIgnoreCase(thirdEmail).orElse(null);
             if (thirdUser == null) {
@@ -194,12 +194,12 @@ public class DataInitializer {
                 accountRepository.save(thirdUser);
             }
 
-            // 4b. Seed tÃ i khoáº£n APPROVER: tuelam332@gmail.com / 123
+            // 4b. Seed tài khoản APPROVER: tuelam332@gmail.com / 123
             String approverEmail = "tuelam332@gmail.com";
             Account approverUser = accountRepository.findByEmailIgnoreCase(approverEmail).orElse(null);
             if (approverUser == null) {
                 approverUser = new Account();
-                approverUser.setFullName("Tuá»‡ LÃ¢m (Approver)");
+                approverUser.setFullName("Tuệ Lâm (Approver)");
                 approverUser.setEmail(approverEmail);
                 approverUser.setPasswordHash(passwordEncoder.encode("123"));
                 approverUser.setRole(AccountRole.APPROVER);
@@ -209,7 +209,7 @@ public class DataInitializer {
                 accountRepository.save(approverUser);
             } else {
                 if (!StringUtils.hasText(approverUser.getFullName())) {
-                    approverUser.setFullName("Tuá»‡ LÃ¢m (Approver)");
+                    approverUser.setFullName("Tuệ Lâm (Approver)");
                 }
                 approverUser.setPasswordHash(passwordEncoder.encode("123"));
                 approverUser.setRole(AccountRole.APPROVER);
@@ -220,7 +220,8 @@ public class DataInitializer {
                 accountRepository.save(approverUser);
             }
 
-            // 5. Tá»± Ä‘á»™ng Ä‘á»“ng bá»™ 4.203 bÃ i Ä‘Äƒng R2 Dataset (LOST + FOUND) vÃ  toÃ n bá»™ dá»¯ liá»‡u demo snapshot (accounts, news, claims, notifications)
+            // 5. Đồng bộ toàn bộ tài khoản demo trước để các bài R2 map đúng chủ sở hữu, sau đó nạp R2 + dữ liệu demo snapshot (news, claims, notifications)
+            LocalDemoSnapshotImporter.syncAccountsOnly(accountRepository, passwordEncoder, objectMapper);
             seedR2DatasetPostsIfMissing(dataSource);
             LocalDemoSnapshotImporter.importIfNeeded(dataSource, accountRepository, passwordEncoder, objectMapper);
 
@@ -262,11 +263,11 @@ public class DataInitializer {
                     CHECK (role IN ('ADMIN', 'USER', 'APPROVER', 'MANAGER'))
                     """);
             if (updatedChecker > 0 || updatedOther > 0) {
-                log.info("[SEED DATA] ÄÃ£ chuyá»ƒn Ä‘á»•i {} tÃ i khoáº£n CHECKER -> APPROVER vÃ  {} tÃ i khoáº£n role cÅ© -> USER.",
+                log.info("[SEED DATA] Đã chuyển đổi {} tài khoản CHECKER -> APPROVER và {} tài khoản role cũ -> USER.",
                         updatedChecker, updatedOther);
             }
         } catch (Exception e) {
-            log.warn("[SEED DATA] Bá» qua chuáº©n hÃ³a role cÅ© trÃªn báº£ng accounts: {}", e.getMessage());
+            log.warn("[SEED DATA] Bỏ qua chuẩn hóa role cũ trên bảng accounts: {}", e.getMessage());
         }
     }
 
@@ -274,14 +275,14 @@ public class DataInitializer {
         try {
             st.execute(sql);
         } catch (Exception e) {
-            log.debug("[SCHEMA INIT] Bá» qua cÃ¢u lá»‡nh DDL ({}): {}", sql, e.getMessage());
+            log.debug("[SCHEMA INIT] Bỏ qua câu lệnh DDL ({}): {}", sql, e.getMessage());
         }
     }
 
     private void ensureCoreSchemaAndDefaults(DataSource dataSource) {
         try (Connection conn = dataSource.getConnection();
              Statement st = conn.createStatement()) {
-            // 1. Khá»Ÿi táº¡o cÃ¡c PL/pgSQL trigger functions trÆ°á»›c má»i báº£ng vÃ  trigger
+            // 1. Khởi tạo các PL/pgSQL trigger functions trước mọi bảng và trigger
             execSafe(st, """
                     CREATE OR REPLACE FUNCTION set_updated_at()
                     RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END; $$ LANGUAGE plpgsql
@@ -291,7 +292,7 @@ public class DataInitializer {
                     RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END; $$ LANGUAGE plpgsql
                     """);
 
-            // 2. Äáº£m báº£o DEFAULT vÃ  trigger cho category, post, post_image, accounts
+            // 2. Đảm bảo DEFAULT và trigger cho category, post, post_image, accounts
             execSafe(st, "ALTER TABLE category ALTER COLUMN is_active SET DEFAULT true");
             execSafe(st, "ALTER TABLE category ALTER COLUMN created_at SET DEFAULT now()");
             execSafe(st, "ALTER TABLE category ALTER COLUMN updated_at SET DEFAULT now()");
@@ -310,7 +311,7 @@ public class DataInitializer {
             execSafe(st, "DROP TRIGGER IF EXISTS trg_post_updated_at ON post");
             execSafe(st, "CREATE TRIGGER trg_post_updated_at BEFORE UPDATE ON post FOR EACH ROW EXECUTE FUNCTION set_post_category_updated_at()");
 
-            // 3. Táº¡o cá»™t tsvector search_document vÃ  GIN index cho chá»©c nÄƒng tÃ¬m kiáº¿m bÃ i Ä‘Äƒng
+            // 3. Tạo cột tsvector search_document và GIN index cho chức năng tìm kiếm bài đăng
             execSafe(st, """
                     ALTER TABLE post
                     ADD COLUMN IF NOT EXISTS search_document tsvector
@@ -325,7 +326,7 @@ public class DataInitializer {
             execSafe(st, "ALTER TABLE post_image ALTER COLUMN sort_order SET DEFAULT 0");
             execSafe(st, "ALTER TABLE post_image ALTER COLUMN created_at SET DEFAULT now()");
 
-            // 4. Seed Ä‘á»§ 16 danh má»¥c chuáº©n trÆ°á»›c khi cháº¡y questionnaire vÃ  R2 dataset
+            // 4. Seed đủ 16 danh mục chuẩn trước khi chạy questionnaire và R2 dataset
             String insertCatSql = """
                     INSERT INTO category (name, is_active, created_at, updated_at)
                     SELECT ?, true, now(), now()
@@ -338,9 +339,9 @@ public class DataInitializer {
                     ps.executeUpdate();
                 }
             }
-            log.info("[SCHEMA INIT] ÄÃ£ Ä‘áº£m báº£o function set_updated_at(), cá»™t post.search_document vÃ  16 danh má»¥c chuáº©n.");
+            log.info("[SCHEMA INIT] Đã đảm bảo function set_updated_at(), cột post.search_document và 16 danh mục chuẩn.");
         } catch (Exception e) {
-            log.warn("[SCHEMA INIT] Cáº£nh bÃ¡o khi khá»Ÿi táº¡o core schema/defaults: {}", e.getMessage());
+            log.warn("[SCHEMA INIT] Cảnh báo khi khởi tạo core schema/defaults: {}", e.getMessage());
         }
     }
 
@@ -353,17 +354,17 @@ public class DataInitializer {
                     String sql = StreamUtils.copyToString(res.getInputStream(), StandardCharsets.UTF_8);
                     sql = MigrationCompatibility.prepare(path, sql);
                     st.execute(sql);
-                    log.info("[SQL MIGRATION] ÄÃ£ thá»±c thi thÃ nh cÃ´ng: {}", path);
+                    log.info("[SQL MIGRATION] Đã thực thi thành công: {}", path);
                 } catch (Exception e) {
-                    // Náº¿u script cÃ³ BEGIN; mÃ  bá»‹ lá»—i giá»¯a chá»«ng, báº¯t buá»™c ROLLBACK Ä‘á»ƒ khÃ´ng lÃ m treo HikariCP connection
+                    // Nếu script có BEGIN; mà bị lỗi giữa chừng, bắt buộc ROLLBACK để không làm treo HikariCP connection
                     try (Statement rb = conn.createStatement()) {
                         rb.execute("ROLLBACK");
                     } catch (Exception ignored) {
                     }
-                    log.warn("[SQL MIGRATION] ÄÃ£ rollback script ({}): {}", path, e.getMessage());
+                    log.warn("[SQL MIGRATION] Đã rollback script ({}): {}", path, e.getMessage());
                 }
             } catch (Exception e) {
-                log.warn("[SQL MIGRATION] KhÃ´ng thá»ƒ má»Ÿ káº¿t ná»‘i cho ({}): {}", path, e.getMessage());
+                log.warn("[SQL MIGRATION] Không thể mở kết nối cho ({}): {}", path, e.getMessage());
             }
         }
     }
@@ -382,12 +383,12 @@ public class DataInitializer {
                     existingIdentifiers.add(rs.getString(1));
                 }
             } catch (Exception ex) {
-                log.warn("[SEED R2 DATASET] Báº£ng post chÆ°a sáºµn sÃ ng, bá» qua seed R2 dataset: {}", ex.getMessage());
+                log.warn("[SEED R2 DATASET] Bảng post chưa sẵn sàng, bỏ qua seed R2 dataset: {}", ex.getMessage());
                 return;
             }
 
             if (existingIdentifiers.size() >= 4203) {
-                log.info("[SEED R2 DATASET] ÄÃ£ cÃ³ Ä‘á»§ {} bÃ i Ä‘Äƒng R2 trong Database.", existingIdentifiers.size());
+                log.info("[SEED R2 DATASET] Đã có đủ {} bài đăng R2 trong Database.", existingIdentifiers.size());
                 return;
             }
 
@@ -513,21 +514,21 @@ public class DataInitializer {
                     if (inserted % 400 == 0) {
                         psImg.executeBatch();
                         conn.commit();
-                        log.info("[SEED R2 DATASET] Tiáº¿n Ä‘á»™ Ä‘á»“ng bá»™: {}/4203 bÃ i Ä‘Äƒng...", inserted);
+                        log.info("[SEED R2 DATASET] Tiến độ đồng bộ: {}/4203 bài đăng...", inserted);
                     }
                 }
 
                 psImg.executeBatch();
                 conn.commit();
-                log.info("[SEED R2 DATASET] ÄÃ£ tá»± Ä‘á»™ng Ä‘á»“ng bá»™ thÃ nh cÃ´ng {} bÃ i Ä‘Äƒng R2 vÃ o Database!", inserted);
+                log.info("[SEED R2 DATASET] Đã tự động đồng bộ thành công {} bài đăng R2 vào Database!", inserted);
             } catch (Exception e) {
                 conn.rollback();
-                log.error("[SEED R2 DATASET] Lá»—i khi Ä‘á»“ng bá»™ bÃ i Ä‘Äƒng R2: {}", e.getMessage(), e);
+                log.error("[SEED R2 DATASET] Lỗi khi đồng bộ bài đăng R2: {}", e.getMessage(), e);
             } finally {
                 conn.setAutoCommit(origAutoCommit);
             }
         } catch (Exception e) {
-            log.warn("[SEED R2 DATASET] KhÃ´ng thá»ƒ káº¿t ná»‘i Database Ä‘á»ƒ seed R2 dataset: {}", e.getMessage());
+            log.warn("[SEED R2 DATASET] Không thể kết nối Database để seed R2 dataset: {}", e.getMessage());
         }
     }
 }
