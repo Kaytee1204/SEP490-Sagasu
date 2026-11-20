@@ -292,6 +292,19 @@ class ChatMessageServiceTest {
                 AppException ex = assertThrows(AppException.class,
                                 () -> service.send(800L, new SendChatRequest(UUID.randomUUID(), "Hi"), claimantUser));
                 assertEquals(ErrorCode.CHAT_UNAVAILABLE, ex.getErrorCode());
+                assertEquals("Chỉ xem", ex.getMessage());
+        }
+
+        @Test
+        void sendLocation_whenAppealPausesChat_rejectsBeforeSaving() {
+                when(policy.actor(claimantUser)).thenReturn(claimant);
+                stubWritableLock(20L);
+                when(policy.readOnlyReason(conversation)).thenReturn("Chat đang tạm khóa do kháng cáo.");
+
+                var request = new ChatLocationRequest(UUID.randomUUID(), 21.0, 105.0, "Library");
+                assertEquals(ErrorCode.CHAT_UNAVAILABLE, assertThrows(AppException.class,
+                                () -> service.sendLocation(800L, request, claimantUser)).getErrorCode());
+                verify(messages, never()).saveAndFlush(any(ChatMessage.class));
         }
 
         private static Account account(Long id, String name) {

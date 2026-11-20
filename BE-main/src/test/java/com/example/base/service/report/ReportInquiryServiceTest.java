@@ -95,7 +95,7 @@ class ReportInquiryServiceTest {
         verify(jdbc).update(contains("insert into report_inquiry"), eq(5L), eq(7L), eq(1L), eq("Where did you lose it?"));
         verify(jdbc).update(contains("update report set version=version+1"), eq(5L));
         verify(reviews).history(eq(5L), eq(1L), eq("ASK_INFORMATION"), eq("IN_REVIEW"), eq("IN_REVIEW"), anyString(), anyString());
-        verify(notifications).notifyUser(eq(7L), eq("REPORT_INFORMATION"), anyString(), anyString(), eq("/bao-cao-trao-doi"), eq(false));
+        verify(notifications).notifyUser(eq(7L), eq("REPORT_INFORMATION"), anyString(), anyString(), eq("/bao-cao/5#phan-hoi"), eq(false));
         assertThat(res).containsEntry("ok", true);
     }
 

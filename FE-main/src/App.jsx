@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import HomePage from '@/features/home/pages/HomePage';
 import LandingLoginPage from '@/features/home/pages/LandingLoginPage';
@@ -45,7 +45,7 @@ import ApproverNewsPage from '@/features/approver/pages/ApproverNewsPage';
 import ChatPage from '@/features/chat/pages/ChatPage';
 import MyReportsPage from '@/features/reports/pages/MyReportsPage';
 import ReportDetailPage from '@/features/reports/pages/ReportDetailPage';
-import ReportExchangesPage from '@/features/report-review/ReportExchangesPage';
+import { reportsPath } from '@/features/reports/utils/reportUtils';
 import NotificationProvider from '@/features/notifications/NotificationProvider';
 import SavedPostsPage from '@/features/items/pages/SavedPostsPage';
 import SavedPostsProvider from '@/features/items/context/SavedPostsProvider';
@@ -71,6 +71,12 @@ function ProtectedRoute({ children, adminOnly = false, managerOnly = false, appr
 function RootHomeRoute() {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <HomePage /> : <LandingLoginPage />;
+}
+
+function ReportWorkspaceRedirect({ results = false }) {
+  const [params] = useSearchParams();
+  const finished = results || params.get('tab') === 'results';
+  return <Navigate to={`${reportsPath}?tab=related${finished ? '&status=FINISHED' : ''}`} replace />;
 }
 
 function AppRoutes() {
@@ -112,8 +118,8 @@ function AppRoutes() {
           <Route path="/van-phong/chuyen-giao" element={<OfficeTransfers mine />} />
           <Route path="/van-phong/chuyen-giao/:id" element={<OfficeTransferDetailPage mine />} />
           <Route path="/bao-cao-cua-toi" element={<MyReportsPage />} />
-          <Route path="/bao-cao-trao-doi" element={<ReportExchangesPage />} />
-          <Route path="/ket-qua-bao-cao" element={<ReportExchangesPage resultsView />} />
+          <Route path="/bao-cao-trao-doi" element={<ReportWorkspaceRedirect />} />
+          <Route path="/ket-qua-bao-cao" element={<ReportWorkspaceRedirect results />} />
           <Route path="/bao-cao/:id" element={<ReportDetailPage />} />
           <Route path="/tin-nhan" element={<ChatPage />} />
           <Route path="/tin-nhan/:conversationId" element={<ChatPage />} />

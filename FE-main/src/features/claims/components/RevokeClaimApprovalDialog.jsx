@@ -3,11 +3,11 @@ import { X } from 'lucide-react';
 import { revokeClaimApproval } from '../api/claimApi';
 import './RejectClaimDialog.css';
 
-export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked }) {
+export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked, initialReason = '', cancelLabel = 'Quay lại hồ sơ' }) {
   const dialog = useRef(null);
   const sending = useRef(false);
   const titleId = useId();
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(initialReason);
   const [custodyConfirmed, setCustodyConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -28,7 +28,7 @@ export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked })
 
   function close() {
     if (sending.current) return;
-    if (reason.trim()) setDiscard(true);
+    if (reason.trim() && reason.trim() !== initialReason.trim()) setDiscard(true);
     else onClose();
   }
 
@@ -56,7 +56,7 @@ export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked })
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
     <form onSubmit={submit}>
       <p>Đưa yêu cầu của <strong>{claim.claimantName}</strong> cho <strong>{claim.postTitle}</strong> về chờ xét duyệt.</p>
-      <p>Bạn có thể xét duyệt các yêu cầu khác. Người yêu cầu sẽ nhận được lý do; cuộc chat chuyển sang chỉ xem lịch sử.</p>
+      <p>Bạn có thể xét duyệt các yêu cầu khác. Người yêu cầu sẽ nhận được lý do và cuộc chat chuyển sang chỉ xem lịch sử.</p>
       <label className="claim-reject-option">
         <input type="checkbox" required checked={custodyConfirmed} disabled={busy}
           onChange={event => setCustodyConfirmed(event.target.checked)} />
@@ -69,7 +69,7 @@ export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked })
       {discard ? <div className="claim-reject-discard" role="alert"><p>Bỏ lý do đang nhập và quay lại hồ sơ?</p>
         <div className="claim-actions"><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></div></div>
-        : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại hồ sơ</button>
+        : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>{cancelLabel}</button>
           <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !custodyConfirmed}>{busy ? 'Đang lưu…' : 'Xác nhận thu hồi'}</button></footer>}
     </form>
   </dialog>;

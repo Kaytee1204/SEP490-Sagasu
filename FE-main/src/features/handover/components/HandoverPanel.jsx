@@ -1,10 +1,10 @@
 import { useEffect,useState } from 'react';
-import { ChevronDown, CircleCheck, Clock3, Images, PackageCheck, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { ChevronDown, CircleCheck, Clock3, Images, PackageCheck, RotateCcw, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useChat } from '@/features/chat/hooks/useChat';
 import { useNotifications } from '@/features/notifications/NotificationProvider';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
 import { handoverVerificationHint } from '@/features/claims/utils/reviewCriteria';
-import { P2P_CLAIM_STEPS } from '@/features/claims/utils/claimUtils';
+import { claimDate, P2P_CLAIM_STEPS } from '@/features/claims/utils/claimUtils';
 import WorkflowSteps from '@/components/common/WorkflowSteps';
 import { getHandover } from '../api/handoverApi';
 import RecordHandoverDialog from './RecordHandoverDialog';
@@ -15,22 +15,24 @@ import '../styles/Handover.css';
 const statusLabels={NOT_RECORDED:'Chưa ghi nhận giao đồ',WAITING_CONFIRMATION:'Chờ người nhận xác nhận',COMPLETED:'Đã nhận đồ',DISPUTED:'Có sự cố — chờ quản lý xử lý',CANCELLED:'Đã kết thúc bàn giao theo kết luận của quản lý'};
 const date=value=>new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});
 
-function currentStep(data) {
+function currentStep(data, canRevoke) {
   if (data.heldForReview && !['COMPLETED', 'CANCELLED'].includes(data.status)) return {
     Icon: ShieldAlert, title: 'Giao nhận đang tạm dừng', description: 'Quản lý đang đối chiếu báo cáo. Theo dõi kết quả trước khi tiếp tục bàn giao.',
   };
   const appeal = data.appealWindow;
   if (appeal?.state === 'OPEN') return {
-    Icon: Clock3, title: 'Đang trong thời hạn kháng cáo',
-    description: `Chờ đến ${date(appeal.deadline)} để bàn giao. Hai bên vẫn có thể nhắn tin trong thời gian này.`,
+    Icon: Clock3, title: 'Chưa thể bàn giao',
+    description: `Những người gửi yêu cầu khác có thể phản hồi đến ${claimDate(appeal.deadline)}. Hai bên vẫn có thể nhắn tin trong lúc chờ.`,
   };
   if (appeal?.state === 'UNDER_REVIEW') return {
     Icon: ShieldAlert, title: 'Đang xem xét kháng cáo',
-    description: 'Hãy chờ quản lý xử lý kháng cáo trước khi giao đồ.',
+    description: 'Chat đang ở chế độ chỉ xem. Hãy chờ quản lý xử lý kháng cáo trước khi giao đồ.',
   };
   if (appeal?.state === 'REVIEW_REQUIRED') return {
-    Icon: ShieldAlert, title: 'Cần xét duyệt lại người nhận',
-    description: 'Theo kết quả kháng cáo, người nhặt cần xác nhận vẫn đang giữ đồ và thu hồi chấp thuận để xét lại.',
+    Icon: ShieldAlert, title: 'Bàn giao đang tạm dừng',
+    description: canRevoke
+      ? 'Quản lý yêu cầu xét lại người nhận. Nếu vẫn đang giữ món đồ, hãy thu hồi chấp thuận để đưa hồ sơ về chờ xét duyệt.'
+      : 'Quản lý yêu cầu xét lại người nhận. Đang chờ người nhặt xác nhận vẫn giữ món đồ và thu hồi chấp thuận.',
   };
   switch (data.status) {
     case 'NOT_RECORDED': return data.canRecord
@@ -59,7 +61,7 @@ function HandoverSteps({ data, showSubmission }) {
   return <WorkflowSteps label="Các bước nhận đồ" steps={steps} completed={completed + Number(showSubmission)} state={state} />;
 }
 
-export default function HandoverPanel({claim,onChanged,showSubmission = false}) {
+export default function HandoverPanel({claim,onChanged,onRevokeApproval,showSubmission = false}) {
   const {revision}=useChat();
   const { items } = useNotifications();
   const latestNotification = items.find(item => item.targetUrl === `/bai-dang/${claim.postId}/claims/${claim.id}`)?.id;
@@ -85,21 +87,30 @@ export default function HandoverPanel({claim,onChanged,showSubmission = false}) 
   const evidence=(data?.evidence||[]).map(item=>({...item,name:item.name||'Ảnh giao đồ'}));
   const issueEvidence=(data?.issue?.evidence||[]).map(item=>({...item,name:item.name||'Ảnh sự cố'}));
   const gallery=[...evidence.map(item=>({...item,id:`h:${item.id}`})),...issueEvidence.map(item=>({...item,id:`r:${item.id}`}))];
-  const step = data ? currentStep(data) : null;
+  const requiresReReview = appealState === 'REVIEW_REQUIRED';
+  const canRevoke = Boolean(onRevokeApproval) && (!data || data.status === 'NOT_RECORDED')
+    && !data?.heldForReview && appealState !== 'UNDER_REVIEW';
+  const step = data ? currentStep(data, canRevoke) : null;
+  const revokeButton = canRevoke && <button type="button" className={requiresReReview ? 'btn btn-accent' : 'btn btn-ghost'}
+    onClick={onRevokeApproval}><RotateCcw size={16} aria-hidden="true" />{requiresReReview ? 'Thu hồi để xét lại' : 'Thu hồi chấp thuận'}</button>;
   const StepIcon = step?.Icon;
   return <section id="handover" className="claim-panel handover-panel" aria-labelledby="handover-title">
     <header className="handover-heading"><span className="handover-heading-icon"><PackageCheck size={22} aria-hidden="true" /></span><div><h2 id="handover-title">Tiến trình nhận đồ</h2><p>Hoàn tất sau khi người nhận xác nhận đúng món đồ.</p></div></header>
-    {error&&<div role="alert" className="claim-alert"><p>{error}</p><button type="button" className="btn btn-ghost" onClick={()=>setRefresh(n=>n+1)}>Tải lại tiến trình</button></div>}
+    {error&&<div role="alert" className="claim-alert"><p>{error}</p><div className="handover-next-actions">
+      <button type="button" className="btn btn-ghost" onClick={()=>setRefresh(n=>n+1)}>Tải lại tiến trình</button>
+      {!data && revokeButton}
+    </div></div>}
     {!data&&!error&&<p role="status">Đang tải tiến trình bàn giao…</p>}
     {data&&<>
     <HandoverSteps data={data} showSubmission={showSubmission} />
-    <div className={`handover-current-step ${data.status === 'COMPLETED' ? 'is-completed' : isPaused(data) ? 'is-paused' : ''}`}>
+    <div id={canRevoke ? 'review-approval' : undefined} className={`handover-current-step ${data.status === 'COMPLETED' ? 'is-completed' : isPaused(data) ? 'is-paused' : ''}`}>
       <StepIcon size={24} aria-hidden="true" /><div className="handover-current-content"><h3>{step.title}</h3><p>{step.description}</p>
-      {(data.canRecord || data.canConfirm || data.canReportIssue) && <div className="handover-next-actions">
+      {(data.canRecord || data.canConfirm || data.canReportIssue || canRevoke) && <div className="handover-next-actions">
         {data.canRecord && <p className="handover-verification-hint">{handoverVerificationHint(claim.answers)}</p>}
         {data.canRecord&&<button type="button" className="btn btn-accent" onClick={()=>setRecordOpen(true)}><PackageCheck size={18} aria-hidden="true" />Ghi nhận đã giao đồ</button>}
         {data.canConfirm&&<button type="button" className="btn btn-accent" onClick={()=>setConfirmOpen(true)}><CircleCheck size={18} aria-hidden="true" />Xác nhận đã nhận đúng đồ</button>}
         {data.canReportIssue&&<button type="button" className="btn btn-ghost handover-issue-button" onClick={()=>setIssueOpen(true)}><TriangleAlert size={17} aria-hidden="true" />Báo sự cố bàn giao</button>}
+        {revokeButton}
       </div>}
       </div>
     </div>

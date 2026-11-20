@@ -156,6 +156,19 @@ class ChatAttachmentServiceTest {
         verify(chatMessageService).notifyChatRecipient(eq(conversation), eq(20L), anyString());
     }
 
+    @Test
+    void send_whenAppealPausesChat_rejectsBeforeUploading() {
+        when(policy.actor(user)).thenReturn(claimant);
+        when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
+        doThrow(new AppException(ErrorCode.CHAT_UNAVAILABLE)).when(chatMessageService).requireWritable(conversation);
+        var file = new MockMultipartFile("files", "image.jpg", "image/jpeg", new byte[]{1});
+        var request = new SendChatRequest(UUID.randomUUID(), null);
+
+        assertEquals(ErrorCode.CHAT_UNAVAILABLE, assertThrows(AppException.class,
+                () -> service.send(800L, request, List.of(file), user)).getErrorCode());
+        verifyNoInteractions(validator, storage);
+    }
+
     // UTC052 - send with duplicate clientMessageId and matching attachment hash reuses existing without upload
     @Test
     void send_whenDuplicateClientMessageId_reusesExistingWithoutUploading() {

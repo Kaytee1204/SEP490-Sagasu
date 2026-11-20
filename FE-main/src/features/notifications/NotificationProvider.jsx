@@ -223,6 +223,9 @@ export default function NotificationProvider({ children }) {
               return [incoming, ...prev].slice(0, 30);
             });
             setUnreadCount((prev) => prev + 1);
+            if (incoming.type === 'REPORT_INFORMATION' || incoming.type === 'REPORT_RESOLVED') {
+              window.dispatchEvent(new Event('sagasu-counts-changed'));
+            }
 
             const isAlreadyOnChat =
               incoming.type === 'CHAT_MESSAGE' &&

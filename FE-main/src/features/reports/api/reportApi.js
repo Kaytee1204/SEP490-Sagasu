@@ -1,7 +1,10 @@
 import api from '@/services/apiClient';
-export const getReport = async id => (await api.get(`/reports/${id}`)).data;
-export const getMyReports = async (page,status,type='ALL') =>
-  (await api.get(`/reports/mine?${new URLSearchParams({page,status,type})}`)).data;
+
+const workspace = '/reports/workspace';
+export const getReportWorkspace = async ({ page, mine, status, type }) =>
+  (await api.get(`${workspace}?${new URLSearchParams({ page, mine, status, type })}`)).data;
+export const getReportActionCounts = async () => (await api.get(`${workspace}/action-counts`)).data;
+export const getReportWorkspaceDetail = async id => (await api.get(`${workspace}/${id}`)).data;
 export const getReportReasons = async (targetType,targetId,handoverIssue=false) =>
   (await api.get(`/reports/reasons?${new URLSearchParams({targetType,targetId,handoverIssue})}`)).data;
 export async function createReport(request,images) {

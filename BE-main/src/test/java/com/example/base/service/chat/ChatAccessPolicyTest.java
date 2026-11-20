@@ -10,6 +10,7 @@ import com.example.base.entity.Post;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.repository.AccountRepository;
+import com.example.base.repository.ChatQueryRepository;
 import com.example.base.repository.ItemReceiptRepository;
 import com.example.base.security.CustomUserDetails;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,8 @@ class ChatAccessPolicyTest {
     private AccountRepository accounts;
     @Mock
     private ItemReceiptRepository receipts;
+    @Mock
+    private ChatQueryRepository queries;
 
     @InjectMocks
     private ChatAccessPolicy policy;
@@ -109,6 +112,18 @@ class ChatAccessPolicyTest {
     }
 
     @Test
+    void chatKeepsHistoryAccessibleAndReopensWhenAppealLockEnds() {
+        Claim approved = approvedClaim();
+        ChatConversation conversation = new ChatConversation(approved);
+        when(queries.isAppealLocked(500L)).thenReturn(true, false);
+
+        assertTrue(policy.eligible(approved));
+        String reason = policy.readOnlyReason(conversation);
+        assertTrue(reason != null && reason.contains("kháng cáo"));
+        assertNull(policy.readOnlyReason(conversation));
+    }
+
+    @Test
     void utc010_readOnlyReason_cancelledClaimReturnsMessage() {
         Claim claim = approvedClaim();
         ChatConversation conv = new ChatConversation(claim);
@@ -129,6 +144,7 @@ class ChatAccessPolicyTest {
         ReflectionTestUtils.setField(post, "id", 100L);
         ReflectionTestUtils.setField(post, "status", "RESERVED");
         Claim claim = Claim.submit(post, claimant, "Mine", null);
+        ReflectionTestUtils.setField(claim, "id", 500L);
         claim.review("APPROVED");
         return claim;
     }

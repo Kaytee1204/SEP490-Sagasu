@@ -9,6 +9,7 @@ import com.example.base.repository.ClaimRepository;
 import com.example.base.repository.PostRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.chat.ChatAccessPolicy;
+import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.report.ReportService;
 import com.example.base.service.report.WorkflowImages;
@@ -41,6 +42,7 @@ public class P2pClaimAppealService {
     private final PostRepository posts;
     private final ClaimRoutingPolicy routing;
     private final ChatAccessPolicy actors;
+    private final ChatConversationService chat;
     private final EntityManager entityManager;
     private final PlatformTransactionManager transactions;
     private final WorkflowImages images;
@@ -174,6 +176,7 @@ public class P2pClaimAppealService {
                 jdbc.update("insert into p2p_claim_appeal(approval_id, appellant_claim_id, report_id) values (?, ?, ?)",
                         request.approvalId(), claimId, report.getId());
                 used[0] = true;
+                chat.notifyAppealChanged(report.getId());
                 notifyAppeal(post, actor, report.getId());
                 return new Submitted(report.getId());
             });

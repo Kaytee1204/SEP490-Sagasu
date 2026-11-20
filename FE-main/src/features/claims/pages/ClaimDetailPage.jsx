@@ -75,9 +75,9 @@ function ClaimDetail({ postId, id }) {
   const canRevokeApproval = claim?.canRevokeApproval;
   useEffect(() => {
     if (!loadedClaimId || !['#handover', '#review-approval'].includes(location.hash)) return;
-    const section = location.hash === '#review-approval' && canRevokeApproval ? 'review-approval' : 'handover';
-    document.getElementById(section)?.scrollIntoView({ block: 'start' });
-  }, [loadedClaimId, location.hash, canRevokeApproval]);
+    const step = document.getElementById(location.hash.slice(1)) || document.getElementById('handover');
+    step?.scrollIntoView({ block: 'start' });
+  }, [loadedClaimId, location.hash]);
   async function act(action, reviewDecision = decision) {
     if (inFlight.current) return;
     if (action === 'review' && !reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; }
@@ -112,8 +112,9 @@ function ClaimDetail({ postId, id }) {
       <ClaimDetailSummary claim={claim} post={post} />
       <div className="claim-detail-layout">
         <div className="claim-detail-main">
-          {showHandover ? <HandoverPanel claim={claim} onChanged={refreshClaim} showSubmission={isClaimant} />
-            : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} showProgress={isClaimant && claim.claimType === 'P2P'} />}
+          {showHandover ? <HandoverPanel claim={claim} onChanged={refreshClaim} showSubmission={isClaimant}
+            onRevokeApproval={canRevokeApproval ? () => setRevokeOpen(true) : undefined} />
+            : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} isClaimant={isClaimant} />}
           {claim.claimType === 'P2P' && claim.status === 'PENDING' && isClaimant &&
             <ClaimAppealPanel claim={claim} focusRevision={focusRevision} notificationId={claimNotification} />}
           {claim.claimType === 'OFFICE' && <p className="claim-detail-office-note">Món đồ do văn phòng tiếp nhận lưu giữ. Hồ sơ và việc nhận đồ được xử lý qua bên tiếp nhận.</p>}
@@ -131,10 +132,6 @@ function ClaimDetail({ postId, id }) {
           <button type="button" className="btn btn-ghost claim-detail-reject" disabled={busy} onClick={() => setRejectOpen(true)}><XCircle size={18} aria-hidden="true" />Từ chối yêu cầu</button>
         </div> : <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu kết quả xét duyệt'}</button>}
       </form>}
-      {canRevokeApproval && <section id="review-approval" className="claim-panel claim-detail-review">
-        <h2>Xét duyệt lại người nhận</h2><p>Thu hồi chấp thuận nếu cần kiểm tra lại căn cứ trước khi giao đồ.</p>
-        <button type="button" className="btn btn-ghost" onClick={() => setRevokeOpen(true)}>Thu hồi chấp thuận</button>
-      </section>}
       <ClaimParticipantPanel claim={claim} />
       <ClaimActivityTimeline activities={claim.activities} />
       <div className="claim-detail-secondary-actions">

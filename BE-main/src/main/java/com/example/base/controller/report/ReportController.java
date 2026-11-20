@@ -3,6 +3,7 @@ package com.example.base.controller.report;
 import com.example.base.dto.ApiResponse;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.report.ReportService;
+import com.example.base.service.report.ReportWorkspaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,7 @@ import java.util.List;
 )
 public class ReportController {
     private final ReportService service;
+    private final ReportWorkspaceService workspace;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
@@ -59,6 +61,31 @@ public class ReportController {
             @RequestParam(defaultValue = "false") boolean handoverIssue,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.reasonOptions(targetType, targetId, handoverIssue, user)));
+    }
+
+    @GetMapping("/workspace")
+    @Operation(summary = "Danh sách báo cáo đã gửi hoặc cần theo dõi của người dùng")
+    public ResponseEntity<?> workspace(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "true") boolean mine,
+            @RequestParam(defaultValue = "ALL") ReportWorkspaceService.Status status,
+            @RequestParam(defaultValue = "ALL") ReportWorkspaceService.Type type,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(workspace.list(page, mine, status, type, user)));
+    }
+
+    @GetMapping("/workspace/action-counts")
+    @Operation(summary = "Số báo cáo cần người dùng xử lý theo từng mục")
+    public ResponseEntity<?> actionCounts(@Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(workspace.actionCounts(user)));
+    }
+
+    @GetMapping("/workspace/{id}")
+    @Operation(summary = "Chi tiết báo cáo đã gửi hoặc được yêu cầu phản hồi hay nhận kết quả")
+    public ResponseEntity<?> workspaceDetail(@PathVariable long id,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(workspace.detail(id, user)));
     }
 
     @GetMapping("/{id}")

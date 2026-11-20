@@ -4,13 +4,18 @@ import com.example.base.entity.Account;
 import com.example.base.entity.Category;
 import com.example.base.entity.Claim;
 import com.example.base.entity.Post;
+import com.example.base.entity.Report;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.repository.ClaimRepository;
+import com.example.base.repository.PostRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.chat.ChatAccessPolicy;
+import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.notification.NotificationService;
+import com.example.base.service.report.ReportService;
 import com.example.base.service.report.WorkflowImages;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,11 +45,15 @@ import static org.mockito.Mockito.*;
 class P2pClaimAppealServiceTest {
     @Mock private JdbcTemplate jdbc;
     @Mock private ClaimRepository claims;
+    @Mock private PostRepository posts;
     @Mock private ChatAccessPolicy actors;
+    @Mock private ChatConversationService chat;
     @Mock private NotificationService notifications;
     @Mock private ClaimRoutingPolicy routing;
     @Mock private PlatformTransactionManager transactions;
     @Mock private WorkflowImages images;
+    @Mock private ReportService reports;
+    @Mock private EntityManager entityManager;
     @InjectMocks private P2pClaimAppealService service;
     private Claim selected;
     private Claim appellant;
@@ -127,6 +136,32 @@ class P2pClaimAppealServiceTest {
         var duplicate = new P2pClaimAppealService.Submit(3L, request.reason(), UUID.randomUUID());
         assertEquals(ErrorCode.REPORT_DUPLICATE, assertThrows(AppException.class,
                 () -> service.submit(501L, duplicate, List.of(), user)).getErrorCode());
+        verifyNoInteractions(chat);
+    }
+
+    @Test
+    void newAppealRefreshesTheApprovedConversation() throws Exception {
+        CustomUserDetails user = new CustomUserDetails(appellant.getClaimant());
+        var request = new P2pClaimAppealService.Submit(3L, "Look at the inner pocket.", UUID.randomUUID());
+        givenSubmission(user);
+        when(routing.matches(appellant, Set.of("RESERVED"))).thenReturn(true);
+        givenWindow(OffsetDateTime.now().plusHours(1), false, false);
+        doReturn(List.of()).when(jdbc).query(contains("appellant_claim_id=?"), any(RowMapper.class), eq(3L), eq(501L));
+        when(claims.findPostId(501L)).thenReturn(Optional.of(100L));
+        when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(appellant.getPost()));
+        when(claims.findForUpdate(501L)).thenReturn(Optional.of(appellant));
+        when(images.upload("reports/30", new WorkflowImages.Prepared(List.of(), List.of(), "hash")))
+                .thenReturn(List.of());
+        Report report = mock(Report.class);
+        when(report.getId()).thenReturn(900L);
+        when(reports.insert(eq(30L), eq("HANDOVER_ISSUE"), eq("CLAIM"), eq(501L),
+                anyString(), eq(request.clientRequestId()), eq("hash"), eq(List.of()))).thenReturn(report);
+
+        assertEquals(900L, service.submit(501L, request, List.of(), user).reportId());
+
+        var ordered = inOrder(jdbc, chat);
+        ordered.verify(jdbc).update(startsWith("insert into p2p_claim_appeal"), eq(3L), eq(501L), eq(900L));
+        ordered.verify(chat).notifyAppealChanged(900L);
     }
 
     @ParameterizedTest

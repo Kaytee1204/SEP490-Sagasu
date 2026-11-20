@@ -9,6 +9,7 @@ import com.example.base.repository.AccountRepository;
 import com.example.base.repository.PostRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.account.AccountService;
+import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.office.OfficeAccess;
 import com.example.base.service.office.OfficeManagementService;
@@ -44,6 +45,7 @@ class ReportReviewServiceTest {
     @Mock OfficeManagementService moderation;
     @Mock PostRepository posts;
     @Mock NotificationService notifications;
+    @Mock ChatConversationService chat;
 
     ReportContextService context;
     ReportReviewService service;
@@ -56,7 +58,7 @@ class ReportReviewServiceTest {
     @BeforeEach
     void setUp() {
         context = spy(new ReportContextService(jdbc, new ObjectMapper(), storage));
-        service = new ReportReviewService(access, jdbc, context, accounts, accountRepository, moderation, posts, notifications);
+        service = new ReportReviewService(access, jdbc, context, accounts, accountRepository, moderation, posts, notifications, chat);
         manager = new Account();
         manager.setId(1L);
         manager.setRole(AccountRole.MANAGER);
@@ -465,12 +467,14 @@ class ReportReviewServiceTest {
         service.act(5L, action("RESOLVE"), user);
         verifyStatusUpdate("RESOLVED");
         verify(jdbc).update(contains("update report_hold set released_at=now()"), eq(5L));
+        verify(chat).notifyAppealChanged(5L);
     }
 
     @Test
     void utc089_dismiss_rejectedStatus() {
         service.act(5L, action("DISMISS"), user);
         verifyStatusUpdate("REJECTED");
+        verify(chat).notifyAppealChanged(5L);
     }
 
     @Test

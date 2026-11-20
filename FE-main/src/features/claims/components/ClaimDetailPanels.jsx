@@ -88,13 +88,23 @@ export function ClaimActivityTimeline({ activities = [] }) {
   </section>;
 }
 
-export function ClaimStatusPanel({ claim, showProgress = false }) {
-  const waitingForAnotherClaim = showProgress && claim.status === 'PENDING' && claim.postStatus === 'RESERVED';
-  const pendingDescription = waitingForAnotherClaim
-    ? 'Một yêu cầu khác đã được chấp thuận. Bạn có thể theo dõi tình trạng hồ sơ của mình tại đây.'
-    : 'Staff sẽ kiểm tra căn cứ của bạn và gửi thông báo khi có kết quả.';
+function pendingReviewDescription(claim, isClaimant, waitingForAnotherClaim) {
+  if (claim.canReview) return 'Đối chiếu các căn cứ bên dưới trước khi chấp thuận người nhận.';
+  if (waitingForAnotherClaim) {
+    return isClaimant
+      ? 'Một yêu cầu khác đã được chấp thuận. Hồ sơ của bạn sẽ được xem xét tiếp nếu bài đăng mở lại.'
+      : 'Bài đăng đang giữ chỗ cho một yêu cầu đã được chấp thuận. Bạn có thể xét duyệt hồ sơ này khi bài đăng mở lại.';
+  }
+  if (!isClaimant) return 'Bài đăng hiện chưa đủ điều kiện để xét duyệt hồ sơ này.';
+  const reviewer = claim.claimType === 'OFFICE' ? 'Nhân viên văn phòng' : 'Người nhặt';
+  return `${reviewer} sẽ kiểm tra căn cứ của bạn và gửi thông báo khi có kết quả.`;
+}
+
+export function ClaimStatusPanel({ claim, isClaimant = false }) {
+  const showProgress = isClaimant && claim.claimType === 'P2P';
+  const waitingForAnotherClaim = claim.status === 'PENDING' && claim.postStatus === 'RESERVED';
   const copy = {
-    PENDING: [claim.canReview ? 'Yêu cầu đang chờ bạn xét duyệt' : 'Đang chờ xét duyệt', claim.canReview ? 'Đối chiếu các căn cứ bên dưới trước khi chấp thuận người nhận.' : pendingDescription],
+    PENDING: [claim.canReview ? 'Yêu cầu đang chờ bạn xét duyệt' : 'Đang chờ xét duyệt', pendingReviewDescription(claim, isClaimant, waitingForAnotherClaim)],
     APPROVED: ['Yêu cầu đã được chấp thuận', 'Theo dõi hướng dẫn của bên tiếp nhận để nhận lại món đồ.'],
     REJECTED: ['Yêu cầu chưa được chấp thuận', 'Xem lý do trong lịch sử xử lý để biết căn cứ cần làm rõ.'],
     CANCELLED: ['Yêu cầu đã được hủy', 'Nội dung, bằng chứng và lịch sử xử lý vẫn được lưu trong hồ sơ này.'],

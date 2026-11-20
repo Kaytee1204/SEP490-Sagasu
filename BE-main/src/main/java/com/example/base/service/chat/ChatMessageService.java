@@ -116,7 +116,8 @@ public class ChatMessageService {
         return conversation;
     }
     public void requireWritable(ChatConversation conversation) {
-        if (policy.readOnlyReason(conversation) != null) throw new AppException(ErrorCode.CHAT_UNAVAILABLE);
+        String reason = policy.readOnlyReason(conversation);
+        if (reason != null) throw new AppException(ErrorCode.CHAT_UNAVAILABLE, reason);
     }
     public String text(String value) {
         String result = value == null || value.isBlank() ? null : value.strip();

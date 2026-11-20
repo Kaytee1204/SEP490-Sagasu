@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { reviewApi } from "../api";
-import { ErrorBox, Gallery } from "./Shared";
-import ParticipantReportCard from "./ParticipantReportCard";
-import { date } from "../format";
+import { reviewApi } from "@/features/report-review/api";
+import { formatReportDate } from "../utils/reportUtils";
 import useImageUploads from '@/hooks/useImageUploads';
 import ImageUploadButton from "@/components/common/ImageUploadButton";
 import { Send, ShieldCheck } from "lucide-react";
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
-export default function ParticipantInquiry({ inquiry: i, onSaved }) {
+export default function ReportInquiryResponse({ inquiry: i, onSaved }) {
   const [response, setResponse] = useState(""),
     [files, setFiles] = useState([]),
     [submitting, setBusy] = useState(false),
@@ -44,20 +42,25 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
     } catch (problem) { setError(problem.message); }
   }
   return (
-    <ParticipantReportCard report={i} timestamp={`Yêu cầu bổ sung lúc ${date(i.created_at)}`}>
-      <div className="rr-callout exchange-report-note">
+    <article className="report-inquiry">
+      <div className="report-note">
         <h3>Yêu cầu từ quản lý</h3>
+        <time dateTime={i.created_at}>{formatReportDate(i.created_at)}</time>
         <p>{i.question}</p>
       </div>
       {i.responded_at ? (
         <>
           <h3>Thông tin bạn đã gửi</h3>
           <p>{i.response}</p>
-          <small>{date(i.responded_at)}</small>
-          <Gallery images={i.evidence} />
+          <time dateTime={i.responded_at}>{formatReportDate(i.responded_at)}</time>
+          {i.evidence?.length > 0 && <div className="report-evidence">
+            {i.evidence.map(image => <a href={image.url} key={image.evidence_id} target="_blank" rel="noreferrer">
+              <img src={image.url} alt={image.original_name || 'Ảnh đối chiếu'} loading="lazy" />
+            </a>)}
+          </div>}
         </>
       ) : ["OPEN", "IN_REVIEW"].includes(i.status) ? (
-        <form className="rr-stack" onSubmit={submit}>
+        <form className="report-reply-form" onSubmit={submit}>
           <label>
             Phản hồi của bạn *
             <textarea
@@ -69,14 +72,14 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
               onChange={(e) => setResponse(e.target.value)}
             />
           </label>
-          <div className="exchange-upload">
-            <span className="exchange-field-label">Ảnh đối chiếu <small>Không bắt buộc</small></span>
+          <div className="report-reply-upload">
+            <span>Ảnh đối chiếu <small>Không bắt buộc</small></span>
             <ImageUploadButton label="Thêm ảnh đối chiếu" disabled={busy || files.length >= 5} onChange={pick}/>
             <small>{files.length}/5 ảnh · Tối đa 5 MB/ảnh</small><small>{IMAGE_FORMATS}</small>
           </div>
           <ImageProcessingStatus active={processing} />
           {files.map((f, index) => (
-            <div className="rr-row" key={index}>
+            <div className="report-reply-file" key={index}>
               <span>{f.name}</span>
               <button
                 type="button"
@@ -89,23 +92,17 @@ export default function ParticipantInquiry({ inquiry: i, onSaved }) {
               </button>
             </div>
           ))}
-          <footer className="exchange-submit"><p className="rr-muted"><ShieldCheck size={16}/>
-            Phản hồi chỉ được gửi một lần và được lưu nguyên vẹn để đối chiếu.
-          </p>
-          <ErrorBox>{error}</ErrorBox>
-          <button className="rr-primary" disabled={busy || !response.trim()}>
-            <Send size={16}/>{busy ? "Đang gửi…" : "Gửi thông tin bổ sung"}
-          </button></footer>
+          {error && <p className="report-error" role="alert">{error}</p>}
+          <footer className="report-reply-submit">
+            <p><ShieldCheck size={16} aria-hidden="true" /> Phản hồi chỉ được gửi một lần.</p>
+            <button className="btn btn-accent" type="submit" disabled={busy || !response.trim()}>
+              <Send size={16} aria-hidden="true" />{busy ? "Đang gửi…" : "Gửi thông tin bổ sung"}
+            </button>
+          </footer>
         </form>
       ) : (
         <p>Vụ việc đã kết thúc, không cần gửi thêm thông tin.</p>
       )}
-      {i.resolution_note && (
-        <div className="rr-callout exchange-report-note">
-          <h3>Kết luận xử lý</h3>
-          <p>{i.resolution_note}</p>
-        </div>
-      )}
-    </ParticipantReportCard>
+    </article>
   );
 }

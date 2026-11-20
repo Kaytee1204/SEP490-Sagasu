@@ -21,8 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class ReportInquiryService {
 
-  private static final String PARTICIPANT_REPORT_COLUMNS = """
-      r.report_id, r.status, r.resolution_note,
+  static final String REPORT_SUBJECT_COLUMNS = """
       case
         when appeal.report_id is not null then 'CLAIM_APPEAL'
         when r.kind = 'HANDOVER_ISSUE' then 'HANDOVER_ISSUE'
@@ -32,12 +31,16 @@ public class ReportInquiryService {
         when r.reported_account_id is not null then 'USER'
       end as report_type,
       coalesce(nullif(btrim(p.title), ''), nullif(btrim(a.full_name), '')) as report_subject,
-      coalesce(r.post_id, c.post_id, conversation.post_id, r.reported_account_id) as report_subject_id,
-      case when appeal.report_id is null then r.reason_label_snapshot end as report_reason,
-      case when p.account_id = ? then approved.claim_id end as finder_approved_claim_id
+      coalesce(r.post_id, c.post_id, conversation.post_id, r.reported_account_id) as report_subject_id
       """;
 
-  private static final String PARTICIPANT_REPORT_JOINS = """
+  private static final String PARTICIPANT_REPORT_COLUMNS = """
+      r.report_id, r.status, r.resolution_note, %s,
+      case when appeal.report_id is null then r.reason_label_snapshot end as report_reason,
+      case when p.account_id = ? then approved.claim_id end as finder_approved_claim_id
+      """.formatted(REPORT_SUBJECT_COLUMNS);
+
+  static final String PARTICIPANT_REPORT_JOINS = """
       left join p2p_claim_appeal appeal on appeal.report_id = r.report_id
       left join claim c on c.claim_id = r.claim_id
       left join chat_message m on m.message_id = r.message_id
@@ -113,7 +116,7 @@ public class ReportInquiryService {
       "REPORT_INFORMATION",
       "Cần bổ sung thông tin cho báo cáo #" + report,
       request.question(),
-      "/bao-cao-trao-doi",
+      "/bao-cao/" + report + "#phan-hoi",
       false
     );
     return reviews.detail(report, user);
@@ -130,18 +133,26 @@ public class ReportInquiryService {
         order by i.created_at desc
         limit 100
         """.formatted(PARTICIPANT_REPORT_COLUMNS, PARTICIPANT_REPORT_JOINS), actor, actor);
-    rows.forEach(r ->
-      r.put(
-        "evidence",
-        context.withUrls(
-          jdbc.queryForList(
-            "select evidence_id,storage_key,original_name from report_reply_evidence where inquiry_id=?",
-            r.get("inquiry_id")
-          )
-        )
-      )
-    );
+    attachEvidence(rows);
     return rows;
+  }
+
+  List<Map<String, Object>> forReport(long reportId, long recipientId) {
+    var rows = jdbc.queryForList("""
+        select i.inquiry_id, i.question, i.created_at, i.response, i.responded_at, r.status
+        from report_inquiry i join report r using (report_id)
+        where i.report_id = ? and i.recipient_id = ?
+        order by i.created_at desc, i.inquiry_id desc
+        """, reportId, recipientId);
+    attachEvidence(rows);
+    return rows;
+  }
+
+  private void attachEvidence(List<Map<String, Object>> rows) {
+    rows.forEach(row -> row.put("evidence", context.withUrls(jdbc.queryForList(
+        "select evidence_id,storage_key,original_name from report_reply_evidence where inquiry_id=?",
+        row.get("inquiry_id")
+    ))));
   }
 
   @Transactional(readOnly = true)

@@ -8,6 +8,7 @@ import com.example.base.entity.*;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.account.AccountService;
+import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.office.*;
 import jakarta.validation.constraints.*;
@@ -29,6 +30,7 @@ public class ReportReviewService {
   private final OfficeManagementService moderation;
   private final PostRepository posts;
   private final NotificationService notifications;
+  private final ChatConversationService chat;
 
   public record Action(
     @NotNull @PositiveOrZero Long version,
@@ -428,6 +430,7 @@ public class ReportReviewService {
       reportId
     );
     if (finished) {
+      chat.notifyAppealChanged(reportId);
       jdbc.update(
         "update report_hold set released_at=now() where report_id=? and released_at is null",
         reportId
@@ -443,7 +446,7 @@ public class ReportReviewService {
           "REPORT_RESOLVED",
           "Báo cáo #" + reportId + " đã có kết quả",
           conclusion,
-          "/bao-cao-trao-doi?tab=results",
+          "/bao-cao/" + reportId + "#ket-qua",
           false
         );
       }

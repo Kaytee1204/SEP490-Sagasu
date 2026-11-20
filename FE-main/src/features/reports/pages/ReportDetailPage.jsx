@@ -1,43 +1,138 @@
 import '@/styles/Workspace.css';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, UserRound } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
-import { getReport } from '../api/reportApi';
-import { reportTypes, reportStatuses as statuses } from '../constants/reportConstants';
-import { formatReportDate as date, reportTargetType as typeOf } from '../utils/reportUtils';
+import { claimDetailPath } from '@/features/claims/utils/claimUtils';
+import useLoad from '@/features/office/hooks/useLoad';
+import { getReportWorkspaceDetail } from '../api/reportApi';
+import FinderAppealAction from '../components/FinderAppealAction';
+import ReportInquiryResponse from '../components/ReportInquiryResponse';
 import ReportProgress from '../components/ReportProgress';
+import { reportStatuses, reportTitles } from '../constants/reportConstants';
+import { formatReportDate, reportsPath, reportSubject } from '../utils/reportUtils';
 import '../styles/Reports.css';
 
 export default function ReportDetailPage() {
-  const {id}=useParams(),{user}=useAuth();return <ReportDetail key={`${user.id}:${id}`} id={id}/>;
+  const { id } = useParams();
+  const { user } = useAuth();
+  return /^[1-9]\d*$/.test(id)
+    ? <ReportDetail key={`${user.id}:${id}`} id={id} />
+    : <main className="container reports-page"><BackLink to={reportsPath} /><p role="alert">Mã báo cáo không hợp lệ.</p></main>;
 }
-function ReportDetail({id}) {
-  const [report,setReport]=useState(null),[loadError,setLoadError]=useState(''),[image,setImage]=useState(null);
-  const validId = /^[1-9]\d*$/.test(id);
-  const error = validId ? loadError : 'Mã báo cáo không hợp lệ.';
+
+function BackLink({ to }) {
+  return <Link className="report-back" to={to}><ArrowLeft size={17} aria-hidden="true" /> Về danh sách báo cáo</Link>;
+}
+
+function ReportDetail({ id }) {
+  const location = useLocation();
+  const { data, error, loading, reload } = useLoad(() => getReportWorkspaceDetail(id), id);
+  const [image, setImage] = useState(null);
+  const [replySaved, setReplySaved] = useState(false);
+
   useEffect(() => {
-    if (!validId) return;
-    let cancelled = false;
-    getReport(id).then(data => { if (!cancelled) setReport(data); })
-      .catch(problem => { if (!cancelled) setLoadError(problem.message); });
-    return () => { cancelled = true; };
-  }, [id, validId]);
-  const evidence=(report?.evidence||[]).map(item=>({...item,name:item.name||'Ảnh bằng chứng'}));
-  const type = report ? typeOf(report) : null;
-  return <main className="container reports-page"><Link className="btn btn-ghost" to="/bao-cao-cua-toi"><ArrowLeft size={16}/> Về danh sách báo cáo</Link><h1 className="report-detail-title">{report ? `Báo cáo #${report.id}` : "Chi tiết báo cáo"}</h1>
-    {error&&<p role="alert" className="report-error">{error}</p>}{!report&&!error&&<p role="status">Đang tải…</p>}
-    {report&&<><section className="report-card"><div className="report-account-heading report-detail-account"><span className="report-account-avatar"><UserRound size={23}/></span><div className="report-account-info"><span className="report-account-caption">Tài khoản liên quan</span><h2>{report.targetAccount?.name || "Không còn thông tin tài khoản"}</h2><p>{reportTypes[type]} · {report.targetLabel}</p></div></div><div className="report-card-meta"><span className="report-kind-badge">{reportTypes[type]}</span><span className={`report-state report-state-${report.status}`}>{statuses[report.status]}</span></div>
-    <ReportProgress status={report.status} appeal={type === 'CLAIM_APPEAL'} />
-    <dl className="report-detail-fields">{type !== 'CLAIM_APPEAL' && <div><dt>Lý do báo cáo</dt><dd>{report.reasonLabel || 'Chưa phân loại (báo cáo cũ)'}</dd></div>}
-      {report.description&&<div><dt>{type === 'CLAIM_APPEAL' ? 'Nội dung kháng cáo' : 'Mô tả chi tiết'}</dt><dd className="report-description">{report.description}</dd></div>}
-      <div><dt>Thời gian gửi</dt><dd>{date(report.createdAt)}</dd></div>
-      {report.resolutionNote&&<div><dt>Kết luận xử lý</dt><dd className="report-description">{report.resolutionNote}</dd></div>}
-    </dl>
-    <div className="report-evidence">{evidence.map((item,i)=><button key={item.id} onClick={()=>setImage(i)} aria-label="Xem ảnh bằng chứng"><img src={item.url} alt={item.name}/></button>)}</div>
-    </section>
-    <details className="report-card"><summary>Lịch sử xử lý</summary>{(report.activities || []).map((item,i)=><p key={i}>{date(item.at)} · {statuses[item.status]}{item.note&&` · ${item.note}`}</p>)}</details></>}
-    {image!==null&&<ClaimEvidencePreview images={evidence} initialIndex={image} onClose={()=>setImage(null)}/>}
-  </main>;
+    const hash = location.hash;
+    if (!data || (hash !== '#phan-hoi' && hash !== '#ket-qua')) return;
+    const frame = requestAnimationFrame(() => {
+      const section = document.getElementById(hash.slice(1));
+      section?.focus({ preventScroll: true });
+      section?.scrollIntoView({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [data, location.hash]);
+
+  const { report, submission, inquiries = [] } = data ?? {};
+  const returnTo = location.state?.returnTo || (report?.mine === false ? `${reportsPath}?tab=related` : reportsPath);
+  const evidence = (submission?.evidence ?? []).map(item => ({ ...item, name: item.name || 'Ảnh bằng chứng' }));
+  const subject = report && reportSubject(report);
+  const isAppeal = report?.report_type === 'CLAIM_APPEAL';
+  const concluded = report && ['RESOLVED', 'REJECTED'].includes(report.status);
+  const pending = report?.needs_reply === true;
+  const claimPath = isAppeal && report.finder_approved_claim_id && report.report_subject_id
+    ? claimDetailPath(report.report_subject_id, report.finder_approved_claim_id) : null;
+
+  function afterReply() {
+    setReplySaved(true);
+    window.dispatchEvent(new Event('sagasu-counts-changed'));
+    reload();
+  }
+
+  return (
+    <main className="container reports-page report-detail-page">
+      <BackLink to={returnTo} />
+      {loading && <p className="reports-count" role="status">Đang tải chi tiết báo cáo…</p>}
+      {error && <div className="report-card">
+        <p className="report-error" role="alert">{error}</p>
+        <button type="button" className="btn btn-ghost" onClick={reload}>Thử tải lại</button>
+      </div>}
+      {report && <>
+        <header className="report-card report-detail-overview">
+          <div className="report-detail-heading">
+            <div>
+              <p className="report-detail-reference">Báo cáo #{report.report_id} · {report.mine ? 'Bạn đã gửi' : 'Liên quan đến bạn'}</p>
+              <h1>{reportTitles[report.report_type] || 'Chi tiết báo cáo'}</h1>
+            </div>
+            <span className={`report-state report-state-${report.status}`}>{reportStatuses[report.status]}</span>
+          </div>
+          {subject.value && <p className="report-detail-subject">{subject.label} <span className="report-meta-dot">·</span> <strong>{subject.value}</strong></p>}
+          <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
+          <ReportProgress status={report.status} appeal={isAppeal} />
+        </header>
+        {inquiries.length > 0 && <section id="phan-hoi" className="report-card report-detail-section" tabIndex={-1}>
+          <div className="report-detail-heading">
+            <h2>Trao đổi với quản lý</h2>
+            {pending && <span className="report-state report-state-ACTION">Cần bạn phản hồi</span>}
+          </div>
+          {replySaved && <p className="report-reply-success" role="status">Đã gửi thông tin bổ sung.</p>}
+          {inquiries.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} onSaved={afterReply} />)}
+        </section>}
+        {concluded && <section id="ket-qua" className="report-card report-detail-section" tabIndex={-1}>
+          <div className="report-detail-heading">
+            <h2>Kết quả xử lý</h2>
+            {report.resolved_at && <time dateTime={report.resolved_at}>Xử lý lúc {formatReportDate(report.resolved_at)}</time>}
+          </div>
+          <div className="report-note">
+            <p>{report.resolution_note || submission?.resolutionNote || 'Chưa có ghi chú kết luận.'}</p>
+          </div>
+          {claimPath && report.needs_reopen && <FinderAppealAction report={report} claimPath={claimPath} />}
+          {claimPath && !report.needs_reopen && <HandoverLink claimPath={claimPath} status={report.status} />}
+        </section>}
+        {!concluded && claimPath && <section className="report-card report-detail-section">
+          <h2>Bàn giao món đồ</h2>
+          <HandoverLink claimPath={claimPath} status={report.status} />
+        </section>}
+        {(submission || report.report_reason) && <section className="report-card report-detail-section">
+          <h2>{isAppeal ? 'Nội dung kháng cáo' : 'Nội dung báo cáo'}</h2>
+          <dl className="report-detail-fields">
+            {!isAppeal && <div><dt>Lý do báo cáo</dt><dd>{report.report_reason || 'Chưa phân loại (báo cáo cũ)'}</dd></div>}
+            {submission?.description && <div><dt>Mô tả</dt><dd className="report-description">{submission.description}</dd></div>}
+          </dl>
+          {evidence.length > 0 && <div className="report-evidence">
+            {evidence.map((item, index) => <button type="button" key={item.id} onClick={() => setImage(index)} aria-label={`Xem ${item.name}`}>
+              <img src={item.url} alt={item.name} loading="lazy" />
+            </button>)}
+          </div>}
+        </section>}
+        {submission?.activities?.length > 0 && <details className="report-card report-history">
+          <summary>Lịch sử xử lý</summary>
+          {submission.activities.map((activity, index) => <p key={index}>
+            {formatReportDate(activity.at)} · {reportStatuses[activity.status]}{activity.note && ` · ${activity.note}`}
+          </p>)}
+        </details>}
+        {image !== null && <ClaimEvidencePreview images={evidence} initialIndex={image} onClose={() => setImage(null)} />}
+      </>}
+    </main>
+  );
+}
+
+function HandoverLink({ claimPath, status }) {
+  const guide = status === 'RESOLVED' ? 'Kiểm tra tiến trình để biết khi nào có thể xét lại người nhận.'
+    : status === 'REJECTED' ? 'Kiểm tra tiến trình để biết khi nào có thể bàn giao.'
+      : 'Giữ món đồ trong khi quản lý xử lý kháng cáo.';
+  return <div className="report-appeal-next">
+    <p>{guide}</p>
+    <Link className="btn btn-ghost" to={`${claimPath}#handover`}>Theo dõi bàn giao <ArrowRight size={15} aria-hidden="true" /></Link>
+  </div>;
 }

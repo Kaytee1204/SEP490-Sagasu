@@ -33,6 +33,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -149,6 +150,17 @@ class ChatConversationServiceTest {
         service.notifyChanged(claim);
 
         verifyNoInteractions(events);
+    }
+
+    @Test
+    void appealRefreshesOnlyTheConversationForTheAffectedApproval() {
+        when(conversations.findActiveConversationIdForAppeal(900L)).thenReturn(Optional.of(800L));
+
+        service.notifyAppealChanged(900L);
+        service.notifyAppealChanged(901L);
+
+        verify(events).changed(800L, "CONVERSATION_UPDATED");
+        verifyNoMoreInteractions(events);
     }
 
     private static Account account(Long id, String name) {

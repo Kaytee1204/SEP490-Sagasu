@@ -71,6 +71,7 @@ function PostClaimsContent({ postId }) {
   const [snapshot, setSnapshot] = useState({ key: '', group: null, error: '' });
 
   const fromList = location.state?.fromClaimsList;
+  const revokedClaimId = location.state?.revokedClaimId;
   const backPath = typeof fromList === 'string' && (fromList === '/claim-cua-toi' || fromList.startsWith('/claim-cua-toi?'))
     ? fromList
     : '/claim-cua-toi';
@@ -233,6 +234,9 @@ function PostClaimsContent({ postId }) {
         )}
       </section>
 
+      {validClaimId(revokedClaimId) && <p className="claim-notice" role="status">
+        Đã thu hồi chấp thuận. Hồ sơ #{revokedClaimId} đã về chờ xét duyệt.
+      </p>}
       <section className="claim-list-controls post-claims-controls" aria-label="Lọc và chế độ hiển thị hồ sơ">
         <div className="post-claims-toolbar-top">
           <div className="claim-list-tabs" role="group" aria-label="Danh sách yêu cầu">

@@ -9,7 +9,24 @@ import java.util.List;
 
 @Repository @RequiredArgsConstructor
 public class ChatQueryRepository {
+    // An upheld appeal keeps chat paused until the affected approval round is closed.
+    private static final String APPEAL_LOCK = """
+            EXISTS (
+                SELECT 1 FROM p2p_claim_approval approval
+                JOIN p2p_claim_appeal appeal USING (approval_id)
+                JOIN report r ON r.report_id = appeal.report_id
+                WHERE approval.approved_claim_id = %s AND approval.closed_at IS NULL
+                  AND r.status IN ('OPEN', 'IN_REVIEW', 'RESOLVED')
+            )
+            """;
+
     private final JdbcTemplate jdbc;
+
+    public boolean isAppealLocked(long claimId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT " + APPEAL_LOCK.formatted("?"), Boolean.class, claimId));
+    }
+
     public List<ChatPageDto.Summary> list(long actorId, OffsetDateTime before, long beforeId, int limit) {
         return list(actorId, before, beforeId, limit, "ALL");
     }
@@ -28,7 +45,8 @@ public class ChatQueryRepository {
                      AND p.status='RESERVED' AND p.deleted_at IS NULL AND a.status='ACTIVE'
                      AND (a.locked_until IS NULL OR a.locked_until<now())
                      AND (a.valid_until IS NULL OR a.valid_until>now())
-                     AND NOT EXISTS (SELECT 1 FROM item_receipt r WHERE r.post_id=p.post_id)), false) AS can_send
+                     AND NOT EXISTS (SELECT 1 FROM item_receipt r WHERE r.post_id=p.post_id)
+                     AND NOT %s), false) AS can_send
             FROM chat_participant mine JOIN chat_conversation c ON c.conversation_id=mine.conversation_id
             JOIN post p ON p.post_id=c.post_id JOIN claim cl ON cl.claim_id=c.latest_claim_id
             JOIN accounts a ON a.id=CASE WHEN mine.account_id=p.account_id THEN c.claimant_id ELSE p.account_id END
@@ -39,7 +57,7 @@ public class ChatQueryRepository {
             WHERE (?='ALL' OR can_send=(?='ACTIVE'))
               AND (?::timestamptz IS NULL OR (last_activity_at,conversation_id)<(?::timestamptz,?))
             ORDER BY last_activity_at DESC,conversation_id DESC LIMIT ?
-            """, (rs, n) -> new ChatPageDto.Summary(rs.getLong("conversation_id"), rs.getLong("post_id"),
+            """.formatted(APPEAL_LOCK.formatted("cl.claim_id")), (rs, n) -> new ChatPageDto.Summary(rs.getLong("conversation_id"), rs.getLong("post_id"),
                 rs.getString("title"), rs.getString("full_name"), rs.getString("preview"),
                 rs.getObject("last_activity_at", OffsetDateTime.class), rs.getLong("unread"), rs.getBoolean("can_send")),
                 actorId, actorId, view, view, cutoff, cutoff, beforeId, limit);
