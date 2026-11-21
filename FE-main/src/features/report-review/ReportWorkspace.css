@@ -782,6 +782,22 @@
   }
 }
 
+@container (min-width: 561px) and (max-width: 790px) {
+  .rr-case-row[data-kind="CLAIM_APPEAL"] {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto;
+    grid-template-areas:
+      "subject reason reason"
+      "status assignee open";
+    align-items: center;
+  }
+
+  .rr-case-row[data-kind="CLAIM_APPEAL"] .rr-case-subject { grid-area: subject; }
+  .rr-case-row[data-kind="CLAIM_APPEAL"] .rr-case-reason { grid-area: reason; }
+  .rr-case-row[data-kind="CLAIM_APPEAL"] .rr-case-status { grid-area: status; }
+  .rr-case-row[data-kind="CLAIM_APPEAL"] .rr-case-assignee { grid-area: assignee; }
+  .rr-case-row[data-kind="CLAIM_APPEAL"] .rr-case-open { grid-area: open; }
+}
+
 @container (max-width: 460px) {
   .rr-queue-toolbar {
     padding: 14px;
@@ -864,9 +880,28 @@
   border-top: 1px solid var(--review-line);
 }
 .rr .rr-appeal-actions h3 { font-size: .85rem; }
-.rr-appeal-action { display: grid; gap: 4px; }
-.rr .rr-appeal-action button { justify-content: flex-start; text-align: start; font-weight: 650; }
-.rr .rr-appeal-action p { color: var(--review-muted); font-size: .8rem; line-height: 1.45; }
+.rr-appeal-action { position: relative; display: grid; }
+.rr .rr-appeal-action button { justify-content: flex-start; gap: 8px; text-align: start; font-weight: 650; }
+.rr-appeal-action button svg { flex-shrink: 0; }
+.rr .rr-appeal-tooltip {
+  position: absolute;
+  z-index: 5;
+  inset-inline: 0;
+  bottom: 100%;
+  visibility: hidden;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #173c44;
+  color: white;
+  box-shadow: 0 4px 12px #173c4433;
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.rr-appeal-action:has(button:focus-visible) .rr-appeal-tooltip { visibility: visible; }
+@media (hover: hover) {
+  .rr-appeal-action:hover .rr-appeal-tooltip { visibility: visible; }
+}
 .rr-workflow > button { align-self: start; }
 .rr-workflow .rr-follow-up { display: grid; gap: 4px; }
 

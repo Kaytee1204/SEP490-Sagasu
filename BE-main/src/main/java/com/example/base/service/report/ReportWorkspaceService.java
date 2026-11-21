@@ -155,13 +155,17 @@ public class ReportWorkspaceService {
         var report = sql.queryForList(WORKSPACE + """
                 select w.*, d.action as outcome,
                        exists (select 1 from report_decision reopened
-                           where reopened.report_id=w.report_id and reopened.action='APPEAL_REOPEN') as approval_reopened,
+                           where reopened.report_id=w.report_id
+                             and (reopened.action='APPEAL_REOPEN'
+                               or (reopened.action='APPEAL_WRONG_RECIPIENT'
+                                 and reopened.after_state->>'approvalReopened'='true'))) as approval_reopened,
                        case when w.post_owner then d.after_state->>'appliedMeasure' end as post_measure
                 from workspace w left join lateral (
                     select d.action, d.after_state from report_decision d
                     where d.report_id = w.report_id
                       and d.action in ('VIOLATION', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE',
-                                       'APPEAL_KEEP', 'APPEAL_REQUIRE_REVIEW', 'HANDOVER_COMPLETED',
+                                       'APPEAL_KEEP', 'APPEAL_REJECT_CLAIM', 'APPEAL_REQUIRE_REVIEW',
+                                       'APPEAL_WRONG_RECIPIENT', 'HANDOVER_COMPLETED',
                                        'HANDOVER_CONTINUE', 'HANDOVER_RETRY', 'HANDOVER_REOPEN', 'CLAIM_REJECTED')
                     order by d.decision_id desc limit 1
                 ) d on true

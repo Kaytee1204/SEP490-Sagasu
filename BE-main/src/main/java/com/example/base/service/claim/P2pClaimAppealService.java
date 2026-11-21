@@ -26,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -118,12 +119,6 @@ public class P2pClaimAppealService {
         return new HandoverWindow(approval.deadline(), approval.stateAt(OffsetDateTime.now()));
     }
 
-    public boolean canReopenFromDecision(Claim selected, long approvalId) {
-        Approval approval = activeApproval(selected.getPost().getId());
-        return approval != null && approval.id() == approvalId && approval.selectedClaimId() == selected.getId()
-                && approval.stateAt(OffsetDateTime.now()) == State.REVIEW_REQUIRED;
-    }
-
     @Transactional(readOnly = true)
     public Status status(long claimId, CustomUserDetails user) {
         long actor = actors.actor(user).getId();
@@ -141,9 +136,9 @@ public class P2pClaimAppealService {
         }
         if (!ownClaim) return null;
         ExistingAppeal existing = existingAppeal(approval.id(), claimId);
-        if (!"PENDING".equals(claim.getStatus()) && existing == null) return null;
-        boolean canAppeal = existing == null && "PENDING".equals(claim.getStatus())
-                && now.isBefore(approval.deadline());
+        if (existing == null && (!"PENDING".equals(claim.getStatus())
+                || ClaimRepository.disputeEndsReview(claims.findLatestDisputeOutcome(claimId)))) return null;
+        boolean canAppeal = existing == null && now.isBefore(approval.deadline());
         return new Status(approval.id(), approval.deadline(), state, canAppeal,
                 existing == null ? null : existing.id(), existing == null ? null : existing.status());
     }
@@ -214,6 +209,7 @@ public class P2pClaimAppealService {
         Approval approval = activeApproval(claim.getPost().getId());
         if (approval == null || approval.id() != request.approvalId() || approval.selectedClaimId() == claim.getId()
                 || !routing.matches(claim, RESERVED) || !"PENDING".equals(claim.getStatus())
+                || ClaimRepository.disputeEndsReview(claims.findLatestDisputeOutcome(claim.getId()))
                 || !OffsetDateTime.now().isBefore(approval.deadline())) {
             throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Hồ sơ đã thay đổi hoặc hết thời hạn gửi tranh chấp.");
         }
@@ -258,7 +254,15 @@ public class P2pClaimAppealService {
     }
 
     private List<Claim> waitingP2p(long postId) {
-        return claims.findWaitingForReturn(postId).stream().filter(claim -> !claim.isOffice()).toList();
+        var waiting = claims.findWaitingForReturn(postId).stream().filter(claim -> !claim.isOffice()).toList();
+        if (waiting.isEmpty()) return waiting;
+        var closed = new HashSet<Long>();
+        for (Object[] outcome : claims.findLatestDisputeOutcomes(waiting.stream().map(Claim::getId).toList())) {
+            if (ClaimRepository.disputeEndsReview((String) outcome[1])) {
+                closed.add(((Number) outcome[0]).longValue());
+            }
+        }
+        return waiting.stream().filter(claim -> !closed.contains(claim.getId())).toList();
     }
 
     private String claimPath(Claim claim) {

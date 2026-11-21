@@ -1,6 +1,6 @@
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronDown, ClipboardCheck, History, MessageSquare, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ClipboardCheck, History, MessageSquare, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { reviewApi } from "../api";
 import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
 import { appealActionHelp, availableRecipients, date, labels, reviewKinds } from "../format";
@@ -130,6 +130,7 @@ function FollowUp({ data }) {
     }
   } else if (appeal?.follow_up) {
     text = appealInstruction(appeal.follow_up);
+    if (appeal.follow_up === "READY_TO_REOPEN") owner = "Người nhặt";
   } else if (questions.length && ["OPEN","IN_REVIEW"].includes(report.status)) {
     const overdue = questions.some(i => i.overdue);
     text = overdue ? "Đã qua hạn bổ sung. Xem trao đổi và đánh giá các căn cứ hiện có." : "Chờ bổ sung thông tin. Mở Trao đổi để xem câu hỏi và hạn phản hồi của từng người.";
@@ -166,20 +167,28 @@ function FollowUp({ data }) {
   </div>;
 }
 
-function AppealActions({ actions, isClosed, onAction }) {
+const appealActionIcons = { APPEAL_KEEP: ShieldCheck, APPEAL_WRONG_RECIPIENT: RotateCcw };
+
+function AppealActions({ actions, onAction }) {
+  const decisions = ["APPEAL_KEEP", "APPEAL_WRONG_RECIPIENT"];
   const groups = [
-    { title: isClosed ? "Xét duyệt lại" : "Chọn kết quả xử lý tranh chấp", values: actions.filter(value => value.startsWith("APPEAL_")) },
+    { title: "Kết luận tranh chấp", values: decisions.filter(value => actions.includes(value)) },
     { title: "Theo dõi yêu cầu thu hồi đã gửi", values: actions.filter(value => value === "CONFIRM_ITEM_RECOVERY") },
   ];
   return groups.filter(group => group.values.length).map(({ title, values }) => (
     <section className="rr-appeal-actions" key={title}>
       <h3>{title}</h3>
-      {values.map(value => <div className="rr-appeal-action" key={value}>
-        <button type="button" className={value === "APPEAL_REOPEN" ? "rr-primary" : undefined}
-          aria-describedby={appealActionHelp[value] ? `rr-help-${value}` : undefined}
-          onClick={() => onAction(value)}>{labels[value]}</button>
-        {appealActionHelp[value] && <p id={`rr-help-${value}`}>{appealActionHelp[value]}</p>}
-      </div>)}
+      {values.map(value => {
+        const Icon = appealActionIcons[value];
+        const help = appealActionHelp[value];
+        return <div className="rr-appeal-action" key={value}>
+          <button type="button"
+            aria-describedby={help ? `rr-help-${value}` : undefined} onClick={() => onAction(value)}>
+            {Icon && <Icon size={16} aria-hidden="true" />}<span>{labels[value]}</span>
+          </button>
+          {help && <p id={`rr-help-${value}`} className="rr-appeal-tooltip" role="tooltip">{help}</p>}
+        </div>;
+      })}
     </section>
   ));
 }
@@ -190,7 +199,7 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
   const canAsk = (data.canAsk ?? canProcess) && availableRecipients(data).length > 0;
   const isAppeal = caseKind === "CLAIM_APPEAL";
   const conclusion = data.decisions?.findLast(item => findings.includes(item.action)
-    || ["APPEAL_KEEP", "APPEAL_REQUIRE_REVIEW"].includes(item.action));
+    || ["APPEAL_KEEP", "APPEAL_REJECT_CLAIM", "APPEAL_REQUIRE_REVIEW", "APPEAL_WRONG_RECIPIENT"].includes(item.action));
   const title = isClosed ? "Tiếp tục xử lý" : caseKind === "HANDOVER_ISSUE" ? "Kết quả bàn giao" : "Kết luận báo cáo";
   const structured = actions.some(value => findings.includes(value));
   const otherActions = actions.filter(value => !itemMeasures.includes(value));
@@ -219,7 +228,12 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
       </> : canProcess || canAsk || actions.length > 0 ? <div className="rr-workflow-actions">
         {canAsk && <button type="button" onClick={onAsk}><MessageSquare size={16} aria-hidden="true" />
           {report.reason_code === "HANDOVER_MISSING_ITEMS" ? "Hỏi về phụ kiện còn thiếu" : "Hỏi người liên quan"}</button>}
-        {isAppeal ? <AppealActions actions={actions} isClosed={isClosed} onAction={onAction} />
+        {isAppeal ? <>
+          <AppealActions actions={actions} onAction={onAction} />
+          {canProcess && !actions.includes("APPEAL_WRONG_RECIPIENT") && <p className="rr-callout">
+            Hiện chưa đủ điều kiện mở lại xét duyệt. Nếu đồ đã giao, xử lý trong Sự cố bàn giao.
+          </p>}
+        </>
         : structured ? <button type="button" className="rr-primary" onClick={() => onAction("CONCLUDE_VIOLATION")}>
           Ghi kết luận báo cáo
         </button> : <>
@@ -236,7 +250,7 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
           {!isHandover && otherActions.length > 0 && <div className="rr-process-actions">
             <h3>{title}</h3>
             {otherActions.map(value => <button type="button" key={value}
-              className={["RESOLVE", "HANDOVER_CONTINUE", "CONFIRM_ITEM_RECOVERY", "APPEAL_REOPEN"].includes(value) ? "rr-primary" : ""}
+              className={["RESOLVE", "HANDOVER_CONTINUE", "CONFIRM_ITEM_RECOVERY"].includes(value) ? "rr-primary" : ""}
               onClick={() => onAction(value)}>
               {value === "RESOLVE" && caseKind === "HANDOVER_ISSUE" ? "Ghi kết quả bàn giao" : labels[value]}
             </button>)}

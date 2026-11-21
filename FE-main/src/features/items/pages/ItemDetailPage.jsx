@@ -134,6 +134,7 @@ function PostDetail({ id, onRetry }) {
         </button>
         <Link to="/">Trang chủ</Link><ChevronRight size={14} />
         <span>{post.title}</span>
+        {!isOwnPost && <div className="post-detail-report"><ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" /></div>}
       </nav>
       <div className="container post-detail-grid">
         <div className="post-detail-media">
@@ -144,15 +145,19 @@ function PostDetail({ id, onRetry }) {
         <section className="post-detail-info" aria-label="Thông tin bài đăng">
           <div className="post-detail-card post-detail-summary">
             <ItemInfoSection item={item} />
-            {post.moderationStatus === 'VISIBLE' && <div className="post-detail-save-action"><SavePostButton postId={post.id} /></div>}
             <div className="post-detail-author">
-              <span className="post-detail-author-icon"><UserRound size={19} aria-hidden="true" /></span>
-              <div><span>Người đăng</span><strong>{post.authorName || 'Chưa cập nhật tên'}</strong></div>
-              <OfficeReceiptBadge receipt={post.officeReceipt} />
+              <div className="post-detail-author-profile">
+                <span className="post-detail-author-icon"><UserRound size={19} aria-hidden="true" /></span>
+                <div className="post-detail-author-name"><span>Người đăng</span><strong>{post.authorName || 'Chưa cập nhật tên'}</strong></div>
+              </div>
+              {post.moderationStatus === 'VISIBLE' && <SavePostButton postId={post.id} />}
             </div>
 
             <div className="post-detail-state" data-status={post.status}>
-              <span>{post.status === 'RETURNED' && <CircleCheck size={17} aria-hidden="true" />}{statusLabel}</span>
+              <div className="post-detail-state-badges">
+                <span className="post-detail-status-badge">{post.status === 'RETURNED' && <CircleCheck size={17} aria-hidden="true" />}{statusLabel}</span>
+                <OfficeReceiptBadge receipt={post.officeReceipt} />
+              </div>
               {isFinished && <p>{post.status === 'RETURNED' ? 'Món đồ đã được trao trả.' : 'Bài đăng đã ngừng nhận yêu cầu mới.'}</p>}
               {post.postType === 'FOUND' && !post.officeReceipt && !isFinished && <p>
                 {post.custodyMode === 'OFFICE'
@@ -219,7 +224,6 @@ function PostDetail({ id, onRetry }) {
             </dl>
           </section>}
 
-          {!isOwnPost && <div className="post-detail-report"><ReportButton type="POST" id={post.id} targetLabel={post.title} label="Báo cáo bài đăng" /></div>}
         </section>
       </div>
 

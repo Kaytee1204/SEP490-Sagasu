@@ -35,8 +35,8 @@ function currentStep(data, canRevoke) {
   if (appeal?.state === 'REVIEW_REQUIRED') return {
     Icon: ShieldAlert, title: 'Bàn giao đang tạm dừng',
     description: canRevoke
-      ? 'Quản lý yêu cầu xét lại người nhận. Nếu vẫn giữ đồ, bạn có thể xét lại hồ sơ này hoặc thu hồi chấp thuận để xem các yêu cầu khác.'
-      : 'Quản lý yêu cầu xét lại người nhận. Đang chờ người nhặt xác nhận vẫn giữ món đồ và thu hồi chấp thuận.',
+      ? 'Quản lý yêu cầu xét lại người nhận. Nếu vẫn giữ đồ, bạn có thể mở lại xét duyệt để tự quyết định người nhận.'
+      : 'Quản lý yêu cầu xét lại người nhận. Bàn giao tạm dừng trong lúc chờ người nhặt xử lý.',
   };
   switch (data.status) {
     case 'NOT_RECORDED': return data.canRecord
@@ -128,7 +128,7 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,onContin
         {data.canConfirm&&<button type="button" className="btn btn-accent" onClick={()=>setConfirmOpen(true)}><CircleCheck size={18} aria-hidden="true" />Xác nhận đã nhận đúng đồ</button>}
         {canReportIssue&&<button type="button" className="btn btn-ghost handover-issue-button" onClick={()=>setIssueOpen(true)}><TriangleAlert size={17} aria-hidden="true" />Báo sự cố trao trả</button>}
         {canContinueReview && <button type="button" className="btn btn-accent" onClick={onContinueReview}>
-          Tiếp tục yêu cầu nhận đồ này <ArrowRight size={16} aria-hidden="true" />
+          Xét lại hồ sơ này <ArrowRight size={16} aria-hidden="true" />
         </button>}
         {revokeButton}
       </div>}

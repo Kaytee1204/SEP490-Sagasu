@@ -26,7 +26,6 @@
 .save-post-button:focus-visible, .saved-posts-filters button:focus-visible { outline: 3px solid var(--teal-600); outline-offset: 3px; }
 .save-post-button.is-compact { position: absolute; z-index: 2; top: 12px; right: 12px; width: 40px; height: 40px; min-height: 0; padding: 0; background: white; box-shadow: 0 2px 8px #1233; }
 .save-post-button.is-compact.is-saved { background: var(--teal-50); }
-.post-detail-save-action { display: flex; justify-content: flex-end; margin-top: 16px; }
 .saved-post-notice { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 1200; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); padding: 14px 18px; border-radius: 12px; background: #155e59; color: white; box-shadow: 0 8px 32px #1233; font-size: .875rem; }
 .saved-post-notice.is-error { background: #9f2d2d; }
 .saved-post-notice > svg { flex: none; }

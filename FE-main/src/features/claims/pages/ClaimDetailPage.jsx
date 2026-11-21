@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2, ClipboardCheck, XCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getPostDetail } from '@/features/items/api/postApi';
 import { getClaimOnPost, reviewClaim, cancelClaim } from '../api/claimApi';
-import { evidenceUrl, validClaimId, postClaimsPath } from '../utils/claimUtils';
+import { claimDisplayStatus, evidenceUrl, validClaimId, postClaimsPath } from '../utils/claimUtils';
 import ClaimEvidencePreview from '../components/ClaimEvidencePreview';
 import ClaimAppealPanel from '../components/ClaimAppealPanel';
 import { ClaimActivityTimeline, ClaimDetailSummary, ClaimParticipantPanel, ClaimStatusPanel, ClaimVerificationPanel } from '../components/ClaimDetailPanels';
@@ -77,7 +77,7 @@ function ClaimDetail({ postId, id }) {
   }, [postId, id,revision,focusRevision,claimNotification]);
   const loadedClaimId = claim?.id;
   const canRevokeApproval = claim?.canRevokeApproval;
-  const canReview = claim?.canReview;
+  const canReview = claim?.canReview && claimDisplayStatus(claim) === 'PENDING';
   useEffect(() => {
     if (focusReview && canReview) {
       reviewForm.current?.focus();
@@ -126,14 +126,14 @@ function ClaimDetail({ postId, id }) {
           {showHandover ? <HandoverPanel claim={claim} onChanged={refreshClaim} showSubmission={isClaimant}
             onRevokeApproval={canRevokeApproval ? () => setRevokeAction('revoke') : undefined}
             onContinueReview={canRevokeApproval ? () => setRevokeAction('continue') : undefined} />
-            : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} isClaimant={isClaimant} />}
+            : (!canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} isClaimant={isClaimant} />}
           {claim.claimType === 'P2P' && claim.status === 'PENDING' && isClaimant &&
             <ClaimAppealPanel claim={claim} focusRevision={focusRevision} notificationId={claimNotification} />}
           {claim.claimType === 'OFFICE' && <p className="claim-detail-office-note">Món đồ do văn phòng tiếp nhận lưu giữ. Hồ sơ và việc nhận đồ được xử lý qua bên tiếp nhận.</p>}
           <ClaimVerificationPanel claim={claim} onPreviewImage={setPreviewImageId} />
         </div>
         <aside className="claim-detail-sidebar" aria-label="Thông tin và xử lý yêu cầu">
-      {claim.canReview && <form ref={reviewForm} tabIndex={-1} aria-label="Xét duyệt yêu cầu nhận đồ" className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); if (!reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; } setPendingDirectAction({ action: 'review', decision: event.nativeEvent.submitter?.value || decision }); }}>
+      {canReview && <form ref={reviewForm} tabIndex={-1} aria-label="Xét duyệt yêu cầu nhận đồ" className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); if (!reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; } setPendingDirectAction({ action: 'review', decision: event.nativeEvent.submitter?.value || decision }); }}>
         <h2><ClipboardCheck size={20} aria-hidden="true" />Xét duyệt yêu cầu</h2>
         <p>Đối chiếu căn cứ và ảnh bằng chứng để xác định đúng người nhận.</p>
         {claim.claimType !== 'P2P' && <label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
@@ -175,7 +175,7 @@ function ClaimDetail({ postId, id }) {
       }}
       onClose={() => !busy && setPendingDirectAction(null)}
     />
-    {rejectOpen && claim?.canReview && claim.claimType === 'P2P' && <RejectClaimDialog claim={claim}
+    {rejectOpen && canReview && claim.claimType === 'P2P' && <RejectClaimDialog claim={claim}
       onClose={() => setRejectOpen(false)} onRejected={() => {
         setRejectOpen(false); setReason(''); setError(''); setNotice('Đã từ chối yêu cầu nhận đồ.');
         setClaim(current => ({ ...current, status: 'REJECTED', canReview: false }));
@@ -187,7 +187,7 @@ function ClaimDetail({ postId, id }) {
         setClaim(current => ({ ...current, status: 'CANCELLED', canCancel: false, canOpenChat: false }));
         getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
       }} />}
-    {approveOpen && claim?.canReview && claim.claimType === 'P2P' && <ApproveClaimDialog claim={claim}
+    {approveOpen && canReview && claim.claimType === 'P2P' && <ApproveClaimDialog claim={claim}
       onClose={() => setApproveOpen(false)} onApproved={() => {
         setApproveOpen(false); setError(''); setNotice('Đã chấp thuận yêu cầu. Hai bên có thể trao đổi để nhận đồ.');
         setClaim(current => ({ ...current, status: 'APPROVED', canReview: false }));

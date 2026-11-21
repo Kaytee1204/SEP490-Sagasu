@@ -160,6 +160,8 @@ public class OfficeClaimService {
         eligible(p);
         if(!"OPEN".equals(p.getStatus())||!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
         Account claimant = counter ? counterClaimant(r) : actor;
+        if (claims.hasDisputeRejection(p.getId(), claimant.getId()))
+            throw new AppException(ErrorCode.CLAIM_RESUBMISSION_BLOCKED);
         if(claims.hasFailedOfficeVerification(p.getId(),claimant.getId()))
             throw bad("Người nhận đã không đạt xác minh tại quầy và không được yêu cầu nhận lại món đồ này.");
         if (claimant != null && (Objects.equals(p.getAccount().getId(), claimant.getId()) || (p.getCreatedBy() != null && Objects.equals(p.getCreatedBy().getId(), claimant.getId())))) {

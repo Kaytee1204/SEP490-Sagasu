@@ -92,6 +92,16 @@ class P2pClaimAppealServiceTest {
     }
 
     @Test
+    void dismissedDisputeDoesNotCreateAnotherAppealWindowForThatClaim() {
+        when(claims.findWaitingForReturn(100L)).thenReturn(List.of(appellant));
+        when(claims.findLatestDisputeOutcomes(List.of(501L)))
+                .thenReturn(java.util.Collections.singletonList(new Object[]{501L, "APPEAL_KEEP"}));
+
+        assertNull(service.open(selected));
+        verifyNoInteractions(jdbc, notifications);
+    }
+
+    @Test
     void statusDoesNotRevealAnotherClaimantsAppeal() {
         Account outsider = account(40L);
         CustomUserDetails user = new CustomUserDetails(outsider);
@@ -182,7 +192,6 @@ class P2pClaimAppealServiceTest {
 
         assertEquals(state, window.state());
         assertEquals(state != P2pClaimAppealService.State.CLEARED, window.blocksHandover());
-        assertEquals(state == P2pClaimAppealService.State.REVIEW_REQUIRED, service.canReopenFromDecision(selected, 3L));
     }
 
     private void givenSubmission(CustomUserDetails user) {

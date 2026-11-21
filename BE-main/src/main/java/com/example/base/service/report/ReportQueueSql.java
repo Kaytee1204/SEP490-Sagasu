@@ -16,9 +16,8 @@ final class ReportQueueSql {
         where approval.approval_id is not null and sibling_claim.post_id=p.post_id and q.status in ('OPEN','IN_REVIEW')
       )
       """;
-  static final String REOPEN_ALLOWED = """
-      not pending.waiting_other_appeals
-        and p.post_type='FOUND' and p.moderation_status='VISIBLE'
+  static final String APPROVAL_CAN_BE_REOPENED = """
+      p.post_type='FOUND' and p.moderation_status='VISIBLE'
         and not exists (select 1 from item_receipt receipt where receipt.post_id=p.post_id)
         and not exists (select 1 from p2p_handover handover where handover.claim_id=chosen.claim_id and handover.status<>'CANCELLED')
         and not exists (select 1 from report_hold hold where hold.post_id=p.post_id and hold.released_at is null)
@@ -30,6 +29,7 @@ final class ReportQueueSql {
           select 1 from p2p_claim_appeal related join report_recovery x using(report_id)
           where related.approval_id=approval.approval_id and x.confirmed_at is null)
       """;
+  static final String REOPEN_ALLOWED = "not pending.waiting_other_appeals and (" + APPROVAL_CAN_BE_REOPENED + ")";
 
   // The report conclusion and the approval round can finish at different times.
   static final String APPEAL_STEP = """
@@ -100,6 +100,7 @@ final class ReportQueueSql {
           when inquiry.waiting_reply then 'WAITING_REPLY'
           when facts.accepted_appeal and pending.waiting_other_appeals then 'WAITING_OTHER_APPEALS'
           when facts.accepted_appeal and not (%s) then 'WAITING_REOPEN'
+          when facts.accepted_appeal then 'WAITING_FINDER_REVIEW'
         end as waiting_reason
         offset 0
       ) step
@@ -118,7 +119,6 @@ final class ReportQueueSql {
             when facts.new_reply then 'REPLIED'
             when facts.recovery_overdue then 'RECOVERY_OVERDUE'
             when inquiry.reply_overdue then 'REPLY_OVERDUE'
-            when facts.accepted_appeal then 'CLAIM_REOPEN'
             when facts.recovery_confirmed then 'RECOVERY_CONFIRMED'
             when appeal.report_id is not null then 'CLAIM_APPEAL'
             when facts.active_p2p_dispute then 'P2P_ACTIVE'

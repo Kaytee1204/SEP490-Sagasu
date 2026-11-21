@@ -1,16 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { reviewClaim } from '../api/claimApi';
-import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import './RejectClaimDialog.css';
 
 export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
   const dialog = useRef(null);
   const sending = useRef(false);
   const titleId = useId();
-  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  const [evidenceVerified, setEvidenceVerified] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
 
@@ -29,33 +28,30 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
 
   function close() {
     if (sending.current) return;
-    if (reason.trim()) setDiscard(true);
+    if (note.trim()) setDiscard(true);
     else onClose();
   }
 
-  function handleFormSubmit(event) {
+  async function submit(event) {
     event.preventDefault();
-    if (sending.current || !reason.trim()) return;
-    setError('');
-    setConfirmOpen(true);
-  }
-
-  async function executeSubmit() {
-    if (sending.current || !reason.trim()) return;
+    if (sending.current || !evidenceVerified) return;
     sending.current = true;
     setBusy(true);
     setError('');
     try {
-      await reviewClaim(claim.id, { decision: 'APPROVED', reason: reason.trim(), expectedVersion: claim.version });
+      await reviewClaim(claim.id, {
+        decision: 'APPROVED',
+        reason: note.trim() || null,
+        expectedVersion: claim.version,
+        evidenceVerified,
+      });
     } catch (problem) {
       setError(problem.message || 'Chưa thể chấp thuận yêu cầu. Vui lòng thử lại.');
-      setConfirmOpen(false);
       return;
     } finally {
       sending.current = false;
       setBusy(false);
     }
-    setConfirmOpen(false);
     onApproved();
   }
 
@@ -63,30 +59,25 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
     onCancel={event => { event.preventDefault(); close(); }}>
     <header><h2 id={titleId}>Chấp thuận yêu cầu nhận đồ?</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
-    <form onSubmit={handleFormSubmit}>
+    <form onSubmit={submit}>
       <p>Chấp thuận <strong>{claim.claimantName}</strong> nhận <strong>{claim.postTitle}</strong>.</p>
-      <p>Chỉ chấp thuận sau khi đã đối chiếu căn cứ và bằng chứng. Hai bên có thể chat để trao đổi việc nhận đồ.</p>
+      <p>Sau khi chấp thuận, hai bên có thể nhắn tin để trao đổi việc nhận đồ.</p>
       <p className="claim-notice">Nếu còn hồ sơ đang chờ, hệ thống sẽ thông báo cho những người đó và tạm dừng giao đồ trong ít nhất 24 giờ để họ có thể gửi tranh chấp.</p>
-      <label className="claim-reject-detail">Căn cứ chấp thuận *
-        <textarea required maxLength={2000} value={reason} disabled={busy} placeholder="Ví dụ: Mô tả và bằng chứng khớp với đặc điểm của món đồ…"
-          onChange={event => { setReason(event.target.value); setDiscard(false); }} /></label>
+      <label className="claim-reject-option">
+        <input type="checkbox" required checked={evidenceVerified} disabled={busy}
+          onChange={event => { setEvidenceVerified(event.target.checked); setDiscard(false); }} />
+        Tôi đã đối chiếu thông tin trong hồ sơ với món đồ và xác nhận đây là người nhận phù hợp.
+      </label>
+      <label className="claim-reject-detail">Ghi chú (tùy chọn)
+        <textarea maxLength={2000} value={note} disabled={busy} placeholder="Ví dụ: Mô tả đúng vết xước ở góc trái…"
+          onChange={event => { setNote(event.target.value); setDiscard(false); }} />
+      </label>
       {error && <p role="alert" className="claim-alert">{error}</p>}
-      {discard ? <div className="claim-reject-discard" role="alert"><p>Bỏ căn cứ đang nhập và quay lại hồ sơ?</p>
+      {discard ? <div className="claim-reject-discard" role="alert"><p>Bỏ ghi chú đang nhập và quay lại hồ sơ?</p>
         <div className="claim-actions"><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></div></div>
         : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại hồ sơ</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim()}>{busy ? 'Đang lưu…' : 'Chấp thuận nhận đồ'}</button></footer>}
+          <button type="submit" className="btn btn-accent" disabled={busy || !evidenceVerified}>{busy ? 'Đang lưu…' : 'Chấp thuận nhận đồ'}</button></footer>}
     </form>
-    <ConfirmActionPopup
-      open={confirmOpen}
-      variant="success"
-      title="Bạn có chắc chắn chấp thuận?"
-      description={`Xác nhận chấp thuận cho ${claim.claimantName} nhận lại "${claim.postTitle}". Hai bên sẽ có thể trao đổi để bàn giao đồ.`}
-      confirmLabel="Đồng ý chấp thuận"
-      cancelLabel="Quay lại"
-      busy={busy}
-      onConfirm={executeSubmit}
-      onClose={() => setConfirmOpen(false)}
-    />
   </dialog>;
 }

@@ -72,6 +72,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -337,6 +338,17 @@ class ClaimServiceTest {
     }
 
     @Test
+    void disputeRejectionBlocksBothNewSubmissionAndRetryFromOlderClaim() {
+        when(claims.hasDisputeRejection(100L, 20L)).thenReturn(true);
+        when(claims.findById(499L)).thenReturn(Optional.of(p2pClaim(499L, "REJECTED", 0L)));
+
+        assertEquals(ErrorCode.CLAIM_RESUBMISSION_BLOCKED,
+                code(() -> service.submit(100L, validSubmitReq(), List.of(), claimantUser)));
+        assertEquals(ErrorCode.CLAIM_RESUBMISSION_BLOCKED,
+                code(() -> service.retry(499L, validSubmitReq(), List.of(), claimantUser)));
+    }
+
+    @Test
     void utc021_retry_cancelledClaimCanBeRetried() {
         when(claims.findById(480L)).thenReturn(Optional.of(p2pClaim(480L, "CANCELLED", 1L)));
         assertEquals(500L, service.retry(480L, validSubmitReq(), List.of(), claimantUser).id());
@@ -484,6 +496,22 @@ class ClaimServiceTest {
         verify(claims).findOnPost(eq(100L), eq(10L), eq(false), eq("ALL"), any(PageRequest.class));
     }
 
+    @Test
+    void onPostShowsDisputeOutcomeOnlyForTheClaimItBelongsTo() {
+        stubThumbnails(List.of());
+        var paging = PageRequest.of(0, 10);
+        when(claims.findOnPost(100L, 10L, false, "ALL", paging)).thenReturn(new PageImpl<>(List.of(
+                p2pClaim(521L, "REJECTED", 1L), p2pClaim(522L, "PENDING", 0L)), paging, 2));
+        when(claims.findLatestDisputeOutcomes(List.of(521L, 522L)))
+                .thenReturn(java.util.Collections.singletonList(new Object[]{521L, "APPEAL_REJECT_CLAIM"}));
+
+        var rows = service.onPost(100L, 1, 10, "ALL", finderUser).content();
+
+        assertEquals("REJECTED", rows.get(0).status());
+        assertEquals("APPEAL_REJECT_CLAIM", rows.get(0).disputeOutcome());
+        assertNull(rows.get(1).disputeOutcome());
+    }
+
     /** Supplementary: grouped() returns claim summaries grouped by post. */
     @Test
     @SuppressWarnings("unchecked")
@@ -539,6 +567,25 @@ class ClaimServiceTest {
     }
 
     @Test
+    void dismissedDisputeClosesReviewForExistingPendingClaim() {
+        Claim pending = reviewableClaim(541L);
+        when(claims.findById(541L)).thenReturn(Optional.of(pending));
+        when(claims.findLatestDisputeOutcome(541L)).thenReturn("APPEAL_KEEP");
+
+        var detail = service.detailOnPost(100L, 541L, finderUser);
+
+        assertEquals("APPEAL_KEEP", detail.disputeOutcome());
+        assertFalse(detail.canReview());
+        assertEquals(ErrorCode.CLAIM_STATE_INVALID,
+                code(() -> service.review(541L, new ReviewClaimRequest("APPROVED", null, 0L, true), finderUser)));
+        assertEquals(ErrorCode.CLAIM_STATE_INVALID,
+                code(() -> service.review(541L, new ReviewClaimRequest("REJECTED", "Reason", 0L, false), finderUser)));
+        assertEquals("PENDING", pending.getStatus());
+        verify(activities, never()).save(any());
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
     void utc044_detail_outsiderThrowsNotFound() {
         when(claims.findById(540L)).thenReturn(Optional.of(p2pClaim(540L, "PENDING", 0L)));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.detail(540L, outsiderUser)));
@@ -559,6 +606,17 @@ class ClaimServiceTest {
     }
 
     @Test
+    void detailShowsWhyAClaimRejectedAfterDisputeCannotBeRetried() {
+        stubRejectedDetail();
+        when(claims.hasDisputeRejection(100L, 20L)).thenReturn(true);
+
+        var detail = service.detail(542L, claimantUser);
+
+        assertTrue(detail.resubmissionBlocked());
+        assertFalse(detail.canRetry());
+    }
+
+    @Test
     void utc047_detailOnPost_mismatchedPostIdThrowsNotFound() {
         stubRejectedDetail();
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.detailOnPost(101L, 542L, claimantUser)));
@@ -575,11 +633,12 @@ class ClaimServiceTest {
     @Test
     void utc049_review_approvedOpensChatAndNotifies() {
         Claim c = reviewableClaim(550L);
-        ClaimResultDto result = service.review(550L, new ReviewClaimRequest("APPROVED", "Matched details", 0L), finderUser);
+        ClaimResultDto result = service.review(550L, new ReviewClaimRequest("APPROVED", null, 0L, true), finderUser);
 
         assertEquals("APPROVED", result.status());
         verify(chatConversations).forApprovedClaim(c);
-        verify(activities).save(any(ClaimActivity.class));
+        verify(activities).save(argThat(activity -> "APPROVE".equals(activity.getAction())
+                && "Người nhặt xác nhận đã đối chiếu hồ sơ với món đồ.".equals(activity.getReason())));
         verify(notifications).notifyUser(eq(20L), anyString(), anyString(), anyString(), anyString(), eq(true));
     }
 
@@ -587,9 +646,10 @@ class ClaimServiceTest {
     void review_approvedOpensAppealWindowForOtherPendingClaimants() {
         Claim approved = reviewableClaim(550L);
 
-        ClaimResultDto result = service.review(550L, new ReviewClaimRequest("APPROVED", "Matched details", 0L), finderUser);
+        ClaimResultDto result = service.review(550L, new ReviewClaimRequest("APPROVED", "Matched details", 0L, true), finderUser);
 
         assertEquals("APPROVED", result.status());
+        verify(activities).save(argThat(activity -> "Matched details".equals(activity.getReason())));
         verify(appeals).open(approved);
         verify(notifications).notifyUser(eq(20L), eq("CLAIM_APPROVED"), anyString(), anyString(), anyString(), eq(true));
     }
@@ -597,7 +657,7 @@ class ClaimServiceTest {
     @Test
     void utc050_review_rejectedSavesActivityAndNotifiesWithReason() {
         reviewableClaim(553L);
-        ClaimResultDto result = service.review(553L, new ReviewClaimRequest("REJECTED", "Wrong colour", 0L), finderUser);
+        ClaimResultDto result = service.review(553L, new ReviewClaimRequest("REJECTED", "Wrong colour", 0L, false), finderUser);
 
         assertEquals("REJECTED", result.status());
         verify(activities).save(any(ClaimActivity.class));
@@ -611,7 +671,7 @@ class ClaimServiceTest {
     void utc051_review_officeClaimOnP2pEndpointThrowsNotFound() {
         stubLockForAction(551L, officeClaim(551L));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND,
-                code(() -> service.review(551L, new ReviewClaimRequest("APPROVED", "Reason", 0L), staffUser)));
+                code(() -> service.review(551L, new ReviewClaimRequest("APPROVED", "Reason", 0L, true), staffUser)));
         verifyNoInteractions(chatConversations);
     }
 
@@ -619,42 +679,52 @@ class ClaimServiceTest {
     void utc052_review_nonOwnerThrowsNotFound() {
         stubLockForAction(554L, p2pClaim(554L, "PENDING", 0L));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND,
-                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "ok", 0L), outsiderUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "ok", 0L, true), outsiderUser)));
     }
 
     @Test
     void utc053_review_claimantReviewingOwnClaimThrowsNotFound() {
         stubLockForAction(554L, p2pClaim(554L, "PENDING", 0L));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND,
-                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "ok", 0L), claimantUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "ok", 0L, true), claimantUser)));
     }
 
     @Test
     void utc054_review_unsupportedDecisionThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
-                code(() -> service.review(554L, new ReviewClaimRequest("MAYBE", "Reason", 0L), finderUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("MAYBE", "Reason", 0L, false), finderUser)));
     }
 
     @Test
-    void utc055_review_emptyReasonThrowsInputInvalid() {
+    void review_requiresEvidenceConfirmationEvenWithApprovalNote() {
+        Claim claim = reviewableClaim(554L);
+
+        assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Matched details", 0L, false), finderUser)));
+        assertEquals("PENDING", claim.getStatus());
+        verifyNoInteractions(activities, notifications);
+    }
+
+    @Test
+    void review_rejectionRequiresReason() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
-                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "", 0L), finderUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("REJECTED", "", 0L, false), finderUser)));
     }
 
     @Test
     void utc056_review_reason2001ThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
-                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "x".repeat(2001), 0L), finderUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "x".repeat(2001), 0L, true), finderUser)));
     }
 
     @Test
     void utc057_review_reason2000Accepted() {
         reviewableClaim(556L);
         assertEquals("APPROVED",
-                service.review(556L, new ReviewClaimRequest("APPROVED", "r".repeat(2000), 0L), finderUser).status());
+                service.review(556L, new ReviewClaimRequest("APPROVED", "r".repeat(2000), 0L, true), finderUser).status());
     }
 
     @Test
@@ -662,21 +732,21 @@ class ClaimServiceTest {
         Claim c = reviewableClaim(552L);
         ReflectionTestUtils.setField(c, "version", 2L);
         assertEquals(ErrorCode.CLAIM_STALE,
-                code(() -> service.review(552L, new ReviewClaimRequest("REJECTED", "Mismatch", 0L), finderUser)));
+                code(() -> service.review(552L, new ReviewClaimRequest("REJECTED", "Mismatch", 0L, false), finderUser)));
     }
 
     @Test
     void utc059_review_nullExpectedVersionThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
-                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", null), finderUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", null, true), finderUser)));
     }
 
     @Test
     void utc060_review_negativeExpectedVersionThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
-                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", -1L), finderUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", -1L, true), finderUser)));
     }
 
     @Test
@@ -684,7 +754,7 @@ class ClaimServiceTest {
         Claim c = reviewableClaim(555L);
         ReflectionTestUtils.setField(c, "status", "APPROVED");
         assertEquals(ErrorCode.CLAIM_STATE_INVALID,
-                code(() -> service.review(555L, new ReviewClaimRequest("REJECTED", "Late", 0L), finderUser)));
+                code(() -> service.review(555L, new ReviewClaimRequest("REJECTED", "Late", 0L, false), finderUser)));
     }
 
     @Test
@@ -692,7 +762,7 @@ class ClaimServiceTest {
         reviewableClaim(554L);
         when(claims.existsByPost_IdAndStatusIn(100L, Set.of("APPROVED"))).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_STATE_INVALID,
-                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", 0L), finderUser)));
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", 0L, true), finderUser)));
     }
 
     @Test
@@ -713,30 +783,45 @@ class ClaimServiceTest {
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.revokeApproval(562L,
                 new RevokeClaimApprovalRequest("Review", 1L, false), finderUser)));
         assertEquals("PENDING", service.revokeApproval(562L, confirmed, finderUser).status());
+        assertEquals("OPEN", p2pPost.getStatus());
+        verify(activities).save(argThat(activity -> "REVOKE_APPROVAL".equals(activity.getAction())
+                && "APPROVED".equals(activity.getFromStatus()) && "PENDING".equals(activity.getToStatus())));
         verify(appeals).reopen(claim);
     }
 
     @Test
-    void managerReopensOnlyAnEligibleAppealApproval() {
+    void managerWhoDoesNotOwnThePostCannotRevokeItsApproval() {
         Account manager = account(60L, "Manager", AccountRole.MANAGER);
         when(accounts.findById(60L)).thenReturn(Optional.of(manager));
         var managerUser = new CustomUserDetails(manager);
-        Claim chosen = cancellableClaim(562L, "APPROVED");
+        Claim chosen = p2pClaim(562L, "APPROVED", 1L);
+        stubLockForAction(562L, chosen);
+        p2pPost.reserveForClaim();
+
+        assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.revokeApproval(562L,
+                new RevokeClaimApprovalRequest("Review", 1L, true), managerUser)));
+
+        assertEquals("APPROVED", chosen.getStatus());
+        assertEquals("RESERVED", p2pPost.getStatus());
+        verifyNoInteractions(activities, notifications);
+    }
+
+    @Test
+    void reopeningAfterDisputeReturnsTheApprovedClaimToTheFindersQueue() {
+        Account manager = account(60L, "Manager", AccountRole.MANAGER);
+        when(accounts.findById(60L)).thenReturn(Optional.of(manager));
+        Claim chosen = p2pClaim(562L, "APPROVED", 1L);
+        stubLockForAction(562L, chosen);
         p2pPost.reserveForClaim();
         when(routing.matches(chosen, Set.of("RESERVED"))).thenReturn(true);
-        Query hold = mock(Query.class);
-        when(entityManager.createNativeQuery(contains("select exists(select 1 from report_hold"))).thenReturn(hold);
-        when(hold.setParameter("postId", p2pPost.getId())).thenReturn(hold);
-        when(hold.getSingleResult()).thenReturn(false);
-        when(appeals.canReopenFromDecision(chosen, 300L)).thenReturn(true);
 
-        assertEquals(ErrorCode.CLAIM_STATE_INVALID,
-                code(() -> service.reopenApprovalFromAppeal(562L, 301L, "Review", managerUser)));
-        assertEquals("APPROVED", chosen.getStatus());
-        service.reopenApprovalFromAppeal(562L, 300L, "Review", managerUser);
+        service.reopenApprovalForReview(562L, "Review the claim again", new CustomUserDetails(manager));
 
         assertEquals("PENDING", chosen.getStatus());
+        assertNull(chosen.getCancelledAt());
         assertEquals("OPEN", p2pPost.getStatus());
+        verify(activities).save(argThat(activity -> "REVOKE_APPROVAL".equals(activity.getAction())
+                && "APPROVED".equals(activity.getFromStatus()) && "PENDING".equals(activity.getToStatus())));
         verify(appeals).reopen(chosen);
         verify(chatConversations).notifyChanged(chosen);
     }

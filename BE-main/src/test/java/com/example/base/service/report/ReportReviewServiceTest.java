@@ -163,6 +163,16 @@ class ReportReviewServiceTest {
     }
 
     @Test
+    void appealHistoryGroupsByReportIdSoSeparateDisputesOnTheSameClaimStayVisible() {
+        givenTotals(2L, 2L);
+        service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "HISTORY", null, user);
+
+        String appealKey = "when appeal.report_id is not null then 'APPEAL:'||r.report_id";
+        verify(jdbc).queryForMap(contains(appealKey), any(Object[].class));
+        verify(jdbc).queryForList(contains(appealKey), any(Object[].class));
+    }
+
+    @Test
     void exactReportReferenceIgnoresQueueAndFiltersWithinItsKind() {
         givenTotals(1L, 1L);
         var result = service.list(4, "OPEN", "GENERAL", "POST", " # 00052 ", "READY", null, "MINE", user);
@@ -508,7 +518,7 @@ class ReportReviewServiceTest {
         report.put("kind", "HANDOVER_ISSUE");
         report.put("status", "RESOLVED");
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
-                "active", true, "ready_for_reopen", false));
+                "active", true, "follow_up", "WAIT_APPEALS"));
 
         assertBad(() -> service.act(5L, action("REQUEST_ITEM_RECOVERY", 8L, false), user), "Hồ sơ tranh chấp này chỉ dùng để xem lại");
         report.put("status", "IN_REVIEW");
@@ -532,21 +542,83 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void appealConclusionAndReopenRequireExplicitDecisionsAndCustodyVerification() {
+    void keepingApprovalBlocksTheAppellantAndClosesTheDispute() {
+        report.put("kind", "HANDOVER_ISSUE");
+        report.put("claim_id", 41L);
+        rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L, "active", true));
+        ctx.put("claim", row("claim_id", 41L, "claimant_id", 7L, "claim_type", "P2P", "status", "PENDING"));
+
+        assertThat((List<?>) service.detail(5L, user).get("actions")).hasSize(1);
+        assertBad(() -> service.act(5L, action("APPEAL_REJECT_CLAIM"), user), "Thao tác không hợp lệ");
+        service.act(5L, action("APPEAL_KEEP"), user);
+
+        verify(claims).rejectClaimAfterAppeal(eq(41L), contains("Bạn không thể gửi lại"), eq(user));
+        verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
+                eq("APPEAL_KEEP"), eq("Conclusion"), eq("Basis"), anyString(), anyString());
+        verifyStatusUpdate("REJECTED");
+    }
+
+    @Test
+    void keepingApprovalCanCloseADisputeEvenIfTheAppellantHasWithdrawn() {
+        report.put("kind", "HANDOVER_ISSUE");
+        report.put("claim_id", 41L);
+        rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L, "active", true));
+        ctx.put("claim", row("claim_id", 41L, "claimant_id", 7L, "claim_type", "P2P", "status", "CANCELLED"));
+
+        service.act(5L, action("APPEAL_KEEP"), user);
+
+        verifyNoInteractions(claims);
+        verifyStatusUpdate("REJECTED");
+    }
+
+    @Test
+    void confirmingWrongRecipientReopensTheApprovalRoundAndNotifiesTheFinder() {
         report.put("kind", "HANDOVER_ISSUE");
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
-                "active", true, "ready_for_reopen", true));
+                "active", true, "can_reopen_approval", true, "post_id", 10L, "finder_id", 8L, "waiting_other_appeals", true));
+        rows(jdbc, "where appeal.approval_id=? and r.report_id<>?", row("report_id", 6L, "reporter_id", 9L, "status", "OPEN"));
+        assertThat(service.detail(5L, user).get("actions")).isEqualTo(List.of("APPEAL_KEEP", "APPEAL_WRONG_RECIPIENT"));
         assertBad(() -> service.act(5L, action("RESOLVE"), user), "quyết định xử lý tranh chấp");
-        service.act(5L, action("APPEAL_REQUIRE_REVIEW"), user);
-        verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L), eq(true));
+        assertBad(() -> service.act(5L, action("APPEAL_REQUIRE_REVIEW"), user), "Thao tác không hợp lệ");
+        assertBad(() -> service.act(5L, action("APPEAL_WRONG_RECIPIENT"), user), "Cần xác nhận đã đối chiếu");
+        assertBad(() -> service.act(5L, new ReportReviewService.Action(3L, "APPEAL_WRONG_RECIPIENT",
+                "Conclusion", "Basis", null, false, null, true), user), "Cần xác minh đồ");
+        service.act(5L, new ReportReviewService.Action(3L, "APPEAL_WRONG_RECIPIENT",
+                "Conclusion", "Basis", null, true, null, true), user);
+        verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
+                eq("APPEAL_WRONG_RECIPIENT"), eq("Conclusion"), eq("Basis"), anyString(),
+                contains("\"approvalReopened\":true"));
+        verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L));
+        verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(6L));
+        verify(jdbc).update(startsWith("update report set status='RESOLVED'"), contains("đã được mở lại"), eq(1L), eq(6L));
+        verify(notifications).notifyUser(eq(8L), eq("REPORT_RESOLVED"), eq("Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt"),
+                anyString(), eq("/bai-dang/10/claims?claimStatus=PENDING"), eq(false));
+        verify(notifications).notifyUser(eq(9L), eq("REPORT_RESOLVED"), anyString(), anyString(), eq("/bao-cao/6"), eq(false));
+        verify(chat).notifyAppealChanged(5L);
         verifyStatusUpdate("RESOLVED");
+        verify(claims).reopenApprovalForReview(40L, "Báo cáo #5: Conclusion", user);
+    }
+
+    @Test
+    void wrongRecipientCannotReopenAClaimWithUnconfirmedCustodyState() {
+        report.put("kind", "HANDOVER_ISSUE");
+        rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
+                "active", true, "can_reopen_approval", false));
+        assertBad(() -> service.act(5L, new ReportReviewService.Action(3L, "APPEAL_WRONG_RECIPIENT",
+                "Conclusion", "Basis", null, true, null, true), user), "sự cố bàn giao");
         verifyNoInteractions(claims);
+    }
 
+    @Test
+    void appealConclusionDoesNotExposeASeparateManagerReopenAction() {
+        report.put("kind", "HANDOVER_ISSUE");
         report.put("status", "RESOLVED");
-        assertBad(() -> service.act(5L, action("APPEAL_REOPEN"), user), "Cần xác minh");
-        service.act(5L, action("APPEAL_REOPEN", null, true), user);
+        rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
+                "active", true, "follow_up", "READY_TO_REOPEN"));
+        assertThat(service.detail(5L, user).get("actions")).isEqualTo(List.of());
+        assertBad(() -> service.act(5L, action("APPEAL_REOPEN", null, true), user), "Báo cáo đã thay đổi");
 
-        verify(claims).reopenApprovalFromAppeal(40L, 30L, "Báo cáo #5: Conclusion", user);
+        verifyNoInteractions(claims);
     }
 
     @Test
@@ -593,7 +665,7 @@ class ReportReviewServiceTest {
     void utc088_resolve_resolvedAndHoldReleased() {
         service.act(5L, action("RESOLVE"), user);
         verifyStatusUpdate("RESOLVED");
-        verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L), eq(false));
+        verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L));
         verify(jdbc).update(contains("update report_hold set released_at=now()"), eq(5L));
         verify(chat).notifyAppealChanged(5L);
     }

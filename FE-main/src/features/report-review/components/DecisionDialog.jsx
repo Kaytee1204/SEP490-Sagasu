@@ -67,12 +67,15 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
     [basis, setBasis] = useState(""),
     [holder, setHolder] = useState(""),
     [custodyVerified, setCustody] = useState(false),
+    [wrongRecipientVerified, setWrongRecipientVerified] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const accountAction = ["WARN_ACCOUNT", "SUSPEND_ACCOUNT"].includes(effect);
   const isRecoveryRequest = action === "REQUEST_ITEM_RECOVERY";
+  const isWrongRecipientDecision = action === "APPEAL_WRONG_RECIPIENT";
   const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
-  const requiresCustody = requiresRecoveryCheck || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "APPEAL_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
+  const requiresCustody = isWrongRecipientDecision || requiresRecoveryCheck
+    || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
     || (action === "APPEAL_KEEP" && data.recoveryRequested);
   const warning = (data.caseKind === "CLAIM_APPEAL" && appealActionHelp[effect]) || warnings[effect];
   const unresolvedInquiries = data.inquiries.some(item => !item.responded_at && !item.closed_at);
@@ -82,13 +85,16 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
     setSameIncident(false);
   }
 
-  const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim() || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified) || (selected.length>0 && !sameIncident);
+  const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim()
+    || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified)
+    || (isWrongRecipientDecision && !wrongRecipientVerified) || (selected.length > 0 && !sameIncident);
 
   function submit(event) {
     event.preventDefault();
     if (!cannotSubmit) {
       setError("");
-      setConfirmOpen(true);
+      if (isWrongRecipientDecision || action === "APPEAL_KEEP") void executeSubmit();
+      else setConfirmOpen(true);
     }
   }
 
@@ -112,6 +118,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           basis: basis.trim(),
           targetId: isRecoveryRequest ? Number(holder) : accountAction ? data.report.reported_account_id : null,
           custodyVerified,
+          ...(isWrongRecipientDecision && { wrongRecipientVerified }),
         }),
       );
       onClose();
@@ -196,9 +203,20 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             rows={3}
             value={basis}
             onChange={(e) => setBasis(e.target.value)}
-            placeholder="Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."
+            placeholder={isWrongRecipientDecision
+              ? "Ghi rõ căn cứ nào cho thấy người được duyệt không phải chủ món đồ."
+              : "Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."}
           />
         </label>
+        {isWrongRecipientDecision && <label className="rr-check">
+          <input
+            type="checkbox"
+            required
+            checked={wrongRecipientVerified}
+            onChange={(event) => setWrongRecipientVerified(event.target.checked)}
+          />
+          Tôi đã đối chiếu căn cứ và xác nhận người được duyệt không phải chủ món đồ.
+        </label>}
         {requiresCustody && (
           <label className="rr-check">
             <input
@@ -207,7 +225,8 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
               checked={custodyVerified}
               onChange={(e) => setCustody(e.target.checked)}
             />
-            {action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
+            {isWrongRecipientDecision ? "Tôi đã xác minh người nhặt vẫn đang giữ món đồ."
+              : action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
               : requiresRecoveryCheck
               ? "Đã xác minh tình trạng món đồ và có đủ căn cứ áp dụng kết quả bàn giao này."
               : "Đã xác minh đồ đang ở người giữ và có thể tiến hành theo quyết định này."}
@@ -219,7 +238,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           "HANDOVER_RETRY",
           "HANDOVER_REOPEN",
           "APPEAL_KEEP",
-          "APPEAL_REQUIRE_REVIEW",
+          "APPEAL_WRONG_RECIPIENT",
         ].includes(decision)) && unresolvedInquiries && (
             <p className="rr-callout">
               Vẫn còn yêu cầu bổ sung chưa được trả lời. Nếu đã đủ căn cứ, ghi
@@ -235,7 +254,9 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             className="rr-primary"
             disabled={cannotSubmit}
           >
-            {busy ? "Đang lưu…" : structured || outcome ? "Xác nhận kết luận" : "Xác nhận xử lý"}
+            {busy ? "Đang lưu…" : isWrongRecipientDecision ? "Xác nhận mở lại xét duyệt"
+              : action === "APPEAL_KEEP" ? labels.APPEAL_KEEP
+              : structured || outcome ? "Xác nhận kết luận" : "Xác nhận xử lý"}
           </button>
         </footer>
       </form>

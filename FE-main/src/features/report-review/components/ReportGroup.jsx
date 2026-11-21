@@ -17,7 +17,6 @@ const priorityReasons = {
   USER_SAFETY_THREAT: "Có phản ánh đe dọa an toàn",
   HANDOVER: "Cần làm rõ sự cố bàn giao",
   CLAIM_APPEAL: "Chờ xử lý trước bàn giao",
-  CLAIM_REOPEN: "Đủ điều kiện xác minh để mở lại xét duyệt",
   RECOVERY_OVERDUE: "Đã qua hạn phản hồi về thu hồi đồ",
   REPLY_OVERDUE: "Đã qua hạn bổ sung thông tin",
   RECOVERY_CONFIRMED: "Đã thu hồi đồ, cần ghi kết quả",
@@ -27,6 +26,7 @@ const waitingReasons = {
   WAITING_REPLY: "Chờ người liên quan phản hồi",
   WAITING_OTHER_APPEALS: "Chờ xử lý tranh chấp của bài đăng",
   WAITING_REOPEN: "Chờ đủ điều kiện mở lại xét duyệt",
+  WAITING_FINDER_REVIEW: "Chờ người nhặt xét lại",
 };
 const icons = { POST: FileText, CLAIM: ClipboardList, MESSAGE: MessageSquare, USER: UserRound };
 
@@ -79,7 +79,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
   const reasons = Object.entries(report.reason_summary ?? {}).sort((a, b) => b[1] - a[1]);
   const primaryReason = reasons[0]?.[0] || report.reason_label_snapshot || labels[report.kind];
   return <tbody role="rowgroup">
-    <tr role="row" className={`rr-case-row${report.priority_rank === 0 ? " is-priority" : ""}`}>
+    <tr role="row" data-kind={report.kind} className={`rr-case-row${report.priority_rank === 0 ? " is-priority" : ""}`}>
       <td role="cell" className="rr-case-subject">
         <div className="rr-case-identity">
           <span className="rr-case-icon rr-case-thumbnail">
