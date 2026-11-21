@@ -82,14 +82,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** One test per UTC of sheet "Claim" for ClaimService (UTC001-UTC070). */
+/** Unit tests UTC139-UTC186 (sheet "Claim"): submit, retry, review, cancel. */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ClaimServiceTest {
     @Mock private ClaimDailyLimit dailyLimit;
 
     @Test
-    void dailyLimitRejectsBeforeSavingP2pDossier() {
+    void utc158_dailyLimitRejectsBeforeSavingP2pDossier() {
         var req = new SubmitClaimRequest("Description", null, "v1", List.of());
         when(posts.findById(p2pPost.getId())).thenReturn(Optional.of(p2pPost));
         when(routing.canSubmit(p2pPost)).thenReturn(true);
@@ -181,7 +181,7 @@ class ClaimServiceTest {
     // ---------------------------------------------------------------- submit
 
     @Test
-    void utc001_submit_validP2pClaimSavesEvidenceActivityAndNotifiesFinder() {
+    void utc139_submit_validP2pClaimSavesEvidenceActivityAndNotifiesFinder() {
         SubmitClaimRequest req = new SubmitClaimRequest(" My brown wallet ", " Has student ID ", "v1", List.of());
         List<MultipartFile> files = List.of(new MockMultipartFile("files", "proof.jpg", "image/jpeg", new byte[]{1, 2, 3}));
         when(validator.validate(files)).thenReturn(List.of(
@@ -199,18 +199,18 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc002_submit_nullRequestThrowsInputInvalid() {
+    void utc140_submit_nullRequestThrowsInputInvalid() {
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.submit(100L, null, List.of(), claimantUser)));
     }
 
     @Test
-    void utc003_submit_blankDescriptionThrowsInputInvalid() {
+    void utc141_submit_blankDescriptionThrowsInputInvalid() {
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
                 code(() -> service.submit(100L, new SubmitClaimRequest("   ", null, "v1", List.of()), List.of(), claimantUser)));
     }
 
     @Test
-    void utc004_submit_descriptionAtMax5000Succeeds() {
+    void utc142_submit_descriptionAtMax5000Succeeds() {
         ClaimResultDto result = service.submit(
                 100L, new SubmitClaimRequest("a".repeat(5000), null, "v1", List.of()), List.of(), claimantUser);
         assertEquals(500L, result.id());
@@ -218,30 +218,30 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc005_submit_description5001ThrowsInputInvalid() {
+    void utc143_submit_description5001ThrowsInputInvalid() {
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.submit(
                 100L, new SubmitClaimRequest("a".repeat(5001), null, "v1", List.of()), List.of(), claimantUser)));
     }
 
     @Test
-    void utc006_submit_evidenceNote5001ThrowsInputInvalid() {
+    void utc144_submit_evidenceNote5001ThrowsInputInvalid() {
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.submit(
                 100L, new SubmitClaimRequest("valid", "b".repeat(5001), "v1", List.of()), List.of(), claimantUser)));
     }
 
     @Test
-    void utc007_submit_finderClaimingOwnPostThrowsSelfNotAllowed() {
+    void utc145_submit_finderClaimingOwnPostThrowsSelfNotAllowed() {
         assertEquals(ErrorCode.CLAIM_SELF_NOT_ALLOWED, code(() -> service.submit(100L, validSubmitReq(), List.of(), finderUser)));
     }
 
     @Test
-    void utc008_submit_postCreatedByClaimantThrowsSelfNotAllowed() {
+    void utc146_submit_postCreatedByClaimantThrowsSelfNotAllowed() {
         ReflectionTestUtils.setField(p2pPost, "createdBy", claimant);
         assertEquals(ErrorCode.CLAIM_SELF_NOT_ALLOWED, code(() -> service.submit(100L, validSubmitReq(), List.of(), claimantUser)));
     }
 
     @Test
-    void utc009_submit_lostPostThrowsPostUnavailable() {
+    void utc147_submit_lostPostThrowsPostUnavailable() {
         Post lostPost = Post.lost(finder, p2pPost.getCategory(), "Lost", "Desc", "Hall A", OffsetDateTime.now().minusDays(1));
         ReflectionTestUtils.setField(lostPost, "id", 101L);
         when(posts.findById(101L)).thenReturn(Optional.of(lostPost));
@@ -250,28 +250,28 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc010_submit_activeDuplicateClaimThrowsDuplicate() {
+    void utc148_submit_activeDuplicateClaimThrowsDuplicate() {
         when(claims.existsByPost_IdAndClaimant_IdAndStatusIn(eq(100L), eq(20L), any())).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_DUPLICATE, code(() -> service.submit(100L, validSubmitReq(), List.of(), claimantUser)));
     }
 
     @Test
-    void utc011_submit_postIdZeroThrowsInputInvalid() {
+    void utc149_submit_postIdZeroThrowsInputInvalid() {
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.submit(0L, validSubmitReq(), List.of(), claimantUser)));
     }
 
     @Test
-    void utc012_submit_missingPostThrowsClaimNotFound() {
+    void utc150_submit_missingPostThrowsClaimNotFound() {
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.submit(999L, validSubmitReq(), List.of(), claimantUser)));
     }
 
     @Test
-    void utc013_submit_nullUserThrowsUnauthorized() {
+    void utc151_submit_nullUserThrowsUnauthorized() {
         assertEquals(ErrorCode.UNAUTHORIZED, code(() -> service.submit(100L, validSubmitReq(), List.of(), null)));
     }
 
     @Test
-    void utc014_submit_claimantSuspendedAfterRefreshThrowsForbidden() {
+    void utc152_submit_claimantSuspendedAfterRefreshThrowsForbidden() {
         doAnswer(inv -> {
             ReflectionTestUtils.setField(claimant, "status", AccountStatus.SUSPENDED);
             return null;
@@ -280,7 +280,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc015_submit_uniqueViolationMapsToDuplicateAndDeletesUploads() {
+    void utc153_submit_uniqueViolationMapsToDuplicateAndDeletesUploads() {
         List<MultipartFile> files = oneEvidenceFile("proof.jpg");
         doThrow(new DataIntegrityViolationException("uq_active")).when(claims).saveAndFlush(any(Claim.class));
 
@@ -289,7 +289,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc016_submit_storagePutFailureDeletesKeyAndRethrows() {
+    void utc154_submit_storagePutFailureDeletesKeyAndRethrows() {
         List<MultipartFile> files = oneEvidenceFile("proof.jpg");
         doThrow(new RuntimeException("S3 put failed")).when(storage).put(anyString(), any(), anyString());
 
@@ -298,7 +298,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc017_submit_windowsPathStrippedFromEvidenceFilename() {
+    void utc155_submit_windowsPathStrippedFromEvidenceFilename() {
         service.submit(100L, validSubmitReq(), oneEvidenceFile("C:\\Users\\a\\pic.jpg"), claimantUser);
 
         ArgumentCaptor<Claim> saved = ArgumentCaptor.forClass(Claim.class);
@@ -307,7 +307,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc018_submit_blankFullNameFallsBackToThanhVien() {
+    void utc156_submit_blankFullNameFallsBackToThanhVien() {
         ReflectionTestUtils.setField(claimant, "fullName", "   ");
         service.submit(100L, validSubmitReq(), List.of(), claimantUser);
 
@@ -318,7 +318,7 @@ class ClaimServiceTest {
 
     /** Supplementary: evidence uploaded before a generic transaction failure is cleaned up. */
     @Test
-    void utc019_submit_whenTransactionThrowsAfterUpload_deletesUploadedKeys() {
+    void utc157_submit_whenTransactionThrowsAfterUpload_deletesUploadedKeys() {
         List<MultipartFile> files = oneEvidenceFile("proof.jpg");
         doThrow(new RuntimeException("DB fail")).when(claims).saveAndFlush(any());
 
@@ -329,7 +329,7 @@ class ClaimServiceTest {
     // ---------------------------------------------------------------- retry
 
     @Test
-    void utc020_retry_rejectedOwnedClaimResubmits() {
+    void utc159_retry_rejectedOwnedClaimResubmits() {
         when(claims.findById(499L)).thenReturn(Optional.of(p2pClaim(499L, "REJECTED", 0L)));
         ClaimResultDto result = service.retry(499L, validSubmitReq(), List.of(), claimantUser);
         assertEquals(500L, result.id());
@@ -337,19 +337,19 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc021_retry_cancelledClaimCanBeRetried() {
+    void utc160_retry_cancelledClaimCanBeRetried() {
         when(claims.findById(480L)).thenReturn(Optional.of(p2pClaim(480L, "CANCELLED", 1L)));
         assertEquals(500L, service.retry(480L, validSubmitReq(), List.of(), claimantUser).id());
     }
 
     @Test
-    void utc022_retry_pendingPreviousThrowsStateInvalid() {
+    void utc161_retry_pendingPreviousThrowsStateInvalid() {
         when(claims.findById(499L)).thenReturn(Optional.of(p2pClaim(499L, "PENDING", 0L)));
         assertEquals(ErrorCode.CLAIM_STATE_INVALID, code(() -> service.retry(499L, validSubmitReq(), List.of(), claimantUser)));
     }
 
     @Test
-    void utc023_retry_claimOwnedByAnotherUserThrowsNotFound() {
+    void utc162_retry_claimOwnedByAnotherUserThrowsNotFound() {
         Claim others = Claim.submit(p2pPost, outsider, "Other", null);
         ReflectionTestUtils.setField(others, "id", 482L);
         ReflectionTestUtils.setField(others, "status", "REJECTED");
@@ -358,7 +358,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc024_retry_officeClaimThrowsNotFound() {
+    void utc163_retry_officeClaimThrowsNotFound() {
         Claim office = officeClaim(483L);
         ReflectionTestUtils.setField(office, "status", "REJECTED");
         when(claims.findById(483L)).thenReturn(Optional.of(office));
@@ -366,7 +366,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc025_retry_custodyChangedToOfficeRejectsRetry() {
+    void utc164_retry_custodyChangedToOfficeRejectsRetry() {
         when(claims.findById(484L)).thenReturn(Optional.of(p2pClaim(484L, "REJECTED", 1L)));
         ReflectionTestUtils.setField(p2pPost, "custodyMode", "OFFICE");
 
@@ -379,201 +379,14 @@ class ClaimServiceTest {
 
     // ---------------------------------------------------------------- questionnaire / latestOnPost
 
-    @Test
-    void utc026_questionnaire_returnsCategoryQuestionnaire() {
-        ClaimQuestionnaireDto dto = new ClaimQuestionnaireDto("v1", 3L, "Wallet", List.of(), List.of());
-        when(questionnaires.forCategory(p2pPost.getCategory())).thenReturn(dto);
-        assertEquals(dto, service.questionnaire(100L, claimantUser));
-    }
-
-    @Test
-    void utc027_questionnaire_postOwnerThrowsSelfNotAllowed() {
-        assertEquals(ErrorCode.CLAIM_SELF_NOT_ALLOWED, code(() -> service.questionnaire(100L, finderUser)));
-    }
-
-    @Test
-    void utc028_latestOnPost_returnsMostRecentClaim() {
-        Claim latest = Claim.submit(p2pPost, claimant, "Mine", null);
-        ReflectionTestUtils.setField(latest, "id", 510L);
-        when(claims.findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(100L, 20L, "P2P"))
-                .thenReturn(Optional.of(latest));
-        assertEquals(510L, service.latestOnPost(100L, claimantUser).id());
-    }
-
-    @Test
-    void utc029_latestOnPost_noClaimReturnsNull() {
-        assertNull(service.latestOnPost(100L, claimantUser));
-    }
-
-    @Test
-    void utc030_latestOnPost_postIdZeroThrowsInputInvalid() {
-        assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.latestOnPost(0L, claimantUser)));
-    }
-
     // ---------------------------------------------------------------- listings
 
-    @Test
-    void utc031_mine_mapsSummaryWithThumbnail() {
-        Claim c = p2pClaim(520L, "PENDING", 0L);
-        PostImage img = new PostImage("posts/10/thumb.jpg", 0, "image/jpeg", 50L, 10, 10, "h");
-        ReflectionTestUtils.setField(img, "post", p2pPost);
-        when(claims.findMine(eq(20L), eq("HISTORY"), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(c), PageRequest.of(0, 10), 1));
-        stubThumbnails(List.of(img));
-        when(storage.readUrl("posts/10/thumb.jpg", null)).thenReturn("https://cdn/thumb.jpg");
-
-        ClaimPageDto page = service.mine(1, 10, "HISTORY", claimantUser);
-
-        assertEquals(1, page.content().size());
-        assertEquals(520L, page.content().get(0).id());
-        assertEquals("https://cdn/thumb.jpg", page.content().get(0).postThumbnailUrl());
-        assertNotNull(page.content().get(0).descriptionPreview());
-    }
-
-    @Test
-    void utc032_mine_unknownStatusThrowsInputInvalid() {
-        assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.mine(1, 10, "UNKNOWN", claimantUser)));
-    }
-
-    @Test
-    void utc033_mine_nullStatusThrowsInputInvalid() {
-        assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.mine(1, 10, null, claimantUser)));
-    }
-
-    @Test
-    void utc034_mine_pageZeroThrowsPaginationInvalid() {
-        assertEquals(ErrorCode.POST_PAGINATION_INVALID, code(() -> service.mine(0, 10, "ALL", claimantUser)));
-    }
-
-    @Test
-    void utc035_mine_size101ThrowsPaginationInvalid() {
-        assertEquals(ErrorCode.POST_PAGINATION_INVALID, code(() -> service.mine(1, 101, "ALL", claimantUser)));
-    }
-
-    @Test
-    void utc036_received_returnsPendingClaimsForOwner() {
-        stubThumbnails(List.of());
-        when(claims.findReceived(10L, "PENDING", PageRequest.of(0, 10))).thenReturn(new PageImpl<>(
-                List.of(p2pClaim(521L, "PENDING", 0L), p2pClaim(522L, "PENDING", 0L)), PageRequest.of(0, 10), 2));
-        assertEquals(2, service.received(1, 10, "PENDING", finderUser).content().size());
-    }
-
-    @Test
-    void utc037_office_userRoleThrowsForbidden() {
-        assertEquals(ErrorCode.FORBIDDEN, code(() -> service.office(1, 10, "ALL", claimantUser)));
-    }
-
-    @Test
-    void utc038_office_approverQueriesOfficeClaims() {
-        when(claims.findOffice(eq("PENDING"), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
-        assertTrue(service.office(1, 10, "PENDING", staffUser).content().isEmpty());
-        verify(claims).findOffice(eq("PENDING"), any(PageRequest.class));
-    }
-
-    @Test
-    void utc039_onPost_outsiderThrowsNotFound() {
-        assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.onPost(100L, 1, 10, "ALL", outsiderUser)));
-    }
-
-    @Test
-    void utc040_onPost_ownerQueriesNonApproverView() {
-        when(claims.findOnPost(eq(100L), eq(10L), eq(false), eq("ALL"), any(PageRequest.class)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
-        assertTrue(service.onPost(100L, 1, 10, "ALL", finderUser).content().isEmpty());
-        verify(claims).findOnPost(eq(100L), eq(10L), eq(false), eq("ALL"), any(PageRequest.class));
-    }
-
-    /** Supplementary: grouped() returns claim summaries grouped by post. */
-    @Test
-    @SuppressWarnings("unchecked")
-    void utc041_grouped_whenMatchingPostsExist_returnsGroupedClaims() {
-        Claim c = p2pClaim(530L, "PENDING", 0L);
-        TypedQuery<Long> countQuery = mock(TypedQuery.class);
-        TypedQuery<Long> idsQuery = mock(TypedQuery.class);
-        TypedQuery<Claim> claimsQuery = mock(TypedQuery.class);
-        when(entityManager.createQuery(anyString(), eq(Long.class))).thenReturn(countQuery, idsQuery);
-        when(countQuery.setParameter(anyString(), any())).thenReturn(countQuery);
-        when(countQuery.getSingleResult()).thenReturn(1L);
-        when(idsQuery.setParameter(anyString(), any())).thenReturn(idsQuery);
-        when(idsQuery.setFirstResult(anyInt())).thenReturn(idsQuery);
-        when(idsQuery.setMaxResults(anyInt())).thenReturn(idsQuery);
-        when(idsQuery.getResultList()).thenReturn(List.of(100L));
-        when(entityManager.createQuery(anyString(), eq(Claim.class))).thenReturn(claimsQuery);
-        when(claimsQuery.setParameter(anyString(), any())).thenReturn(claimsQuery);
-        when(claimsQuery.getResultList()).thenReturn(List.of(c));
-        stubThumbnails(List.of());
-
-        ClaimPostGroupDto.PageData grouped = service.grouped(1, 10, "HISTORY", true, null, claimantUser);
-
-        assertEquals(1, grouped.content().size());
-        assertEquals(100L, grouped.content().get(0).postId());
-        assertEquals(1, grouped.content().get(0).claims().size());
-    }
-
     // ---------------------------------------------------------------- detail / detailOnPost
-
-    @Test
-    void utc042_detail_claimantSeesOwnPendingClaim() {
-        Claim c = Claim.submit(p2pPost, claimant, "My wallet", "ID card");
-        ReflectionTestUtils.setField(c, "id", 540L);
-        c.addEvidence(new ClaimEvidence("claims/540/1.jpg", "1.jpg", "image/jpeg", 5L, "h", 0));
-        when(claims.findById(540L)).thenReturn(Optional.of(c));
-        when(routing.matches(eq(c), any())).thenReturn(true);
-        when(storage.readUrl("claims/540/1.jpg", null)).thenReturn("https://cdn/1.jpg");
-
-        ClaimDetailDto dto = service.detail(540L, claimantUser);
-        assertEquals(540L, dto.id());
-        assertTrue(dto.canCancel());
-        assertFalse(dto.canReview());
-        assertEquals(540L, service.detailOnPost(100L, 540L, claimantUser).id());
-    }
-
-    @Test
-    void utc043_detail_ownerSeesCanReview() {
-        Claim pending = p2pClaim(541L, "PENDING", 0L);
-        when(claims.findById(541L)).thenReturn(Optional.of(pending));
-        when(routing.reviewer(pending, finder)).thenReturn(true);
-        when(routing.matches(pending, Set.of("OPEN"))).thenReturn(true);
-        assertTrue(service.detail(541L, finderUser).canReview());
-    }
-
-    @Test
-    void utc044_detail_outsiderThrowsNotFound() {
-        when(claims.findById(540L)).thenReturn(Optional.of(p2pClaim(540L, "PENDING", 0L)));
-        assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.detail(540L, outsiderUser)));
-    }
-
-    @Test
-    void utc045_detail_rejectedWithoutOtherActiveClaimCanRetry() {
-        stubRejectedDetail();
-        when(claims.existsByPost_IdAndClaimant_IdAndStatusIn(eq(100L), eq(20L), any())).thenReturn(false);
-        assertTrue(service.detail(542L, claimantUser).canRetry());
-    }
-
-    @Test
-    void utc046_detail_rejectedWithOtherActiveClaimCannotRetry() {
-        stubRejectedDetail();
-        when(claims.existsByPost_IdAndClaimant_IdAndStatusIn(eq(100L), eq(20L), any())).thenReturn(true);
-        assertFalse(service.detail(542L, claimantUser).canRetry());
-    }
-
-    @Test
-    void utc047_detailOnPost_mismatchedPostIdThrowsNotFound() {
-        stubRejectedDetail();
-        assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.detailOnPost(101L, 542L, claimantUser)));
-    }
-
-    @Test
-    void utc048_detail_officeClaimThrowsNotFound() {
-        when(claims.findById(543L)).thenReturn(Optional.of(officeClaim(543L)));
-        assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.detail(543L, claimantUser)));
-    }
 
     // ---------------------------------------------------------------- review
 
     @Test
-    void utc049_review_approvedOpensChatAndNotifies() {
+    void utc165_review_approvedOpensChatAndNotifies() {
         Claim c = reviewableClaim(550L);
         ClaimResultDto result = service.review(550L, new ReviewClaimRequest("APPROVED", "Matched details", 0L), finderUser);
 
@@ -584,18 +397,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void review_approvedOpensAppealWindowForOtherPendingClaimants() {
-        Claim approved = reviewableClaim(550L);
-
-        ClaimResultDto result = service.review(550L, new ReviewClaimRequest("APPROVED", "Matched details", 0L), finderUser);
-
-        assertEquals("APPROVED", result.status());
-        verify(appeals).open(approved);
-        verify(notifications).notifyUser(eq(20L), eq("CLAIM_APPROVED"), anyString(), anyString(), anyString(), eq(true));
-    }
-
-    @Test
-    void utc050_review_rejectedSavesActivityAndNotifiesWithReason() {
+    void utc166_review_rejectedSavesActivityAndNotifiesWithReason() {
         reviewableClaim(553L);
         ClaimResultDto result = service.review(553L, new ReviewClaimRequest("REJECTED", "Wrong colour", 0L), finderUser);
 
@@ -608,7 +410,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc051_review_officeClaimOnP2pEndpointThrowsNotFound() {
+    void utc167_review_officeClaimOnP2pEndpointThrowsNotFound() {
         stubLockForAction(551L, officeClaim(551L));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND,
                 code(() -> service.review(551L, new ReviewClaimRequest("APPROVED", "Reason", 0L), staffUser)));
@@ -616,49 +418,49 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc052_review_nonOwnerThrowsNotFound() {
+    void utc168_review_nonOwnerThrowsNotFound() {
         stubLockForAction(554L, p2pClaim(554L, "PENDING", 0L));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND,
                 code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "ok", 0L), outsiderUser)));
     }
 
     @Test
-    void utc053_review_claimantReviewingOwnClaimThrowsNotFound() {
+    void utc169_review_claimantReviewingOwnClaimThrowsNotFound() {
         stubLockForAction(554L, p2pClaim(554L, "PENDING", 0L));
         assertEquals(ErrorCode.CLAIM_NOT_FOUND,
                 code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "ok", 0L), claimantUser)));
     }
 
     @Test
-    void utc054_review_unsupportedDecisionThrowsInputInvalid() {
+    void utc170_review_unsupportedDecisionThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
                 code(() -> service.review(554L, new ReviewClaimRequest("MAYBE", "Reason", 0L), finderUser)));
     }
 
     @Test
-    void utc055_review_emptyReasonThrowsInputInvalid() {
+    void utc171_review_emptyReasonThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
                 code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "", 0L), finderUser)));
     }
 
     @Test
-    void utc056_review_reason2001ThrowsInputInvalid() {
+    void utc172_review_reason2001ThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
                 code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "x".repeat(2001), 0L), finderUser)));
     }
 
     @Test
-    void utc057_review_reason2000Accepted() {
+    void utc173_review_reason2000Accepted() {
         reviewableClaim(556L);
         assertEquals("APPROVED",
                 service.review(556L, new ReviewClaimRequest("APPROVED", "r".repeat(2000), 0L), finderUser).status());
     }
 
     @Test
-    void utc058_review_versionMismatchThrowsStale() {
+    void utc174_review_versionMismatchThrowsStale() {
         Claim c = reviewableClaim(552L);
         ReflectionTestUtils.setField(c, "version", 2L);
         assertEquals(ErrorCode.CLAIM_STALE,
@@ -666,21 +468,21 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc059_review_nullExpectedVersionThrowsInputInvalid() {
+    void utc175_review_nullExpectedVersionThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
                 code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", null), finderUser)));
     }
 
     @Test
-    void utc060_review_negativeExpectedVersionThrowsInputInvalid() {
+    void utc176_review_negativeExpectedVersionThrowsInputInvalid() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
                 code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", -1L), finderUser)));
     }
 
     @Test
-    void utc061_review_alreadyApprovedThrowsStateInvalid() {
+    void utc177_review_alreadyApprovedThrowsStateInvalid() {
         Claim c = reviewableClaim(555L);
         ReflectionTestUtils.setField(c, "status", "APPROVED");
         assertEquals(ErrorCode.CLAIM_STATE_INVALID,
@@ -688,7 +490,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc062_review_anotherApprovedClaimOnPostThrowsStateInvalid() {
+    void utc178_review_anotherApprovedClaimOnPostThrowsStateInvalid() {
         reviewableClaim(554L);
         when(claims.existsByPost_IdAndStatusIn(100L, Set.of("APPROVED"))).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_STATE_INVALID,
@@ -744,7 +546,7 @@ class ClaimServiceTest {
     // ---------------------------------------------------------------- cancel
 
     @Test
-    void utc063_cancel_pendingByClaimantNotifiesFinder() {
+    void utc179_cancel_pendingByClaimantNotifiesFinder() {
         Claim c = cancellableClaim(560L, "PENDING");
         ClaimResultDto result = service.cancel(560L, new CancelClaimRequest(1L, "Found mine"), claimantUser);
 
@@ -755,7 +557,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc064_cancel_approvedClaimReopensPost() {
+    void utc180_cancel_approvedClaimReopensPost() {
         p2pPost.reserveForClaim();
         Claim claim = cancellableClaim(562L, "APPROVED");
         when(routing.matches(claim, Set.of("RESERVED"))).thenReturn(true);
@@ -785,7 +587,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc065_cancel_approvedWithHandoverThrowsStateInvalid() {
+    void utc181_cancel_approvedWithHandoverThrowsStateInvalid() {
         cancellableClaim(561L, "APPROVED");
         when(handovers.existsByClaimId(561L)).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_STATE_INVALID,
@@ -793,32 +595,32 @@ class ClaimServiceTest {
     }
 
     @Test
-    void utc066_cancel_rejectedClaimThrowsStateInvalid() {
+    void utc182_cancel_rejectedClaimThrowsStateInvalid() {
         cancellableClaim(563L, "REJECTED");
         assertEquals(ErrorCode.CLAIM_STATE_INVALID,
                 code(() -> service.cancel(563L, new CancelClaimRequest(1L, "No longer needed"), claimantUser)));
     }
 
     @Test
-    void utc067_cancel_nonClaimantThrowsNotFound() {
+    void utc183_cancel_nonClaimantThrowsNotFound() {
         cancellableClaim(563L, "PENDING");
         assertEquals(ErrorCode.CLAIM_NOT_FOUND, code(() -> service.cancel(563L, new CancelClaimRequest(1L, "No"), outsiderUser)));
     }
 
     @Test
-    void utc068_cancel_nullRequestThrowsInputInvalid() {
+    void utc184_cancel_nullRequestThrowsInputInvalid() {
         cancellableClaim(563L, "PENDING");
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.cancel(563L, null, claimantUser)));
     }
 
     @Test
-    void utc069_cancel_nullReasonAccepted() {
+    void utc185_cancel_nullReasonAccepted() {
         cancellableClaim(564L, "PENDING");
         assertEquals("CANCELLED", service.cancel(564L, new CancelClaimRequest(1L, null), claimantUser).status());
     }
 
     @Test
-    void utc070_cancel_reason2001ThrowsInputInvalid() {
+    void utc186_cancel_reason2001ThrowsInputInvalid() {
         cancellableClaim(563L, "PENDING");
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
                 code(() -> service.cancel(563L, new CancelClaimRequest(1L, "z".repeat(2001)), claimantUser)));

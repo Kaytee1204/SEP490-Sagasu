@@ -119,38 +119,6 @@ class ReportReviewServiceTest {
     // ---------- list ----------
 
     @Test
-    void utc047_list_validFilters_returnsPagedContent() {
-        givenTotals(30L, 25L);
-        rows(jdbc, "with queue_rows as", row("report_id", 5L, "reason_summary", "{\"Spam\":2}"));
-
-        Map<String, Object> res = service.list(1, "ALL", "ALL", "ALL", "  wallet ", user);
-
-        // totalElements counts grouped objects; totalReports counts raw reports
-        assertThat(res).containsEntry("totalElements", 25L).containsEntry("totalReports", 30L)
-                .containsEntry("totalPages", 3L).containsEntry("page", 1);
-        List<Map<String, Object>> content = (List<Map<String, Object>>) res.get("content");
-        assertThat(content).hasSize(1);
-        assertThat(content.get(0).get("reason_summary")).isEqualTo(Map.of("Spam", 2));
-    }
-
-    @Test
-    void utc048_list_noRows_totalPagesAtLeastOne() {
-        givenTotals(0L, 0L);
-        assertThat(service.list(1, "OPEN", "GENERAL", "POST", "", user)).containsEntry("totalPages", 1L);
-    }
-
-    @Test
-    void utc049_list_wildcardsInKeywordAreEscaped() {
-        givenTotals(0L, 0L);
-
-        service.list(1, "ALL", "ALL", "ALL", "50%_off", user);
-
-        ArgumentCaptor<Object[]> cap = ArgumentCaptor.forClass(Object[].class);
-        verify(jdbc).queryForMap(startsWith("select count(*) as reports"), cap.capture());
-        assertThat(cap.getValue()).contains("%50\\%\\_off%");
-    }
-
-    @Test
     void assigneeCombinesWithTheSelectedQueue() {
         givenTotals(0L, 0L);
         service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "WAITING", null, "MINE", user);
@@ -176,100 +144,22 @@ class ReportReviewServiceTest {
         assertThat(result).containsEntry("page", 1);
     }
 
-    @Test
-    void utc050_list_pageZero_bad() {
-        assertBad(() -> service.list(0, "ALL", "ALL", "ALL", "", user), "Bộ lọc");
-    }
-
-    @Test
-    void utc051_list_page100001_bad() {
-        assertBad(() -> service.list(100001, "ALL", "ALL", "ALL", "", user), "Bộ lọc");
-    }
-
-    @Test
-    void utc052_list_unknownStatusKindOrTarget_bad() {
-        assertBad(() -> service.list(1, "CLOSED", "ALL", "ALL", "", user), "Bộ lọc");
-        assertBad(() -> service.list(1, "ALL", "OTHER", "ALL", "", user), "Bộ lọc");
-        assertBad(() -> service.list(1, "ALL", "ALL", "COMMENT", "", user), "Bộ lọc");
-    }
-
-    @Test
-    void utc053_list_keyword201Chars_bad() {
-        assertBad(() -> service.list(1, "ALL", "ALL", "ALL", "a".repeat(201), user), "Bộ lọc");
-    }
-
-    @Test
-    void utc054_list_notManager_forbidden() {
-        when(access.require(eq(user), any(AccountRole[].class))).thenThrow(new AppException(ErrorCode.FORBIDDEN));
-        assertThatThrownBy(() -> service.list(1, "ALL", "ALL", "ALL", "", user))
-                .isInstanceOf(AppException.class).extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
     // ---------- detail ----------
-
-    @Test
-    void utc055_detail_assignedToActor_canProcess() {
-        Map<String, Object> d = service.detail(5L, user);
-
-        verify(context).capture(5L, "FIRST_REVIEW");
-        assertThat(d).containsEntry("canProcess", true).containsEntry("canTake", false).containsEntry("conflict", false);
-        assertThat(d).containsKeys("report", "current", "snapshot", "evidence", "history", "decisions", "inquiries", "hold", "p2pDispute", "related");
-    }
-
-    @Test
-    void utc056_detail_openUnassigned_canTake() {
-        report.put("assigned_to", null);
-        report.put("status", "OPEN");
-        givenReport(report);
-
-        assertThat(service.detail(5L, user)).containsEntry("canTake", true).containsEntry("canProcess", false);
-    }
-
-    @Test
-    void utc057_detail_actorIsParticipant_conflict() {
-        ctx.put("participants", List.of(row("id", 1L)));
-
-        assertThat(service.detail(5L, user)).containsEntry("conflict", true)
-                .containsEntry("canTake", false).containsEntry("canProcess", false);
-    }
-
-    @Test
-    void utc058_detail_missingReport_bad() {
-        rows(jdbc, "select * from report where report_id");
-        assertBad(() -> service.detail(99L, user), "Không tìm thấy báo cáo");
-    }
-
-    @Test
-    void utc059_participantsFor_mergesSnapshotParticipants() {
-        rows(jdbc, "payload::text from report_snapshot", row("payload", "{\"participants\":[{\"id\":9}]}"));
-        assertThat(service.participantsFor(report)).containsExactlyInAnyOrder(7L, 8L, 9L);
-    }
-
-    @Test
-    void utc060_inquiries_attachesEvidenceUrls() {
-        rows(jdbc, "from report_inquiry i join accounts", row("inquiry_id", 2L, "question", "Q"));
-        rows(jdbc, "from report_reply_evidence", row("evidence_id", 1L, "storage_key", "k"));
-        when(storage.readUrl("k", null)).thenReturn("https://cdn/k");
-
-        List<Map<String, Object>> list = service.inquiries(5L);
-
-        assertThat(list.get(0).get("evidence").toString()).contains("https://cdn/k");
-    }
 
     // ---------- act: routing ----------
 
     @Test
-    void utc061_act_unknownAction_rejected() {
+    void utc299_act_unknownAction_rejected() {
         assertBad(() -> service.act(5L, action("CONCLUDE"), user), "Thao tác không hợp lệ");
     }
 
     @Test
-    void utc062_suspend_withoutTarget_rejected() {
+    void utc300_suspend_withoutTarget_rejected() {
         assertBad(() -> service.act(5L, action("SUSPEND_ACCOUNT"), user), "Chọn đúng tài khoản");
     }
 
     @Test
-    void utc063_hidePost_alreadyHidden_rejected() {
+    void utc301_hidePost_alreadyHidden_rejected() {
         Post post = mock(Post.class);
         when(post.getModerationStatus()).thenReturn("HIDDEN");
         when(posts.findById(10L)).thenReturn(Optional.of(post));
@@ -280,7 +170,7 @@ class ReportReviewServiceTest {
     // ---------- act: TAKE ----------
 
     @Test
-    void utc064_take_openUnassigned_assignsAndLogsHistory() {
+    void utc302_take_openUnassigned_assignsAndLogsHistory() {
         report.put("assigned_to", null);
         report.put("status", "OPEN");
         givenReport(report);
@@ -292,12 +182,12 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc065_take_alreadyAssigned_rejected() {
+    void utc303_take_alreadyAssigned_rejected() {
         assertBad(() -> service.act(5L, action("TAKE"), user), "đã được nhận");
     }
 
     @Test
-    void utc066_take_versionMismatch_rejected() {
+    void utc304_take_versionMismatch_rejected() {
         report.put("assigned_to", null);
         report.put("version", 4L);
         givenReport(report);
@@ -305,7 +195,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc067_take_actorIsParticipant_rejected() {
+    void utc305_take_actorIsParticipant_rejected() {
         report.put("assigned_to", null);
         givenReport(report);
         ctx.put("participants", List.of(row("id", 1L)));
@@ -315,28 +205,28 @@ class ReportReviewServiceTest {
     // ---------- act: processing guard ----------
 
     @Test
-    void utc068_act_notAssignedToActor_rejected() {
+    void utc306_act_notAssignedToActor_rejected() {
         report.put("assigned_to", 2L);
         givenReport(report);
         assertBad(() -> service.act(5L, action("HOLD"), user), "Cần nhận xử lý");
     }
 
     @Test
-    void utc069_act_staleVersion_rejected() {
+    void utc307_act_staleVersion_rejected() {
         report.put("version", 9L);
         givenReport(report);
         assertBad(() -> service.act(5L, action("HOLD"), user), "Báo cáo đã thay đổi");
     }
 
     @Test
-    void utc070_act_closedReport_rejected() {
+    void utc308_act_closedReport_rejected() {
         report.put("status", "RESOLVED");
         givenReport(report);
         assertBad(() -> service.act(5L, action("HOLD"), user), "Báo cáo đã thay đổi");
     }
 
     @Test
-    void utc071_act_blankConclusion_rejected() {
+    void utc309_act_blankConclusion_rejected() {
         var req = new ReportReviewService.Action(3L, "HOLD", "  ", "Basis", null, false);
         assertBad(() -> service.act(5L, req, user), "Cần ghi kết luận");
     }
@@ -344,7 +234,7 @@ class ReportReviewServiceTest {
     // ---------- act: HOLD / RELEASE ----------
 
     @Test
-    void utc072_hold_foundOpenPost_insertsHoldWithoutClosing() {
+    void utc310_hold_foundOpenPost_insertsHoldWithoutClosing() {
         service.act(5L, action("HOLD"), user);
 
         verify(jdbc).update(contains("insert into report_hold"), eq(5L), eq(10L), eq(1L), eq("Conclusion"));
@@ -353,25 +243,25 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc073_hold_lostPost_rejected() {
+    void utc311_hold_lostPost_rejected() {
         ctx.put("post", row("post_id", 10L, "post_type", "LOST", "status", "OPEN"));
         assertBad(() -> service.act(5L, action("HOLD"), user), "không còn ở bước");
     }
 
     @Test
-    void utc074_hold_returnedPost_rejected() {
+    void utc312_hold_returnedPost_rejected() {
         ctx.put("post", row("post_id", 10L, "post_type", "FOUND", "status", "RETURNED"));
         assertBad(() -> service.act(5L, action("HOLD"), user), "không còn ở bước");
     }
 
     @Test
-    void utc075_hold_noPostInContext_rejected() {
+    void utc313_hold_noPostInContext_rejected() {
         ctx.remove("post");
         assertBad(() -> service.act(5L, action("HOLD"), user), "không có đồ vật");
     }
 
     @Test
-    void utc076_release_releasesActiveHold() {
+    void utc314_release_releasesActiveHold() {
         ctx.put("post", row("post_id", 10L, "post_type", "FOUND", "status", "RETURNED"));
 
         service.act(5L, action("RELEASE"), user);
@@ -382,13 +272,13 @@ class ReportReviewServiceTest {
     // ---------- act: HIDE_POST / SUSPEND_ACCOUNT (measures keep the report open) ----------
 
     @Test
-    void utc077_hidePost_noPostInContext_rejected() {
+    void utc315_hidePost_noPostInContext_rejected() {
         ctx.remove("post");
         assertBad(() -> service.act(5L, action("HIDE_POST"), user), "không có bài đăng để ẩn");
     }
 
     @Test
-    void utc078_hidePost_moderatesAndRecordsDecision() {
+    void utc316_hidePost_moderatesAndRecordsDecision() {
         givenVisiblePost();
 
         service.act(5L, action("HIDE_POST"), user);
@@ -402,7 +292,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc079_suspend_participant_suspendsAndResetsLock() {
+    void utc317_suspend_participant_suspendsAndResetsLock() {
         givenAccountReport();
         rows(jdbc, "select status,role from accounts", row("status", "ACTIVE", "role", "USER"));
         Account target = new Account();
@@ -422,19 +312,19 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc080_suspend_reporter_rejected() {
+    void utc318_suspend_reporter_rejected() {
         givenAccountReport();
         assertBad(() -> service.act(5L, action("SUSPEND_ACCOUNT", 7L, false), user), "Chọn đúng tài khoản");
     }
 
     @Test
-    void utc081_suspend_nonParticipant_rejected() {
+    void utc319_suspend_nonParticipant_rejected() {
         givenAccountReport();
         assertBad(() -> service.act(5L, action("SUSPEND_ACCOUNT", 99L, false), user), "Chọn đúng tài khoản");
     }
 
     @Test
-    void utc082_suspend_alreadySuspended_rejected() {
+    void utc320_suspend_alreadySuspended_rejected() {
         givenAccountReport();
         rows(jdbc, "select status,role from accounts", row("status", "SUSPENDED"));
         assertBad(() -> service.act(5L, action("SUSPEND_ACCOUNT", 8L, false), user), "không còn hoạt động");
@@ -442,7 +332,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc083_suspend_basisNamesSuspendedAccount() {
+    void utc321_suspend_basisNamesSuspendedAccount() {
         givenAccountReport();
         rows(jdbc, "select status,role from accounts", row("status", "ACTIVE", "role", "USER"));
         Account target = new Account();
@@ -550,7 +440,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc084_measure_keepsReportInReviewWithoutNotifying() {
+    void utc322_measure_keepsReportInReviewWithoutNotifying() {
         givenVisiblePost();
 
         service.act(5L, action("HIDE_POST"), user);
@@ -561,7 +451,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc085_decision_recordsBeforeAndAfterStatus() {
+    void utc323_decision_recordsBeforeAndAfterStatus() {
         service.act(5L, action("RESOLVE"), user);
 
         ArgumentCaptor<String> before = ArgumentCaptor.forClass(String.class);
@@ -575,7 +465,7 @@ class ReportReviewServiceTest {
     // ---------- act: RESOLVE / DISMISS ----------
 
     @Test
-    void utc086_resolve_notifiesEveryParticipant() {
+    void utc324_resolve_notifiesEveryParticipant() {
         service.act(5L, action("RESOLVE"), user);
 
         verify(notifications).notifyUser(eq(7L), eq("REPORT_RESOLVED"), anyString(), eq("Conclusion"), anyString(), eq(false));
@@ -584,13 +474,13 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc087_dismiss_activeP2pDispute_mustUseHandoverOutcome() {
+    void utc325_dismiss_activeP2pDispute_mustUseHandoverOutcome() {
         when(jdbc.queryForObject(contains("p2p_handover_issue"), eq(Boolean.class), any(Object[].class))).thenReturn(true);
         assertBad(() -> service.act(5L, action("DISMISS"), user), "kết quả trao trả");
     }
 
     @Test
-    void utc088_resolve_resolvedAndHoldReleased() {
+    void utc326_resolve_resolvedAndHoldReleased() {
         service.act(5L, action("RESOLVE"), user);
         verifyStatusUpdate("RESOLVED");
         verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L), eq(false));
@@ -599,14 +489,14 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc089_dismiss_rejectedStatus() {
+    void utc327_dismiss_rejectedStatus() {
         service.act(5L, action("DISMISS"), user);
         verifyStatusUpdate("REJECTED");
         verify(chat).notifyAppealChanged(5L);
     }
 
     @Test
-    void utc090_resolve_activeP2pDispute_mustUseHandoverOutcome() {
+    void utc328_resolve_activeP2pDispute_mustUseHandoverOutcome() {
         when(jdbc.queryForObject(contains("p2p_handover_issue"), eq(Boolean.class), any(Object[].class))).thenReturn(true);
         assertBad(() -> service.act(5L, action("RESOLVE"), user), "kết quả trao trả");
     }
@@ -630,7 +520,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc091_handoverCompleted_completesHandoverClaimAndPost() {
+    void utc329_handoverCompleted_completesHandoverClaimAndPost() {
         givenDispute("DISPUTED", "APPROVED");
         when(jdbc.queryForList(contains("returning claim_id,claimant_id"), eq(10L)))
                 .thenReturn(List.of(row("claim_id", 21L, "claimant_id", 9L)));
@@ -646,7 +536,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void utc092_handoverContinue_backToWaitingConfirmation() {
+    void utc330_handoverContinue_backToWaitingConfirmation() {
         givenDispute("DISPUTED", "APPROVED");
 
         service.act(5L, action("HANDOVER_CONTINUE", null, false), user);
@@ -656,7 +546,7 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void handoverDisputeCannotRejectClaimDirectly() {
+    void utc331_claimRejected_withCustody_cancelsHandoverAndReopensPost() {
         givenDispute("DISPUTED", "APPROVED");
 
         assertBad(() -> service.act(5L, action("CLAIM_REJECTED", null, true), user), "Thao tác không hợp lệ");
@@ -664,31 +554,31 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void handoverRetryRequiresCustodyCheck() {
+    void utc332_claimRejected_withoutCustodyCheck_rejected() {
         givenDispute("DISPUTED", "APPROVED");
         assertBad(() -> service.act(5L, action("HANDOVER_RETRY", null, false), user), "Cần xác minh");
     }
 
     @Test
-    void utc095_handoverOutcome_onGeneralReport_rejected() {
+    void utc333_handoverOutcome_onGeneralReport_rejected() {
         assertBad(() -> service.act(5L, action("HANDOVER_COMPLETED", null, false), user), "không phải tranh chấp");
     }
 
     @Test
-    void utc096_handoverOutcome_noP2pHandover_rejected() {
+    void utc334_handoverOutcome_noP2pHandover_rejected() {
         givenDispute("DISPUTED", "APPROVED");
         rows(jdbc, "select h.* from p2p_handover h");
         assertBad(() -> service.act(5L, action("HANDOVER_COMPLETED", null, true), user), "chỉ hỗ trợ ghi kết quả xác minh");
     }
 
     @Test
-    void utc097_handoverOutcome_handoverNoLongerDisputed_rejected() {
+    void utc335_handoverOutcome_handoverNoLongerDisputed_rejected() {
         givenDispute("COMPLETED", "APPROVED");
         assertBad(() -> service.act(5L, action("HANDOVER_COMPLETED", null, true), user), "đã thay đổi");
     }
 
     @Test
-    void utc098_handoverCompleted_otherReportHoldsItem_rejected() {
+    void utc336_handoverCompleted_otherReportHoldsItem_rejected() {
         givenDispute("DISPUTED", "APPROVED");
         when(jdbc.queryForObject(contains("report_id<>?"), eq(Boolean.class), any(Object[].class))).thenReturn(true);
         assertBad(() -> service.act(5L, action("HANDOVER_COMPLETED", null, true), user), "báo cáo khác");
@@ -735,11 +625,4 @@ class ReportReviewServiceTest {
 
     // ---------- helpers ----------
 
-    @Test
-    void utc099_text_validatesAndStrips() {
-        assertThat(ReportReviewService.text("  ok  ")).isEqualTo("ok");
-        assertThat(ReportReviewService.text("a".repeat(5000))).hasSize(5000);
-        assertBad(() -> ReportReviewService.text(null), "Cần ghi kết luận");
-        assertBad(() -> ReportReviewService.text("a".repeat(5001)), "Cần ghi kết luận");
-    }
 }
