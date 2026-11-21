@@ -266,6 +266,14 @@ public class ReportReviewService {
     out.put("recoveryRequested", recoveryRequested);
     out.put("recovery", recovery);
     out.put("issuePhase", issuePhase);
+    if (issuePhase != null) {
+      out.put("incident", context.one("""
+          select phase,submission_status,
+            message_snapshot->>'sender' as message_sender,message_snapshot->>'body' as message_body,
+            message_snapshot->>'createdAt' as message_created_at
+          from p2p_handover_issue where report_id=?
+          """, reportId));
+    }
     out.put("current", context.withUrls(current));
     out.put("snapshot", context.snapshot(reportId));
     out.put("canTake", !conflict && r.get("assigned_to") == null && open(r));

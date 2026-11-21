@@ -47,6 +47,9 @@ public class ReportService {
 
     public Detail create(Submit request,List<MultipartFile> files,CustomUserDetails user) {
         validate(request); long actor=actors.actor(user).getId();
+        if (request.reasonCode().startsWith("P2P_HANDOVER_")) {
+            throw new AppException(ErrorCode.REPORT_REASON_INVALID);
+        }
         String text=Objects.toString(request.description(),"").strip();
         String payload=request.targetType()+":"+request.targetId()+":"+request.reasonCode()+":"+text;
         var prepared=images.prepare(payload,files);
