@@ -22,6 +22,7 @@ import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.claim.ClaimRoutingPolicy;
 import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.notification.NotificationService;
+import com.example.base.service.report.ReportReasonService;
 import com.example.base.service.report.ReportService;
 import com.example.base.service.report.WorkflowImages;
 import com.example.base.storage.ImageValidator.ValidatedImage;
@@ -92,6 +93,8 @@ class P2pHandoverServiceTest {
         @Mock
         private ReportService reports;
         @Mock
+        private ReportReasonService reportReasons;
+        @Mock
         private ReportRepository reportRepository;
         @Mock
         private EntityManager em;
@@ -143,6 +146,10 @@ class P2pHandoverServiceTest {
                 ReflectionTestUtils.setField(approvedClaim, "version", 2L);
 
                 lenient().when(transactions.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+                lenient().when(reportReasons.p2pHandoverOptions()).thenReturn(new ReportReasonService.Options(
+                                "HANDOVER_ISSUE", List.of(
+                                                new ReportReasonService.Reason("P2P_HANDOVER_PAYMENT", "Yêu cầu thanh toán", true),
+                                                new ReportReasonService.Reason("HANDOVER_WRONG_ITEM", "Giao sai món đồ", true))));
         }
 
         // Supplementary (P2pHandoverService.detail): propagates UNAUTHORIZED when actor is null
@@ -174,9 +181,8 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.HANDOVER_NOT_FOUND, ex.getErrorCode());
         }
 
-        // UTC001 - detail: post owner with no recorded handover gets NOT_RECORDED & canRecord=true
         @Test
-        void detail_whenNoHandoverRecorded_finderCanRecordOnly() {
+        void detail_whenNoHandoverRecorded_finderCanRecordAndReportBeforeHandoverIssues() {
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
@@ -188,8 +194,10 @@ class P2pHandoverServiceTest {
                 assertEquals(500L, detail.claimId());
                 assertTrue(detail.canRecord());
                 assertFalse(detail.canConfirm());
-                assertFalse(detail.canReportIssue());
-                assertNull(detail.issuePhase());
+                assertTrue(detail.canReportIssue());
+                assertEquals("BEFORE", detail.issuePhase());
+                assertEquals(List.of("P2P_HANDOVER_PAYMENT"),
+                                detail.issueReasons().stream().map(ReportReasonService.Reason::code).toList());
                 assertTrue(detail.evidence().isEmpty());
                 assertNull(detail.issue());
         }
@@ -238,7 +246,7 @@ class P2pHandoverServiceTest {
 
         @ParameterizedTest
         @EnumSource(P2pClaimAppealService.State.class)
-        void issueIsUnavailableBeforeHandoverInEveryAppealState(P2pClaimAppealService.State state) {
+        void beforeHandoverIssueRequiresExplicitPhaseInEveryAppealState(P2pClaimAppealService.State state) {
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
@@ -248,7 +256,8 @@ class P2pHandoverServiceTest {
                                 .thenReturn(new WorkflowImages.Prepared(List.of(), List.of(), "hash"));
 
                 var detail = service.detail(500L, finderUser);
-                assertFalse(detail.canReportIssue());
+                assertTrue(detail.canReportIssue());
+                assertEquals("BEFORE", detail.issuePhase());
                 AppException failure = assertThrows(AppException.class, () -> service.issue(500L,
                                 new P2pHandoverService.IssueRequest("Wrong item", detail.version(), UUID.randomUUID()),
                                 List.of(), finderUser));
