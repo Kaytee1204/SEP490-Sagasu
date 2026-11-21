@@ -117,6 +117,18 @@ public class OfficeTransferService {
     }
 
     @Transactional(readOnly=true)
+    public Long myTransferId(long postId, CustomUserDetails user) {
+        Account actor = access.require(user);
+        return jdbc.queryForList("""
+                select transfer_id from office_transfer
+                where post_id = ? and requested_by = ?
+                order by (status = 'PENDING') desc, requested_at desc, transfer_id desc
+                limit 1
+                """, Long.class, postId, actor.getId()).stream().findFirst()
+                .orElseThrow(() -> bad("Không tìm thấy yêu cầu giao đồ của bài đăng này."));
+    }
+
+    @Transactional(readOnly = true)
     public TransferView detail(long id,CustomUserDetails user) {
         Account actor=access.require(user);
         Map<String,Object> row=row(id);

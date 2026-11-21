@@ -90,6 +90,14 @@ public class OfficeWorkflowController {
         return ApiResponse.ok(transfers.list(page, status, q, mine, user));
     }
 
+    @GetMapping("/transfers/my-id")
+    @Operation(summary = "Tìm mã yêu cầu giao đồ của người dùng theo bài đăng")
+    public ApiResponse<Long> myTransferId(
+            @RequestParam("postId") long postId,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(transfers.myTransferId(postId, user));
+    }
+
     @GetMapping("/transfers/{id}")
     @Operation(
             summary = "[11.5] Xem chi tiết một yêu cầu chuyển giao đồ cho Văn phòng theo ID",

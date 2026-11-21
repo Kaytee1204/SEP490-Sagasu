@@ -12,6 +12,7 @@ export const workflowApi = {
   counterReceive: (body,files) => uploadReceipt('/office-workflow/counter/receive',body,files),
   reply: (id, intake, body) => data(api.post(`/office-workflow/${intake ? "transfers" : "claims"}/${id}/appointment-response`, body)),
   transfers: (filters) => data(api.get(`/office-workflow/transfers?${new URLSearchParams(filters)}`)),
+  myTransferId: (postId) => data(api.get(`/office-workflow/transfers/my-id?${new URLSearchParams({ postId })}`)),
   transfer: (id) => data(api.get(`/office-workflow/transfers/${id}`)),
   decide: (id, body, files) => body.decision === "RECEIVED" ? uploadReceipt(`/office-workflow/transfers/${id}/receive`,body,files) : data(api.post(`/office-workflow/transfers/${id}`, body)),
   schedule: (id, body) => data(api.post(`/office-workflow/transfers/${id}/schedule`, body)),
