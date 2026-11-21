@@ -3,7 +3,9 @@ import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
 import { labels } from "../format";
 const warnings = {
+  REQUEST_POST_CORRECTION: "Người đăng sẽ nhận yêu cầu chỉnh sửa và có thể xem hướng dẫn trong hồ sơ.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
+  WARN_ACCOUNT: "Gửi cảnh báo và lưu lý do vào lịch sử xử lý của báo cáo.",
   SUSPEND_ACCOUNT:
     "Tài khoản được chọn sẽ bị đình chỉ truy cập. Quản lý chỉ xử lý tài khoản người dùng hoặc nhân viên tiếp nhận.",
   HOLD: "Tạm dừng tiếp nhận và bàn giao đồ liên quan đến báo cáo này.",
@@ -13,33 +15,65 @@ const warnings = {
     "Xác nhận đồ đã trả đúng người: hoàn tất bàn giao, đóng bài đăng và các yêu cầu đang chờ.",
   HANDOVER_CONTINUE:
     "Cho phép người nhận tiếp tục xác nhận bàn giao. Báo cáo này được kết thúc, bằng chứng vẫn được giữ lại.",
-  CLAIM_REJECTED:
-    "Kết thúc yêu cầu nhận đồ này và mở lại bài đăng. Chỉ dùng khi đã xác minh đồ vẫn ở người giữ.",
+  HANDOVER_RETRY: "Hủy lượt giao hiện tại và giữ nguyên người đã được chấp thuận. Người nhặt có thể ghi nhận lượt giao mới.",
+  HANDOVER_REOPEN: "Thu hồi chấp thuận, đưa hồ sơ về chờ xét duyệt và mở lại việc chọn người nhận.",
+  CLAIM_VIOLATION_REJECT: "Bác hồ sơ được báo cáo và gửi lý do cho người yêu cầu.",
+  REQUEST_ITEM_RECOVERY: "Gửi hướng dẫn thu hồi cho các bên. Bàn giao tiếp tục tạm dừng trong khi quản lý xác minh kết quả.",
+  CONFIRM_ITEM_RECOVERY: "Ghi nhận món đồ đã về người giữ sau khi đối chiếu bằng chứng.",
+  APPEAL_KEEP: "Kết thúc kháng cáo này. Việc bàn giao còn phụ thuộc thời hạn và các kháng cáo khác cùng đợt.",
+  APPEAL_REQUIRE_REVIEW: "Ghi nhận kết luận cần xét lại. Bàn giao tạm dừng cho đến khi xác minh người giữ đồ và thu hồi chấp thuận.",
+  APPEAL_REOPEN: "Thu hồi chấp thuận hiện tại và mở lại danh sách xét duyệt. Các bên sẽ nhận được thông báo.",
   RESOLVE:
     "Ghi kết quả giải quyết. Phiếu trả đồ đã hoàn tất sẽ không bị đảo ngược.",
   DISMISS:
     "Bác bỏ báo cáo với lý do rõ ràng. Người liên quan sẽ nhận được kết luận.",
 };
+const findings = {
+  VIOLATION: "Có vi phạm",
+  NO_VIOLATION: labels.NO_VIOLATION,
+  INSUFFICIENT_EVIDENCE: labels.INSUFFICIENT_EVIDENCE,
+};
+const batchActions = ["RESOLVE", "DISMISS", ...Object.keys(findings)];
+
 export default function DecisionDialog({ action, data, onClose, onSaved }) {
   const [selected, setSelected] = useState([]);
   const [sameIncident, setSameIncident] = useState(false);
-  const candidates = ["RESOLVE","DISMISS"].includes(action) ? (data.related || []).filter(r =>
+  const structured = action === "CONCLUDE_VIOLATION";
+  const [finding, setFinding] = useState("");
+  const [measure, setMeasure] = useState("");
+  const decision = structured ? finding : action;
+  const effect = measure || decision;
+  const candidates = !measure && batchActions.includes(decision) ? (data.related || []).filter(r =>
     ["OPEN","IN_REVIEW"].includes(r.status) && r.assigned_to === data.report.assigned_to &&
-    ["kind","reason_code","post_id","claim_id","message_id","reported_account_id"].every(key => (r[key] ?? null) === (data.report[key] ?? null))) : [];
+    r.kind === data.caseKind &&
+    ["reason_code","post_id","claim_id","message_id","reported_account_id"].every(key => (r[key] ?? null) === (data.report[key] ?? null))) : [];
   const [conclusion, setConclusion] = useState(""),
     [basis, setBasis] = useState(""),
-    [targetId, setTarget] = useState(""),
+    [holder, setHolder] = useState(""),
     [custodyVerified, setCustody] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const accountAction = ["WARN_ACCOUNT", "SUSPEND_ACCOUNT"].includes(effect);
+  const isRecoveryRequest = action === "REQUEST_ITEM_RECOVERY";
+  const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
+  const requiresCustody = requiresRecoveryCheck || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "APPEAL_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
+    || (action === "APPEAL_KEEP" && data.recoveryRequested);
+  const warning = warnings[effect];
+  const unresolvedInquiries = data.inquiries.some(item => !item.responded_at && !item.closed_at);
+  function changeDecision(setValue, value) {
+    setValue(value);
+    setSelected([]);
+    setSameIncident(false);
+  }
+
   async function submit(e) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !decision || (isRecoveryRequest && !holder)) return;
     setBusy(true);
     setError("");
     try {
       if (selected.length) {
-        await reviewApi.batch({reports:[data.report,...candidates.filter(r => selected.includes(r.report_id))].map(r => ({id:r.report_id,version:r.version})), action, conclusion:conclusion.trim(), basis:basis.trim(), sameIncidentConfirmed:sameIncident});
+        await reviewApi.batch({reports:[data.report,...candidates.filter(r => selected.includes(r.report_id))].map(r => ({id:r.report_id,version:r.version})), action: decision, conclusion:conclusion.trim(), basis:basis.trim(), sameIncidentConfirmed:sameIncident});
         onSaved(await reviewApi.detail(data.report.report_id));
         onClose();
         return;
@@ -47,10 +81,11 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
       onSaved(
         await reviewApi.act(data.report.report_id, {
           version: data.report.version,
-          action,
+          action: decision,
+          measure: measure || null,
           conclusion: conclusion.trim(),
           basis: basis.trim(),
-          targetId: targetId ? Number(targetId) : null,
+          targetId: isRecoveryRequest ? Number(holder) : accountAction ? data.report.reported_account_id : null,
           custodyVerified,
         }),
       );
@@ -62,9 +97,26 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
     }
   }
   return (
-    <Dialog title={labels[action]} busy={busy} onClose={onClose}>
-      <form onSubmit={submit} className="rr-stack">
-        <p className="rr-callout">{warnings[action]}</p>
+    <Dialog title={structured ? "Ghi kết luận vi phạm" : labels[action]} busy={busy} onClose={onClose}>
+      <form onSubmit={submit} className="rr-stack rr-decision-form">
+        {structured && <>
+          <fieldset className="rr-decision-choice" disabled={busy}>
+            <legend>Kết luận *</legend>
+            {Object.entries(findings).map(([value, label]) => <label key={value}>
+              <input type="radio" name="finding" value={value} required checked={finding === value}
+                onChange={() => { changeDecision(setFinding, value); setMeasure(""); }} />
+              {label}
+            </label>)}
+          </fieldset>
+          {finding === "VIOLATION" && <label>
+            Biện pháp áp dụng
+            <select value={measure} disabled={busy} onChange={event => changeDecision(setMeasure, event.target.value)}>
+              <option value="">Ghi nhận vi phạm</option>
+              {(data.availableMeasures || []).map(value => <option key={value} value={value}>{labels[value]}</option>)}
+            </select>
+          </label>}
+        </>}
+        {warning && <p className="rr-callout">{warning}</p>}
         {candidates.length > 0 && <fieldset className="rr-batch-selection">
           <legend>Áp dụng cho báo cáo cùng sự việc</legend>
           <p>Mặc định chỉ kết luận báo cáo #{data.report.report_id}. Chỉ chọn thêm sau khi đã đối chiếu từng nội dung và bằng chứng. Các báo cáo mới gửi sau này không tự nhận kết luận này.</p>
@@ -74,37 +126,24 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           </label>)}
           {selected.length>0 && <label className="rr-check"><input type="checkbox" required checked={sameIncident} onChange={e => setSameIncident(e.target.checked)}/>Tôi đã đối chiếu bằng chứng và xác nhận {selected.length+1} báo cáo này cùng sự việc, cùng kết luận. Kết quả được lưu và thông báo riêng cho từng báo cáo.</label>}
         </fieldset>}
-        {action === "SUSPEND_ACCOUNT" && (
-          <label>
-            Tài khoản cần xử lý *
-            <select
-              required
-              value={targetId}
-              onChange={(e) => setTarget(e.target.value)}
-            >
-              <option value="">Chọn tài khoản</option>
-              {data.current.participants
-                .filter(
-                  (p) =>
-                    p.id !== data.report.reporter_id &&
-                    ["USER", "APPROVER"].includes(p.role),
-                )
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name} · {p.email}
-                  </option>
-                ))}
-            </select>
-          </label>
+        {accountAction && (
+          <p>Tài khoản được báo cáo <strong>{data.current.account?.full_name || `#${data.report.reported_account_id}`}</strong></p>
         )}
+        {isRecoveryRequest && <label>
+          Người đang giữ món đồ *
+          <select required value={holder} onChange={event => setHolder(event.target.value)} disabled={busy}>
+            <option value="">Chọn người cần phản hồi về thu hồi</option>
+            {(data.current.participants || []).map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}
+          </select>
+        </label>}
         <label>
           Nội dung gửi cho người liên quan{" "}
           *
           <textarea
-            autoFocus
+            autoFocus={!structured}
             required
             maxLength={5000}
-            rows={4}
+            rows={3}
             value={conclusion}
             onChange={(e) => setConclusion(e.target.value)}
             placeholder="Nêu kết quả rõ ràng, không đưa thông tin riêng tư của người khác vào kết luận."
@@ -115,13 +154,13 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           <textarea
             required
             maxLength={5000}
-            rows={4}
+            rows={3}
             value={basis}
             onChange={(e) => setBasis(e.target.value)}
             placeholder="Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."
           />
         </label>
-        {action === "CLAIM_REJECTED" && (
+        {requiresCustody && (
           <label className="rr-check">
             <input
               type="checkbox"
@@ -129,17 +168,20 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
               checked={custodyVerified}
               onChange={(e) => setCustody(e.target.checked)}
             />
-            Đã xác minh đồ vẫn ở người giữ và có thể trao cho người khác.
+            {action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
+              : requiresRecoveryCheck
+              ? "Đã xác minh tình trạng món đồ và có đủ căn cứ áp dụng kết quả bàn giao này."
+              : "Đã xác minh đồ đang ở người giữ và có thể tiến hành theo quyết định này."}
           </label>
         )}
-        {[
-          "RESOLVE",
-          "DISMISS",
+        {(batchActions.includes(decision) || [
           "HANDOVER_COMPLETED",
           "HANDOVER_CONTINUE",
-          "CLAIM_REJECTED",
-        ].includes(action) &&
-          data.inquiries.some((i) => !i.responded_at) && (
+          "HANDOVER_RETRY",
+          "HANDOVER_REOPEN",
+          "APPEAL_KEEP",
+          "APPEAL_REQUIRE_REVIEW",
+        ].includes(decision)) && unresolvedInquiries && (
             <p className="rr-callout">
               Vẫn còn yêu cầu bổ sung chưa được trả lời. Nếu đã đủ căn cứ, ghi
               rõ lý do kết luận ở trên.
@@ -152,9 +194,9 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           </button>
           <button
             className="rr-primary"
-            disabled={busy || !conclusion.trim() || !basis.trim() || (selected.length>0 && !sameIncident)}
+            disabled={busy || !decision || !conclusion.trim() || !basis.trim() || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified) || (selected.length>0 && !sameIncident)}
           >
-            {busy ? "Đang lưu…" : "Xác nhận xử lý"}
+            {busy ? "Đang lưu…" : structured ? "Xác nhận kết luận" : "Xác nhận xử lý"}
           </button>
         </footer>
       </form>

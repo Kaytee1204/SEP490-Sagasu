@@ -1,6 +1,6 @@
 // src/components/layouts/admin/AdminSidebar.jsx
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowUpRight, LogOut, X } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, LogOut, X } from 'lucide-react';
 import { ADMIN_NAV_SECTIONS } from './adminNavConfig';
 import { useAuth } from '@/context/AuthContext';
 
@@ -70,8 +70,8 @@ export default function AdminSidebar({ pendingReportsCount = 0, navBadges = {}, 
                     ? 'bg-amber-500 text-slate-950'
                     : 'bg-slate-700 text-slate-200';
               return (
+                <div key={item.path}>
                 <Link
-                  key={item.path}
                   to={item.path}
                   onClick={onClose}
                   className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -85,12 +85,34 @@ export default function AdminSidebar({ pendingReportsCount = 0, navBadges = {}, 
                     {/* DaiHV: allow the office intake label to wrap instead of hiding its meaning. */}
                     <span className={item.wrapLabel ? 'whitespace-normal leading-5' : 'truncate'}>{item.label}</span>
                   </div>
-                  {hasBadge && (
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full min-w-5 text-center shrink-0 ${badgeToneClass}`}>
+                  {(hasBadge || item.children) && <div className="flex shrink-0 items-center gap-1.5">
+                    {hasBadge && <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full min-w-5 text-center ${badgeToneClass}`}>
                       {badgeCount > 99 ? '99+' : badgeCount}
-                    </span>
-                  )}
+                    </span>}
+                    {item.children && <ChevronDown size={13} className={active ? "" : "-rotate-90"} aria-hidden="true" />}
+                  </div>}
                 </Link>
+                {active && item.children && <ul className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-2">
+                  {item.children.map(child => {
+                    const detailKind = new URLSearchParams(location.search).get("kind");
+                    const selected = location.pathname === child.path || (
+                      /^\/admin\/reports\/\d+$/.test(location.pathname) && detailKind === child.kind
+                    );
+                    const count = navBadges.reportQueues?.[child.kind] || 0;
+                    return <li key={child.kind}>
+                      <Link to={child.path} onClick={onClose} aria-current={selected ? "page" : undefined}
+                        className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm ${selected
+                          ? "bg-teal-500/15 font-semibold text-teal-300"
+                          : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                        <span>{child.label}</span>
+                        {count > 0 && <span className="shrink-0 rounded-full bg-slate-700 px-1.5 text-xs text-slate-100" title={`${count} hồ sơ cần xử lý`}>
+                          {count > 99 ? "99+" : count}
+                        </span>}
+                      </Link>
+                    </li>;
+                  })}
+                </ul>}
+                </div>
               );
             })}
           </div>

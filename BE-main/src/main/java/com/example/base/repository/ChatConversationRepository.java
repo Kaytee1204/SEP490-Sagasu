@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public interface ChatConversationRepository extends JpaRepository<ChatConversation, Long> {
     Optional<ChatConversation> findByPost_IdAndClaimant_Id(long postId, long claimantId);
+    Optional<ChatConversation> findByLatestClaim_Id(long claimId);
 
     @Query(value = """
             SELECT c.conversation_id

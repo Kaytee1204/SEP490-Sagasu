@@ -31,7 +31,7 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
     <section className="rr-card">
       <div className="rr-row">
         <h3>Thông tin từ các bên</h3>
-        {data.canProcess && (
+        {(data.canAsk ?? data.canProcess) && (
           <button
             onClick={() => {
               setError("");
@@ -52,10 +52,11 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
           <div className="rr-row">
             <strong>{i.recipient}</strong>
             <span className="rr-badge">
-              {i.responded_at ? "Đã phản hồi" : "Chờ phản hồi"}
+              {i.responded_at ? "Đã phản hồi" : i.closed_at ? "Đã kết thúc" : i.overdue ? "Quá hạn phản hồi" : "Chờ phản hồi"}
             </span>
           </div>
           <small>{date(i.created_at)}</small>
+          {i.response_due_at && !i.responded_at && !i.closed_at && <small> · Hạn phản hồi {date(i.response_due_at)}</small>}
           <p>{i.question}</p>
           {i.responded_at && (
             <blockquote>

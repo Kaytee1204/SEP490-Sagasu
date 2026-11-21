@@ -29,7 +29,7 @@ export default function AdminHeader({ onMenuClick }) {
     if (location.pathname.startsWith('/admin/report-reasons')) return 'Quản lý lý do báo cáo';
     if (location.pathname.startsWith('/admin/audit-logs')) return 'Nhật ký hệ thống (Audit Logs)';
     if (location.pathname.startsWith('/admin/items')) return 'Tin đăng đồ thất lạc';
-    if (location.pathname.startsWith('/admin/reports')) return 'Báo cáo & Vi phạm';
+    if (location.pathname.startsWith('/admin/reports')) return 'Báo cáo & phản ánh';
     if (location.pathname.startsWith('/admin/users/')) return 'Chi tiết tài khoản';
     if (location.pathname.startsWith('/admin/users')) return 'Tài khoản thành viên';
     return 'Bảng điều khiển';

@@ -6,7 +6,6 @@ import com.example.base.exception.ErrorCode;
 import com.example.base.repository.ReportRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.chat.ChatAccessPolicy;
-import com.example.base.service.chat.ChatService;
 import com.example.base.service.claim.ClaimRoutingPolicy;
 import com.example.base.service.notification.NotificationService;
 import jakarta.persistence.EntityManager;
@@ -46,7 +45,6 @@ class ReportServiceTest {
     @Mock ReportRepository reports;
     @Mock EntityManager em;
     @Mock ChatAccessPolicy actors;
-    @Mock ChatService chats;
     @Mock ClaimRoutingPolicy claimPolicy;
     @Mock JdbcTemplate jdbc;
     @Mock WorkflowImages images;
@@ -137,7 +135,7 @@ class ReportServiceTest {
         verify(jdbc).update(contains("insert into report_evidence"), any(Object[].class));
         verify(jdbc).update(contains("'CREATE','OPEN'"), eq(100L), eq(7L));
         verify(context).capture(100L, "SUBMISSION");
-        verify(notifications).notifyRoles(eq(List.of(AccountRole.MANAGER)), eq(7L), eq("REPORT_CREATED"), anyString(), anyString(), eq("/admin/reports"), eq(false));
+        verify(notifications).notifyRoles(eq(List.of(AccountRole.MANAGER)), eq(7L), eq("REPORT_CREATED"), anyString(), anyString(), eq("/admin/reports/100?kind=GENERAL"), eq(false));
         verify(images, never()).cleanup(any());
     }
 
@@ -180,19 +178,18 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc009_create_claimByClaimant_created() {
+    void utc009_create_ownP2pClaimMustUseHandoverIssueOrAppeal() {
         Claim c = claim(7L);
         when(em.find(Claim.class, 20L)).thenReturn(c);
 
-        ReportService.Detail d = service.create(submit("CLAIM", 20L, "Wrong item"), files, user);
-
-        assertThat(d.targetType()).isEqualTo("CLAIM");
-        assertThat(d.kind()).isEqualTo("GENERAL");
+        assertCode(() -> service.create(submit("CLAIM", 20L, "Wrong item"), files, user),
+                ErrorCode.REPORT_TARGET_UNAVAILABLE);
     }
 
     @Test
     void utc017_create_claimWithOfficeHandover_kindHandoverIssue() {
         Claim c0 = claim(7L); when(em.find(Claim.class, 20L)).thenReturn(c0);
+        when(c0.isOffice()).thenReturn(true);
         when(jdbc.queryForObject(contains("office_handover"), eq(Boolean.class), any())).thenReturn(true);
 
         ReportService.Detail d = service.create(submit("CLAIM", 20L, "Wrong item"), files, user);
@@ -210,12 +207,8 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc011_create_messageInForeignConversation_chatNotFound() {
-        ChatMessage m = mock(ChatMessage.class);
-        when(m.getConversationId()).thenReturn(5L);
-        when(em.find(ChatMessage.class, 30L)).thenReturn(m);
-        when(chats.requireMember(5L, 7L)).thenThrow(new AppException(ErrorCode.CHAT_NOT_FOUND));
-        assertCode(() -> service.create(submit("MESSAGE", 30L, "x"), files, user), ErrorCode.CHAT_NOT_FOUND);
+    void utc011_create_messageReportsAreRetired() {
+        assertCode(() -> service.create(submit("MESSAGE", 30L, "x"), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test

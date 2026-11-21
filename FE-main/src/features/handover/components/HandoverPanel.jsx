@@ -1,4 +1,5 @@
 import { useEffect,useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronDown, CircleCheck, Clock3, Images, PackageCheck, RotateCcw, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useChat } from '@/features/chat/hooks/useChat';
 import { useNotifications } from '@/features/notifications/NotificationProvider';
@@ -30,7 +31,9 @@ function currentStep(data, canRevoke) {
   };
   if (appeal?.state === 'REVIEW_REQUIRED') return {
     Icon: ShieldAlert, title: 'Bàn giao đang tạm dừng',
-    description: canRevoke
+    description: data.waitingForAppealDeadline
+      ? `Quản lý yêu cầu xét lại người nhận. Có thể thu hồi chấp thuận sau ${claimDate(appeal.deadline)}.`
+      : canRevoke
       ? 'Quản lý yêu cầu xét lại người nhận. Nếu vẫn đang giữ món đồ, hãy thu hồi chấp thuận để đưa hồ sơ về chờ xét duyệt.'
       : 'Quản lý yêu cầu xét lại người nhận. Đang chờ người nhặt xác nhận vẫn giữ món đồ và thu hồi chấp thuận.',
   };
@@ -41,7 +44,9 @@ function currentStep(data, canRevoke) {
     case 'WAITING_CONFIRMATION': return data.canConfirm
       ? { Icon: PackageCheck, title: 'Kiểm tra và xác nhận món đồ đã nhận', description: 'Kiểm tra đúng món đồ và phụ kiện trước khi xác nhận. Báo sự cố nếu chưa nhận được hoặc có vấn đề.' }
       : { Icon: Clock3, title: 'Chờ người nhận xác nhận', description: 'Bạn đã ghi nhận giao đồ. Quá trình hoàn tất khi người nhận xác nhận đã nhận đúng món đồ.' };
-    case 'COMPLETED': return { Icon: CircleCheck, title: 'Đã hoàn tất trao trả', description: 'Người nhận đã xác nhận nhận đúng đồ. Hồ sơ và lịch sử trao đổi được giữ lại để đối chiếu.' };
+    case 'COMPLETED': return { Icon: CircleCheck, title: 'Đã hoàn tất trao trả', description: data.confirmedByManager
+      ? 'Quản lý đã đối chiếu căn cứ và xác nhận đúng món đồ, đúng người nhận.'
+      : 'Người nhận đã xác nhận nhận đúng đồ.' };
     case 'DISPUTED': return { Icon: TriangleAlert, title: 'Sự cố đang được xem xét', description: 'Quản lý đang xử lý báo cáo. Hai bên vẫn có thể nhắn tin; việc hoàn tất bàn giao đang tạm dừng.' };
     case 'CANCELLED': return { Icon: ShieldAlert, title: 'Bàn giao đã kết thúc', description: 'Bàn giao đã kết thúc theo kết luận của quản lý. Lịch sử và bằng chứng vẫn được lưu.' };
     default: return { Icon: Clock3, title: statusLabels[data.status] || data.status, description: 'Theo dõi kết quả bàn giao tại đây.' };
@@ -70,14 +75,27 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,showSubm
   const [confirmOpen,setConfirmOpen]=useState(false);
   const [issueOpen,setIssueOpen]=useState(false);
   useEffect(()=>{const refetch=()=>setRefresh(n=>n+1);window.addEventListener('focus',refetch);return()=>window.removeEventListener('focus',refetch);},[]);
-  useEffect(()=>{let cancelled=false;getHandover(claim.id).then(value=>{if(!cancelled){setData(value);setError('');}}).catch(e=>{if(!cancelled)setError(e.message);});return()=>{cancelled=true;};},[claim.id,claim.version,revision,refresh,latestNotification]);
+  useEffect(() => {
+    let cancelled = false;
+    getHandover(claim.id).then(value => {
+      if (cancelled) return;
+      setData({
+        ...value,
+        waitingForAppealDeadline: value.appealWindow?.state === 'REVIEW_REQUIRED'
+          && Date.parse(value.appealWindow.deadline) > Date.now(),
+      });
+      setError('');
+    }).catch(problem => { if (!cancelled) setError(problem.message); });
+    return () => { cancelled = true; };
+  }, [claim.id, claim.version, revision, refresh, latestNotification]);
   const appealState = data?.appealWindow?.state;
   const deadline = data?.appealWindow?.deadline;
   useEffect(() => {
-    if (appealState !== 'OPEN' && appealState !== 'UNDER_REVIEW') return;
+    const remaining = Date.parse(deadline) - Date.now();
+    if (appealState !== 'OPEN' && appealState !== 'UNDER_REVIEW'
+        && !(appealState === 'REVIEW_REQUIRED' && remaining > 0)) return;
     const refetch = () => { if (document.visibilityState === 'visible') setRefresh(value => value + 1); };
     const interval = window.setInterval(refetch, 30000);
-    const remaining = Date.parse(deadline) - Date.now();
     const timeout = remaining > 0 ? window.setTimeout(refetch, remaining + 100) : undefined;
     return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
   }, [appealState, deadline]);
@@ -89,7 +107,7 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,showSubm
   const gallery=[...evidence.map(item=>({...item,id:`h:${item.id}`})),...issueEvidence.map(item=>({...item,id:`r:${item.id}`}))];
   const requiresReReview = appealState === 'REVIEW_REQUIRED';
   const canRevoke = Boolean(onRevokeApproval) && (!data || data.status === 'NOT_RECORDED')
-    && !data?.heldForReview && appealState !== 'UNDER_REVIEW';
+    && !data?.heldForReview && appealState !== 'UNDER_REVIEW' && !data?.waitingForAppealDeadline;
   const step = data ? currentStep(data, canRevoke) : null;
   const revokeButton = canRevoke && <button type="button" className={requiresReReview ? 'btn btn-accent' : 'btn btn-ghost'}
     onClick={onRevokeApproval}><RotateCcw size={16} aria-hidden="true" />{requiresReReview ? 'Thu hồi để xét lại' : 'Thu hồi chấp thuận'}</button>;
@@ -116,13 +134,16 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,showSubm
     </div>
     {(data.recordedAt || data.confirmedAt) && <dl className="handover-dates">
       {data.recordedAt && <div><dt>Ghi nhận giao đồ</dt><dd>{date(data.recordedAt)}</dd></div>}
-      {data.confirmedAt && <div><dt>Người nhận xác nhận</dt><dd>{date(data.confirmedAt)}</dd></div>}
+      {data.confirmedAt && <div><dt>{data.confirmedByManager ? 'Quản lý xác nhận' : 'Người nhận xác nhận'}</dt><dd>{date(data.confirmedAt)}</dd></div>}
     </dl>}
     {data.recordedAt&&<details className="handover-evidence-details"><summary><Images size={18} aria-hidden="true" /><span>Ghi chú và ảnh bàn giao</span><small>{evidence.length} ảnh</small><ChevronDown size={17} aria-hidden="true" /></summary>
       {data.note&&<p className="claim-prose">{data.note}</p>}
       {evidence.length ? <div className="report-evidence">{evidence.map((item,i)=><button key={item.id} type="button" onClick={()=>setImage(i)} aria-label={`Xem ảnh giao đồ ${i+1}`}><img src={item.url} alt={item.name}/></button>)}</div> : <p className="claims-muted">Không đính kèm ảnh bàn giao.</p>}
     </details>}
-    {data.issue&&<section className="handover-issue-summary"><h3><TriangleAlert size={18} aria-hidden="true" />Báo cáo sự cố #{data.issue.id}</h3>{data.issue.reasonLabel&&<p><strong>{data.issue.reasonLabel}</strong></p>}<p className="claim-prose">{data.issue.description}</p><p>Quản lý đang xem xét báo cáo. Việc hoàn tất bàn giao đang tạm dừng.</p>
+    {data.issue&&<section className="handover-issue-summary"><h3><TriangleAlert size={18} aria-hidden="true" />Báo cáo sự cố #{data.issue.id}</h3>{data.issue.reasonLabel&&<p><strong>{data.issue.reasonLabel}</strong></p>}<p className="claim-prose">{data.issue.description}</p><p>{data.status === 'COMPLETED'
+      ? 'Quản lý đang xem xét sự cố phát sinh sau khi hoàn tất bàn giao.'
+      : 'Quản lý đang xem xét báo cáo. Việc hoàn tất bàn giao đang tạm dừng.'}</p>
+      <Link className="btn btn-ghost" to={`/bao-cao/${data.issue.id}`}>Theo dõi báo cáo</Link>
       <div className="report-evidence">{issueEvidence.map((item,i)=><button type="button" key={item.id} onClick={()=>setImage(evidence.length+i)} aria-label="Xem ảnh sự cố"><img src={item.url} alt={item.name}/></button>)}</div></section>}
     </>}
     {recordOpen&&data?.canRecord&&<RecordHandoverDialog claim={claim} onClose={()=>setRecordOpen(false)}

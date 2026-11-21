@@ -17,7 +17,7 @@ public class ReportWorkspaceService {
     private static final int PAGE_SIZE = 12;
     private static final String WORKSPACE = """
             with my_inquiries as (
-                select report_id, bool_or(responded_at is null) as unanswered
+                select report_id, bool_or(responded_at is null and closed_at is null) as unanswered
                 from report_inquiry
                 where recipient_id = :actor
                 group by report_id
@@ -28,14 +28,24 @@ public class ReportWorkspaceService {
             ), workspace as (
                 select r.report_id, r.status, r.created_at, r.updated_at, r.resolved_at,
                     r.reporter_id = :actor as mine, %s,
-                    r.status in ('OPEN', 'IN_REVIEW') and coalesce(i.unanswered, false) as needs_reply,
+                    coalesce(i.unanswered, false) and (
+                        r.status in ('OPEN', 'IN_REVIEW') or (
+                            r.status = 'RESOLVED' and approved.claim_id is not null and p.deleted_at is null
+                            and exists (select 1 from report_decision d
+                                where d.report_id=r.report_id and d.action='REQUEST_ITEM_RECOVERY')
+                        )
+                    ) as needs_reply,
                     case when p.account_id = :actor then approved.claim_id end as finder_approved_claim_id,
                     coalesce(r.status = 'RESOLVED' and p.account_id = :actor
                         and approved.claim_id is not null
+                        and approval.appeal_until <= now()
                         and approved.claimant_id <> :actor
                         and p.deleted_at is null and p.post_type = 'FOUND' and p.moderation_status = 'VISIBLE'
                         and not exists (select 1 from item_receipt ir where ir.post_id = p.post_id)
-                        and not exists (select 1 from p2p_handover h where h.claim_id = approved.claim_id)
+                        and not exists (select 1 from p2p_handover h where h.claim_id = approved.claim_id and h.status <> 'CANCELLED')
+                        and not exists (
+                            select 1 from p2p_claim_appeal related join report_recovery x using(report_id)
+                            where related.approval_id = approval.approval_id and x.confirmed_at is null)
                         and not exists (select 1 from report_hold h where h.post_id = p.post_id and h.released_at is null)
                         and not exists (
                             select 1 from claim selected
@@ -44,10 +54,21 @@ public class ReportWorkspaceService {
                             join report pending on pending.report_id = other.report_id
                             where selected.post_id = p.post_id and pending.status in ('OPEN', 'IN_REVIEW')
                         ), false) as needs_reopen,
-                    r.resolution_note, case when appeal.report_id is null then r.reason_label_snapshot end as report_reason
+                    r.resolution_note, r.reason_label_snapshot as report_reason,
+                    holder.full_name as recovery_holder_name, recovery.due_at as recovery_due_at,
+                    recovery.confirmed_at as recovery_confirmed_at,
+                    case when r.status in ('OPEN','IN_REVIEW')
+                        or (r.status = 'RESOLVED' and approval.approval_id is not null)
+                        or recovery.confirmed_at is not null then (
+                        select decision.conclusion from report_decision decision
+                        where decision.report_id=r.report_id and decision.action='REQUEST_ITEM_RECOVERY'
+                        order by decision.decision_id desc limit 1
+                    ) end as recovery_note
                 from visible_reports v join report r using (report_id)
                 %s
                 left join my_inquiries i on i.report_id = r.report_id
+                left join report_recovery recovery on recovery.report_id = r.report_id
+                left join accounts holder on holder.id = recovery.holder_id
             )
             """.formatted(ReportInquiryService.REPORT_SUBJECT_COLUMNS, ReportInquiryService.PARTICIPANT_REPORT_JOINS);
     private static final String FILTERS = """
@@ -108,7 +129,17 @@ public class ReportWorkspaceService {
 
     public Detail detail(long reportId, CustomUserDetails user) {
         long actor = access.require(user).getId();
-        var report = sql.queryForList(WORKSPACE + "select * from workspace where report_id = :reportId",
+        var report = sql.queryForList(WORKSPACE + """
+                select w.*, (
+                    select d.action from report_decision d
+                    where d.report_id = w.report_id
+                      and d.action in ('VIOLATION', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE',
+                                       'APPEAL_KEEP', 'APPEAL_REQUIRE_REVIEW', 'HANDOVER_COMPLETED',
+                                       'HANDOVER_CONTINUE', 'HANDOVER_RETRY', 'HANDOVER_REOPEN', 'CLAIM_REJECTED')
+                    order by d.decision_id desc limit 1
+                ) as outcome
+                from workspace w where w.report_id = :reportId
+                """,
                         Map.of("actor", actor, "reportId", reportId))
                 .stream().findFirst().orElseThrow(() -> new AppException(ErrorCode.REPORT_NOT_FOUND));
         var submission = Boolean.TRUE.equals(report.get("mine")) ? reports.mineDetail(reportId, user) : null;

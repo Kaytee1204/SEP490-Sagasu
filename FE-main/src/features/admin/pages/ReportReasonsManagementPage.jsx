@@ -21,7 +21,7 @@ const TARGET_GROUPS = [
   { value: 'POST', label: 'Bài đăng (POST)', badgeClass: 'bg-teal-50 text-teal-700 border-teal-200' },
   { value: 'USER', label: 'Người dùng (USER)', badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   { value: 'CLAIM', label: 'Yêu cầu nhận đồ (CLAIM)', badgeClass: 'bg-amber-50 text-amber-800 border-amber-200' },
-  { value: 'MESSAGE', label: 'Tin nhắn Chat (MESSAGE)', badgeClass: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { value: 'CLAIM_APPEAL', label: 'Kháng cáo', badgeClass: 'bg-sky-50 text-sky-700 border-sky-200' },
   { value: 'HANDOVER_ISSUE', label: 'Sự cố bàn giao (HANDOVER_ISSUE)', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200' },
 ];
 

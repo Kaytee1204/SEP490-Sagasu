@@ -154,8 +154,8 @@ class P2pClaimAppealServiceTest {
                 .thenReturn(List.of());
         Report report = mock(Report.class);
         when(report.getId()).thenReturn(900L);
-        when(reports.insert(eq(30L), eq("HANDOVER_ISSUE"), eq("CLAIM"), eq(501L),
-                anyString(), eq(request.clientRequestId()), eq("hash"), eq(List.of()))).thenReturn(report);
+        when(reports.insertAppeal(eq(30L), eq(501L), anyString(), isNull(),
+                eq(request.clientRequestId()), eq("hash"), eq(List.of()))).thenReturn(report);
 
         assertEquals(900L, service.submit(501L, request, List.of(), user).reportId());
 

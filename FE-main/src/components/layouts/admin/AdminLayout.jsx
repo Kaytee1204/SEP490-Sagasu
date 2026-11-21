@@ -28,7 +28,7 @@ export default function AdminLayout() {
     const load = async () => {
       if (role === 'MANAGER') {
         const [reportsRes, postsRes, transfersRes, storedRes] = await Promise.allSettled([
-          reviewApi.list({ status: 'OPEN' }),
+          reviewApi.list({ queue: 'READY' }),
           officeApi.posts({ page: 1, moderation: 'PENDING' }),
           workflowApi.transfers({ page: 1, status: 'PENDING', mine: false }),
           officeApi.stored({ page: 1 }),
@@ -36,6 +36,7 @@ export default function AdminLayout() {
         if (!active) return;
         setNavBadges({
           pendingReports: readTotal(reportsRes),
+          reportQueues: reportsRes.status === 'fulfilled' ? reportsRes.value?.countsByKind : undefined,
           pendingPosts: readTotal(postsRes),
           pendingTransfers: readTotal(transfersRes),
           storedItems: readTotal(storedRes),

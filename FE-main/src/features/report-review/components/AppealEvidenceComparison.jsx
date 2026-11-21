@@ -1,0 +1,64 @@
+import { Scale, UserRound } from "lucide-react";
+import { Badge, Gallery } from "./Shared";
+
+function indexedAnswers(answers = []) {
+  const occurrences = new Map();
+  return answers.map(answer => {
+    const question = JSON.stringify([answer.section_title, answer.question_label]);
+    const occurrence = (occurrences.get(question) || 0) + 1;
+    occurrences.set(question, occurrence);
+    return [`${question}:${occurrence}`, answer];
+  });
+}
+
+export default function AppealEvidenceComparison({ current, approved }) {
+  const candidates = [
+    { label: "Người kháng cáo", context: current },
+    { label: "Người được chấp thuận", context: approved },
+  ];
+  const [appealAnswers, approvedAnswers] = candidates.map(({ context }) => new Map(indexedAnswers(context.answers)));
+  const questions = new Map([...appealAnswers, ...approvedAnswers]);
+  return <section className="rr-card rr-evidence-comparison" aria-labelledby="rr-evidence-heading">
+    <div className="rr-evidence-heading">
+      <span className="rr-case-icon"><Scale size={20} aria-hidden="true" /></span>
+      <div>
+        <h2 id="rr-evidence-heading">Đối chiếu hai hồ sơ nhận đồ</h2>
+        <p>Câu trả lời và ảnh do từng người gửi để quản lý kiểm chứng.</p>
+      </div>
+    </div>
+    <div className="rr-evidence-grid" role="table" aria-label="Đối chiếu căn cứ nhận đồ">
+      <div className="rr-evidence-row rr-evidence-head" role="row">
+        <div role="columnheader" className="rr-evidence-question">Căn cứ</div>
+        {candidates.map(({ label, context }) => <div key={label} role="columnheader" className="rr-evidence-person">
+          <small><UserRound size={14} aria-hidden="true" />{label}</small>
+          <strong>{context.claim?.claimant_name || label}</strong>
+          {context.claim?.claim_id && <small>Yêu cầu #{context.claim.claim_id}</small>}
+          {context.claim?.status && <Badge value={context.claim.status} />}
+        </div>)}
+      </div>
+      {[["description", "Căn cứ nhận đồ"], ["evidence_note", "Thông tin bổ sung"]].map(([key, label]) => (
+        (current.claim?.[key] || approved.claim?.[key]) && <div key={key} className="rr-evidence-row" role="row">
+          <div className="rr-evidence-question" role="rowheader">{label}</div>
+          {candidates.map(({ label: heading, context }) => <div key={heading} role="cell">
+            {context.claim?.[key]?.trim() || <span className="rr-muted">Chưa cung cấp</span>}
+          </div>)}
+        </div>
+      ))}
+      {[...questions].map(([key, question]) => <div key={key} className="rr-evidence-row" role="row">
+        <div className="rr-evidence-question" role="rowheader">
+          {question.section_title && <small>{question.section_title}</small>}
+          {question.question_label}
+        </div>
+        {[appealAnswers, approvedAnswers].map((answers, index) => <div key={candidates[index].label} role="cell">
+          {answers.get(key)?.answer_text?.trim() || <span className="rr-muted">Chưa trả lời</span>}
+        </div>)}
+      </div>)}
+      <div className="rr-evidence-row" role="row">
+        <div className="rr-evidence-question" role="rowheader">Ảnh bằng chứng</div>
+        {candidates.map(({ label, context }) => <div key={label} role="cell">
+          {context.claimEvidence?.length ? <Gallery images={context.claimEvidence} /> : <span className="rr-muted">Chưa đính kèm ảnh</span>}
+        </div>)}
+      </div>
+    </div>
+  </section>;
+}

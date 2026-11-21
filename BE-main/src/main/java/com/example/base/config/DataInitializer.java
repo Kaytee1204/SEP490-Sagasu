@@ -88,7 +88,8 @@ public class DataInitializer {
             "db/migrations/25_p2p_revoke_approval.sql",
             "db/migrations/26_saved_posts.sql",
             "db/migrations/27_p2p_claim_appeals.sql",
-            "db/migrations/28_news_articles.sql"
+            "db/migrations/28_news_articles.sql",
+            "db/migrations/29_p2p_report_followups.sql"
     );
 
     @Bean

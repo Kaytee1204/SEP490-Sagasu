@@ -45,4 +45,10 @@ public class ChatConversationService {
         conversations.findActiveConversationIdForAppeal(reportId)
                 .ifPresent(conversationId -> events.changed(conversationId, "CONVERSATION_UPDATED"));
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void notifyHandoverChanged(long claimId) {
+        conversations.findByLatestClaim_Id(claimId)
+                .ifPresent(conversation -> events.changed(conversation.getId(), "CONVERSATION_UPDATED"));
+    }
 }

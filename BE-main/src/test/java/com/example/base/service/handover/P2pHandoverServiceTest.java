@@ -174,7 +174,7 @@ class P2pHandoverServiceTest {
 
         // UTC001 - detail: post owner with no recorded handover gets NOT_RECORDED & canRecord=true
         @Test
-        void detail_whenNoHandoverRecorded_returnsFinderCanRecordOnly() {
+        void detail_whenNoHandoverRecorded_finderCanRecordOrReport() {
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
@@ -186,9 +186,29 @@ class P2pHandoverServiceTest {
                 assertEquals(500L, detail.claimId());
                 assertTrue(detail.canRecord());
                 assertFalse(detail.canConfirm());
-                assertFalse(detail.canReportIssue());
+                assertTrue(detail.canReportIssue());
+                assertEquals("BEFORE", detail.issuePhase());
                 assertTrue(detail.evidence().isEmpty());
                 assertNull(detail.issue());
+        }
+
+        @Test
+        void completedHandoverShowsManagerConfirmationAndAllowsReportingWithinSevenDays() {
+                P2pHandover handover = waitingHandover(703L);
+                handover.confirm(99L);
+                approvedClaim.completeReceipt();
+                when(actors.actor(finderUser)).thenReturn(finder);
+                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
+                when(handovers.findByClaimId(500L)).thenReturn(Optional.of(handover));
+
+                var detail = service.detail(500L, finderUser);
+                assertEquals("COMPLETED", detail.status());
+                assertTrue(detail.confirmedByManager());
+                assertTrue(detail.canReportIssue());
+                assertEquals("AFTER", detail.issuePhase());
+
+                ReflectionTestUtils.setField(handover, "confirmedAt", OffsetDateTime.now().minusDays(8));
+                assertFalse(service.detail(500L, finderUser).canReportIssue());
         }
 
         @Test
@@ -861,9 +881,8 @@ class P2pHandoverServiceTest {
                 assertEquals(902L, result.issue().id());
         }
 
-        // UTC032 - issue: post owner calling issue throws FORBIDDEN
         @Test
-        void issue_whenFinderCalls_throwsForbidden() {
+        void issue_whenFinderCallsWithStaleVersion_throwsStateChanged() {
                 UUID reqId = UUID.randomUUID();
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(images.prepare("ISSUE:500:Wrong item", List.of()))
@@ -873,7 +892,7 @@ class P2pHandoverServiceTest {
                 AppException ex = assertThrows(AppException.class, () -> service.issue(
                                 500L, new P2pHandoverService.IssueRequest("Wrong item", 1L, reqId), List.of(),
                                 finderUser));
-                assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
+                assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, ex.getErrorCode());
         }
 
         // UTC033 - issue: already COMPLETED handover throws HANDOVER_STATE_CHANGED
@@ -887,8 +906,6 @@ class P2pHandoverServiceTest {
                                 .thenReturn(new WorkflowImages.Prepared(List.of(), List.of(), "img-hash"));
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(handovers.findByClaimId(500L)).thenReturn(Optional.of(completed));
-                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
-
                 AppException ex = assertThrows(AppException.class, () -> service.issue(
                                 500L, new P2pHandoverService.IssueRequest("Wrong item", 1L, reqId), List.of(),
                                 claimantUser));
@@ -913,7 +930,7 @@ class P2pHandoverServiceTest {
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(reports.retry(20L, reqId, "img-hash")).thenReturn(issueDetail);
                 when(handovers.findByClaimId(500L)).thenReturn(Optional.of(handover));
-                when(jdbc.queryForObject(contains("p2p_handover_issue"), eq(Boolean.class), eq(703L), eq(901L)))
+                when(jdbc.queryForObject(contains("p2p_handover_issue"), eq(Boolean.class), eq(901L)))
                                 .thenReturn(true);
                 when(jdbc.query(contains("p2p_handover_issue"), any(RowMapper.class), eq(703L)))
                                 .thenReturn(List.of(901L));

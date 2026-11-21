@@ -6,7 +6,8 @@ import ImageUploadButton from "@/components/common/ImageUploadButton";
 import { Send, ShieldCheck } from "lucide-react";
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
-export default function ReportInquiryResponse({ inquiry: i, onSaved }) {
+export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved }) {
+  const replyOpen = canReply && !i.closed_at;
   const [response, setResponse] = useState(""),
     [files, setFiles] = useState([]),
     [submitting, setBusy] = useState(false),
@@ -47,6 +48,7 @@ export default function ReportInquiryResponse({ inquiry: i, onSaved }) {
         <h3>Yêu cầu từ quản lý</h3>
         <time dateTime={i.created_at}>{formatReportDate(i.created_at)}</time>
         <p>{i.question}</p>
+        {i.response_due_at && !i.responded_at && replyOpen && <p>Hạn phản hồi · {formatReportDate(i.response_due_at)}</p>}
       </div>
       {i.responded_at ? (
         <>
@@ -59,7 +61,7 @@ export default function ReportInquiryResponse({ inquiry: i, onSaved }) {
             </a>)}
           </div>}
         </>
-      ) : ["OPEN", "IN_REVIEW"].includes(i.status) ? (
+      ) : replyOpen ? (
         <form className="report-reply-form" onSubmit={submit}>
           <label>
             Phản hồi của bạn *

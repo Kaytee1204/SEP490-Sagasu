@@ -187,6 +187,9 @@ function AppRoutes() {
         <Route path="transfers" element={<ProtectedRoute managerOnly><OfficeTransfers /></ProtectedRoute>} />
         <Route path="transfers/:id" element={<ProtectedRoute managerOnly><OfficeTransferDetailPage /></ProtectedRoute>} />
         <Route path="reports" element={<ProtectedRoute managerOnly><AdminReportsPage /></ProtectedRoute>} />
+        <Route path="reports/vi-pham" element={<ProtectedRoute managerOnly><AdminReportsPage kind="GENERAL" /></ProtectedRoute>} />
+        <Route path="reports/su-co-ban-giao" element={<ProtectedRoute managerOnly><AdminReportsPage kind="HANDOVER_ISSUE" /></ProtectedRoute>} />
+        <Route path="reports/khang-cao" element={<ProtectedRoute managerOnly><AdminReportsPage kind="CLAIM_APPEAL" /></ProtectedRoute>} />
         <Route path="reports/:id" element={<ProtectedRoute managerOnly><ReportReviewDetailPage /></ProtectedRoute>} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
       </Route>

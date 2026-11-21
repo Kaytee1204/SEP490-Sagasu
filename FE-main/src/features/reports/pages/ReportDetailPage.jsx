@@ -14,6 +14,19 @@ import { reportStatuses, reportTitles } from '../constants/reportConstants';
 import { formatReportDate, reportsPath, reportSubject } from '../utils/reportUtils';
 import '../styles/Reports.css';
 
+const outcomeLabels = {
+  VIOLATION: 'Có vi phạm',
+  NO_VIOLATION: 'Không phát hiện vi phạm',
+  INSUFFICIENT_EVIDENCE: 'Chưa đủ căn cứ',
+  APPEAL_KEEP: 'Giữ kết quả nhận đồ',
+  APPEAL_REQUIRE_REVIEW: 'Cần xét lại người nhận',
+  HANDOVER_COMPLETED: 'Xác nhận đã trả đồ',
+  HANDOVER_CONTINUE: 'Cho tiếp tục bàn giao',
+  HANDOVER_RETRY: 'Hủy lượt giao và hẹn giao lại',
+  HANDOVER_REOPEN: 'Thu hồi chấp thuận để xét lại',
+  CLAIM_REJECTED: 'Hủy bàn giao và mở lại xét duyệt',
+};
+
 export default function ReportDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -80,13 +93,19 @@ function ReportDetail({ id }) {
           <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
           <ReportProgress status={report.status} appeal={isAppeal} />
         </header>
+        {report.recovery_note && <section className="report-card report-detail-section">
+          <h2>{report.recovery_confirmed_at ? 'Đã xác nhận thu hồi món đồ' : 'Yêu cầu thu hồi món đồ'}</h2>
+          <p>{report.recovery_note}</p>
+          {report.recovery_holder_name && <p>Người được yêu cầu phản hồi · {report.recovery_holder_name}</p>}
+          {report.recovery_due_at && !report.recovery_confirmed_at && <p>Hạn phản hồi · {formatReportDate(report.recovery_due_at)}</p>}
+        </section>}
         {inquiries.length > 0 && <section id="phan-hoi" className="report-card report-detail-section" tabIndex={-1}>
           <div className="report-detail-heading">
             <h2>Trao đổi với quản lý</h2>
             {pending && <span className="report-state report-state-ACTION">Cần bạn phản hồi</span>}
           </div>
           {replySaved && <p className="report-reply-success" role="status">Đã gửi thông tin bổ sung.</p>}
-          {inquiries.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} onSaved={afterReply} />)}
+          {inquiries.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} canReply={pending} onSaved={afterReply} />)}
         </section>}
         {concluded && <section id="ket-qua" className="report-card report-detail-section" tabIndex={-1}>
           <div className="report-detail-heading">
@@ -94,6 +113,7 @@ function ReportDetail({ id }) {
             {report.resolved_at && <time dateTime={report.resolved_at}>Xử lý lúc {formatReportDate(report.resolved_at)}</time>}
           </div>
           <div className="report-note">
+            {outcomeLabels[report.outcome] && <strong>{outcomeLabels[report.outcome]}</strong>}
             <p>{report.resolution_note || submission?.resolutionNote || 'Chưa có ghi chú kết luận.'}</p>
           </div>
           {claimPath && report.needs_reopen && <FinderAppealAction report={report} claimPath={claimPath} />}
@@ -106,7 +126,7 @@ function ReportDetail({ id }) {
         {(submission || report.report_reason) && <section className="report-card report-detail-section">
           <h2>{isAppeal ? 'Nội dung kháng cáo' : 'Nội dung báo cáo'}</h2>
           <dl className="report-detail-fields">
-            {!isAppeal && <div><dt>Lý do báo cáo</dt><dd>{report.report_reason || 'Chưa phân loại (báo cáo cũ)'}</dd></div>}
+            <div><dt>{isAppeal ? 'Lý do kháng cáo' : 'Lý do báo cáo'}</dt><dd>{report.report_reason || 'Chưa phân loại (báo cáo cũ)'}</dd></div>
             {submission?.description && <div><dt>Mô tả</dt><dd className="report-description">{submission.description}</dd></div>}
           </dl>
           {evidence.length > 0 && <div className="report-evidence">

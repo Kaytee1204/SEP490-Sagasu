@@ -142,7 +142,8 @@ function ClaimDetail({ postId, id }) {
             <div className="claim-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('cancel')}>Xác nhận hủy</button>
               <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirmCancel(false)}>Giữ claim</button></div></div>}
       </section>}
-      <ReportButton type="CLAIM" id={claim.id} targetLabel={claim.postTitle} label="Báo cáo yêu cầu này" />
+      {(claim.claimType !== 'P2P' || Number(claim.claimantId) !== Number(user?.id)) &&
+        <ReportButton type="CLAIM" id={claim.id} targetLabel={claim.postTitle} label="Báo cáo yêu cầu này" />}
       </div>
         </aside>
       </div>

@@ -1,5 +1,6 @@
 // src/components/layouts/admin/adminNavConfig.js
 import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield, Newspaper } from 'lucide-react';
+import { reportReviewNavItems, reportReviewRoot } from '@/features/report-review/routes';
 
 export const ADMIN_NAV_SECTIONS = [
   {
@@ -93,7 +94,8 @@ export const ADMIN_NAV_SECTIONS = [
       {
         // DaiHV: the report investigation queue belongs to Manager.
         label: 'Báo cáo & phản ánh',
-        path: '/admin/reports',
+        path: reportReviewRoot,
+        children: reportReviewNavItems,
         icon: AlertTriangle,
         badgeKey: 'pendingReports',
         badgeTone: 'danger',

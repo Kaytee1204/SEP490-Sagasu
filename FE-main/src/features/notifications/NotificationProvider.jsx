@@ -226,6 +226,9 @@ export default function NotificationProvider({ children }) {
             if (incoming.type === 'REPORT_INFORMATION' || incoming.type === 'REPORT_RESOLVED') {
               window.dispatchEvent(new Event('sagasu-counts-changed'));
             }
+            if (incoming.type === 'REPORT_CREATED' || incoming.type === 'REPORT_REPLY') {
+              window.dispatchEvent(new Event('report-review-changed'));
+            }
 
             const isAlreadyOnChat =
               incoming.type === 'CHAT_MESSAGE' &&

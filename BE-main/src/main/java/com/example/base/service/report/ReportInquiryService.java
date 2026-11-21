@@ -77,14 +77,15 @@ public class ReportInquiryService {
   ) {
     Account actor = access.require(user, AccountRole.MANAGER);
     var r = reviews.lock(report);
-    reviews.processing(r, actor, request.version());
+    if (reviews.canFollowUpRecovery(r)) reviews.requireAssignee(r, actor, request.version());
+    else reviews.processing(r, actor, request.version());
     if (
       !reviews.participants(context.context(r)).contains(request.recipientId())
     ) throw bad("Người được hỏi phải liên quan đến vụ việc.");
     if (
       Boolean.TRUE.equals(
         jdbc.queryForObject(
-          "select exists(select 1 from report_inquiry where report_id=? and recipient_id=? and responded_at is null)",
+          "select exists(select 1 from report_inquiry where report_id=? and recipient_id=? and responded_at is null and closed_at is null)",
           Boolean.class,
           report,
           request.recipientId()
@@ -92,11 +93,12 @@ public class ReportInquiryService {
       )
     ) throw bad("Người này đang có câu hỏi chưa phản hồi.");
     jdbc.update(
-      "insert into report_inquiry(report_id,recipient_id,created_by,question) values(?,?,?,?)",
+      "insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at) values(?,?,?,?,?)",
       report,
       request.recipientId(),
       actor.getId(),
-      request.question().strip()
+      request.question().strip(),
+      reviews.responseDue()
     );
     jdbc.update(
       "update report set version=version+1,updated_at=now() where report_id=?",
@@ -126,7 +128,7 @@ public class ReportInquiryService {
   public List<Map<String, Object>> mine(CustomUserDetails user) {
     long actor = access.require(user).getId();
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.question, i.created_at, i.response, i.responded_at, %s
+        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at, %s
         from report_inquiry i join report r using (report_id)
         %s
         where i.recipient_id = ?
@@ -139,7 +141,7 @@ public class ReportInquiryService {
 
   List<Map<String, Object>> forReport(long reportId, long recipientId) {
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.question, i.created_at, i.response, i.responded_at, r.status
+        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at, r.status
         from report_inquiry i join report r using (report_id)
         where i.report_id = ? and i.recipient_id = ?
         order by i.created_at desc, i.inquiry_id desc
@@ -162,7 +164,7 @@ public class ReportInquiryService {
         select r.resolved_at, %s
         from report r join report_recipient x using (report_id)
         %s
-        where x.account_id = ?
+        where x.account_id = ? and r.status in ('RESOLVED','REJECTED')
         order by r.resolved_at desc
         limit 100
         """.formatted(PARTICIPANT_REPORT_COLUMNS, PARTICIPANT_REPORT_JOINS), actor, actor);
@@ -193,7 +195,8 @@ public class ReportInquiryService {
           "select * from report_inquiry where inquiry_id=? for update",
           inquiry
         );
-        if (!reviews.open(r)) throw bad("Báo cáo đã kết thúc.");
+        if (!reviews.open(r) && !reviews.canFollowUpRecovery(r)) throw bad("Báo cáo đã kết thúc.");
+        if (i.get("closed_at") != null) throw bad("Yêu cầu bổ sung này đã kết thúc.");
         if (i.get("responded_at") != null) throw bad(
           "Phản hồi đã được ghi nhận và giữ nguyên. Hãy tải lại."
         );
@@ -228,7 +231,7 @@ public class ReportInquiryService {
           "REPORT_REPLY",
           "Có phản hồi cho báo cáo #" + r.get("report_id"),
           "Mở hồ sơ để xem thông tin bổ sung.",
-          "/admin/reports?id=" + r.get("report_id"),
+          "/admin/reports/" + r.get("report_id") + "#trao-doi",
           false
         );
         return Map.of("saved", true);

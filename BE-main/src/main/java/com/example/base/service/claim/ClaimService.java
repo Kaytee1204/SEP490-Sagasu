@@ -20,6 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 @Service @RequiredArgsConstructor @Slf4j
@@ -296,29 +297,66 @@ public class ClaimService {
         requireVersion(claim, request.expectedVersion());
         if (!revocable(claim)) throw stateChanged();
         var window = appeals.handoverWindow(claim);
-        if (window != null && window.state() == P2pClaimAppealService.State.REVIEW_REQUIRED
-                && !Boolean.TRUE.equals(request.custodyConfirmed())) {
-            throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Vui lòng xác nhận bạn vẫn đang giữ món đồ.");
+        if (window != null && window.state() == P2pClaimAppealService.State.REVIEW_REQUIRED) {
+            if (OffsetDateTime.now().isBefore(window.deadline()))
+                throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Cần chờ hết hạn gửi kháng cáo trước khi xét lại.");
+            if (!Boolean.TRUE.equals(request.custodyConfirmed()))
+                throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Vui lòng xác nhận bạn vẫn đang giữ món đồ.");
         }
+        reopenApproval(claim, post, actor, request.reason());
+        return result(claim);
+    }
+
+    @Transactional
+    public void reopenApprovalFromAppeal(long claimId, long approvalId, String reason, CustomUserDetails user) {
+        Account manager = activeManager(user);
+        Post post = lockPost(claimPostId(claimId));
+        routing.lockReceipt(post);
+        Claim claim = lockClaim(claimId);
+        if (!revocable(claim) || !appeals.canReopenFromDecision(claim, approvalId)) throw stateChanged();
+        reopenApproval(claim, post, manager, reason);
+    }
+
+    @Transactional
+    public void rejectReportedClaim(long claimId, String reason, CustomUserDetails user) {
+        Account manager = activeManager(user);
+        Post post = lockPost(claimPostId(claimId));
+        routing.lockReceipt(post);
+        Claim claim = lockClaim(claimId);
+        if (!routing.matches(claim, Set.of("OPEN")) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
+        claim.review("REJECTED");
+        activities.save(new ClaimActivity(claim, manager, "REJECT", "PENDING", reason));
+        claims.flush();
+        notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_REJECTED",
+                "Yêu cầu nhận đồ #" + claimId + " bị từ chối", reason,
+                "/bai-dang/" + post.getId() + "/claims/" + claimId, true);
+    }
+
+    private void reopenApproval(Claim claim, Post post, Account actor, String reason) {
         claim.review("PENDING");
         post.reopenAfterClaimCancellation();
-        activities.save(new ClaimActivity(claim, actor, "REVOKE_APPROVAL", "APPROVED", request.reason()));
+        activities.save(new ClaimActivity(claim, actor, "REVOKE_APPROVAL", "APPROVED", reason));
         claims.flush();
         appeals.reopen(claim);
         chatConversations.notifyChanged(claim);
         notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_APPROVAL_REVOKED",
                 "Đã thu hồi chấp thuận yêu cầu nhận đồ #" + claim.getId(),
                 "Yêu cầu cho bài đăng " + post.getTitle() + " được đưa về chờ xét duyệt. Lý do: "
-                        + request.reason().strip() + ". Cuộc trò chuyện được giữ để xem lịch sử.",
+                        + reason.strip() + ". Cuộc trò chuyện được giữ để xem lịch sử.",
                 "/bai-dang/" + post.getId() + "/claims/" + claim.getId(), true);
-        return result(claim);
     }
 
     private boolean revocable(Claim claim) {
         return !claim.isOffice() && "APPROVED".equals(claim.getStatus())
                 && routing.matches(claim, Set.of("RESERVED")) && !handovers.existsByClaimId(claim.getId())
                 && !Boolean.TRUE.equals(entityManager.createNativeQuery(
-                    "select exists(select 1 from report_hold where post_id=:postId and released_at is null)")
+                    """
+                    select exists(select 1 from report_hold where post_id=:postId and released_at is null
+                      union all
+                      select 1 from p2p_claim_approval a join claim c on c.claim_id=a.approved_claim_id
+                      join p2p_claim_appeal appeal using(approval_id) join report_recovery x using(report_id)
+                      where c.post_id=:postId and a.closed_at is null and x.confirmed_at is null)
+                    """)
                     .setParameter("postId", claim.getPost().getId()).getSingleResult())
                 && !appeals.hasUnresolvedAppeal(claim.getPost().getId());
     }
@@ -391,6 +429,12 @@ public class ClaimService {
         CustomUserDetails current = new CustomUserDetails(actor);
         if (actor.getRole() == null || actor.getStatus() != AccountStatus.ACTIVE
                 || !current.isAccountNonExpired() || !current.isAccountNonLocked()) throw new AppException(ErrorCode.FORBIDDEN);
+        return actor;
+    }
+
+    private Account activeManager(CustomUserDetails user) {
+        Account actor = activeActor(user);
+        if (actor.getRole() != AccountRole.MANAGER) throw new AppException(ErrorCode.FORBIDDEN);
         return actor;
     }
 

@@ -55,7 +55,9 @@ public class P2pClaimAppealService {
     }
     public record Status(long approvalId, OffsetDateTime deadline, State state, boolean canAppeal,
                          Long reportId, String reportStatus) {}
-    public record Submit(Long approvalId, String reason, UUID clientRequestId) {}
+    public record Submit(Long approvalId, String reason, UUID clientRequestId, String reasonCode) {
+        public Submit(Long approvalId,String reason,UUID clientRequestId) { this(approvalId,reason,clientRequestId,null); }
+    }
     public record Submitted(long reportId) {}
     private record Approval(long id, long selectedClaimId, OffsetDateTime deadline, boolean pending, boolean upheld) {
         State stateAt(OffsetDateTime now) {
@@ -116,6 +118,13 @@ public class P2pClaimAppealService {
         return new HandoverWindow(approval.deadline(), approval.stateAt(OffsetDateTime.now()));
     }
 
+    public boolean canReopenFromDecision(Claim selected, long approvalId) {
+        Approval approval = activeApproval(selected.getPost().getId());
+        OffsetDateTime now = OffsetDateTime.now();
+        return approval != null && approval.id() == approvalId && approval.selectedClaimId() == selected.getId()
+                && !now.isBefore(approval.deadline()) && approval.stateAt(now) == State.REVIEW_REQUIRED;
+    }
+
     @Transactional(readOnly = true)
     public Status status(long claimId, CustomUserDetails user) {
         long actor = actors.actor(user).getId();
@@ -148,11 +157,17 @@ public class P2pClaimAppealService {
         }
         long actor = actors.actor(user).getId();
         String reason = request.reason().strip();
-        var prepared = images.prepare("P2P_APPEAL:" + claimId + ":" + request.approvalId() + ":" + reason, files);
+        String reasonCode = request.reasonCode();
+        if (reasonCode != null && (reasonCode.isBlank() || reasonCode.length() > 64))
+            throw new AppException(ErrorCode.REPORT_REASON_INVALID);
+        String payload = "P2P_APPEAL:" + claimId + ":" + request.approvalId() + ":";
+        var prepared = images.prepare(payload + (reasonCode == null ? "" : reasonCode + ":") + reason, files);
         var tx = new TransactionTemplate(transactions);
         Submitted retry = tx.execute(status -> {
             Claim claim = claims.findById(claimId).orElseThrow(this::missing);
-            return checkSubmission(claim, actor, request, prepared.hash());
+            Submitted existing = checkSubmission(claim, actor, request, prepared.hash());
+            if (existing == null && reasonCode != null) reports.validateReason("CLAIM_APPEAL", reasonCode, reason);
+            return existing;
         });
         if (retry != null) return retry;
 
@@ -170,8 +185,7 @@ public class P2pClaimAppealService {
                 Submitted duplicate = checkSubmission(claim, actor, request, prepared.hash());
                 if (duplicate != null) return duplicate;
 
-                String description = "Kháng cáo kết quả xét duyệt yêu cầu nhận đồ\n\n" + reason;
-                var report = reports.insert(actor, "HANDOVER_ISSUE", "CLAIM", claimId, description,
+                var report = reports.insertAppeal(actor, claimId, reason, reasonCode,
                         request.clientRequestId(), prepared.hash(), uploaded);
                 jdbc.update("insert into p2p_claim_appeal(approval_id, appellant_claim_id, report_id) values (?, ?, ?)",
                         request.approvalId(), claimId, report.getId());
@@ -234,9 +248,8 @@ public class P2pClaimAppealService {
     private void notifyAppeal(Post post, long actor, long reportId) {
         notifications.notifyRoles(List.of(AccountRole.MANAGER), actor, "REPORT_CREATED",
                 "Có kháng cáo kết quả nhận đồ (#" + reportId + ")",
-                "Đối chiếu hồ sơ trước khi bàn giao. Chọn «Bác bỏ báo cáo» để giữ kết quả; "
-                        + "chọn «Giải quyết báo cáo» nếu cần người nhặt thu hồi và xét lại.",
-                "/admin/reports/" + reportId, false);
+                "Đối chiếu hồ sơ rồi chọn giữ kết quả hoặc ghi kết luận cần xét lại người nhận.",
+                "/admin/reports/" + reportId + "?kind=CLAIM_APPEAL", false);
         claims.findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(post.getId(), "APPROVED").ifPresent(selected -> {
             String title = "Bàn giao được tạm dừng để xét kháng cáo";
             String message = "Có kháng cáo cho bài «" + post.getTitle() + "». Hãy chờ kết quả trước khi giao đồ.";

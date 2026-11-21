@@ -34,6 +34,7 @@ import com.example.base.storage.ImageStorage;
 import com.example.base.storage.ImageValidator;
 import com.example.base.storage.ImageValidator.ValidatedImage;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,6 +71,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -690,6 +692,31 @@ class ClaimServiceTest {
         when(claims.existsByPost_IdAndStatusIn(100L, Set.of("APPROVED"))).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_STATE_INVALID,
                 code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", "Reason", 0L), finderUser)));
+    }
+
+    @Test
+    void managerReopensOnlyAnEligibleAppealApproval() {
+        Account manager = account(60L, "Manager", AccountRole.MANAGER);
+        when(accounts.findById(60L)).thenReturn(Optional.of(manager));
+        var managerUser = new CustomUserDetails(manager);
+        Claim chosen = cancellableClaim(562L, "APPROVED");
+        p2pPost.reserveForClaim();
+        when(routing.matches(chosen, Set.of("RESERVED"))).thenReturn(true);
+        Query hold = mock(Query.class);
+        when(entityManager.createNativeQuery(contains("select exists(select 1 from report_hold"))).thenReturn(hold);
+        when(hold.setParameter("postId", p2pPost.getId())).thenReturn(hold);
+        when(hold.getSingleResult()).thenReturn(false);
+        when(appeals.canReopenFromDecision(chosen, 300L)).thenReturn(true);
+
+        assertEquals(ErrorCode.CLAIM_STATE_INVALID,
+                code(() -> service.reopenApprovalFromAppeal(562L, 301L, "Review", managerUser)));
+        assertEquals("APPROVED", chosen.getStatus());
+        service.reopenApprovalFromAppeal(562L, 300L, "Review", managerUser);
+
+        assertEquals("PENDING", chosen.getStatus());
+        assertEquals("OPEN", p2pPost.getStatus());
+        verify(appeals).reopen(chosen);
+        verify(chatConversations).notifyChanged(chosen);
     }
 
     // ---------------------------------------------------------------- cancel

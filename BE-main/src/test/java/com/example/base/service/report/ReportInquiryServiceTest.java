@@ -92,7 +92,7 @@ class ReportInquiryServiceTest {
         Map<String, Object> res = service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "  Where did you lose it? "), managerUser);
 
         verify(reviews).processing(report, manager, 3L);
-        verify(jdbc).update(contains("insert into report_inquiry"), eq(5L), eq(7L), eq(1L), eq("Where did you lose it?"));
+        verify(jdbc).update(contains("response_due_at"), eq(5L), eq(7L), eq(1L), eq("Where did you lose it?"), any());
         verify(jdbc).update(contains("update report set version=version+1"), eq(5L));
         verify(reviews).history(eq(5L), eq(1L), eq("ASK_INFORMATION"), eq("IN_REVIEW"), eq("IN_REVIEW"), anyString(), anyString());
         verify(notifications).notifyUser(eq(7L), eq("REPORT_INFORMATION"), anyString(), anyString(), eq("/bao-cao/5#phan-hoi"), eq(false));
@@ -148,7 +148,7 @@ class ReportInquiryServiceTest {
         verify(jdbc).update(contains("update report_inquiry set response=?"), eq("It was at gate B"), eq(2L));
         verify(jdbc).update(contains("insert into report_reply_evidence"), eq(2L), eq("report-replies/2/a.jpg"), eq("a.jpg"), eq("ih"));
         verify(reviews).history(eq(5L), eq(7L), eq("REPLY"), any(), any(), anyString(), isNull());
-        verify(notifications).notifyUser(eq(1L), eq("REPORT_REPLY"), anyString(), anyString(), eq("/admin/reports?id=5"), eq(false));
+        verify(notifications).notifyUser(eq(1L), eq("REPORT_REPLY"), anyString(), anyString(), eq("/admin/reports/5#trao-doi"), eq(false));
         verify(images, never()).cleanup(any());
     }
 

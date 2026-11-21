@@ -6,6 +6,9 @@ import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import useImageUploads from '@/hooks/useImageUploads';
 import { getClaimAppeal, submitClaimAppeal } from '../api/claimApi';
 import ReportProgress from '@/features/reports/components/ReportProgress';
+import ReportReasonPicker from '@/features/reports/components/ReportReasonPicker';
+import useReportReasons from '@/features/reports/hooks/useReportReasons';
+import { reportDescriptionHint } from '@/features/reports/utils/reportDescriptionHints';
 
 export default function ClaimAppealPanel({ claim, focusRevision, notificationId }) {
   const [appeal, setAppeal] = useState(null);
@@ -64,6 +67,8 @@ export default function ClaimAppealPanel({ claim, focusRevision, notificationId 
 }
 
 function AppealForm({ claimId, approvalId, onSubmitted }) {
+  const catalog = useReportReasons('CLAIM_APPEAL', claimId);
+  const [reasonCode, setReasonCode] = useState('');
   const [reason, setReason] = useState('');
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -94,14 +99,14 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
 
   async function submit(event) {
     event.preventDefault();
-    if (sending.current || disabled || !reason.trim()) return;
+    if (sending.current || disabled || !reasonCode || !reason.trim()) return;
     sending.current = true;
     setBusy(true);
     setError('');
     requestId.current ||= crypto.randomUUID();
     try {
       const result = await submitClaimAppeal(claimId, {
-        approvalId, reason: reason.trim(), clientRequestId: requestId.current,
+        approvalId, reasonCode, reason: reason.trim(), clientRequestId: requestId.current,
       }, files);
       onSubmitted(result.reportId);
     } catch (problem) {
@@ -115,7 +120,10 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
   return <details className="claim-appeal-disclosure">
     <summary>Gửi kháng cáo</summary>
     <form className="claim-form" onSubmit={submit}>
-      <label>Lý do và căn cứ sở hữu *
+      <ReportReasonPicker {...catalog} value={reasonCode} disabled={disabled}
+        onChange={value => { setReasonCode(value); requestId.current = null; }} />
+      <label>Căn cứ cần đối chiếu *
+        {reasonCode && <small>{reportDescriptionHint(reasonCode)}</small>}
         <textarea required maxLength={4500} disabled={disabled} value={reason}
           onChange={event => { setReason(event.target.value); requestId.current = null; }}
           placeholder="Nêu đặc điểm hoặc bằng chứng cho thấy món đồ là của bạn." />
@@ -134,7 +142,7 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
       )}</ul>}
       {error && <p className="claim-alert" role="alert">{error}</p>}
       <div className="claim-actions">
-        <button type="submit" className="btn btn-accent" disabled={disabled || !reason.trim()}>{busy ? 'Đang gửi…' : 'Gửi cho quản lý'}</button>
+        <button type="submit" className="btn btn-accent" disabled={disabled || !reasonCode || !reason.trim()}>{busy ? 'Đang gửi…' : 'Gửi cho quản lý'}</button>
       </div>
     </form>
   </details>;
