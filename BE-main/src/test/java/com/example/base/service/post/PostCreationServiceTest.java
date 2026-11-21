@@ -95,9 +95,9 @@ class PostCreationServiceTest {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
 
-    // UTC018 - createLost valid request with 2 images trims text and persists ordered images
+    // UTC098 - createLost valid request with 2 images trims text and persists ordered images
     @Test
-    void createLost_whenValidWithTwoImages_createsTrimmedPostWithOrderedImages() {
+    void utc098_createLost_whenValidWithTwoImages_createsTrimmedPostWithOrderedImages() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, " Lost wallet ", " Black leather ", 3L, " Hall A ",
                 OffsetDateTime.now().minusDays(1), null);
@@ -140,9 +140,9 @@ class PostCreationServiceTest {
         assertTrue(saved.getImages().get(1).getStorageKey().matches("posts/7/[0-9a-f\\-]+\\.jpg"));
     }
 
-    // UTC019 - createLost with no images throws BAD_REQUEST because at least 1 image is required
+    // UTC099 - createLost with no images throws BAD_REQUEST because at least 1 image is required
     @Test
-    void createLost_whenNoImages_throwsBadRequest() {
+    void utc099_createLost_whenNoImages_throwsBadRequest() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost keys", "Silver", 3L, "Hall B",
                 OffsetDateTime.now().minusHours(5), null);
@@ -156,9 +156,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(storage, posts);
     }
 
-    // UTC020 - createLost throws when selected category is inactive without uploading images
+    // UTC100 - createLost throws when selected category is inactive without uploading images
     @Test
-    void createLost_whenCategoryInactive_throwsWithoutUploading() {
+    void utc100_createLost_whenCategoryInactive_throwsWithoutUploading() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -171,9 +171,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(validator, storage);
     }
 
-    // UTC021 - createLost propagates exception when validator rejects unsupported file
+    // UTC101 - createLost propagates exception when validator rejects unsupported file
     @Test
-    void createLost_whenValidatorRejectsFile_propagatesException() {
+    void utc101_createLost_whenValidatorRejectsFile_propagatesException() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -190,9 +190,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(storage);
     }
 
-    // UTC022 - createLost deletes both uploaded keys when second storage put fails
+    // UTC102 - createLost deletes both uploaded keys when second storage put fails
     @Test
-    void createLost_whenSecondStoragePutFails_cleansUpBothKeysAndRethrows() {
+    void utc102_createLost_whenSecondStoragePutFails_cleansUpBothKeysAndRethrows() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -212,9 +212,9 @@ class PostCreationServiceTest {
         verify(storage, times(2)).delete(anyString());
     }
 
-    // UTC023 - createLost throws FORBIDDEN and cleans up uploaded images when account locked mid-request
+    // UTC103 - createLost throws FORBIDDEN and cleans up uploaded images when account locked mid-request
     @Test
-    void createLost_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImages() {
+    void utc103_createLost_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImages() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -232,9 +232,9 @@ class PostCreationServiceTest {
         verify(storage, times(1)).delete(anyString());
     }
 
-    // UTC024 - createLost throws UNAUTHORIZED when principal user is null
+    // UTC104 - createLost throws UNAUTHORIZED when principal user is null
     @Test
-    void createLost_whenUserNull_throwsUnauthorized() {
+    void utc104_createLost_whenUserNull_throwsUnauthorized() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -245,9 +245,9 @@ class PostCreationServiceTest {
         assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
     }
 
-    // UTC025 - createLost stores trimmed privateIdentifiers on newly created post
+    // UTC105 - createLost stores trimmed privateIdentifiers on newly created post
     @Test
-    void createLost_whenPrivateIdentifiersProvided_storesTrimmedIdentifiers() {
+    void utc105_createLost_whenPrivateIdentifiersProvided_storesTrimmedIdentifiers() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost phone", "Blue", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), "  Serial ABC123  ");
@@ -273,7 +273,7 @@ class PostCreationServiceTest {
     // Supplementary (PostCreationService.createLost): existing clientRequestId returns cached post without uploading
     @Test
     @SuppressWarnings("unchecked")
-    void utc026_createLost_whenRequestIdAlreadyProcessed_returnsExistingWithoutUpload() {
+    void utc106_createLost_whenRequestIdAlreadyProcessed_returnsExistingWithoutUpload() {
         UUID reqId = UUID.randomUUID();
         CreateLostPostRequest request = new CreateLostPostRequest(
                 reqId, "Lost wallet", "Black", 3L, "Hall A",
@@ -291,7 +291,7 @@ class PostCreationServiceTest {
     // Supplementary (PostCreationService.createLost): concurrent duplicate clientRequestId reuses persisted post and deletes uploaded images
     @Test
     @SuppressWarnings("unchecked")
-    void utc027_createLost_whenConcurrentRequestIdWinsInsideTransaction_reusesExistingAndDeletesUploadedImages() {
+    void utc107_createLost_whenConcurrentRequestIdWinsInsideTransaction_reusesExistingAndDeletesUploadedImages() {
         UUID reqId = UUID.randomUUID();
         CreateLostPostRequest request = new CreateLostPostRequest(
                 reqId, "Lost wallet", "Black", 3L, "Hall A",
@@ -315,10 +315,10 @@ class PostCreationServiceTest {
         verify(posts, never()).saveAndFlush(any());
     }
 
-    // UTC028 - createFound with custodyMode=null and new clientRequestId creates P2P FOUND post and records request
+    // UTC108 - createFound with custodyMode=null and new clientRequestId creates P2P FOUND post and records request
     @Test
     @SuppressWarnings("unchecked")
-    void createFound_whenValidWithNullCustodyAndNewRequestId_createsP2pFoundPostAndRecordsRequest() {
+    void utc108_createFound_whenValidWithNullCustodyAndNewRequestId_createsP2pFoundPostAndRecordsRequest() {
         UUID reqId = UUID.randomUUID();
         CreateFoundPostRequest request = new CreateFoundPostRequest(
                 reqId, " Found card ", " Student ID ", 3L, " Library ",
@@ -348,9 +348,9 @@ class PostCreationServiceTest {
         verify(jdbc).update(anyString(), eq(7L), eq(reqId), eq(103L));
     }
 
-    // UTC029 - createFound throws POST_CUSTODY_INVALID when custodyMode="OFFICE"
+    // UTC109 - createFound throws POST_CUSTODY_INVALID when custodyMode="OFFICE"
     @Test
-    void createFound_whenCustodyOffice_throwsPostCustodyInvalid() {
+    void utc109_createFound_whenCustodyOffice_throwsPostCustodyInvalid() {
         CreateFoundPostRequest request = new CreateFoundPostRequest(
                 null, "Found wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusHours(2), "OFFICE", null, null);
@@ -361,9 +361,9 @@ class PostCreationServiceTest {
         assertEquals(ErrorCode.POST_CUSTODY_INVALID, ex.getErrorCode());
     }
 
-    // UTC030 - createFound throws POST_HANDOVER_TIME_DISABLED when handoverRequestedAt is provided
+    // UTC110 - createFound throws POST_HANDOVER_TIME_DISABLED when handoverRequestedAt is provided
     @Test
-    void createFound_whenHandoverRequestedAtProvided_throwsPostHandoverTimeDisabled() {
+    void utc110_createFound_whenHandoverRequestedAtProvided_throwsPostHandoverTimeDisabled() {
         CreateFoundPostRequest request = new CreateFoundPostRequest(
                 null, "Found wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusHours(2), "P2P", null, OffsetDateTime.now().plusDays(1));
@@ -373,5 +373,120 @@ class PostCreationServiceTest {
 
         assertEquals(ErrorCode.POST_HANDOVER_TIME_DISABLED, ex.getErrorCode());
     }
-}
 
+    private CreateFoundPostRequest foundRequest(String custodyMode, String privateIdentifiers) {
+        return new CreateFoundPostRequest(null, "Found wallet", "Black leather", 3L, "Hall A",
+                OffsetDateTime.now().minusHours(2), custodyMode, privateIdentifiers, null);
+    }
+
+    private void stubFoundSave(long id) {
+        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.of(author));
+        when(categories.findActiveForPostCreation(3L)).thenReturn(Optional.of(category));
+        when(posts.saveAndFlush(any(Post.class))).thenAnswer(inv -> {
+            Post p = inv.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", id);
+            return p;
+        });
+    }
+
+    private static final ValidatedImage JPG = new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 100, 100, "h1");
+
+    // UTC111 - createFound with custodyMode="P2P" publishes a P2P FOUND post that is OPEN and VISIBLE
+    @Test
+    void utc111_createFound_whenCustodyP2p_createsVisibleP2pFoundPost() {
+        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
+        when(validator.validate(any())).thenReturn(List.of(JPG));
+        stubFoundSave(104L);
+
+        CreatedPostDto result = service.createFound(foundRequest("P2P", null), List.of(), user);
+
+        assertEquals(new CreatedPostDto(104L, "FOUND", "OPEN", "VISIBLE"), result);
+        ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
+        verify(posts).saveAndFlush(captor.capture());
+        assertEquals("P2P", captor.getValue().getCustodyMode());
+        assertEquals(null, captor.getValue().getHandoverRequestedAt());
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
+    }
+
+    // UTC112 - createFound with no images throws BAD_REQUEST because at least 1 image is required
+    @Test
+    void utc112_createFound_whenNoImages_throwsBadRequest() {
+        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
+        when(validator.validate(List.of())).thenReturn(List.of());
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createFound(foundRequest(null, null), List.of(), user));
+
+        assertEquals(ErrorCode.BAD_REQUEST, ex.getErrorCode());
+        assertEquals("Vui lòng tải lên ít nhất 1 hình ảnh cho bài đăng.", ex.getMessage());
+        verifyNoInteractions(storage, posts);
+    }
+
+    // UTC113 - createFound with an inactive category throws POST_CATEGORY_UNAVAILABLE before any upload
+    @Test
+    void utc113_createFound_whenCategoryInactive_throwsWithoutUploading() {
+        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(false);
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createFound(foundRequest(null, null), List.of(), user));
+
+        assertEquals(ErrorCode.POST_CATEGORY_UNAVAILABLE, ex.getErrorCode());
+        verifyNoInteractions(validator, storage, posts);
+    }
+
+    // UTC114 - createFound throws UNAUTHORIZED when there is no logged-in user
+    @Test
+    void utc114_createFound_whenUserNull_throwsUnauthorized() {
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createFound(foundRequest(null, null), List.of(), null));
+
+        assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
+        verifyNoInteractions(categories, validator, storage, posts);
+    }
+
+    // UTC115 - createFound throws FORBIDDEN and deletes the uploaded image when the account is no longer active
+    @Test
+    void utc115_createFound_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImage() {
+        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
+        when(validator.validate(any())).thenReturn(List.of(JPG));
+        when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.empty());
+
+        AppException ex = assertThrows(AppException.class,
+                () -> service.createFound(foundRequest(null, null), List.of(), user));
+
+        assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
+        verify(storage, times(1)).delete(anyString());
+        verify(posts, never()).saveAndFlush(any());
+    }
+
+    // UTC116 - createFound deletes the partially uploaded image and rethrows when R2 upload fails (SRS UC-16 E3)
+    @Test
+    void utc116_createFound_whenStoragePutFails_cleansUpAndRethrows() {
+        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
+        when(validator.validate(any())).thenReturn(List.of(JPG));
+        doThrow(new RuntimeException("R2 down")).when(storage).put(anyString(), any(), anyString());
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> service.createFound(foundRequest(null, null), List.of(), user));
+
+        assertEquals("R2 down", ex.getMessage());
+        verify(storage, times(1)).delete(anyString());
+        verify(posts, never()).saveAndFlush(any());
+    }
+
+    // UTC117 - createFound stores trimmed private identifiers; blank identifiers are stored as null
+    @Test
+    void utc117_createFound_whenPrivateIdentifiersProvided_storesTrimmedOrNull() {
+        when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
+        when(validator.validate(any())).thenReturn(List.of(JPG));
+        stubFoundSave(105L);
+
+        service.createFound(foundRequest(null, "  Serial XYZ789  "), List.of(), user);
+        service.createFound(foundRequest(null, "   "), List.of(), user);
+
+        ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
+        verify(posts, times(2)).saveAndFlush(captor.capture());
+        assertEquals("Serial XYZ789", captor.getAllValues().get(0).getPrivateIdentifiers());
+        assertEquals(null, captor.getAllValues().get(1).getPrivateIdentifiers());
+    }
+}
