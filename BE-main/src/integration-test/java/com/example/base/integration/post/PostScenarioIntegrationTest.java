@@ -52,7 +52,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Report-5.2 (scenario style) sheet "Posts": TC-POST-01 .. TC-POST-12, Swagger group 04, per SRS 2.0 v2
  * UC-13..UC-17, UC-21, UC-30..UC-32 and the data business rules (active category, private identifiers, post images, opposite-type matching).
  * ImageStorage (R2) is mocked; the Python AI service is a local stub HTTP server (up or down per case).
- * Field validation of the create form and the matching formula are unit-tested (Report-5.1 Post UTC098-UTC138).
+ * Field checks of the create form are unit-tested (Report-5.1 Post UTC098-UTC117); the Smart Match scoring formula has no unit test.
  */
 class PostScenarioIntegrationTest extends ScenarioTestBase {
 
@@ -348,12 +348,14 @@ class PostScenarioIntegrationTest extends ScenarioTestBase {
     }
 
     @Test
-    @DisplayName("TC-POST-06 User creates a Lost post without photos")
+    @DisplayName("TC-POST-06 A Lost post without photos is refused")
     void tcPost06_createLostWithoutPhoto() throws Exception {
+        // Follows the code (team decision): at least 1 photo for Lost posts too; SRS UC-15 Alt 4.1 (0 photos) is outdated here.
         String key = token();
-        Res r = create(token(USER01), "lost", postBody("Mất thẻ sinh viên " + key, cat));
-        soft.assertThat(r.status()).as("Step 1 Lost post without photo is accepted (UC-15 Alt 4.1): HTTP status (message: %s)", r.message()).isEqualTo(201);
-        soft.assertThat(countTitle(key)).as("Step 2 post saved").isEqualTo(1);
+        expect("Step 1 Lost post without photo", create(token(USER01), "lost", postBody("Mất thẻ sinh viên " + key, cat)),
+                400, "ERR_400", MSG_NO_IMAGE);
+        soft.assertThat(countTitle(key)).as("Step 2 no post saved").isZero();
+        verify(storage, never()).put(any(), any(), any());
     }
 
     @Test

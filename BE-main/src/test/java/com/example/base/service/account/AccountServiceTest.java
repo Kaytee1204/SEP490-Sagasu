@@ -1,9 +1,7 @@
 package com.example.base.service.account;
 
-import com.example.base.dto.PageResponse;
 import com.example.base.dto.account.AccountDto;
 import com.example.base.dto.account.CreateAccountRequest;
-import com.example.base.dto.account.ExcelImportResponse;
 import com.example.base.dto.account.UpdateAccountRequest;
 import com.example.base.dto.account.UpdateProfileRequest;
 import com.example.base.entity.Account;
@@ -18,11 +16,6 @@ import com.example.base.repository.AccountRepository;
 import com.example.base.repository.LoginAuditLogRepository;
 import com.example.base.repository.RefreshTokenRepository;
 import com.example.base.security.CustomUserDetails;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,35 +30,23 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -115,10 +96,6 @@ class AccountServiceTest {
         SecurityContextHolder.clearContext();
     }
 
-    // ---------------------------------------------------------------- getAccountsPage
-
-    // ---------------------------------------------------------------- getAccountById / profile / audit logs
-
     // ---------------------------------------------------------------- updateMyProfile
 
     @Test
@@ -161,52 +138,6 @@ class AccountServiceTest {
     @Test
     void utc044_updateMyProfile_plus84PlusTenDigitsThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPhone("+849123456789")));
-    }
-
-    // UTC053-UTC055, UTC070 follow SRS UC-08 / UC-10 (UTC054 passes since the same-password check was added).
-    // UTC053, UTC055, UTC070 are expected to fail until defects ACC-DE02, ACC-DE03, ACC-DE04 are fixed.
-    @Test
-    void utc053_updateMyProfile_newPasswordWithoutCurrentPasswordThrowsBadRequest() {
-        authenticateAs(user);
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setNewPassword("New@1234");
-
-        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.updateMyProfile(req)));
-        assertEquals("encoded-hash", user.getPasswordHash());
-    }
-
-    @Test
-    void utc054_updateMyProfile_newPasswordSameAsCurrentThrowsBadRequest() {
-        authenticateAs(user);
-        when(passwordEncoder.matches("Old@1234", "encoded-hash")).thenReturn(true);
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setCurrentPassword("Old@1234");
-        req.setNewPassword("Old@1234");
-
-        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.updateMyProfile(req)));
-        assertEquals("encoded-hash", user.getPasswordHash());
-    }
-
-    @Test
-    void utc055_updateMyProfile_passwordChangeRevokesRefreshTokens() {
-        RefreshToken rt = new RefreshToken();
-        rt.setAccount(user);
-        when(refreshTokenRepository.findByAccount_IdAndRevokedAtIsNull(3L)).thenReturn(List.of(rt));
-
-        updateMyPassword("New@1234");
-
-        assertNotNull(rt.getRevokedAt());
-    }
-
-    @Test
-    void utc070_createAccount_validUntilInPastThrowsBadRequest() {
-        authenticateAs(admin);
-        CreateAccountRequest req = createReq("past@gmail.com", "Past");
-        req.setPassword("Abc@1234");
-        req.setValidUntil(OffsetDateTime.now().minusDays(1));
-
-        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.createAccount(req)));
-        verify(accountRepository, never()).save(any(Account.class));
     }
 
     @Test
@@ -262,6 +193,41 @@ class AccountServiceTest {
     @Test
     void utc052_updateMyProfile_seventeenCharPasswordThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPassword("Ab@12345678901234")));
+    }
+
+    // SRS UC-08: current password required (fails until ACC-DE02 is fixed), new password must differ from it,
+    // other sessions are signed out (fails until ACC-DE03 is fixed).
+    @Test
+    void utc053_updateMyProfile_newPasswordWithoutCurrentPasswordThrowsBadRequest() {
+        authenticateAs(user);
+        UpdateProfileRequest req = new UpdateProfileRequest();
+        req.setNewPassword("New@1234");
+
+        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.updateMyProfile(req)));
+        assertEquals("encoded-hash", user.getPasswordHash());
+    }
+
+    @Test
+    void utc054_updateMyProfile_newPasswordSameAsCurrentThrowsBadRequest() {
+        authenticateAs(user);
+        when(passwordEncoder.matches("Old@1234", "encoded-hash")).thenReturn(true);
+        UpdateProfileRequest req = new UpdateProfileRequest();
+        req.setCurrentPassword("Old@1234");
+        req.setNewPassword("Old@1234");
+
+        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.updateMyProfile(req)));
+        assertEquals("encoded-hash", user.getPasswordHash());
+    }
+
+    @Test
+    void utc055_updateMyProfile_passwordChangeRevokesRefreshTokens() {
+        RefreshToken rt = new RefreshToken();
+        rt.setAccount(user);
+        when(refreshTokenRepository.findByAccount_IdAndRevokedAtIsNull(3L)).thenReturn(List.of(rt));
+
+        updateMyPassword("New@1234");
+
+        assertNotNull(rt.getRevokedAt());
     }
 
     @Test
@@ -392,6 +358,18 @@ class AccountServiceTest {
         assertEquals(1L, dto.getCreatedById());
     }
 
+    // SRS UC-10 step 5, E2: fails until ACC-DE04 is fixed.
+    @Test
+    void utc070_createAccount_validUntilInPastThrowsBadRequest() {
+        authenticateAs(admin);
+        CreateAccountRequest req = createReq("past@gmail.com", "Past");
+        req.setPassword("Abc@1234");
+        req.setValidUntil(OffsetDateTime.now().minusDays(1));
+
+        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.createAccount(req)));
+        verify(accountRepository, never()).save(any(Account.class));
+    }
+
     // ---------------------------------------------------------------- updateAccount
 
     @Test
@@ -518,22 +496,10 @@ class AccountServiceTest {
         assertEquals("Name 3", service.updateAccount(3L, req).getFullName());
     }
 
-    // ---------------------------------------------------------------- softDeleteAccount
-
-    // ---------------------------------------------------------------- importAccountsFromExcel
-
-    // ---------------------------------------------------------------- template & random password
-
     // ---------------------------------------------------------------- helpers
 
     private static ErrorCode code(Executable call) {
         return assertThrows(AppException.class, call).getErrorCode();
-    }
-
-    private Pageable capturedPageable() {
-        ArgumentCaptor<Pageable> cap = ArgumentCaptor.forClass(Pageable.class);
-        verify(accountRepository).searchAccounts(any(), any(), any(), cap.capture());
-        return cap.getValue();
     }
 
     private AccountDto updateMyPhone(String phone) {
@@ -565,49 +531,10 @@ class AccountServiceTest {
         return req;
     }
 
-    private ExcelImportResponse importOneRow(String... row) throws IOException {
-        authenticateAs(admin);
-        return service.importAccountsFromExcel(xlsx(List.of(new String[]{"email", "password", "full_name", "role"}, row)));
-    }
-
-    private static boolean hasError(ExcelImportResponse res, String fragment) {
-        return res.getErrors().stream().anyMatch(e -> e.contains(fragment));
-    }
-
     private void authenticateAs(Account actor) {
         CustomUserDetails details = new CustomUserDetails(actor);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities()));
-    }
-
-    private static List<LoginAuditLog> auditLogs(int count) {
-        List<LoginAuditLog> list = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            LoginAuditLog log = new LoginAuditLog();
-            log.setId((long) (count - i));
-            log.setEventType("LOGIN_PASSWORD");
-            log.setSuccess(true);
-            log.setDetails(Map.of("idx", i));
-            log.setCreatedAt(OffsetDateTime.now().minusMinutes(i));
-            list.add(log);
-        }
-        return list;
-    }
-
-    private static MockMultipartFile xlsx(List<String[]> rows) throws IOException {
-        try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Sheet sheet = wb.createSheet("Sheet1");
-            for (int r = 0; r < rows.size(); r++) {
-                Row row = sheet.createRow(r);
-                String[] cells = rows.get(r);
-                for (int c = 0; c < cells.length; c++) {
-                    row.createCell(c).setCellValue(cells[c]);
-                }
-            }
-            wb.write(out);
-            return new MockMultipartFile("file", "accounts.xlsx",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
-        }
     }
 
     private static Account account(long id, String email, AccountRole role, AccountStatus status) {
