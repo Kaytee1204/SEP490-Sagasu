@@ -1,15 +1,33 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { requestOfficeHandover } from '../../api/postApi';
+import { workflowApi } from '@/features/office/api/workflowApi';
 import InfoHint from '@/features/office/components/InfoHint';
 import Dialog from '@/features/office/components/Dialog';
 import '@/features/office/Office.css';
 
 export default function OfficeHandoverAction({ post, onTransferred }) {
+  const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
+
+  async function openTransfer() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const transferId = await workflowApi.myTransferId(post.id);
+      navigate(`/van-phong/chuyen-giao/${transferId}`);
+    } catch (failure) {
+      setError(failure.message || 'Chưa mở được yêu cầu giao đồ.');
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
 
   async function sendRequest() {
     if (inFlight.current) return;
@@ -32,7 +50,12 @@ export default function OfficeHandoverAction({ post, onTransferred }) {
   }
 
   if (post.postType !== 'FOUND') return null;
-  if (!post.canRequestOfficeHandover) return (post.isOwner || post.canEditOwnPost) && post.officeTransferPending ? <Link to="/van-phong/chuyen-giao" className="btn btn-ghost">Theo dõi giao đồ cho văn phòng</Link> : null;
+  if (!post.canRequestOfficeHandover) return (post.isOwner || post.canEditOwnPost) && post.officeTransferPending ? <>
+    <button type="button" className="btn btn-ghost" disabled={busy} onClick={openTransfer}>
+      {busy ? 'Đang mở yêu cầu…' : 'Theo dõi giao đồ cho văn phòng'}
+    </button>
+    {error && <p role="alert" className="text-red-700">{error}</p>}
+  </> : null;
   // DaiHV integration: explain and confirm the request at the post action itself.
   return <section aria-label="Gửi đồ cho văn phòng" className="space-y-3">
     <div className="flex items-center gap-3"><button type="button" className="btn btn-ghost" onClick={() => setConfirming(true)}>Nhờ văn phòng giữ đồ</button><InfoHint label="Giải thích việc gửi đồ cho văn phòng">Văn phòng sẽ liên hệ để tiếp nhận. Bạn giữ đồ cho đến khi giao trực tiếp; sau đó văn phòng tiếp tục xử lý các yêu cầu nhận lại đồ.</InfoHint></div>

@@ -1,20 +1,22 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { uploadHandover } from '../api/handoverApi';
+import { getHandover, uploadHandover } from '../api/handoverApi';
 import ReportReasonPicker from '@/features/reports/components/ReportReasonPicker';
-import { reportDescriptionHint } from '@/features/reports/utils/reportDescriptionHints';
-import useReportReasons from '@/features/reports/hooks/useReportReasons';
+import { claimDate } from '@/features/claims/utils/claimUtils';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
+import { handoverStatusLabels } from '../utils/issueForm';
+import '../styles/Handover.css';
 
-export default function ReportHandoverIssueDialog({ claim, handover, onClose, onReported }) {
+export default function ReportHandoverIssueDialog({ claim, handover, initialMessage, onClose, onReported }) {
   const dialog = useRef(null);
   const sending = useRef(false);
   const request = useRef(null);
   const titleId = useId();
-  const { options, error: catalogError, reload } = useReportReasons('CLAIM', claim.id, true);
+  const [current, setCurrent] = useState(handover);
+  const [message, setMessage] = useState(initialMessage ?? null);
   const [reasonCode, setReasonCode] = useState('');
   const [reason, setReason] = useState('');
   const [files, setFiles] = useState([]);
@@ -23,6 +25,9 @@ export default function ReportHandoverIssueDialog({ claim, handover, onClose, on
   const busy = submitting || processing;
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
+  const reasons = current.issueReasons ?? [];
+  const validReason = reasons.some(item => item.code === reasonCode);
+  const [reasonNotice, setReasonNotice] = useState('');
 
   useEffect(() => {
     const element = dialog.current;
@@ -39,7 +44,7 @@ export default function ReportHandoverIssueDialog({ claim, handover, onClose, on
 
   function close() {
     if (sending.current || processing) return;
-    if (reasonCode || reason.trim() || files.length) setDiscard(true);
+    if (reasonCode || reason.trim() || files.length || message) setDiscard(true);
     else onClose();
   }
 
@@ -61,16 +66,35 @@ export default function ReportHandoverIssueDialog({ claim, handover, onClose, on
 
   async function submit(event) {
     event.preventDefault();
-    if (busy || sending.current || !reason.trim() || !options?.reasons.some(item => item.code === reasonCode)) return;
+    if (busy || sending.current || !current.canReportIssue || !reason.trim() || !validReason) return;
     sending.current = true;
     setBusy(true);
     setError('');
-    request.current ||= { reasonCode, reason: reason.trim(), expectedVersion: handover.version, clientRequestId: crypto.randomUUID() };
+    request.current ||= { reasonCode, reason: reason.trim(), messageId: message?.id ?? null,
+      expectedVersion: current.version, expectedPhase: current.issuePhase, clientRequestId: crypto.randomUUID() };
     let result;
     try {
       result = await uploadHandover(claim.id, request.current, files, '/issues');
     } catch (problem) {
       setError(problem.message || 'Chưa thể gửi báo cáo sự cố. Vui lòng thử lại.');
+      try {
+        const latest = await getHandover(claim.id);
+        setCurrent(latest);
+        if (latest.version !== current.version || latest.status !== current.status) {
+          // Keep the request ID on a retry so a lost success response cannot duplicate a submission.
+          if (latest.canReportIssue) {
+            request.current.expectedVersion = latest.version;
+            request.current.expectedPhase = latest.issuePhase;
+          }
+        }
+        if (latest.canReportIssue && !latest.issueReasons?.some(item => item.code === reasonCode)) {
+          setReasonCode('');
+          setReasonNotice('Chọn một lý do trong danh sách mới.');
+          request.current = null;
+        }
+      } catch {
+        // The submission error already explains why the user stayed on the form.
+      }
       return;
     } finally {
       sending.current = false;
@@ -81,33 +105,49 @@ export default function ReportHandoverIssueDialog({ claim, handover, onClose, on
 
   return <dialog ref={dialog} className="handover-record-dialog" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); close(); }}>
-    <header><h2 id={titleId}>Báo sự cố bàn giao</h2>
+    <header><h2 id={titleId}>Báo sự cố trao trả</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
     <form onSubmit={submit}>
-      <div className="handover-record-context"><strong>{claim.postTitle}</strong><p>Người giao: {claim.finderName}</p></div>
-      <p>{handover.issuePhase === 'AFTER'
-        ? 'Quản lý sẽ xem xét sự cố dựa trên hồ sơ bàn giao và căn cứ bạn cung cấp.'
-        : 'Quản lý sẽ xem xét sự cố. Việc xác nhận đã nhận đồ sẽ tạm dừng trong lúc xử lý.'}</p>
-      <ReportReasonPicker options={options} error={catalogError} reload={reload} value={reasonCode} disabled={busy}
-        onChange={code => { setReasonCode(code); request.current = null; setDiscard(false); setError(''); }} />
+      <div className="handover-record-context"><strong>{claim.postTitle}</strong>
+        <dl className="handover-issue-fields">
+          <div><dt>Mã yêu cầu</dt><dd>#{claim.id}</dd></div>
+          <div><dt>Trạng thái hiện tại</dt><dd>{handoverStatusLabels[current.status]}</dd></div>
+          <div><dt>Người giao</dt><dd>{current.finderName || claim.finderName}</dd></div>
+          <div><dt>Người nhận</dt><dd>{current.claimantName || claim.claimantName}</dd></div>
+        </dl>
+      </div>
+      <ReportReasonPicker options={{ reasons }} value={reasonCode} disabled={busy || !current.canReportIssue}
+        onChange={code => { setReasonCode(code); request.current = null; setDiscard(false); setError(''); setReasonNotice(''); }} />
+      {reasonNotice && <p role="status" className="claims-muted">{reasonNotice}</p>}
       <label className="handover-record-field">Mô tả chi tiết sự cố *
-        <small>{reportDescriptionHint(reasonCode)}</small>
-        <textarea required maxLength={4800} value={reason} disabled={busy} placeholder="Mô tả điều đã xảy ra, ví dụ: chưa nhận được đồ hoặc nhận sai món đồ…"
+        <small>Mô tả điều đã xảy ra. Nếu nhớ, hãy ghi thêm thời gian và địa điểm.</small>
+        <textarea required maxLength={4800} value={reason} disabled={busy}
           onChange={event => { setReason(event.target.value); request.current = null; setDiscard(false); }} /></label>
       <div className="handover-record-field"><span>Ảnh bằng chứng (tùy chọn)</span>
         <span className="claims-muted">{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
         <ImageUploadButton label="Thêm ảnh bằng chứng" disabled={busy||files.length>=5} onChange={pickImages} /></div>
       <ImageProcessingStatus active={processing} />
+      {message && <div className="handover-record-context">
+        <strong>Tin nhắn kèm báo cáo</strong>
+        <p>{claimDate(message.createdAt)}</p><p className="claim-prose">{message.body}</p>
+        <button type="button" className="btn btn-ghost" disabled={busy}
+          onClick={() => { setMessage(null); request.current = null; }}>Bỏ tin nhắn</button>
+      </div>}
       {files.length > 0 && <ul className="handover-record-files">{files.map((file, index) => <li key={`${file.name}:${index}`}>
         <span>{file.name}</span><button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {
           setFiles(current => current.filter((_, position) => position !== index)); request.current = null;
         }}>Bỏ ảnh</button></li>)}</ul>}
       {error && <p role="alert" className="claim-alert">{error}</p>}
+      {current.canReportIssue && <p className="claims-muted">{current.issuePhase === 'BEFORE'
+        ? 'Sau khi bạn gửi báo cáo, người nhặt sẽ tạm thời không thể bấm “Ghi nhận đã giao đồ” trong lúc quản lý xem xét.'
+        : current.issuePhase === 'DURING'
+          ? 'Hệ thống sẽ tạm dừng xác nhận đã nhận đồ trong lúc quản lý xem xét.'
+          : 'Quản lý sẽ xem xét sự cố dựa trên hồ sơ trao trả và bằng chứng bạn cung cấp.'}</p>}
       {discard ? <div className="handover-record-discard" role="alert"><p>Bỏ lý do và ảnh đang chọn để đóng?</p>
         <footer><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></footer></div>
         : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !options?.reasons.some(item => item.code === reasonCode)}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang gửi…' : 'Gửi báo cáo sự cố'}</button></footer>}
+          <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !validReason || !current.canReportIssue}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang gửi…' : 'Gửi báo cáo sự cố'}</button></footer>}
     </form>
   </dialog>;
 }

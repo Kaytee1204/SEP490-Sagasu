@@ -122,7 +122,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
       setBusy(false);
     }
   }
-  return (
+  return (<>
     <Dialog title={outcome ? "Ghi kết luận sự cố bàn giao" : interim ? "Xử lý trong lúc xác minh" : structured ? "Ghi kết luận vi phạm" : labels[action]} busy={busy} onClose={onClose}>
       <form onSubmit={submit} className="rr-stack rr-decision-form">
         {(outcome || interim) && <label>
@@ -239,11 +239,12 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           </button>
         </footer>
       </form>
-      <ConfirmActionPopup open={confirmOpen} variant="warning"
-        title="Xác nhận thực hiện quyết định?"
-        description={warning || conclusion.trim()}
-        confirmLabel="Xác nhận thực hiện" cancelLabel="Quay lại"
-        busy={busy} onConfirm={executeSubmit} onClose={() => setConfirmOpen(false)} />
     </Dialog>
-  );
+    <ConfirmActionPopup open={confirmOpen}
+      variant={["HIDE_POST", "SUSPEND_ACCOUNT", "CLAIM_VIOLATION_REJECT"].includes(effect) ? "danger" : ["HANDOVER_COMPLETED", "RESOLVE"].includes(effect) ? "success" : "warning"}
+      title="Xác nhận thực hiện quyết định?"
+      description={warning || conclusion.trim()}
+      confirmLabel="Xác nhận thực hiện" cancelLabel="Quay lại"
+      busy={busy} onConfirm={executeSubmit} onClose={() => setConfirmOpen(false)} />
+  </>);
 }

@@ -11,6 +11,7 @@ import ChatContext from "./ChatContext";
 import AppealEvidenceComparison from "./AppealEvidenceComparison";
 import useReportResource from "@/features/reports/hooks/useReportResource";
 import { appealInstruction, appealSteps } from "@/features/reports/utils/reportUtils";
+import { handoverStatusLabels, incidentPhaseLabels } from "@/features/handover/utils/issueForm";
 
 const findings = ["VIOLATION", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE"];
 const itemMeasures = ["HOLD", "RELEASE", "REQUEST_ITEM_RECOVERY"];
@@ -23,8 +24,15 @@ function Submission({ data }) {
     ? description.slice(reason.length).trim() : description;
   return <section className="rr-card rr-report-content">
       <h2>{data.caseKind === "CLAIM_APPEAL" ? "Nội dung tranh chấp" : "Nội dung báo cáo"}</h2>
+      {data.incident?.phase && <p><strong>Giai đoạn trao trả</strong> · {incidentPhaseLabels[data.incident.phase]}</p>}
+      {data.incident?.submission_status && <p><strong>Trạng thái lúc gửi</strong> · {handoverStatusLabels[data.incident.submission_status]}</p>}
       {reason && <p className="rr-report-reason">{reason}</p>}
       {explanation ? <p className="rr-submission-text">{explanation}</p> : !reason && <p>Chưa có mô tả từ người gửi.</p>}
+      {data.incident?.message_body && <div>
+        <h3>Tin nhắn kèm báo cáo</h3>
+        <p>{data.incident.message_sender} · {date(data.incident.message_created_at)}</p>
+        <blockquote className="rr-submission-text">{data.incident.message_body}</blockquote>
+      </div>}
       {data.evidence.length > 0 && <>
         <h3>Ảnh kèm báo cáo ({data.evidence.length})</h3><Gallery images={data.evidence} />
       </>}
