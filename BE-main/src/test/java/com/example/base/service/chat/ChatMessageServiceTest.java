@@ -299,7 +299,7 @@ class ChatMessageServiceTest {
         void sendLocation_whenAppealPausesChat_rejectsBeforeSaving() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 stubWritableLock(20L);
-                when(policy.readOnlyReason(conversation)).thenReturn("Chat đang tạm khóa do kháng cáo.");
+                when(policy.readOnlyReason(conversation)).thenReturn("Chat đang tạm khóa do tranh chấp.");
 
                 var request = new ChatLocationRequest(UUID.randomUUID(), 21.0, 105.0, "Library");
                 assertEquals(ErrorCode.CHAT_UNAVAILABLE, assertThrows(AppException.class,

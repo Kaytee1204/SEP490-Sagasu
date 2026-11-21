@@ -30,7 +30,7 @@ INSERT INTO report_reason(code,target_group,label,description_required,sort_orde
   ('APPEAL_WRONG_RECIPIENT','CLAIM_APPEAL','Nghi chọn nhầm người nhận',true,3)
 ON CONFLICT (code) DO NOTHING;
 INSERT INTO report_reason(code,target_group,label,description_required,sort_order,active)
-VALUES ('APPEAL_LEGACY','CLAIM_APPEAL','Kháng cáo kết quả nhận đồ',true,99,false)
+VALUES ('APPEAL_LEGACY','CLAIM_APPEAL','Tranh chấp kết quả nhận đồ',true,99,false)
 ON CONFLICT (code) DO NOTHING;
 
 ALTER TABLE p2p_handover DROP CONSTRAINT IF EXISTS p2p_handover_claim_id_key;

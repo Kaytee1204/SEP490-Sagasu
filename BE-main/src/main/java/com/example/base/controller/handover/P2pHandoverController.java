@@ -62,7 +62,7 @@ public class P2pHandoverController {
     @PostMapping(value = "/issues", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
             summary = "[8.4] Báo cáo sự cố / tranh chấp trong quá trình bàn giao P2P",
-            description = "Chuyển biên bản bàn giao sang DISPUTED và tự động tạo phiếu báo cáo (kind = HANDOVER_ISSUE) để Manager điều tra."
+            description = "Chỉ nhận báo cáo khi đã ghi nhận giao đồ. Nếu đang chờ người nhận xác nhận, biên bản chuyển sang DISPUTED để quản lý xem xét."
     )
     public ResponseEntity<?> issue(
             @PathVariable long claimId,

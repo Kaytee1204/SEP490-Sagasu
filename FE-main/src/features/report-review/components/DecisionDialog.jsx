@@ -1,8 +1,8 @@
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
-import { labels } from "../format";
-import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
+import { appealActionHelp, labels } from "../format";
 const warnings = {
   REQUEST_POST_CORRECTION: "Người đăng sẽ nhận yêu cầu chỉnh sửa và có thể xem hướng dẫn trong hồ sơ.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
@@ -21,9 +21,6 @@ const warnings = {
   CLAIM_VIOLATION_REJECT: "Bác hồ sơ được báo cáo và gửi lý do cho người yêu cầu.",
   REQUEST_ITEM_RECOVERY: "Gửi hướng dẫn thu hồi cho các bên. Bàn giao tiếp tục tạm dừng trong khi quản lý xác minh kết quả.",
   CONFIRM_ITEM_RECOVERY: "Ghi nhận món đồ đã về người giữ sau khi đối chiếu bằng chứng.",
-  APPEAL_KEEP: "Kết thúc kháng cáo này. Việc bàn giao còn phụ thuộc thời hạn và các kháng cáo khác cùng đợt.",
-  APPEAL_REQUIRE_REVIEW: "Ghi nhận kết luận cần xét lại. Bàn giao tạm dừng cho đến khi xác minh người giữ đồ và thu hồi chấp thuận.",
-  APPEAL_REOPEN: "Thu hồi chấp thuận hiện tại và mở lại danh sách xét duyệt. Các bên sẽ nhận được thông báo.",
   RESOLVE:
     "Ghi kết quả giải quyết. Phiếu trả đồ đã hoàn tất sẽ không bị đảo ngược.",
   DISMISS:
@@ -36,10 +33,27 @@ const findings = {
 };
 const batchActions = ["RESOLVE", "DISMISS", ...Object.keys(findings)];
 
-export default function DecisionDialog({ action, data, onClose, onSaved }) {
+export default function DecisionDialog({ action: initialAction, data, onClose, onSaved }) {
+  const outcome = initialAction === "CONCLUDE_HANDOVER";
+  const interim = initialAction === "HANDOVER_INTERIM";
+  const [choice, setChoice] = useState("");
+  const action = outcome || interim ? choice : initialAction;
+  const choices = interim ? {
+    HOLD: "Tạm dừng giao nhận trong lúc xác minh",
+    RELEASE: "Gỡ lệnh tạm dừng của hồ sơ này",
+    REQUEST_ITEM_RECOVERY: "Yêu cầu người đang giữ trả lại món đồ",
+    CONFIRM_ITEM_RECOVERY: "Xác nhận đã lấy lại món đồ",
+  } : {
+    HANDOVER_COMPLETED: "Người nhận đã nhận đúng và đủ đồ",
+    HANDOVER_CONTINUE: data.issuePhase === "BEFORE" ? "Hai bên tiếp tục giao theo lịch đã thống nhất" : "Người nhận sẽ tự xác nhận trên lượt giao hiện tại",
+    HANDOVER_RETRY: "Người nhặt đang giữ đồ và sẽ giao lại cho cùng người nhận",
+    HANDOVER_REOPEN: "Đồ đã về tay người nhặt và cần chọn lại người nhận",
+    RESOLVE: "Sự cố đã được khắc phục",
+    DISMISS: "Bác phản ánh sau khi đối chiếu",
+  };
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [selected, setSelected] = useState([]);
   const [sameIncident, setSameIncident] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const structured = action === "CONCLUDE_VIOLATION";
   const [finding, setFinding] = useState("");
   const [measure, setMeasure] = useState("");
@@ -60,7 +74,7 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
   const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
   const requiresCustody = requiresRecoveryCheck || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "APPEAL_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
     || (action === "APPEAL_KEEP" && data.recoveryRequested);
-  const warning = warnings[effect];
+  const warning = (data.caseKind === "CLAIM_APPEAL" && appealActionHelp[effect]) || warnings[effect];
   const unresolvedInquiries = data.inquiries.some(item => !item.responded_at && !item.closed_at);
   function changeDecision(setValue, value) {
     setValue(value);
@@ -68,14 +82,18 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
     setSameIncident(false);
   }
 
-  function submit(e) {
-    e.preventDefault();
-    if (busy || !decision || (isRecoveryRequest && !holder)) return;
-    setConfirmOpen(true);
+  const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim() || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified) || (selected.length>0 && !sameIncident);
+
+  function submit(event) {
+    event.preventDefault();
+    if (!cannotSubmit) {
+      setError("");
+      setConfirmOpen(true);
+    }
   }
 
   async function executeSubmit() {
-    if (busy) return;
+    if (cannotSubmit) return;
     setBusy(true);
     setError("");
     try {
@@ -99,14 +117,27 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
       onClose();
     } catch (e) {
       setError(e.message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
-      setConfirmOpen(false);
     }
   }
   return (<>
-    <Dialog title={structured ? "Ghi kết luận vi phạm" : labels[action]} busy={busy} onClose={onClose}>
+    <Dialog title={outcome ? "Ghi kết luận sự cố bàn giao" : interim ? "Xử lý trong lúc xác minh" : structured ? "Ghi kết luận vi phạm" : labels[action]} busy={busy} onClose={onClose}>
       <form onSubmit={submit} className="rr-stack rr-decision-form">
+        {(outcome || interim) && <label>
+          {outcome ? "Kết quả đã xác minh" : "Việc cần thực hiện"} *
+          <select autoFocus required disabled={busy} value={choice} onChange={event => {
+            changeDecision(setChoice, event.target.value);
+            setCustody(false);
+            setHolder("");
+            setError("");
+          }}>
+            <option value="">Chọn một phương án…</option>
+            {Object.entries(choices).filter(([value]) => data.actions.includes(value)).map(([value, label]) =>
+              <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>}
         {structured && <>
           <fieldset className="rr-decision-choice" disabled={busy}>
             <legend>Kết luận *</legend>
@@ -148,7 +179,7 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           Nội dung gửi cho người liên quan{" "}
           *
           <textarea
-            autoFocus={!structured}
+            autoFocus={!structured && !interim && !outcome}
             required
             maxLength={5000}
             rows={3}
@@ -202,23 +233,18 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           </button>
           <button
             className="rr-primary"
-            disabled={busy || !decision || !conclusion.trim() || !basis.trim() || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified) || (selected.length>0 && !sameIncident)}
+            disabled={cannotSubmit}
           >
-            {busy ? "Đang lưu…" : structured ? "Xác nhận kết luận" : "Xác nhận xử lý"}
+            {busy ? "Đang lưu…" : structured || outcome ? "Xác nhận kết luận" : "Xác nhận xử lý"}
           </button>
         </footer>
       </form>
     </Dialog>
-    <ConfirmActionPopup
-        open={confirmOpen}
-        variant={["HIDE_POST", "SUSPEND_ACCOUNT", "CLAIM_VIOLATION_REJECT"].includes(effect) ? "danger" : ["HANDOVER_COMPLETED", "RESOLVE"].includes(effect) ? "success" : "warning"}
-        title={`Xác nhận: ${findings[decision] || labels[decision]}?`}
-        description={warning}
-        confirmLabel="Xác nhận thực hiện"
-        cancelLabel="Quay lại"
-        busy={busy}
-        onConfirm={executeSubmit}
-        onClose={() => setConfirmOpen(false)}
-    />
+    <ConfirmActionPopup open={confirmOpen}
+      variant={["HIDE_POST", "SUSPEND_ACCOUNT", "CLAIM_VIOLATION_REJECT"].includes(effect) ? "danger" : ["HANDOVER_COMPLETED", "RESOLVE"].includes(effect) ? "success" : "warning"}
+      title="Xác nhận thực hiện quyết định?"
+      description={warning || conclusion.trim()}
+      confirmLabel="Xác nhận thực hiện" cancelLabel="Quay lại"
+      busy={busy} onConfirm={executeSubmit} onClose={() => setConfirmOpen(false)} />
   </>);
 }

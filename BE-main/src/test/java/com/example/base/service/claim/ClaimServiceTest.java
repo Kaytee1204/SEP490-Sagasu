@@ -7,6 +7,7 @@ import com.example.base.dto.claim.ClaimPostGroupDto;
 import com.example.base.dto.claim.ClaimQuestionnaireDto;
 import com.example.base.dto.claim.ClaimResultDto;
 import com.example.base.dto.claim.ReviewClaimRequest;
+import com.example.base.dto.claim.RevokeClaimApprovalRequest;
 import com.example.base.dto.claim.SubmitClaimRequest;
 import com.example.base.entity.Account;
 import com.example.base.entity.AccountRole;
@@ -695,6 +696,27 @@ class ClaimServiceTest {
     }
 
     @Test
+    void finderCanReopenBeforeDeadlineOnceAppealsAreSettledAndCustodyIsConfirmed() {
+        p2pPost.reserveForClaim();
+        Claim claim = cancellableClaim(562L, "APPROVED");
+        when(routing.reviewer(claim, finder)).thenReturn(true);
+        when(routing.matches(claim, Set.of("RESERVED"))).thenReturn(true);
+        Query hold = mock(Query.class);
+        when(entityManager.createNativeQuery(contains("select exists(select 1 from report_hold"))).thenReturn(hold);
+        when(hold.setParameter("postId", p2pPost.getId())).thenReturn(hold);
+        when(hold.getSingleResult()).thenReturn(false);
+        when(appeals.handoverWindow(claim)).thenReturn(new P2pClaimAppealService.HandoverWindow(
+                OffsetDateTime.now().plusHours(23), P2pClaimAppealService.State.REVIEW_REQUIRED));
+        var confirmed = new RevokeClaimApprovalRequest("Review", 1L, true);
+        when(appeals.hasUnresolvedAppeal(100L)).thenReturn(true, false);
+        assertEquals(ErrorCode.CLAIM_STATE_INVALID, code(() -> service.revokeApproval(562L, confirmed, finderUser)));
+        assertEquals(ErrorCode.CLAIM_INPUT_INVALID, code(() -> service.revokeApproval(562L,
+                new RevokeClaimApprovalRequest("Review", 1L, false), finderUser)));
+        assertEquals("PENDING", service.revokeApproval(562L, confirmed, finderUser).status());
+        verify(appeals).reopen(claim);
+    }
+
+    @Test
     void managerReopensOnlyAnEligibleAppealApproval() {
         Account manager = account(60L, "Manager", AccountRole.MANAGER);
         when(accounts.findById(60L)).thenReturn(Optional.of(manager));
@@ -735,9 +757,31 @@ class ClaimServiceTest {
     @Test
     void utc064_cancel_approvedClaimReopensPost() {
         p2pPost.reserveForClaim();
-        cancellableClaim(562L, "APPROVED");
+        Claim claim = cancellableClaim(562L, "APPROVED");
+        when(routing.matches(claim, Set.of("RESERVED"))).thenReturn(true);
+        Query hold = mock(Query.class);
+        when(entityManager.createNativeQuery(contains("select exists(select 1 from report_hold"))).thenReturn(hold);
+        when(hold.setParameter("postId", p2pPost.getId())).thenReturn(hold);
+        when(hold.getSingleResult()).thenReturn(false);
         assertEquals("CANCELLED", service.cancel(562L, new CancelClaimRequest(1L, "Changed my mind"), claimantUser).status());
         assertEquals("OPEN", p2pPost.getStatus());
+    }
+
+    @Test
+    void approvedClaimCannotBeWithdrawnWhileAppealNeedsReview() {
+        p2pPost.reserveForClaim();
+        Claim claim = cancellableClaim(562L, "APPROVED");
+        when(routing.matches(claim, Set.of("RESERVED"))).thenReturn(true);
+        Query hold = mock(Query.class);
+        when(entityManager.createNativeQuery(contains("select exists(select 1 from report_hold"))).thenReturn(hold);
+        when(hold.setParameter("postId", p2pPost.getId())).thenReturn(hold);
+        when(hold.getSingleResult()).thenReturn(false);
+        when(appeals.handoverWindow(claim)).thenReturn(new P2pClaimAppealService.HandoverWindow(
+                OffsetDateTime.now().minusHours(1), P2pClaimAppealService.State.REVIEW_REQUIRED));
+        assertEquals(ErrorCode.CLAIM_STATE_INVALID,
+                code(() -> service.cancel(562L, new CancelClaimRequest(1L, "withdraw"), claimantUser)));
+        assertEquals("APPROVED", claim.getStatus());
+        verify(appeals, never()).reopen(claim);
     }
 
     @Test

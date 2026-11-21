@@ -13,7 +13,7 @@ function indexedAnswers(answers = []) {
 
 export default function AppealEvidenceComparison({ current, approved }) {
   const candidates = [
-    { label: "Người kháng cáo", context: current },
+    { label: "Người gửi tranh chấp", context: current },
     { label: "Người được chấp thuận", context: approved },
   ];
   const [appealAnswers, approvedAnswers] = candidates.map(({ context }) => new Map(indexedAnswers(context.answers)));

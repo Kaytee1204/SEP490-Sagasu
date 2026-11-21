@@ -20,9 +20,8 @@ import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 const TARGET_GROUPS = [
   { value: 'ALL', label: 'Tất cả nhóm', badgeClass: 'bg-slate-100 text-slate-700 border-slate-200' },
   { value: 'POST', label: 'Bài đăng (POST)', badgeClass: 'bg-teal-50 text-teal-700 border-teal-200' },
-  { value: 'USER', label: 'Người dùng (USER)', badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   { value: 'CLAIM', label: 'Yêu cầu nhận đồ (CLAIM)', badgeClass: 'bg-amber-50 text-amber-800 border-amber-200' },
-  { value: 'CLAIM_APPEAL', label: 'Kháng cáo', badgeClass: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { value: 'CLAIM_APPEAL', label: 'Tranh chấp', badgeClass: 'bg-sky-50 text-sky-700 border-sky-200' },
   { value: 'HANDOVER_ISSUE', label: 'Sự cố bàn giao (HANDOVER_ISSUE)', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200' },
 ];
 

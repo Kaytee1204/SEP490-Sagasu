@@ -37,7 +37,7 @@ public class ReportInquiryService {
   private static final String PARTICIPANT_REPORT_COLUMNS = """
       r.report_id, r.status, r.resolution_note, %s,
       case when appeal.report_id is null then r.reason_label_snapshot end as report_reason,
-      case when p.account_id = ? then approved.claim_id end as finder_approved_claim_id
+      case when p.account_id = ? then chosen.claim_id end as finder_approved_claim_id
       """.formatted(REPORT_SUBJECT_COLUMNS);
 
   static final String PARTICIPANT_REPORT_JOINS = """
@@ -48,8 +48,8 @@ public class ReportInquiryService {
       left join post p on p.post_id = coalesce(r.post_id, c.post_id, conversation.post_id)
       left join accounts a on a.id = r.reported_account_id
       left join p2p_claim_approval approval on approval.approval_id = appeal.approval_id and approval.closed_at is null
-      left join claim approved on approved.claim_id = approval.approved_claim_id and approved.post_id = p.post_id
-          and approved.status = 'APPROVED' and approved.claim_type = 'P2P'
+      left join claim chosen on chosen.claim_id = approval.approved_claim_id and chosen.post_id = p.post_id
+          and chosen.status = 'APPROVED' and chosen.claim_type = 'P2P'
           and p.status = 'RESERVED' and p.custody_mode = 'P2P'
       """;
 

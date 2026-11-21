@@ -19,7 +19,7 @@ public class ReportReasonService {
     private final JdbcTemplate jdbc;
 
     public static final Set<String> VALID_GROUPS = Set.of(
-            "POST", "USER", "CLAIM", "HANDOVER_ISSUE", "CLAIM_APPEAL");
+            "POST", "CLAIM", "HANDOVER_ISSUE", "CLAIM_APPEAL");
 
     // Office review integration: these allegations need context beyond the selected label.
     private static final Set<String> CONTEXT_REQUIRED = Set.of(
@@ -86,7 +86,7 @@ public class ReportReasonService {
                 select r.code, r.target_group, r.label, r.description_required, r.active, r.sort_order,
                        (select count(*) from report rep where rep.reason_code = r.code) as usage_count
                 from report_reason r
-                where r.target_group <> 'MESSAGE'
+                where r.target_group not in ('MESSAGE', 'USER')
                 """);
         List<Object> params = new ArrayList<>();
 

@@ -66,7 +66,7 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
     <form onSubmit={handleFormSubmit}>
       <p>Chấp thuận <strong>{claim.claimantName}</strong> nhận <strong>{claim.postTitle}</strong>.</p>
       <p>Chỉ chấp thuận sau khi đã đối chiếu căn cứ và bằng chứng. Hai bên có thể chat để trao đổi việc nhận đồ.</p>
-      <p className="claim-notice">Nếu còn hồ sơ đang chờ, hệ thống sẽ thông báo cho những người đó và tạm dừng giao đồ trong ít nhất 24 giờ để họ có thể kháng cáo.</p>
+      <p className="claim-notice">Nếu còn hồ sơ đang chờ, hệ thống sẽ thông báo cho những người đó và tạm dừng giao đồ trong ít nhất 24 giờ để họ có thể gửi tranh chấp.</p>
       <label className="claim-reject-detail">Căn cứ chấp thuận *
         <textarea required maxLength={2000} value={reason} disabled={busy} placeholder="Ví dụ: Mô tả và bằng chứng khớp với đặc điểm của món đồ…"
           onChange={event => { setReason(event.target.value); setDiscard(false); }} /></label>

@@ -119,7 +119,7 @@ class ChatAccessPolicyTest {
 
         assertTrue(policy.eligible(approved));
         String reason = policy.readOnlyReason(conversation);
-        assertTrue(reason != null && reason.contains("kháng cáo"));
+        assertTrue(reason != null && reason.contains("tranh chấp"));
         assertNull(policy.readOnlyReason(conversation));
     }
 

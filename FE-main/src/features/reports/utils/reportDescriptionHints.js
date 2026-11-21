@@ -19,7 +19,6 @@ const hints = {
   HANDOVER_MISSING_ITEMS: 'Thiếu món đồ hoặc phụ kiện nào so với thông tin bàn giao?',
   HANDOVER_CONDITION: 'Tình trạng thực tế khác mô tả ở điểm nào? Bạn phát hiện khi nào?',
   APPEAL_NEW_EVIDENCE: 'Bạn có căn cứ bổ sung gì cho thấy món đồ là của bạn?',
-  APPEAL_EVIDENCE_MISSED: 'Căn cứ nào đã gửi cần được xem lại?',
   APPEAL_WRONG_RECIPIENT: 'Nêu điểm đặc trưng của món đồ hoặc tài liệu giúp đối chiếu người nhận.',
 };
 

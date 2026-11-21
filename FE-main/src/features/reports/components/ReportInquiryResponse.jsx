@@ -7,7 +7,8 @@ import { Send, ShieldCheck } from "lucide-react";
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved }) {
-  const replyOpen = canReply && !i.closed_at;
+  const replyOpen = canReply && !i.responded_at && !i.closed_at;
+  const [sent, setSent] = useState(false);
   const [response, setResponse] = useState(""),
     [files, setFiles] = useState([]),
     [submitting, setBusy] = useState(false),
@@ -16,11 +17,12 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
   const busy = submitting || processing;
   async function submit(e) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || sent) return;
     setBusy(true);
     setError("");
     try {
       await reviewApi.reply(i.inquiry_id, response.trim(), files);
+      setSent(true);
       onSaved();
     } catch (e) {
       setError(e.message);
@@ -43,7 +45,7 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
     } catch (problem) { setError(problem.message); }
   }
   return (
-    <article className="report-inquiry">
+    <article className="report-inquiry" tabIndex={-1} data-pending={replyOpen && !sent}>
       <div className="report-note">
         <h3>Yêu cầu từ quản lý</h3>
         <time dateTime={i.created_at}>{formatReportDate(i.created_at)}</time>
@@ -61,7 +63,7 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
             </a>)}
           </div>}
         </>
-      ) : replyOpen ? (
+      ) : sent ? <p role="status">Đã gửi phản hồi.</p> : replyOpen ? (
         <form className="report-reply-form" onSubmit={submit}>
           <label>
             Phản hồi của bạn *
@@ -103,7 +105,7 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
           </footer>
         </form>
       ) : (
-        <p>Vụ việc đã kết thúc, không cần gửi thêm thông tin.</p>
+        <p>Yêu cầu bổ sung này đã đóng.</p>
       )}
     </article>
   );

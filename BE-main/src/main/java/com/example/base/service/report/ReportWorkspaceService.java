@@ -30,30 +30,18 @@ public class ReportWorkspaceService {
                     r.reporter_id = :actor as mine, %s,
                     coalesce(i.unanswered, false) and (
                         r.status in ('OPEN', 'IN_REVIEW') or (
-                            r.status = 'RESOLVED' and approved.claim_id is not null and p.deleted_at is null
+                            r.status = 'RESOLVED' and chosen.claim_id is not null and p.deleted_at is null
                             and exists (select 1 from report_decision d
                                 where d.report_id=r.report_id and d.action='REQUEST_ITEM_RECOVERY')
                         )
                     ) as needs_reply,
-                    case when p.account_id = :actor then approved.claim_id end as finder_approved_claim_id,
-                    coalesce(r.status = 'RESOLVED' and p.account_id = :actor
-                        and approved.claim_id is not null
-                        and approval.appeal_until <= now()
-                        and approved.claimant_id <> :actor
-                        and p.deleted_at is null and p.post_type = 'FOUND' and p.moderation_status = 'VISIBLE'
-                        and not exists (select 1 from item_receipt ir where ir.post_id = p.post_id)
-                        and not exists (select 1 from p2p_handover h where h.claim_id = approved.claim_id and h.status <> 'CANCELLED')
-                        and not exists (
-                            select 1 from p2p_claim_appeal related join report_recovery x using(report_id)
-                            where related.approval_id = approval.approval_id and x.confirmed_at is null)
-                        and not exists (select 1 from report_hold h where h.post_id = p.post_id and h.released_at is null)
-                        and not exists (
-                            select 1 from claim selected
-                            join p2p_claim_approval round on round.approved_claim_id = selected.claim_id
-                            join p2p_claim_appeal other on other.approval_id = round.approval_id
-                            join report pending on pending.report_id = other.report_id
-                            where selected.post_id = p.post_id and pending.status in ('OPEN', 'IN_REVIEW')
-                        ), false) as needs_reopen,
+                    case when p.account_id = :actor then chosen.claim_id end as finder_approved_claim_id,
+                    case when c.claim_type='P2P' and (c.claimant_id=:actor or p.account_id=:actor) then c.claim_id
+                         when chosen.claimant_id=:actor then chosen.claim_id end as participant_claim_id,
+                    p.account_id=:actor as post_owner,
+                    follow_up.step as appeal_step, approval.appeal_until,
+                    coalesce(follow_up.step='READY_TO_REOPEN' and p.account_id=:actor
+                        and chosen.claimant_id<>:actor, false) as needs_reopen,
                     r.resolution_note, r.reason_label_snapshot as report_reason,
                     holder.full_name as recovery_holder_name, recovery.due_at as recovery_due_at,
                     recovery.confirmed_at as recovery_confirmed_at,
@@ -66,23 +54,27 @@ public class ReportWorkspaceService {
                     ) end as recovery_note
                 from visible_reports v join report r using (report_id)
                 %s
+                cross join lateral (select %s as waiting_other_appeals offset 0) pending
+                cross join lateral (select %s as step offset 0) follow_up
                 left join my_inquiries i on i.report_id = r.report_id
                 left join report_recovery recovery on recovery.report_id = r.report_id
                 left join accounts holder on holder.id = recovery.holder_id
             )
-            """.formatted(ReportInquiryService.REPORT_SUBJECT_COLUMNS, ReportInquiryService.PARTICIPANT_REPORT_JOINS);
+            """.formatted(ReportInquiryService.REPORT_SUBJECT_COLUMNS, ReportInquiryService.PARTICIPANT_REPORT_JOINS,
+                    ReportQueueSql.OTHER_APPEALS_PENDING, ReportQueueSql.APPEAL_STEP);
     private static final String FILTERS = """
             from workspace
             where mine = :mine
                 and (:status = 'ALL'
-                    or (:status = 'IN_PROGRESS' and status in ('OPEN', 'IN_REVIEW'))
-                    or (:status = 'FINISHED' and status in ('RESOLVED', 'REJECTED')))
+                    or (:status = 'ACTION' and (needs_reply or needs_reopen))
+                    or (:status = 'IN_PROGRESS' and (status in ('OPEN', 'IN_REVIEW') or appeal_step is not null or needs_reply))
+                    or (:status = 'FINISHED' and status in ('RESOLVED', 'REJECTED') and appeal_step is null and not needs_reply))
                 and (:type = 'ALL' or report_type = :type
                     or (:type = 'VIOLATION' and report_type in ('POST', 'USER', 'CLAIM', 'MESSAGE')))
             """;
     private static final String LIST_FIELDS = """
             select report_id, status, created_at, updated_at, mine, report_type, report_subject,
-                report_subject_id, needs_reply, needs_reopen
+                report_subject_id, needs_reply, needs_reopen, appeal_step, appeal_until
             """;
 
     private final OfficeAccess access;
@@ -98,7 +90,7 @@ public class ReportWorkspaceService {
         this.sql = new NamedParameterJdbcTemplate(jdbc);
     }
 
-    public enum Status { ALL, IN_PROGRESS, FINISHED }
+    public enum Status { ALL, ACTION, IN_PROGRESS, FINISHED }
     public enum Type { ALL, VIOLATION, HANDOVER_ISSUE, CLAIM_APPEAL }
 
     public record Page(List<Map<String, Object>> content, long totalElements, long totalPages) {}
@@ -130,15 +122,19 @@ public class ReportWorkspaceService {
     public Detail detail(long reportId, CustomUserDetails user) {
         long actor = access.require(user).getId();
         var report = sql.queryForList(WORKSPACE + """
-                select w.*, (
-                    select d.action from report_decision d
+                select w.*, d.action as outcome,
+                       exists (select 1 from report_decision reopened
+                           where reopened.report_id=w.report_id and reopened.action='APPEAL_REOPEN') as approval_reopened,
+                       case when w.post_owner then d.after_state->>'appliedMeasure' end as post_measure
+                from workspace w left join lateral (
+                    select d.action, d.after_state from report_decision d
                     where d.report_id = w.report_id
                       and d.action in ('VIOLATION', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE',
                                        'APPEAL_KEEP', 'APPEAL_REQUIRE_REVIEW', 'HANDOVER_COMPLETED',
                                        'HANDOVER_CONTINUE', 'HANDOVER_RETRY', 'HANDOVER_REOPEN', 'CLAIM_REJECTED')
                     order by d.decision_id desc limit 1
-                ) as outcome
-                from workspace w where w.report_id = :reportId
+                ) d on true
+                where w.report_id = :reportId
                 """,
                         Map.of("actor", actor, "reportId", reportId))
                 .stream().findFirst().orElseThrow(() -> new AppException(ErrorCode.REPORT_NOT_FOUND));

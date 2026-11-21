@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox, Gallery, Empty } from "./Shared";
-import { date } from "../format";
-export default function Inquiries({ data, onSaved, open, setOpen }) {
+import { availableRecipients, date } from "../format";
+export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
+  const recipients = availableRecipients(draftData || data);
   const [recipientId, setRecipient] = useState(""),
     [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
@@ -14,13 +15,14 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
     try {
       onSaved(
         await reviewApi.ask(data.report.report_id, {
-          version: data.report.version,
+          version: draftData.report.version,
           recipientId: Number(recipientId),
           question: question.trim(),
         }),
       );
       setOpen(false);
       setQuestion("");
+      setRecipient("");
     } catch (e) {
       setError(e.message);
     } finally {
@@ -30,8 +32,8 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
   return (
     <section className="rr-card">
       <div className="rr-row">
-        <h3>Thông tin từ các bên</h3>
-        {(data.canAsk ?? data.canProcess) && (
+        <h3>Trao đổi với người liên quan</h3>
+        {recipients.length > 0 && (data.canAsk ?? data.canProcess) && (
           <button
             onClick={() => {
               setError("");
@@ -47,7 +49,7 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
         nguyên để đối chiếu.
       </p>
       {!data.inquiries.length && <Empty>Chưa yêu cầu bổ sung thông tin.</Empty>}
-      {data.inquiries.map((i) => (
+      {[...data.inquiries].reverse().map((i) => (
         <article className="rr-record" key={i.inquiry_id}>
           <div className="rr-row">
             <strong>{i.recipient}</strong>
@@ -57,10 +59,10 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
           </div>
           <small>{date(i.created_at)}</small>
           {i.response_due_at && !i.responded_at && !i.closed_at && <small> · Hạn phản hồi {date(i.response_due_at)}</small>}
-          <p>{i.question}</p>
+          <p><strong>Quản lý hỏi</strong><br />{i.question}</p>
           {i.responded_at && (
             <blockquote>
-              <p>{i.response}</p>
+              <p><strong>{i.recipient} phản hồi</strong><br />{i.response}</p>
               <small>Phản hồi lúc {date(i.responded_at)}</small>
               <Gallery images={i.evidence} />
             </blockquote>
@@ -83,7 +85,7 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
                 onChange={(e) => setRecipient(e.target.value)}
               >
                 <option value="">Chọn người liên quan</option>
-                {data.current.participants.map((p) => (
+                {recipients.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.full_name} · {p.email}
                   </option>
@@ -100,8 +102,21 @@ export default function Inquiries({ data, onSaved, open, setOpen }) {
                 onChange={(e) => setQuestion(e.target.value)}
               />
             </label>
+            {data.report.reason_code === "HANDOVER_MISSING_ITEMS" && !question && (
+              <div className="rr-actions" aria-label="Câu hỏi gợi ý">
+                <button type="button" onClick={() => setQuestion("Khi nhận đồ, bạn đã nhận những gì và còn thiếu phụ kiện nào? Nếu có, hãy gửi ảnh để đối chiếu.")}>
+                  Hỏi người nhận còn thiếu gì
+                </button>
+                <button type="button" onClick={() => setQuestion("Khi nhặt được món đồ, bạn thấy những phụ kiện nào đi kèm? Bạn đã giao những gì và hiện còn giữ phụ kiện nào?")}>
+                  Hỏi người nhặt đang giữ gì
+                </button>
+                <button type="button" onClick={() => setQuestion("Bạn đã nhận phần phụ kiện được giao bổ sung chưa? Hãy cho biết đã nhận những gì và còn thiếu gì, nếu có.")}>
+                  Kiểm tra sau khi giao bổ sung
+                </button>
+              </div>
+            )}
             <ErrorBox>{error}</ErrorBox>
-            <button className="rr-primary" disabled={busy || !question.trim()}>
+            <button className="rr-primary" disabled={busy || !recipientId || !question.trim()}>
               {busy ? "Đang gửi…" : "Gửi yêu cầu"}
             </button>
           </form>

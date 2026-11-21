@@ -8,7 +8,7 @@ export const reportTargets = {
 export const reviewKinds = {
   GENERAL: "Vi phạm",
   HANDOVER_ISSUE: "Sự cố bàn giao",
-  CLAIM_APPEAL: "Kháng cáo",
+  CLAIM_APPEAL: "Tranh chấp",
 };
 
 export const labels = {
@@ -24,7 +24,7 @@ export const labels = {
   REJECTED: "Đã bác bỏ",
   GENERAL: "Báo cáo vi phạm",
   HANDOVER_ISSUE: "Sự cố bàn giao",
-  CLAIM_APPEAL: "Kháng cáo kết quả nhận đồ",
+  CLAIM_APPEAL: "Tranh chấp kết quả nhận đồ",
   PENDING: "Chờ xử lý",
   NEEDS_INFO: "Cần bổ sung",
   APPROVED: "Đã duyệt",
@@ -82,9 +82,9 @@ export const labels = {
   CLAIM_VIOLATION_REJECT: "Bác yêu cầu nhận đồ vi phạm",
   REQUEST_ITEM_RECOVERY: "Yêu cầu thu hồi món đồ",
   CONFIRM_ITEM_RECOVERY: "Xác nhận đã thu hồi món đồ",
-  APPEAL_KEEP: "Giữ kết quả nhận đồ",
-  APPEAL_REQUIRE_REVIEW: "Kết luận cần xét lại người nhận",
-  APPEAL_REOPEN: "Thu hồi chấp thuận và mở lại xét duyệt",
+  APPEAL_KEEP: "Giữ kết quả xét duyệt",
+  APPEAL_REQUIRE_REVIEW: "Yêu cầu xét lại người nhận",
+  APPEAL_REOPEN: "Mở lại xét duyệt",
   ASK_INFORMATION: "Yêu cầu bổ sung",
   REPLY: "Nhận phản hồi",
   VIEW_CHAT: "Đọc hội thoại",
@@ -105,7 +105,20 @@ export const labels = {
   OFFICE_CANCEL: "Văn phòng hủy",
   RESCHEDULE: "Hẹn lại",
 };
+
+export const appealActionHelp = {
+  APPEAL_KEEP: "Dùng khi căn cứ ủng hộ kết quả xét duyệt hiện tại. Tranh chấp này sẽ kết thúc.",
+  APPEAL_REQUIRE_REVIEW: "Bàn giao tiếp tục tạm dừng để người nhặt kiểm tra lại các hồ sơ trước khi chọn người nhận.",
+  APPEAL_REOPEN: "Thu hồi chấp thuận hiện tại và đưa hồ sơ đã được duyệt về danh sách chờ xét lại.",
+  REQUEST_ITEM_RECOVERY: "Dùng khi món đồ đã được giao và cần lấy lại. Hệ thống gửi hướng dẫn cho người đang giữ đồ.",
+  CONFIRM_ITEM_RECOVERY: "Dùng sau khi đã xác minh món đồ được lấy lại.",
+};
 export const date = (value) =>
   value
     ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
     : "Chưa ghi nhận";
+
+export function availableRecipients(data) {
+  const waiting = new Set(data.inquiries.filter(i => !i.responded_at && !i.closed_at).map(i => i.recipient_id));
+  return data.current.participants.filter(person => !waiting.has(person.id));
+}

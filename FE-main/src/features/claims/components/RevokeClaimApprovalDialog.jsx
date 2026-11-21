@@ -4,7 +4,9 @@ import { revokeClaimApproval } from '../api/claimApi';
 import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import './RejectClaimDialog.css';
 
-export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked, initialReason = '', cancelLabel = 'Quay lại hồ sơ' }) {
+export default function RevokeClaimApprovalDialog({
+  claim, onClose, onRevoked, initialReason = '', cancelLabel = 'Quay lại hồ sơ', continueReview = false,
+}) {
   const dialog = useRef(null);
   const sending = useRef(false);
   const titleId = useId();
@@ -62,11 +64,13 @@ export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked, i
 
   return <dialog ref={dialog} className="claim-reject-dialog" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); close(); }}>
-    <header><h2 id={titleId}>Thu hồi chấp thuận nhận đồ?</h2>
+    <header><h2 id={titleId}>{continueReview ? 'Tiếp tục xét duyệt yêu cầu này?' : 'Thu hồi chấp thuận nhận đồ?'}</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
     <form onSubmit={handleFormSubmit}>
       <p>Đưa yêu cầu của <strong>{claim.claimantName}</strong> cho <strong>{claim.postTitle}</strong> về chờ xét duyệt.</p>
-      <p>Bạn có thể xét duyệt các yêu cầu khác. Người yêu cầu sẽ nhận được lý do và cuộc chat chuyển sang chỉ xem lịch sử.</p>
+      <p>{continueReview
+        ? 'Hệ thống sẽ thu hồi chấp thuận hiện tại và mở lại phần xét duyệt để bạn đối chiếu căn cứ.'
+        : 'Bạn có thể xét duyệt các yêu cầu khác.'} Người yêu cầu sẽ nhận được lý do và cuộc chat chuyển sang chỉ xem lịch sử.</p>
       <label className="claim-reject-option">
         <input type="checkbox" required checked={custodyConfirmed} disabled={busy}
           onChange={event => setCustodyConfirmed(event.target.checked)} />
@@ -80,7 +84,9 @@ export default function RevokeClaimApprovalDialog({ claim, onClose, onRevoked, i
         <div className="claim-actions"><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></div></div>
         : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>{cancelLabel}</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !custodyConfirmed}>{busy ? 'Đang lưu…' : 'Xác nhận thu hồi'}</button></footer>}
+          <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !custodyConfirmed}>
+            {busy ? 'Đang lưu…' : continueReview ? 'Mở lại xét duyệt' : 'Xác nhận thu hồi'}
+          </button></footer>}
     </form>
     <ConfirmActionPopup
       open={confirmOpen}

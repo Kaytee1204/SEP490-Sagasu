@@ -251,7 +251,7 @@ public class ClaimService {
         if ("APPROVED".equals(request.decision())) {
             if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) throw stateChanged();
             if (appeals.hasUnresolvedAppeal(post.getId())) {
-                throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Vui lòng chờ kết quả kháng cáo trước khi chấp thuận người nhận.");
+                throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Vui lòng chờ kết quả tranh chấp trước khi chấp thuận người nhận.");
             }
             post.reserveForClaim();
         }
@@ -267,7 +267,7 @@ public class ClaimService {
                     "CLAIM_APPROVED",
                     "Yêu cầu nhận đồ #" + claim.getId() + " đã được chấp nhận",
                     "Chủ bài đăng \"" + post.getTitle() + "\" đã chấp nhận yêu cầu nhận đồ của bạn. Bạn có thể nhắn tin trao đổi trực tiếp."
-                            + (deadline == null ? "" : " Hãy chờ hết thời hạn kháng cáo 24 giờ và chờ xử lý mọi kháng cáo trước khi giao đồ."),
+                            + (deadline == null ? "" : " Hãy chờ hết thời hạn gửi tranh chấp 24 giờ và chờ xử lý mọi tranh chấp trước khi giao đồ."),
                     "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
                     true
             );
@@ -298,8 +298,6 @@ public class ClaimService {
         if (!revocable(claim)) throw stateChanged();
         var window = appeals.handoverWindow(claim);
         if (window != null && window.state() == P2pClaimAppealService.State.REVIEW_REQUIRED) {
-            if (OffsetDateTime.now().isBefore(window.deadline()))
-                throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Cần chờ hết hạn gửi kháng cáo trước khi xét lại.");
             if (!Boolean.TRUE.equals(request.custodyConfirmed()))
                 throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Vui lòng xác nhận bạn vẫn đang giữ món đồ.");
         }
@@ -352,6 +350,9 @@ public class ClaimService {
                 && !Boolean.TRUE.equals(entityManager.createNativeQuery(
                     """
                     select exists(select 1 from report_hold where post_id=:postId and released_at is null
+                      union all
+                      select 1 from p2p_handover_issue i join report r using(report_id) join claim c on c.claim_id=r.claim_id
+                      where c.post_id=:postId and i.phase='BEFORE' and r.status in ('OPEN','IN_REVIEW')
                       union all
                       select 1 from p2p_claim_approval a join claim c on c.claim_id=a.approved_claim_id
                       join p2p_claim_appeal appeal using(approval_id) join report_recovery x using(report_id)
@@ -417,7 +418,12 @@ public class ClaimService {
 
     private boolean cancellable(Claim claim) {
         // DaiHV integration: office cancellation must also invalidate its appointment/invitation.
-        return !claim.isOffice() && Set.of("PENDING", "APPROVED").contains(claim.getStatus())
+        if ("APPROVED".equals(claim.getStatus())) {
+            if (!revocable(claim)) return false;
+            var window = appeals.handoverWindow(claim);
+            return window == null || window.state() != P2pClaimAppealService.State.REVIEW_REQUIRED;
+        }
+        return !claim.isOffice() && "PENDING".equals(claim.getStatus())
                 && !handovers.existsByClaimId(claim.getId())
                 && routing.matches(claim, Set.of("OPEN", "RESERVED"));
     }

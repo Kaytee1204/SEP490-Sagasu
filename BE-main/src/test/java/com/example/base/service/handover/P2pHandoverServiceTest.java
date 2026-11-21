@@ -30,6 +30,8 @@ import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -174,7 +176,7 @@ class P2pHandoverServiceTest {
 
         // UTC001 - detail: post owner with no recorded handover gets NOT_RECORDED & canRecord=true
         @Test
-        void detail_whenNoHandoverRecorded_finderCanRecordOrReport() {
+        void detail_whenNoHandoverRecorded_finderCanRecordOnly() {
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
@@ -186,8 +188,8 @@ class P2pHandoverServiceTest {
                 assertEquals(500L, detail.claimId());
                 assertTrue(detail.canRecord());
                 assertFalse(detail.canConfirm());
-                assertTrue(detail.canReportIssue());
-                assertEquals("BEFORE", detail.issuePhase());
+                assertFalse(detail.canReportIssue());
+                assertNull(detail.issuePhase());
                 assertTrue(detail.evidence().isEmpty());
                 assertNull(detail.issue());
         }
@@ -232,6 +234,26 @@ class P2pHandoverServiceTest {
 
                 assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, failure.getErrorCode());
                 verify(images, org.mockito.Mockito.never()).upload(anyString(), any());
+        }
+
+        @ParameterizedTest
+        @EnumSource(P2pClaimAppealService.State.class)
+        void issueIsUnavailableBeforeHandoverInEveryAppealState(P2pClaimAppealService.State state) {
+                when(actors.actor(finderUser)).thenReturn(finder);
+                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
+                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
+                when(appeals.handoverWindow(approvedClaim)).thenReturn(new P2pClaimAppealService.HandoverWindow(
+                                OffsetDateTime.now().plusHours(1), state));
+                when(images.prepare(anyString(), eq(List.of())))
+                                .thenReturn(new WorkflowImages.Prepared(List.of(), List.of(), "hash"));
+
+                var detail = service.detail(500L, finderUser);
+                assertFalse(detail.canReportIssue());
+                AppException failure = assertThrows(AppException.class, () -> service.issue(500L,
+                                new P2pHandoverService.IssueRequest("Wrong item", detail.version(), UUID.randomUUID()),
+                                List.of(), finderUser));
+                assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, failure.getErrorCode());
+                verify(images, never()).upload(anyString(), any());
         }
 
         // UTC002 - detail: claimant viewing WAITING_CONFIRMATION gets canConfirm=true, canReportIssue=true & evidence
@@ -331,6 +353,7 @@ class P2pHandoverServiceTest {
                         ReflectionTestUtils.setField(saved, "id", 701L);
                         return saved;
                 });
+                when(jdbc.query(contains("i.handover_id is null"), any(RowMapper.class), eq(500L))).thenReturn(List.of());
                 when(jdbc.query(contains("p2p_handover_issue"), any(RowMapper.class), eq(701L))).thenReturn(List.of());
                 when(jdbc.query(contains("p2p_handover_evidence"), any(RowMapper.class), eq(701L)))
                                 .thenReturn(List.of(ev));
@@ -353,7 +376,9 @@ class P2pHandoverServiceTest {
         @Test
         void record_whenClaimVersionChangesDuringUpload_cleansUpImagesAndThrowsStateChanged() {
                 UUID reqId = UUID.randomUUID();
-                WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(List.of(), List.of(), "img-hash");
+                List<MultipartFile> files = List.of(new MockMultipartFile("files", "a.jpg", "image/jpeg", new byte[]{1}));
+                WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(
+                                List.of(new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 1, 1, "h")), List.of("a.jpg"), "img-hash");
                 WorkflowImages.Image stored = new WorkflowImages.Image(
                                 "handovers/500/1.jpg", "a.jpg", "image/jpeg", 3L, "h", 0);
 
@@ -366,7 +391,7 @@ class P2pHandoverServiceTest {
                 ReflectionTestUtils.setField(changedClaim, "version", 99L);
 
                 when(actors.actor(finderUser)).thenReturn(finder);
-                when(images.prepare("HANDOVER:500:Note", List.of())).thenReturn(prepared);
+                when(images.prepare("HANDOVER:500:Note", files)).thenReturn(prepared);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(handovers.findByRecordedByAndClientRequestId(10L, reqId)).thenReturn(Optional.empty());
                 when(routing.matches(any(Claim.class), eq(Set.of("RESERVED")))).thenReturn(true);
@@ -377,7 +402,7 @@ class P2pHandoverServiceTest {
                 when(claims.findForUpdate(500L)).thenReturn(Optional.of(changedClaim));
 
                 AppException ex = assertThrows(AppException.class, () -> service.record(
-                                500L, new P2pHandoverService.RecordRequest("Note", 2L, reqId), List.of(), finderUser));
+                                500L, new P2pHandoverService.RecordRequest("Note", 2L, reqId), files, finderUser));
 
                 assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, ex.getErrorCode());
                 verify(images).cleanup(List.of(stored));
@@ -625,18 +650,34 @@ class P2pHandoverServiceTest {
                                                 List.of(), finderUser)).getErrorCode());
         }
 
+        @Test
+        void recordRequiresPhotoEvenWhenNoteIsProvided() {
+                when(actors.actor(finderUser)).thenReturn(finder);
+                when(images.prepare("HANDOVER:500:Met", List.of()))
+                                .thenReturn(new WorkflowImages.Prepared(List.of(), List.of(), "hash"));
+                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
+                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
+
+                AppException error = assertThrows(AppException.class, () -> service.record(500L,
+                                new P2pHandoverService.RecordRequest("Met", 2L, UUID.randomUUID()), List.of(), finderUser));
+                assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, error.getErrorCode());
+                verify(handovers, never()).saveAndFlush(any());
+        }
+
         // UTC013 - record: whitespace-only note stored as null
         @Test
         void record_whenBlankNote_storesNullNoteAndCreatesHandover() {
                 UUID reqId = UUID.randomUUID();
-                WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(List.of(), List.of(), "img-hash");
+                List<MultipartFile> files = List.of(new MockMultipartFile("files", "a.jpg", "image/jpeg", new byte[]{1}));
+                WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(
+                                List.of(new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 1, 1, "h")), List.of("a.jpg"), "img-hash");
                 P2pHandover saved = new P2pHandover(500L, 10L, null, reqId, "img-hash");
                 ReflectionTestUtils.setField(saved, "id", 701L);
                 ReflectionTestUtils.setField(saved, "status", "WAITING_CONFIRMATION");
                 ReflectionTestUtils.setField(saved, "version", 1L);
 
                 when(actors.actor(finderUser)).thenReturn(finder);
-                when(images.prepare("HANDOVER:500:", List.of())).thenReturn(prepared);
+                when(images.prepare("HANDOVER:500:", files)).thenReturn(prepared);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(claims.findPostId(500L)).thenReturn(Optional.of(100L));
                 when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
@@ -645,12 +686,13 @@ class P2pHandoverServiceTest {
                 when(handovers.existsByClaimId(500L)).thenReturn(false);
                 when(images.upload("handovers/500", prepared)).thenReturn(List.of());
                 when(handovers.saveAndFlush(any(P2pHandover.class))).thenReturn(saved);
+                when(jdbc.query(contains("i.handover_id is null"), any(RowMapper.class), eq(500L))).thenReturn(List.of());
                 when(jdbc.query(contains("p2p_handover_issue"), any(RowMapper.class), eq(701L))).thenReturn(List.of());
                 when(jdbc.query(contains("p2p_handover_evidence"), any(RowMapper.class), eq(701L)))
                                 .thenReturn(List.of());
 
                 P2pHandoverService.Detail detail = service.record(
-                                500L, new P2pHandoverService.RecordRequest("   ", 2L, reqId), List.of(), finderUser);
+                                500L, new P2pHandoverService.RecordRequest("   ", 2L, reqId), files, finderUser);
 
                 ArgumentCaptor<P2pHandover> captor = ArgumentCaptor.forClass(P2pHandover.class);
                 verify(handovers).saveAndFlush(captor.capture());
@@ -694,12 +736,14 @@ class P2pHandoverServiceTest {
         @Test
         void record_whenDbSaveFailsAfterUpload_cleansUpImages() {
                 UUID reqId = UUID.randomUUID();
-                WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(List.of(), List.of(), "img-hash");
+                List<MultipartFile> files = List.of(new MockMultipartFile("files", "a.jpg", "image/jpeg", new byte[]{1}));
+                WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(
+                                List.of(new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 1, 1, "h")), List.of("a.jpg"), "img-hash");
                 WorkflowImages.Image uploaded = new WorkflowImages.Image(
                                 "handovers/500/1.jpg", "1.jpg", "image/jpeg", 5L, "h", 0);
 
                 when(actors.actor(finderUser)).thenReturn(finder);
-                when(images.prepare("HANDOVER:500:Met", List.of())).thenReturn(prepared);
+                when(images.prepare("HANDOVER:500:Met", files)).thenReturn(prepared);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(claims.findPostId(500L)).thenReturn(Optional.of(100L));
                 when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
@@ -710,7 +754,7 @@ class P2pHandoverServiceTest {
                 doThrow(new RuntimeException("DB fail")).when(handovers).saveAndFlush(any(P2pHandover.class));
 
                 assertThrows(RuntimeException.class, () -> service.record(
-                                500L, new P2pHandoverService.RecordRequest("Met", 2L, reqId), List.of(), finderUser));
+                                500L, new P2pHandoverService.RecordRequest("Met", 2L, reqId), files, finderUser));
 
                 verify(images).cleanup(List.of(uploaded));
         }

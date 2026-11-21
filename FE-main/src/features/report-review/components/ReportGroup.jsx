@@ -25,11 +25,9 @@ const priorityReasons = {
 const waitingReasons = {
   WAITING_RECOVERY: "Chờ thu hồi hoặc phản hồi về người đang giữ đồ",
   WAITING_REPLY: "Chờ người liên quan phản hồi",
-  WAITING_APPEAL_WINDOW: "Chờ hết thời hạn kháng cáo",
-  WAITING_OTHER_APPEALS: "Chờ xử lý kháng cáo cùng đợt",
+  WAITING_OTHER_APPEALS: "Chờ xử lý tranh chấp của bài đăng",
   WAITING_REOPEN: "Chờ đủ điều kiện mở lại xét duyệt",
 };
-const priorityNames = ["Cần xử lý đầu ca", "Sẵn sàng xử lý", "Xử lý theo lượt"];
 const icons = { POST: FileText, CLAIM: ClipboardList, MESSAGE: MessageSquare, USER: UserRound };
 
 function ReplyBadge({ reason }) {
@@ -45,7 +43,22 @@ function workDate(value, timeZone) {
   }).format(new Date(value));
 }
 
-export default function ReportGroup({ report, filters, reportPath, timeZone }) {
+function reportHref(report, reportPath) {
+  const conversation = report.work_state === "READY" && report.has_new_reply;
+  return reportPath(report.report_id) + (conversation ? "#trao-doi" : "");
+}
+
+function OpenReport({ report, reportPath }) {
+  const label = report.work_state === "HISTORY" ? "Xem kết quả"
+    : report.work_state === "WAITING" ? "Theo dõi hồ sơ"
+    : report.has_new_reply ? "Đọc phản hồi" : "Xem để xử lý";
+  return <Link className="rr-case-link" to={reportHref(report, reportPath)}
+    aria-label={`${label} báo cáo #${report.report_id}`}>
+    {label} <ArrowRight size={15} aria-hidden="true" />
+  </Link>;
+}
+
+export default function ReportGroup({ report, filters, reportPath, timeZone, revision }) {
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
   const { post_id, claim_id, message_id, reported_account_id } = report;
@@ -53,12 +66,15 @@ export default function ReportGroup({ report, filters, reportPath, timeZone }) {
   const targetId = post_id ?? claim_id ?? message_id ?? reported_account_id;
   const multiple = report.object_count > 1;
   const priority = priorityReasons[report.priority_reason];
-  const level = report.work_state === "READY" ? priorityNames[report.priority_rank] : null;
+  const ready = report.work_state === "READY";
+  const level = ready && report.priority_rank === 1 ? "Sẵn sàng xử lý" : null;
   const waiting = waitingReasons[report.waiting_reason];
   const appointment = report.next_pickup && workDate(report.next_pickup, timeZone);
   const Icon = report.kind === "CLAIM_APPEAL" ? Scale : report.kind === "HANDOVER_ISSUE" ? Package : icons[target];
-  const reference = `${target === "MESSAGE" ? "Tin nhắn (báo cáo cũ)" : reportTargets[target]} #${targetId}`;
-  const title = target === "MESSAGE" ? report.message_preview?.trim() || "Tin nhắn đính kèm" : report.subject_title || reference;
+  const type = report.kind === "CLAIM_APPEAL" ? "Tranh chấp" : report.kind === "HANDOVER_ISSUE"
+    ? "Sự cố bàn giao" : `Vi phạm · ${reportTargets[target]}`;
+  const thumbnail = report.post_thumbnail?.url;
+  const title = target === "MESSAGE" ? report.message_preview?.trim() || "Tin nhắn đính kèm" : report.subject_title || reportTargets[target];
   const person = target === "CLAIM" ? report.claimant_name : target === "POST" || target === "MESSAGE" ? report.subject_name : "";
   const reasons = Object.entries(report.reason_summary ?? {}).sort((a, b) => b[1] - a[1]);
   const primaryReason = reasons[0]?.[0] || report.reason_label_snapshot || labels[report.kind];
@@ -66,12 +82,17 @@ export default function ReportGroup({ report, filters, reportPath, timeZone }) {
     <tr role="row" className={`rr-case-row${report.priority_rank === 0 ? " is-priority" : ""}`}>
       <td role="cell" className="rr-case-subject">
         <div className="rr-case-identity">
-          <span className="rr-case-icon"><Icon size={18} aria-hidden="true" /></span>
+          <span className="rr-case-icon rr-case-thumbnail">
+            <Icon size={22} aria-hidden="true" />
+            {thumbnail && <img key={thumbnail} src={thumbnail} alt="" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
+          </span>
           <div className="rr-case-name">
-            <small>{reference} <span aria-hidden="true">·</span> {multiple ? `${report.object_count} báo cáo` : `Báo cáo #${report.report_id}`}</small>
+            <span className="rr-case-type">{type}</span>
             {multiple ? <strong>{title}</strong>
-              : <Link to={reportPath(report.report_id)}>{title}</Link>}
-            <small>{person && `${person} · `}<time dateTime={report.created_at}>{date(report.created_at)}</time></small>
+              : <Link to={reportHref(report, reportPath)}>{title}</Link>}
+            {!multiple && report.reporter && <small>Người báo cáo · {report.reporter}</small>}
+            {person && <small>{target === "CLAIM" ? "Người yêu cầu" : target === "POST" ? "Người đăng" : "Người gửi"} · {person}</small>}
+            <small>Gửi lúc <time dateTime={report.created_at}>{date(report.created_at)}</time></small>
           </div>
         </div>
       </td>
@@ -84,17 +105,16 @@ export default function ReportGroup({ report, filters, reportPath, timeZone }) {
         </span>}
         {level && priority && <small>{priority}</small>}
         {appointment && <small>Lịch nhận <time dateTime={report.next_pickup}>{appointment}</time></small>}
-        {report.waiting_reason === "WAITING_APPEAL_WINDOW" && report.appeal_until &&
-          <small>Đến <time dateTime={report.appeal_until}>{workDate(report.appeal_until, timeZone)}</time></small>}
       </td>
       <td role="cell" className="rr-case-status">
         <span className="rr-case-mobile-label">Trạng thái</span>
-        <Badge value={report.status} />
+        {report.status === "RESOLVED" && report.work_state !== "HISTORY" && report.kind === "CLAIM_APPEAL"
+          ? <span className="rr-badge">Còn bước sau kết luận</span> : <Badge value={report.status} />}
         {report.carried_over && <small>Tồn từ ngày làm việc trước</small>}
-        {level && (report.has_new_reply || report.group_has_new_reply) &&
+        {ready && (report.has_new_reply || report.group_has_new_reply) &&
           <ReplyBadge reason={report.priority_reason} />}
         {report.response_due_at && <small className={report.response_overdue ? "rr-response-overdue" : undefined}>
-          {report.response_overdue ? "Quá hạn phản hồi" : "Phản hồi trước"}{" "}
+          {report.response_overdue ? "Quá hạn tiếp nhận" : "Quản lý tiếp nhận trước"}{" "}
           <time dateTime={report.response_due_at}>{workDate(report.response_due_at, timeZone)}</time>
         </small>}
         {multiple && report.open_count > 0 && <small>{report.open_count} báo cáo đang mở</small>}
@@ -106,25 +126,23 @@ export default function ReportGroup({ report, filters, reportPath, timeZone }) {
       <td role="cell" className="rr-case-open">
         {multiple ? <button type="button" aria-expanded={expanded} aria-controls={contentId}
           onClick={() => setExpanded(value => !value)}>
-          {expanded ? "Thu gọn" : "Xem nhóm"}
+          {expanded ? "Thu gọn" : `Xem ${report.object_count} báo cáo`}
           <ChevronDown size={15} className={expanded ? "rr-chevron-open" : ""} aria-hidden="true" />
-        </button> : <Link className="rr-case-link" to={reportPath(report.report_id)} aria-label={`Mở báo cáo #${report.report_id}`}>
-          Mở hồ sơ <ArrowRight size={15} aria-hidden="true" />
-        </Link>}
+        </button> : <OpenReport report={report} reportPath={reportPath} />}
       </td>
     </tr>
     {multiple && <tr role="row" className="rr-case-expansion" hidden={!expanded}>
       <td role="cell" colSpan={5} id={contentId}>
-        {expanded && <Reports filters={{ ...filters, kind: report.kind, target, targetId }} reportPath={reportPath} />}
+        {expanded && <Reports filters={{ ...filters, kind: report.kind, target, targetId }} revision={revision} reportPath={reportPath} />}
       </td>
     </tr>}
   </tbody>;
 }
 
-function Reports({ filters, reportPath }) {
+function Reports({ filters, reportPath, revision }) {
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
-  const { data, error } = useReviewResource("queue", { ...filters, page }, retry);
+  const { data, error } = useReviewResource("queue", { ...filters, page }, [revision, retry]);
   return <div className="rr-case-children">
     <ErrorBox>{error}</ErrorBox>
     {error && <button type="button" onClick={() => setRetry(value => value + 1)}>Thử lại</button>}
@@ -133,16 +151,15 @@ function Reports({ filters, reportPath }) {
       {!data.content.length && <p>Không có báo cáo phù hợp bộ lọc.</p>}
       <ul>{data.content.map(report => <li key={report.report_id}>
         <div>
-          <strong>#{report.report_id} · {report.reason_label_snapshot || labels[report.kind]}</strong>
+          <strong>{report.reason_label_snapshot || labels[report.kind]}</strong>
           <small>{report.reporter && `${report.reporter} · `}{date(report.created_at)} · {report.assignee || "Chưa phân công"}</small>
         </div>
         <div className="rr-case-child-status">
-          <Badge value={report.status} />
+          {report.status === "RESOLVED" && report.work_state !== "HISTORY" && report.kind === "CLAIM_APPEAL"
+          ? <span className="rr-badge">Còn bước sau kết luận</span> : <Badge value={report.status} />}
           {report.work_state === "READY" && report.has_new_reply && <ReplyBadge reason={report.priority_reason} />}
         </div>
-        <Link className="rr-case-link" to={reportPath(report.report_id)} aria-label={`Mở báo cáo #${report.report_id}`}>
-          Mở hồ sơ <ArrowRight size={15} aria-hidden="true" />
-        </Link>
+        <OpenReport report={report} reportPath={reportPath} />
       </li>)}</ul>
       {data.totalPages > 1 && <nav className="rr-queue-pagination" aria-label="Trang báo cáo trong nhóm">
         <span>Trang {page} / {data.totalPages}</span>
