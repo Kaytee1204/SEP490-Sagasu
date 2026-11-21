@@ -13,6 +13,7 @@ import RejectClaimDialog from '../components/RejectClaimDialog';
 import CancelClaimDialog from '../components/CancelClaimDialog';
 import RevokeClaimApprovalDialog from '../components/RevokeClaimApprovalDialog';
 import ApproveClaimDialog from '../components/ApproveClaimDialog';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import ReportButton from '@/features/reports/components/ReportButton';
 import HandoverPanel from '@/features/handover/components/HandoverPanel';
 import { useChat } from '@/features/chat/hooks/useChat';
@@ -45,6 +46,7 @@ function ClaimDetail({ postId, id }) {
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [revokeOpen, setRevokeOpen] = useState(false);
+  const [pendingDirectAction, setPendingDirectAction] = useState(null);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
   const refreshClaim = useCallback(() => {
@@ -121,7 +123,7 @@ function ClaimDetail({ postId, id }) {
           <ClaimVerificationPanel claim={claim} onPreviewImage={setPreviewImageId} />
         </div>
         <aside className="claim-detail-sidebar" aria-label="Thông tin và xử lý yêu cầu">
-      {claim.canReview && <form className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); act('review', event.nativeEvent.submitter?.value || decision); }}>
+      {claim.canReview && <form className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); if (!reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; } setPendingDirectAction({ action: 'review', decision: event.nativeEvent.submitter?.value || decision }); }}>
         <h2><ClipboardCheck size={20} aria-hidden="true" />Xét duyệt yêu cầu</h2>
         <p>Đối chiếu căn cứ và ảnh bằng chứng để xác định đúng người nhận.</p>
         {claim.claimType !== 'P2P' && <label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
@@ -139,7 +141,7 @@ function ClaimDetail({ postId, id }) {
       {claim.canCancel && claim.claimType !== 'P2P' && <section className="claim-detail-office-cancel"><h2>Hủy yêu cầu nhận đồ</h2><p>Chỉ hủy được trước khi bàn giao. Lịch sử và bằng chứng của hồ sơ vẫn được giữ lại.</p>
         {!confirmCancel ? <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setConfirmCancel(true)}>Hủy yêu cầu nhận đồ</button>
           : <div className="claim-form"><p>Bạn xác nhận hủy claim này?</p><label>Lý do hủy (không bắt buộc)<textarea disabled={busy} maxLength={2000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label>
-            <div className="claim-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('cancel')}>Xác nhận hủy</button>
+            <div className="claim-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => setPendingDirectAction({ action: 'cancel' })}>Xác nhận hủy</button>
               <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirmCancel(false)}>Giữ claim</button></div></div>}
       </section>}
       {(claim.claimType !== 'P2P' || Number(claim.claimantId) !== Number(user?.id)) &&
@@ -148,6 +150,21 @@ function ClaimDetail({ postId, id }) {
         </aside>
       </div>
     </>}
+    <ConfirmActionPopup
+      open={Boolean(pendingDirectAction)}
+      variant={pendingDirectAction?.action === 'cancel' ? 'warning' : pendingDirectAction?.decision === 'REJECTED' ? 'danger' : 'success'}
+      title={pendingDirectAction?.action === 'cancel' ? 'Bạn có chắc chắn hủy yêu cầu?' : pendingDirectAction?.decision === 'REJECTED' ? 'Xác nhận từ chối yêu cầu?' : 'Xác nhận chấp thuận yêu cầu?'}
+      description={pendingDirectAction?.action === 'cancel' ? 'Yêu cầu nhận đồ này sẽ bị hủy. Hồ sơ và bằng chứng đã gửi vẫn được giữ lại.' : 'Kết quả xét duyệt sẽ được lưu và thông báo đến người yêu cầu.'}
+      confirmLabel={pendingDirectAction?.action === 'cancel' ? 'Đồng ý hủy' : 'Xác nhận lưu'}
+      cancelLabel="Quay lại"
+      busy={busy}
+      onConfirm={async () => {
+        if (!pendingDirectAction) return;
+        await act(pendingDirectAction.action, pendingDirectAction.decision);
+        setPendingDirectAction(null);
+      }}
+      onClose={() => !busy && setPendingDirectAction(null)}
+    />
     {rejectOpen && claim?.canReview && claim.claimType === 'P2P' && <RejectClaimDialog claim={claim}
       onClose={() => setRejectOpen(false)} onRejected={() => {
         setRejectOpen(false); setReason(''); setError(''); setNotice('Đã từ chối yêu cầu nhận đồ.');

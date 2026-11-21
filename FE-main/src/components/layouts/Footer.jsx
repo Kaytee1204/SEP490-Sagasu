@@ -74,7 +74,7 @@ export default function Footer() {
               <li>
                 <a href="#" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                   <MapPin size={13} style={{ marginTop: 2, flexShrink: 0 }} />
-                  <span>Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc, Km29 Đại lộ Thăng Long, Thạch Thất, Hà Nội</span>
+                  <span>Đại học Sakura Hà Nội, Khu Công nghệ cao Hòa Lạc, Km29 Đại lộ Thăng Long, Thạch Thất, Hà Nội</span>
                 </a>
               </li>
               <li>

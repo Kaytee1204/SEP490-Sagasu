@@ -1,3 +1,4 @@
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ChevronDown, ClipboardCheck, FileText, Flag, History, MessageSquare, Package, RefreshCw, Scale, Users } from "lucide-react";
 import { reviewApi } from "../api";
@@ -209,6 +210,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [action, setAction] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [confirmTake, setConfirmTake] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const { data, error, setData, setError } = useReviewResource("detail", id, refresh);
 
@@ -221,6 +223,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
       setError(error.message);
     } finally {
       setBusy(false);
+      setConfirmTake(false);
     }
   }
 
@@ -276,8 +279,13 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
           </div>}
           {tab === "history" && <HistoryPanel history={data.history} decisions={data.decisions} />}
         </div>
-        <ProcessingPanel data={data} busy={busy} take={take} onAsk={() => { setTab("inquiries"); setInquiryOpen(true); }} onAction={setAction} />
+        <ProcessingPanel data={data} busy={busy} take={() => setConfirmTake(true)} onAsk={() => { setTab("inquiries"); setInquiryOpen(true); }} onAction={setAction} />
       </div>
+      <ConfirmActionPopup open={confirmTake} variant="info"
+        title="Nhận xử lý báo cáo này?"
+        description="Báo cáo sẽ được phân công cho bạn để yêu cầu bổ sung và ghi kết luận."
+        confirmLabel="Nhận xử lý" cancelLabel="Hủy bỏ"
+        busy={busy} onConfirm={take} onClose={() => setConfirmTake(false)} />
       {action && <DecisionDialog key={action} action={action} data={data} onClose={() => setAction(null)} onSaved={setData} />}
     </>}
   </>;

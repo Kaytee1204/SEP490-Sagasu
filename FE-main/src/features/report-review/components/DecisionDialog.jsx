@@ -1,3 +1,4 @@
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
@@ -36,6 +37,7 @@ const findings = {
 const batchActions = ["RESOLVE", "DISMISS", ...Object.keys(findings)];
 
 export default function DecisionDialog({ action, data, onClose, onSaved }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [selected, setSelected] = useState([]);
   const [sameIncident, setSameIncident] = useState(false);
   const structured = action === "CONCLUDE_VIOLATION";
@@ -66,9 +68,18 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
     setSameIncident(false);
   }
 
-  async function submit(e) {
-    e.preventDefault();
-    if (busy || !decision || (isRecoveryRequest && !holder)) return;
+  const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim() || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified) || (selected.length>0 && !sameIncident);
+
+  function submit(event) {
+    event.preventDefault();
+    if (!cannotSubmit) {
+      setError("");
+      setConfirmOpen(true);
+    }
+  }
+
+  async function executeSubmit() {
+    if (cannotSubmit) return;
     setBusy(true);
     setError("");
     try {
@@ -92,6 +103,7 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
       onClose();
     } catch (e) {
       setError(e.message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
@@ -194,12 +206,17 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           </button>
           <button
             className="rr-primary"
-            disabled={busy || !decision || !conclusion.trim() || !basis.trim() || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified) || (selected.length>0 && !sameIncident)}
+            disabled={cannotSubmit}
           >
             {busy ? "Đang lưu…" : structured ? "Xác nhận kết luận" : "Xác nhận xử lý"}
           </button>
         </footer>
       </form>
+      <ConfirmActionPopup open={confirmOpen} variant="warning"
+        title="Xác nhận thực hiện quyết định?"
+        description={warning || conclusion.trim()}
+        confirmLabel="Xác nhận thực hiện" cancelLabel="Quay lại"
+        busy={busy} onConfirm={executeSubmit} onClose={() => setConfirmOpen(false)} />
     </Dialog>
   );
 }

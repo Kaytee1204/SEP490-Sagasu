@@ -2,14 +2,21 @@ import { useState } from "react";
 import { officeApi } from "../api/officeApi";
 import Notice from "./Notice";
 import Dialog from "./Dialog";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
 export default function ModerationDialog({ post, onClose, onDone }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const hiding = post.moderationStatus !== "HIDDEN";
-  async function submit(e) {
+  function handleFormSubmit(e) {
     e.preventDefault();
+    if (busy || !reason.trim()) return;
+    setError("");
+    setConfirmOpen(true);
+  }
+  async function executeSubmit() {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -19,9 +26,11 @@ export default function ModerationDialog({ post, onClose, onDone }) {
         reason: reason.trim(),
         expectedUpdatedAt: post.updatedAt,
       });
+      setConfirmOpen(false);
       onDone();
     } catch (err) {
       setError(err.message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
@@ -32,7 +41,7 @@ export default function ModerationDialog({ post, onClose, onDone }) {
       busy={busy}
       onClose={onClose}
     >
-      <form className="of-form" onSubmit={submit}>
+      <form className="of-form" onSubmit={handleFormSubmit}>
         <p>
           {hiding
             ? "Bài sẽ không xuất hiện trong danh sách và kết quả tìm kiếm công khai."
@@ -68,6 +77,17 @@ export default function ModerationDialog({ post, onClose, onDone }) {
           </button>
         </div>
       </form>
+      <ConfirmActionPopup
+        open={confirmOpen}
+        variant={hiding ? "danger" : "success"}
+        title={hiding ? "Bạn có chắc chắn ẩn bài đăng?" : "Xác nhận gỡ ẩn bài đăng?"}
+        description={hiding ? `Bài đăng "${post.title}" sẽ bị ẩn khỏi danh sách tìm kiếm công khai.` : `Bài đăng "${post.title}" sẽ hiển thị trở lại cho người dùng.`}
+        confirmLabel={hiding ? "Đồng ý ẩn bài" : "Đồng ý gỡ ẩn"}
+        cancelLabel="Quay lại"
+        busy={busy}
+        onConfirm={executeSubmit}
+        onClose={() => setConfirmOpen(false)}
+      />
     </Dialog>
   );
 }

@@ -1,6 +1,6 @@
 import "../PersonalOffice.css";
 import { useState } from "react";
-import { CalendarDays, CheckCircle2, Package, RefreshCw, XCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, Package, XCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { officeApi } from "../api/officeApi";
 import { workflowApi } from "../api/workflowApi";
@@ -14,6 +14,7 @@ import IntakeScheduleForm from "./IntakeScheduleForm";
 import AppointmentReply from "./AppointmentReply";
 import TransferStage from "./TransferStage";
 import { transferStage } from "../transferStage";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
 const responses = { UNSENT: "Chưa gửi được email", PENDING: "Chờ người giao phản hồi", CONFIRMED: "Người giao đã đồng ý", DECLINED: "Người giao chưa sắp xếp được", EXPIRED: "Chưa phản hồi trong thời hạn" };
 const outcomes = { RECEIVED: "Văn phòng đã nhận đồ", REJECTED: "Yêu cầu đã bị từ chối", CANCELLED: "Yêu cầu đã hủy" };
@@ -26,6 +27,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
   const [checked, setChecked] = useState(false);
   const [files,setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(null);
   const transfer = state.data;
@@ -39,7 +41,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
   const receiving = mode === "receive";
   const change = (key, value) => setForm((old) => ({ ...old, [key]: value }));
   function updated(result) {
-    setMode(null); setError("");setChecked(false);setFiles([]);
+    setMode(null); setError("");setChecked(false);setFiles([]);setConfirmOpen(false);
     setNotice(result === "FAILED" ? { error: true, text: "Đã lưu lịch nhưng chưa gửi được email. Bạn có thể gửi lại bên dưới." } : result === "EXPIRED" ? { text: "Lịch này đã hết hạn phản hồi. Hãy hẹn lại thời gian phù hợp." } : result === "SENT" ? { text: "Đã gửi lịch mang đồ đến qua email." } : { text: "Đã cập nhật yêu cầu." });
     state.reload();onDone();
   }
@@ -47,11 +49,17 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
     if (busy) return;setBusy(true);setError("");
     try { updated(await workflowApi.resendIntake(id)); } catch (failure) { setError(failure.message); } finally { setBusy(false); }
   }
-  async function submit(event) {
-    event.preventDefault(); if (busy || (receiving && (!files.length || !checked))) return;
+  function handleFormSubmit(event) {
+    event.preventDefault();
+    if (busy || (receiving && (!files.length || !checked))) return;
+    setError("");
+    setConfirmOpen(true);
+  }
+  async function executeSubmit() {
+    if (busy || (receiving && (!files.length || !checked))) return;
     setBusy(true);setError("");
     try { await workflowApi.decide(id, { ...form, decision: receiving ? "RECEIVED" : mine ? "CANCELLED" : "REJECTED", locationId: form.locationId ? Number(form.locationId) : null, expectedVersion: transfer.version },files);updated(); }
-    catch (failure) {setError(failure.message);}finally {setBusy(false);}
+    catch (failure) {setError(failure.message); setConfirmOpen(false);}finally {setBusy(false);}
   }
   const Frame=WorkflowPageFrame;
   return <Frame personal={mine} hideBack className={mine ? "" : "of-staff-transfer-detail"} title={mine ? "Gửi đồ đến văn phòng" : officer ? "Yêu cầu tiếp nhận đồ" : "Chi tiết chuyển giao"} onClose={onClose} busy={busy} resetKey={`${transfer?.version}:${mode}`}>
@@ -84,7 +92,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
       {!pending ? <>
         {transfer.reason && <div className="of-reason"><strong>Lý do:</strong><p className="of-prose">{transfer.reason}</p></div>}
         {transfer.reconciliationNote && <p className="of-prose">{transfer.reconciliationNote}</p>}
-        {transfer.receiptId && <p>Phiếu tiếp nhận #{transfer.receiptId} · Văn phòng đang phụ trách đồ vật này.</p>}
+        {transfer.receiptId && <p>Hồ sơ tiếp nhận #{transfer.receiptId} · Văn phòng đang phụ trách đồ vật này.</p>}
         {transfer.receiptId && <section><h3>Ảnh khi văn phòng tiếp nhận</h3>
           {transfer.receiptEvidence?.length ? <div className="of-gallery">{transfer.receiptEvidence.map((url,i)=><a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Ảnh tiếp nhận ${i+1}`} /></a>)}</div> : <p className="of-muted">Phiếu cũ chưa lưu ảnh tiếp nhận riêng.</p>}
         </section>}
@@ -96,12 +104,9 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
         {!a && <p className="of-callout">{mine ? "Văn phòng sẽ hẹn bạn mang đồ đến. Bạn cứ giữ đồ cẩn thận trong lúc chờ nhé." : officer && !self ? "Chưa có lịch. Nếu người giao đã đến quầy, có thể ghi nhận tiếp nhận ngay." : "Văn phòng chưa hẹn ngày mang đồ đến."}</p>}
         <Notice error>{error}</Notice>
         {self && <Notice>Nhờ một nhân viên khác xử lý yêu cầu tiếp nhận của bạn.</Notice>}
-        {!mode && <div className={`of-actions of-actions-wrap${mine ? "" : " of-transfer-taskbar"}`}>
-          {officer && !self && <>
-            {needsSchedule && <button className="of-button of-primary" onClick={() => setMode("schedule")}>{a ? "Sắp xếp lịch mới" : "Hẹn mang đồ đến"}</button>}
-            <button className={`of-button${needsSchedule ? "" : " of-primary"}`} onClick={() => setMode("receive")}>Tiếp nhận tại quầy</button>
-          </>}
-          <button className="of-button" disabled={busy} onClick={() => state.reload()}><RefreshCw size={16} aria-hidden="true" /> Làm mới trạng thái</button>
+        {!mode && (officer && !self) && <div className={`of-actions of-actions-wrap${mine ? "" : " of-transfer-taskbar"}`}>
+          {needsSchedule && <button type="button" className="of-button of-primary" onClick={() => setMode("schedule")}>{a ? "Sắp xếp lịch mới" : "Hẹn mang đồ đến"}</button>}
+          <button type="button" className={`of-button${needsSchedule ? "" : " of-primary"}`} onClick={() => setMode("receive")}>Tiếp nhận tại quầy</button>
         </div>}
         {!mode && (mine || officer && !self) && <details className="of-secondary-actions"><summary>{mine ? "Hủy yêu cầu tiếp nhận" : "Điều chỉnh yêu cầu"}</summary><div className="of-actions of-actions-wrap">
           {mine ? <><p>Chỉ hủy nếu bạn không còn muốn gửi đồ cho văn phòng.</p><button className="of-button of-danger" disabled={busy} onClick={() => setMode("withdraw")}>Hủy yêu cầu</button></> : <>
@@ -111,7 +116,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
           </>}
         </div></details>}
         {mode === "schedule" && <IntakeScheduleForm transfer={transfer} onBusyChange={setBusy} onClose={() => guard(() => setMode(null))} onDone={updated} />}
-        {["receive", "reject", "withdraw"].includes(mode) && <form className="of-form of-intake-form" onSubmit={submit}>
+        {["receive", "reject", "withdraw"].includes(mode) && <form className="of-form of-intake-form" onSubmit={handleFormSubmit}>
           <h3>{receiving ? "Ghi nhận đồ đã nhận" : mine ? "Hủy yêu cầu tiếp nhận" : "Từ chối yêu cầu tiếp nhận"}</h3>
           {receiving && <p className="of-callout">Chỉ xác nhận khi người giao đã mang đồ đến và bạn đã kiểm tra thực tế. Việc hẹn lịch chưa chuyển trách nhiệm giữ đồ.</p>}
           {receiving ? <>
@@ -124,6 +129,17 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
           </> : <label>Lý do *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} placeholder={mine ? "Vì sao bạn muốn hủy yêu cầu?" : "Giải thích ngắn gọn để người giao biết…"} /></label>}
           <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard(() => setMode(null))}>Quay lại</button><button className={`of-button ${receiving ? "of-primary" : "of-danger"}`} disabled={busy || (receiving && (!files.length || !checked))}>{busy ? "Đang lưu…" : receiving ? "Xác nhận đã nhận đồ" : mine ? "Xác nhận hủy yêu cầu" : "Từ chối yêu cầu"}</button></div>
         </form>}
+        <ConfirmActionPopup
+          open={confirmOpen}
+          variant={receiving ? "success" : "danger"}
+          title={receiving ? "Xác nhận đã tiếp nhận đồ?" : mine ? "Bạn có chắc chắn hủy yêu cầu?" : "Từ chối yêu cầu tiếp nhận?"}
+          description={receiving ? `Ghi nhận văn phòng đã trực tiếp nhận món đồ "${transfer.title}" vào kho và tạo hồ sơ tiếp nhận.` : mine ? "Yêu cầu gửi đồ về văn phòng sẽ bị hủy. Bạn có thể gửi lại sau nếu vẫn giữ đồ." : `Yêu cầu tiếp nhận "${transfer.title}" sẽ bị từ chối. Hành động này không thể hoàn tác.`}
+          confirmLabel={receiving ? "Đồng ý tiếp nhận" : mine ? "Xác nhận hủy" : "Xác nhận từ chối"}
+          cancelLabel="Quay lại"
+          busy={busy}
+          onConfirm={executeSubmit}
+          onClose={() => setConfirmOpen(false)}
+        />
       </>}
     </>}</LoadState>
     </>}
