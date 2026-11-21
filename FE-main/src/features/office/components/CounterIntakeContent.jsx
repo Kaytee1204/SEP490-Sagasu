@@ -8,6 +8,7 @@ import WorkflowPageFrame from "./WorkflowPageFrame";
 import Notice from "./Notice";
 import IntakeEvidencePicker from "./IntakeEvidencePicker";
 import LoadState from "./LoadState";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
 export default function CounterIntakeContent({ onClose, onDone }) {
   const [query, setQuery] = useState("");
@@ -19,6 +20,7 @@ export default function CounterIntakeContent({ onClose, onDone }) {
   const [form, setForm] = useState({ locationId: "", condition: "", reconciliationNote: "", physicallyReceived: false });
   const [files,setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [receiptId, setReceiptId] = useState(null);
   const posts = useLoad(() => person ? workflowApi.counterPosts(person.id) : Promise.resolve([]), person?.id);
@@ -35,19 +37,23 @@ export default function CounterIntakeContent({ onClose, onDone }) {
   }, [query, person]);
   function search(value) { setQuery(value); setPeople([]); setSearchError(""); setSearching(value.trim().length >= 2); }
   const change = (key, value) => setForm(old => ({ ...old, [key]: value }));
-  async function submit(e) {
-    e.preventDefault(); if (busy || !files.length) return;
+  function handleFormSubmit(e) {
+    e.preventDefault(); if (busy || !files.length || !form.physicallyReceived) return;
+    setError(""); setConfirmOpen(true);
+  }
+  async function executeSubmit() {
+    if (busy || !files.length) return;
     setBusy(true); setError("");
     try {
       const id = await workflowApi.counterReceive({ ...form, locationId: Number(form.locationId), accountId: person.id, postId: post.id },files);
-      setReceiptId(id); onDone();
-    } catch (failure) { setError(failure.message); }
+      setConfirmOpen(false); setReceiptId(id); onDone();
+    } catch (failure) { setError(failure.message); setConfirmOpen(false); }
     finally { setBusy(false); }
   }
   const Frame=WorkflowPageFrame;
   return <Frame title="Tiếp nhận tại quầy" busy={busy} onClose={onClose} resetKey={receiptId}>
     {({ guard }) => <>
-    {receiptId ? <div className="of-counter-success"><CheckCircle2 size={36} /><h3>Đã tiếp nhận đồ</h3><p>Phiếu #{receiptId} đã được tạo. Văn phòng tiếp tục quản lý bài đăng và các yêu cầu nhận lại đồ liên quan.</p><div className="of-actions"><Link className="of-button of-primary" to={`/approver/receipts/${receiptId}`}>Xem phiếu tiếp nhận</Link><button className="of-button" onClick={() => guard()}>Đóng</button></div></div> : <>
+    {receiptId ? <div className="of-counter-success"><CheckCircle2 size={36} /><h3>Đã tiếp nhận đồ</h3><p>Hồ sơ #{receiptId} đã được tạo. Văn phòng tiếp tục quản lý bài đăng và các yêu cầu nhận lại đồ liên quan.</p><div className="of-actions"><Link className="of-button of-primary" to={`/approver/receipts/${receiptId}`}>Xem hồ sơ tiếp nhận</Link><button className="of-button" onClick={() => guard()}>Đóng</button></div></div> : <>
       <p className="of-muted">Dành cho người mang đến đồ đã có bài đăng. Tìm người đăng, đối chiếu đồ và ghi nhận tiếp nhận tại đây.</p>
       {!person ? <div className="of-form">
         <label>Tên hoặc email người đăng<div className="of-counter-search"><Search size={18} /><input autoFocus value={query} onChange={e => search(e.target.value)} placeholder="Nhập ít nhất 2 ký tự…" autoComplete="off" /></div></label>
@@ -57,8 +63,8 @@ export default function CounterIntakeContent({ onClose, onDone }) {
         <div className="of-counter-options">{people.map(p => <button className="of-counter-option" key={p.id} onClick={() => { setPerson(p); setPost(null); }}><strong>{p.name}</strong><span>{p.email}</span></button>)}</div>
       </div> : <>
         <div className="of-counter-person"><div><strong>{person.name}</strong><p>{person.email}</p></div><button className="of-button" disabled={busy} onClick={() => guard(() => { setPerson(null); setPost(null); setFiles([]); search(query); })}>Đổi người</button></div>
-        {!post ? <LoadState state={posts}><h3>Chọn bài đăng của người giao</h3>{!posts.loading && !posts.data?.length && <p>Người này không còn bài đăng đủ điều kiện tiếp nhận.</p>}<div className="of-counter-options">{posts.data?.map(p => <button className="of-counter-option of-counter-post" key={p.id} onClick={() => { setPost(p); setFiles([]); setError(""); setForm({ locationId: "", condition: "", reconciliationNote: "", physicallyReceived: false }); }}>{p.images[0] ? <img src={p.images[0]} alt="" /> : <Package size={32} />}<span><strong>{p.title}</strong><small>Bài #{p.id}</small></span></button>)}</div></LoadState> : <form className="of-form" onSubmit={submit}>
-          <div className="of-intake-summary"><strong>{post.title}</strong><span>{person.name} ? {person.email}</span><small>Bài #{post.id}</small></div>
+        {!post ? <LoadState state={posts}><h3>Chọn bài đăng của người giao</h3>{!posts.loading && !posts.data?.length && <p>Người này không còn bài đăng đủ điều kiện tiếp nhận.</p>}<div className="of-counter-options">{posts.data?.map(p => <button className="of-counter-option of-counter-post" key={p.id} onClick={() => { setPost(p); setFiles([]); setError(""); setForm({ locationId: "", condition: "", reconciliationNote: "", physicallyReceived: false }); }}>{p.images[0] ? <img src={p.images[0]} alt="" /> : <Package size={32} />}<span><strong>{p.title}</strong><small>Bài #{p.id}</small></span></button>)}</div></LoadState> : <form className="of-form" onSubmit={handleFormSubmit}>
+          <div className="of-intake-summary"><strong>{post.title}</strong><span>{person.name} · {person.email}</span><small>Bài #{post.id}</small></div>
           <details className="of-intake-original"><summary>Ảnh và mô tả bài đăng</summary><p className="of-prose">{post.description}</p><div className="of-gallery">{post.images.map(url => <a href={url} target="_blank" rel="noreferrer" key={url}><img src={url} alt={post.title} /></a>)}</div></details>
           <button type="button" className="of-button" disabled={busy} onClick={() => guard(() => { setPost(null); setFiles([]); })}>Chọn bài khác</button>
           <Notice error>{error || locations.error}</Notice>
@@ -69,6 +75,17 @@ export default function CounterIntakeContent({ onClose, onDone }) {
           <label className="of-check"><input type="checkbox" required disabled={busy} checked={form.physicallyReceived} onChange={e => change("physicallyReceived", e.target.checked)} /><span>Tôi đã đối chiếu người giao với tài khoản trên và trực tiếp nhận, kiểm tra đúng đồ vật.</span></label>
           <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard()}>Để sau</button><button className="of-button of-primary" disabled={busy || !form.physicallyReceived || !files.length}>{busy ? "Đang tiếp nhận…" : "Xác nhận đã nhận đồ"}</button></div>
         </form>}
+        <ConfirmActionPopup
+          open={confirmOpen}
+          variant="success"
+          title="Xác nhận tiếp nhận đồ tại quầy?"
+          description={`Hệ thống sẽ tạo hồ sơ tiếp nhận cho "${post?.title || ''}" và chuyển quyền quản lý bài đăng về văn phòng.`}
+          confirmLabel="Xác nhận tiếp nhận"
+          cancelLabel="Quay lại"
+          busy={busy}
+          onConfirm={executeSubmit}
+          onClose={() => setConfirmOpen(false)}
+        />
       </>}
     </>}
     </>}

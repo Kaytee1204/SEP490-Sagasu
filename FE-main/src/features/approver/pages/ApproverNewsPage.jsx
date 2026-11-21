@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Plus,
   Search,
-  RefreshCw,
+  RotateCcw,
   Newspaper,
   Pencil,
   Trash2,
@@ -11,18 +11,20 @@ import {
   Upload,
   CheckCircle2,
   AlertCircle,
-  Globe,
-  FileEdit,
   Clock3,
   User,
+  Tags,
+  Inbox,
 } from 'lucide-react';
 import Pagination from '@/components/common/Pagination';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import { newsApi } from '@/features/news/api/newsApi';
 import {
   NEWS_CATEGORIES,
   formatNewsFullDate,
   getNewsCategoryMeta,
 } from '@/features/news/utils/newsUtils';
+import '@/features/office/StaffWorkspace.css';
 
 const STATUS_TABS = [
   { key: 'ALL', label: 'Tất cả' },
@@ -241,38 +243,26 @@ export default function ApproverNewsPage() {
   };
 
   const activePreviewImage = coverPreviewUrl || form.existingCoverUrl;
+  const hasActiveFilter = Boolean(searchInput.trim()) || category !== 'ALL' || status !== 'ALL';
+  const resetFilters = () => {
+    setSearchInput('');
+    setKeyword('');
+    setCategory('ALL');
+    setStatus('ALL');
+    setPage(1);
+  };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="mb-1.5 text-sm font-bold tracking-wide text-teal-700">
-            Văn phòng · Truyền thông hệ thống
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Tin tức hệ thống
-          </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
-            Soạn thảo và đăng tải thông báo, cập nhật tính năng hoặc hướng dẫn sử dụng hiển thị trực tiếp trên Trang chủ Sagasu.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800"
-        >
-          <Plus size={18} />
-          Tạo bài tin tức
-        </button>
-      </div>
+    <div className="sw-page">
+      <header className="sw-heading">
+        <h1>Tin tức hệ thống</h1>
+      </header>
 
       {/* Feedback Notice */}
       {notice && (
         <div
           role="status"
-          className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-medium ${
+          className={`mb-5 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-medium ${
             notice.type === 'error'
               ? 'border-rose-200 bg-rose-50 text-rose-700'
               : 'border-emerald-200 bg-emerald-50 text-emerald-800'
@@ -293,237 +283,233 @@ export default function ApproverNewsPage() {
         </div>
       )}
 
-      {/* Main Panel */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {/* Toolbar */}
-        <div className="space-y-4 border-b border-slate-100 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[240px] sm:max-w-md">
-              <Search size={17} className="absolute left-3.5 top-3 text-slate-500" />
-              <input
-                type="search"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                maxLength={200}
-                aria-label="Tìm bài tin tức"
-                placeholder="Tìm tiêu đề hoặc nội dung tóm tắt…"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-              />
-            </div>
+      {/* Card 1: Filter Controls */}
+      <section className="sw-controls" aria-label="Bộ lọc tin tức hệ thống">
+        <div className="sw-controls-top">
+          <label className="sw-search">
+            <Search size={17} aria-hidden="true" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              maxLength={200}
+              aria-label="Tìm bài tin tức"
+              placeholder="Tìm tiêu đề hoặc nội dung tóm tắt…"
+            />
+          </label>
 
-            <select
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setPage(1);
-              }}
-              aria-label="Lọc danh mục"
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-teal-500"
-            >
-              <option value="ALL">Tất cả danh mục</option>
-              {NEWS_CATEGORIES.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => {
-                setLoading(true);
-                triggerReload();
-              }}
-              aria-label="Tải lại danh sách"
-              className="rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-            >
-              <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Lọc trạng thái xuất bản">
-            {STATUS_TABS.map((tab) => {
-              const active = status === tab.key;
-              const count = tabCounts[tab.key];
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => {
-                    setStatus(tab.key);
-                    setPage(1);
-                  }}
-                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition ${
-                    active
-                      ? 'bg-teal-700 text-white'
-                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  {typeof count === 'number' && (
-                    <span
-                      className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-                        active
-                          ? 'bg-white/20 text-white'
-                          : tab.key === 'DRAFT' && count > 0
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-200/80 text-slate-700'
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <button type="button" onClick={openCreateModal} className="sw-primary-btn">
+            <Plus size={16} aria-hidden="true" />
+            Tạo bài tin tức
+          </button>
         </div>
 
-        {/* Table / Empty / Loading */}
-        {loading ? (
-          <div className="p-12 text-center text-sm text-slate-500">Đang tải danh sách bài tin tức…</div>
-        ) : error ? (
-          <div className="p-8 text-center text-sm text-rose-600">
-            <p>{error}</p>
-            <button
-              type="button"
-              onClick={() => {
-                setLoading(true);
-                triggerReload();
-              }}
-              className="mt-3 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Thử lại
-            </button>
-          </div>
-        ) : data.content.length === 0 ? (
-          <div className="flex flex-col items-center px-6 py-16 text-center">
-            <div className="mb-4 rounded-2xl bg-teal-50 p-4 text-teal-600">
-              <Newspaper size={32} strokeWidth={1.6} />
+        <div className="sw-filter-row">
+          <div className="sw-status-group">
+            <span className="sw-filter-label">Trạng thái</span>
+            <div className="sw-status-pills" role="group" aria-label="Lọc trạng thái xuất bản">
+              {STATUS_TABS.map((tab) => {
+                const active = status === tab.key;
+                const count = tabCounts[tab.key];
+                const isWarn = tab.key === 'DRAFT' && typeof count === 'number' && count > 0;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setStatus(tab.key);
+                      setPage(1);
+                    }}
+                    className={`${active ? 'is-active' : ''} ${isWarn ? 'is-warning' : ''}`.trim()}
+                  >
+                    {tab.label}
+                    {typeof count === 'number' ? ` (${count})` : ''}
+                  </button>
+                );
+              })}
             </div>
-            <h2 className="text-base font-bold text-slate-800">Chưa có bài tin tức phù hợp</h2>
-            <p className="mt-1.5 max-w-sm text-sm text-slate-500">
-              Tạo bài viết mới để chia sẻ cập nhật tính năng, quy trình hoặc thông báo mới trên Trang chủ.
-            </p>
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-teal-700 hover:underline"
-            >
-              <Plus size={16} /> Tạo bài tin tức mới
-            </button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3.5">Bài viết</th>
-                  <th className="px-4 py-3.5">Danh mục</th>
-                  <th className="px-4 py-3.5">Trạng thái</th>
-                  <th className="px-4 py-3.5">Cập nhật</th>
-                  <th className="px-5 py-3.5 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.content.map((article) => {
-                  const meta = getNewsCategoryMeta(article.category);
-                  return (
-                    <tr key={article.id} className="hover:bg-slate-50/60">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3.5">
-                          {article.coverImageUrl ? (
-                            <img
-                              src={article.coverImageUrl}
-                              alt=""
-                              className="h-14 w-20 shrink-0 rounded-xl border border-slate-200 object-cover"
-                            />
-                          ) : (
-                            <div
-                              className="flex h-14 w-20 shrink-0 items-center justify-center rounded-xl border border-slate-200/70"
-                              style={{ background: meta.gradient, color: meta.accent }}
-                            >
-                              <Newspaper size={20} />
-                            </div>
-                          )}
-                          <div className="min-w-0 max-w-md">
-                            <p className="truncate font-semibold text-slate-900">{article.title}</p>
-                            <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-500">
-                              {article.summary}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span
-                          className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
-                          style={{ background: meta.softBg, color: meta.accent }}
-                        >
-                          {article.categoryLabel || meta.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        {article.published ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                            <Globe size={12} /> Đang hiển thị
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                            <FileEdit size={12} /> Bản nháp
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-xs text-slate-500">
-                        <div>{formatNewsFullDate(article.updatedAt || article.createdAt)}</div>
-                        <div className="mt-0.5 text-slate-400">{article.authorName}</div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewArticle(article)}
-                            title="Xem trước"
-                            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(article)}
-                            title="Chỉnh sửa"
-                            className="rounded-lg p-2 text-slate-500 hover:bg-teal-50 hover:text-teal-700"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(article)}
-                            title="Xóa bài"
-                            className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
-      {/* Pagination */}
-      {!loading && !error && data.totalElements > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-4 px-1">
-          <p className="text-sm text-slate-500">
-            Hiển thị {(page - 1) * 10 + 1}–{Math.min(page * 10, data.totalElements)} trong {data.totalElements} bài viết
+          <div className="sw-dropdowns">
+            <div className="sw-field">
+              <label htmlFor="sw-news-cat">
+                <Tags size={13} aria-hidden="true" />
+                Danh mục
+              </label>
+              <select
+                id="sw-news-cat"
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="ALL">Tất cả danh mục</option>
+                {NEWS_CATEGORIES.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {hasActiveFilter && (
+              <button type="button" onClick={resetFilters} className="sw-reset-btn">
+                <RotateCcw size={13} aria-hidden="true" />
+                Đặt lại
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Card 2: Table / Empty / Loading */}
+      {loading ? (
+        <div className="sw-empty-card">
+          <p>Đang tải danh sách bài tin tức…</p>
+        </div>
+      ) : error ? (
+        <div className="sw-empty-card">
+          <h3>Không tải được tin tức</h3>
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              triggerReload();
+            }}
+            className="sw-secondary-btn"
+          >
+            Thử lại
+          </button>
+        </div>
+      ) : data.content.length === 0 ? (
+        <div className="sw-empty-card">
+          <Inbox size={32} strokeWidth={1.6} aria-hidden="true" />
+          <h3>
+            {hasActiveFilter ? 'Không tìm thấy bài tin tức phù hợp' : 'Chưa có bài tin tức nào'}
+          </h3>
+          <p>
+            {hasActiveFilter
+              ? 'Thử đổi từ khóa hoặc đặt lại bộ lọc để xem toàn bộ danh sách.'
+              : 'Bài viết mới được tạo sẽ hiển thị tại đây và trên Trang chủ Sagasu.'}
           </p>
-          <Pagination currentPage={page} totalPages={data.totalPages} onPageChange={setPage} />
         </div>
+      ) : (
+        <>
+          <div className="sw-results-bar">
+            <h2>Danh sách bài viết trên Trang chủ</h2>
+            <span className="sw-results-count">
+              {data.content.length} / {data.totalElements} bài viết
+            </span>
+          </div>
+
+          <div className="sw-table-card">
+            <div className="sw-table-head sw-grid-news" aria-hidden="true">
+              <span>Bài viết</span>
+              <span>Danh mục</span>
+              <span>Trạng thái</span>
+              <span>Cập nhật</span>
+              <span style={{ textAlign: 'right' }}>Thao tác</span>
+            </div>
+
+            <div className="sw-table-body">
+              {data.content.map((article) => {
+                const meta = getNewsCategoryMeta(article.category);
+                return (
+                  <article key={article.id} className="sw-table-row sw-grid-news">
+                    <div className="sw-item-cell">
+                      {article.coverImageUrl ? (
+                        <img
+                          src={article.coverImageUrl}
+                          alt=""
+                          className="h-14 w-20 shrink-0 rounded-xl border border-[#dfe9e3] object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-14 w-20 shrink-0 items-center justify-center rounded-xl border border-[#dfe9e3]"
+                          style={{ background: meta.gradient, color: meta.accent }}
+                        >
+                          <Newspaper size={20} />
+                        </div>
+                      )}
+                      <div className="sw-item-text">
+                        <span className="sw-item-title">{article.title}</span>
+                        <span className="line-clamp-1 text-xs text-[#6b8075]">
+                          {article.summary}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span
+                        className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                        style={{ background: meta.softBg, color: meta.accent }}
+                      >
+                        {article.categoryLabel || meta.label}
+                      </span>
+                    </div>
+
+                    <div>
+                      {article.published ? (
+                        <span className="sw-status-pill is-success">
+                          <span className="sw-status-dot" />
+                          Đang hiển thị
+                        </span>
+                      ) : (
+                        <span className="sw-status-pill is-warning">
+                          <span className="sw-status-dot" />
+                          Bản nháp
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="sw-meta-cell">
+                      <span>{formatNewsFullDate(article.updatedAt || article.createdAt)}</span>
+                      <small>{article.authorName}</small>
+                    </div>
+
+                    <div className="sw-action-cell">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewArticle(article)}
+                        title="Xem trước"
+                        className="rounded-lg p-2 text-[#5c7466] hover:bg-[#eef4f0] hover:text-[#173f37]"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(article)}
+                        title="Chỉnh sửa"
+                        className="rounded-lg p-2 text-[#5c7466] hover:bg-[#eef4f0] hover:text-[#1c6b4d]"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(article)}
+                        title="Xóa bài"
+                        className="rounded-lg p-2 text-[#5c7466] hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="sw-pagination">
+            <span>
+              Hiển thị {(page - 1) * 10 + 1}–{Math.min(page * 10, data.totalElements)} trong{' '}
+              {data.totalElements} bài viết
+            </span>
+            <Pagination currentPage={page} totalPages={data.totalPages} onPageChange={setPage} />
+          </div>
+        </>
       )}
 
       {/* Modal: Create / Edit News */}
@@ -775,41 +761,17 @@ export default function ApproverNewsPage() {
       )}
 
       {/* Modal: Delete Confirm */}
-      {deleteTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !deleting) setDeleteTarget(null);
-          }}
-        >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-900">Xóa bài tin tức?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Bài viết <strong>{deleteTarget.title}</strong> sẽ bị xóa vĩnh viễn và không còn hiển thị trên Trang chủ.
-            </p>
-            <div className="mt-5 flex justify-end gap-2.5">
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={handleConfirmDelete}
-                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
-              >
-                {deleting ? 'Đang xóa…' : 'Xác nhận xóa'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmActionPopup
+        open={Boolean(deleteTarget)}
+        variant="danger"
+        title="Xóa bài tin tức?"
+        description={deleteTarget ? `Bài viết "${deleteTarget.title}" sẽ bị xóa vĩnh viễn và không còn hiển thị trên Trang chủ. Hành động này không thể hoàn tác.` : ''}
+        confirmLabel={deleting ? 'Đang xóa…' : 'Xác nhận xóa'}
+        cancelLabel="Hủy bỏ"
+        busy={deleting}
+        onConfirm={handleConfirmDelete}
+        onClose={() => !deleting && setDeleteTarget(null)}
+      />
     </div>
   );
 }

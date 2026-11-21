@@ -4,6 +4,7 @@ import Dialog from "./Dialog";
 import Notice from "./Notice";
 import EvidencePicker from "./EvidencePicker";
 import { workflowApi } from "../api/workflowApi";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
 const titles = {
   verify: "Xác minh người nhận tại quầy", reschedule: "Đổi lịch hẹn nhận đồ",
@@ -15,16 +16,22 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
   const [form, setForm] = useState({ result: "PASSED", note: "", reason: "", condition: "", scheduledAt: "", location: claim.appointment?.location || "" });
   const [files, setFiles] = useState([]);
   const [checked, setChecked] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [requestId] = useState(() => crypto.randomUUID());
   const [saving, setBusy] = useState(false);
   const [imagesProcessing, setImagesProcessing] = useState(false);
   const busy = saving || imagesProcessing;
   const [error, setError] = useState("");
   const change = (key, value) => setForm((old) => ({ ...old, [key]: value }));
-  async function submit(event) {
+  function handleFormSubmit(event) {
     event.preventDefault();
     if (busy) return;
     if (action === "handover" && !files.length) { setError("Thêm ít nhất một ảnh chứng minh việc giao đồ."); return; }
+    setError("");
+    setConfirmOpen(true);
+  }
+  async function executeSubmit() {
+    if (busy) return;
     setBusy(true); setError("");
     try {
       const expectedVersion = action === "complete" ? workflow.handover.version : claim.version;
@@ -33,13 +40,27 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       const result = action === "handover"
         ? await workflowApi.record(claim.id, { expectedVersion, condition: form.condition, clientRequestId: requestId }, files)
         : await workflowApi.action(claim.id, action, body);
+      setConfirmOpen(false);
       onDone(result);
-    } catch (failure) { setError(failure.message || "Chưa lưu được. Hãy thử lại."); }
-    finally { setBusy(false); }
+    } catch (failure) {
+      setError(failure.message || "Chưa lưu được. Hãy thử lại.");
+      setConfirmOpen(false);
+    } finally {
+      setBusy(false);
+    }
   }
+  const confirmMeta = {
+    verify: form.result === "PASSED"
+      ? { variant: "success", title: "Xác nhận kết quả Đạt?", description: `Ghi nhận ${claim.claimantName} đã vượt qua bước đối chiếu trực tiếp tại quầy và đủ điều kiện nhận đồ.`, confirmLabel: "Xác nhận Đạt" }
+      : { variant: "danger", title: "Xác nhận Không đạt & Từ chối?", description: `Yêu cầu #${claim.id} sẽ bị từ chối và lịch hẹn bị hủy. Người này sẽ không thể gửi lại yêu cầu cho món đồ này.`, confirmLabel: "Từ chối nhận đồ" },
+    reschedule: { variant: "info", title: "Xác nhận đổi lịch hẹn?", description: "Lịch hẹn cũ sẽ hết hiệu lực và hệ thống sẽ gửi email mời người nhận xác nhận lịch mới.", confirmLabel: "Đồng ý đổi lịch" },
+    cancel: { variant: "danger", title: "Hủy lịch & thu hồi duyệt?", description: `Lịch hẹn của yêu cầu #${claim.id} sẽ bị hủy và hồ sơ chuyển sang từ chối. Hành động này không thể hoàn tác.`, confirmLabel: "Xác nhận hủy" },
+    handover: { variant: "success", title: "Xác nhận hoàn tất trao trả?", description: `Món đồ sẽ được ghi nhận đã bàn giao cho ${claim.claimantName}, xuất khỏi kho và đóng các yêu cầu đang chờ.`, confirmLabel: "Hoàn tất trao trả" },
+    complete: { variant: "success", title: "Xác nhận hoàn tất biên bản?", description: "Xác nhận văn phòng đã giao đúng và đủ đồ cho người nhận theo biên bản.", confirmLabel: "Xác nhận hoàn tất" },
+  }[action] || { variant: "warning", title: "Bạn có chắc chắn?", description: "Xác nhận thực hiện thao tác xử lý hồ sơ này.", confirmLabel: "Xác nhận" };
   return <Dialog title={titles[action]} busy={busy} onClose={onClose}>
     {({ guard }) => <>
-    <form className="of-form" onSubmit={submit}>
+    <form className="of-form" onSubmit={handleFormSubmit}>
       <Notice error>{error}</Notice>
       <p className="of-muted">Hồ sơ #{claim.id} · {claim.postTitle}</p>
       {action === "verify" && <>
@@ -65,6 +86,17 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       {["handover", "complete"].includes(action) && <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi xác nhận văn phòng đã giao đúng và đủ đồ cho người nhận đã được xác minh.</span></label>}
       <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard()}>Để sau</button><button className={`of-button ${action === "cancel" ? "of-danger" : "of-primary"}`} disabled={busy}>{busy ? "Đang lưu…" : titles[action]}</button></div>
     </form>
+    <ConfirmActionPopup
+      open={confirmOpen}
+      variant={confirmMeta.variant}
+      title={confirmMeta.title}
+      description={confirmMeta.description}
+      confirmLabel={confirmMeta.confirmLabel}
+      cancelLabel="Quay lại"
+      busy={busy}
+      onConfirm={executeSubmit}
+      onClose={() => setConfirmOpen(false)}
+    />
     </>}
   </Dialog>;
 }

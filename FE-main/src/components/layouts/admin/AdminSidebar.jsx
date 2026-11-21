@@ -1,165 +1,172 @@
 // src/components/layouts/admin/AdminSidebar.jsx
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowUpRight, ChevronDown, LogOut, X } from 'lucide-react';
+import { LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { ADMIN_NAV_SECTIONS } from './adminNavConfig';
 import { useAuth } from '@/context/AuthContext';
+import './AdminSidebar.css';
 
-export default function AdminSidebar({ pendingReportsCount = 0, navBadges = {}, isOpen = false, onClose = () => {} }) {
+const STORAGE_KEY = 'sagasu_admin_sidebar_collapsed';
+
+function formatBadgeCount(count) {
+  if (!count || count <= 0) return '';
+  return count > 99 ? '99+' : String(count);
+}
+
+export default function AdminSidebar({ pendingReportsCount = 0, navBadges = {} }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
 
   const isItemActive = (path, exact) => {
     if (exact) return location.pathname === path;
     return location.pathname.startsWith(path);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     await logout();
-    navigate('/dang-nhap');
+    navigate('/dang-nhap', { replace: true });
   };
 
-  const displayName = String(user?.fullName || user?.email || 'Quản trị viên').replace(/\s*\((Manager|Admin|Approver|Staff)\)/gi, '').trim();
   const rawRole = user?.role ? String(user.role).toUpperCase() : 'ADMIN';
-  const displayRole = rawRole === 'APPROVER' ? 'STAFF' : rawRole;
-  const avatarSrc = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
+  const roleHeading = rawRole === 'APPROVER' ? 'Staff' : rawRole === 'MANAGER' ? 'Quản lý' : 'Quản trị';
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full bg-[#1c2836] text-[#f8fafc] border-r border-white/10 select-none">
-      {/* Brand Header */}
-      <div className="p-4 px-5 border-b border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center text-white font-extrabold text-base shadow-md shadow-teal-500/20">
-            S
-          </div>
-          <div>
-            <div className="font-extrabold text-base tracking-tight text-white leading-tight">Sagasu</div>
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-teal-300 tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-              {displayRole} Dashboard
-            </div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="lg:hidden p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-6">
-        {ADMIN_NAV_SECTIONS.filter(section => section.items.some(item => !item.roles || item.roles.includes(user?.role))).map((section) => (
-          <div key={section.title} className="space-y-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-1">
-              {section.title}
-            </div>
-            {section.items.filter((item) => !item.roles || item.roles.includes(user?.role)).map((item) => {
-              const active = isItemActive(item.path, item.exact);
-              const Icon = item.icon;
-              const badgeCount = item.badgeKey
-                ? (navBadges[item.badgeKey] ?? (item.badgeKey === 'pendingReports' ? pendingReportsCount : 0))
-                : 0;
-              const hasBadge = badgeCount > 0;
-              const badgeToneClass =
-                item.badgeTone === 'danger'
-                  ? 'bg-rose-500 text-white'
-                  : item.badgeTone === 'warning'
-                    ? 'bg-amber-500 text-slate-950'
-                    : 'bg-slate-700 text-slate-200';
-              return (
-                <div key={item.path}>
-                <Link
-                  to={item.path}
-                  onClick={onClose}
-                  className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    active
-                      ? 'bg-teal-500/15 text-teal-300 font-semibold border border-teal-500/30'
-                      : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon size={17} className={active ? 'text-teal-400' : 'text-slate-400'} />
-                    {/* DaiHV: allow the office intake label to wrap instead of hiding its meaning. */}
-                    <span className={item.wrapLabel ? 'whitespace-normal leading-5' : 'truncate'}>{item.label}</span>
-                  </div>
-                  {(hasBadge || item.children) && <div className="flex shrink-0 items-center gap-1.5">
-                    {hasBadge && <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full min-w-5 text-center ${badgeToneClass}`}>
-                      {badgeCount > 99 ? '99+' : badgeCount}
-                    </span>}
-                    {item.children && <ChevronDown size={13} className={active ? "" : "-rotate-90"} aria-hidden="true" />}
-                  </div>}
-                </Link>
-                {active && item.children && <ul className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-2">
-                  {item.children.map(child => {
-                    const detailKind = new URLSearchParams(location.search).get("kind");
-                    const selected = location.pathname === child.path || (
-                      /^\/admin\/reports\/\d+$/.test(location.pathname) && detailKind === child.kind
-                    );
-                    const count = navBadges.reportQueues?.[child.kind] || 0;
-                    return <li key={child.kind}>
-                      <Link to={child.path} onClick={onClose} aria-current={selected ? "page" : undefined}
-                        className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm ${selected
-                          ? "bg-teal-500/15 font-semibold text-teal-300"
-                          : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
-                        <span>{child.label}</span>
-                        {count > 0 && <span className="shrink-0 rounded-full bg-slate-700 px-1.5 text-xs text-slate-100" title={`${count} hồ sơ cần xử lý`}>
-                          {count > 99 ? "99+" : count}
-                        </span>}
-                      </Link>
-                    </li>;
-                  })}
-                </ul>}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-
-      {/* Bottom Profile */}
-      <div className="p-3 border-t border-white/10 bg-black/20 space-y-2">
-        <Link
-          to="/"
-          className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
-        >
-          <span>Về trang người dùng</span>
-          <ArrowUpRight size={14} />
-        </Link>
-        <div className="flex items-center gap-3 px-2 py-1.5">
-          <img
-            src={avatarSrc}
-            alt={displayName}
-            className="w-8 h-8 rounded-full border border-teal-400 object-cover"
-          />
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white truncate">{displayName}</div>
-            <div className="text-[11px] text-teal-300 font-semibold">{displayRole}</div>
-          </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="p-1.5 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-            title="Đăng xuất"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
-      </div>
-    </div>
+  const visibleSections = ADMIN_NAV_SECTIONS.filter((section) =>
+    section.items.some((item) => !item.roles || item.roles.includes(user?.role)),
   );
+  const showSectionHeadings = visibleSections.length > 1;
 
   return (
-    <>
-      <aside className="hidden lg:block w-64 h-screen sticky top-0 shrink-0 z-30">{sidebarContent}</aside>
-      {isOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10">{sidebarContent}</div>
+    <aside
+      className={`admin-sidebar ${collapsed ? 'is-collapsed' : ''}`}
+      aria-label={`Điều hướng ${roleHeading}`}
+    >
+      <div className="admin-sidebar-upper">
+        {/* Top Heading + Collapse Toggle */}
+        <div className="admin-sidebar-top">
+          {!collapsed && <span className="admin-sidebar-role-heading">{roleHeading}</span>}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="admin-sidebar-toggle"
+            aria-label={collapsed ? 'Mở thanh điều hướng bên trái' : 'Thu gọn thanh điều hướng bên trái'}
+            title={collapsed ? 'Mở thanh bên trái' : 'Thu gọn thanh bên trái'}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
         </div>
-      )}
-    </>
+
+        {/* Role Navigation */}
+        <nav className="admin-sidebar-nav" aria-label={`Điều hướng ${roleHeading}`}>
+          {visibleSections.map((section, sectionIdx) => (
+            <div key={section.title} className="admin-sidebar-section">
+              {!collapsed && showSectionHeadings && (
+                <div className="admin-sidebar-heading">{section.title}</div>
+              )}
+              {collapsed && sectionIdx > 0 && (
+                <div className="admin-sidebar-section-sep" aria-hidden="true" />
+              )}
+
+              {section.items
+                .filter((item) => !item.roles || item.roles.includes(user?.role))
+                .map((item) => {
+                  const active = isItemActive(item.path, item.exact);
+                  const Icon = item.icon;
+                  const badgeCount = item.badgeKey
+                    ? (navBadges[item.badgeKey] ?? (item.badgeKey === 'pendingReports' ? pendingReportsCount : 0))
+                    : 0;
+                  const badgeText = formatBadgeCount(badgeCount);
+                  const tone =
+                    item.badgeTone === 'danger'
+                      ? 'danger'
+                      : item.badgeTone === 'warning'
+                        ? 'warning'
+                        : 'neutral';
+
+                  return (
+                    <div key={item.path}>
+                    <Link
+                      to={item.path}
+                      title={collapsed ? (badgeText ? `${item.label} (${badgeText})` : item.label) : undefined}
+                      aria-label={badgeText ? `${item.label} (${badgeText})` : item.label}
+                      className={`admin-sidebar-link ${active ? 'is-active' : ''}`}
+                    >
+                      <Icon size={19} strokeWidth={1.85} aria-hidden="true" />
+                      {!collapsed && (
+                        <span className={`admin-sidebar-label ${item.wrapLabel ? 'is-wrap' : ''}`}>
+                          {item.label}
+                        </span>
+                      )}
+                      {badgeText && (
+                        <span className={`admin-sidebar-badge is-${tone}`} aria-hidden="true">
+                          {badgeText}
+                        </span>
+                      )}
+                    </Link>
+                    {active && !collapsed && item.children && (
+                      <ul className="admin-sidebar-children">
+                        {item.children.map(child => {
+                          const selected = location.pathname === child.path || (
+                            /^\/admin\/reports\/\d+$/.test(location.pathname) &&
+                            new URLSearchParams(location.search).get('kind') === child.kind
+                          );
+                          const count = formatBadgeCount(navBadges.reportQueues?.[child.kind]);
+                          return <li key={child.kind}>
+                            <Link to={child.path} aria-current={selected ? 'page' : undefined}
+                              className={`admin-sidebar-link ${selected ? 'is-active' : ''}`}>
+                              <span className="admin-sidebar-label is-wrap">{child.label}</span>
+                              {count && <span className="admin-sidebar-badge is-neutral" title={`${count} hồ sơ cần xử lý`}>{count}</span>}
+                            </Link>
+                          </li>;
+                        })}
+                      </ul>
+                    )}
+                    </div>
+                  );
+                })}
+            </div>
+          ))}
+        </nav>
+
+        {!collapsed && <div className="admin-sidebar-divider" aria-hidden="true" />}
+      </div>
+
+      {/* Clean Profile-style Footer (Logout) */}
+      <div className="admin-sidebar-footer">
+        <button
+          type="button"
+          className="admin-sidebar-logout"
+          onClick={handleLogout}
+          title={collapsed ? 'Đăng xuất' : undefined}
+          aria-label="Đăng xuất"
+        >
+          <LogOut size={19} strokeWidth={1.85} aria-hidden="true" />
+          {!collapsed && <span>Đăng xuất</span>}
+        </button>
+      </div>
+    </aside>
   );
 }

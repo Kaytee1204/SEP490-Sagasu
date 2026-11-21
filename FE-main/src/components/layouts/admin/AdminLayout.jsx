@@ -2,13 +2,16 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
-import AdminHeader from './AdminHeader';
+import Navbar from '@/components/layouts/Navbar';
+import Footer from '@/components/layouts/Footer';
+import ChatProvider from '@/features/chat/context/ChatProvider';
 import { useAuth } from '@/context/AuthContext';
 import { reviewApi } from '@/features/report-review/api';
 import { officeApi } from '@/features/office/api/officeApi';
 import { workflowApi } from '@/features/office/api/workflowApi';
 import { approverApi } from '@/features/approver/api/approverApi';
 import { newsApi } from '@/features/news/api/newsApi';
+import './AdminSidebar.css';
 
 function readTotal(settled) {
   if (settled?.status !== 'fulfilled') return 0;
@@ -16,10 +19,15 @@ function readTotal(settled) {
 }
 
 export default function AdminLayout() {
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { user } = useAuth();
   const location = useLocation();
   const [navBadges, setNavBadges] = useState({});
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location.pathname]);
 
   useEffect(() => {
     let active = true;
@@ -77,22 +85,20 @@ export default function AdminLayout() {
   const pendingReportsCount = navBadges.pendingReports || 0;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <AdminSidebar
-        pendingReportsCount={pendingReportsCount}
-        navBadges={navBadges}
-        isOpen={isMobileOpen}
-        onClose={() => setIsMobileOpen(false)}
-      />
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <AdminHeader
-          pendingReportsCount={pendingReportsCount}
-          onMenuClick={() => setIsMobileOpen(true)}
-        />
-        <div className="flex-1 overflow-y-auto">
-          <Outlet />
+    <ChatProvider key={user?.id || 'anonymous'}>
+      <div className="min-h-screen flex flex-col bg-[#f8f9fc] text-[var(--text-primary)] font-sans">
+        <Navbar />
+        <div className="admin-shell flex-1">
+          <AdminSidebar
+            pendingReportsCount={pendingReportsCount}
+            navBadges={navBadges}
+          />
+          <main className="admin-main">
+            <Outlet />
+          </main>
         </div>
-      </main>
-    </div>
+        <Footer />
+      </div>
+    </ChatProvider>
   );
 }

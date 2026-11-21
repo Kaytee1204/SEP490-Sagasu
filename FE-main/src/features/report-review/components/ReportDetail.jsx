@@ -5,6 +5,7 @@ import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
 import { date, labels } from "../format";
 import ContextPanel from "./ContextPanel";
 import DecisionDialog from "./DecisionDialog";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
 import AppealEvidenceComparison from "./AppealEvidenceComparison";
@@ -208,6 +209,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
   const [tab, setTab] = useState(showConversation ? "inquiries" : "overview");
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [action, setAction] = useState(null);
+  const [confirmTake, setConfirmTake] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const { data, error, setData, setError } = useReviewResource("detail", id, refresh);
@@ -221,6 +223,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
       setError(error.message);
     } finally {
       setBusy(false);
+      setConfirmTake(false);
     }
   }
 
@@ -276,9 +279,19 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
           </div>}
           {tab === "history" && <HistoryPanel history={data.history} decisions={data.decisions} />}
         </div>
-        <ProcessingPanel data={data} busy={busy} take={take} onAsk={() => { setTab("inquiries"); setInquiryOpen(true); }} onAction={setAction} />
+        <ProcessingPanel data={data} busy={busy} take={() => setConfirmTake(true)} onAsk={() => { setTab("inquiries"); setInquiryOpen(true); }} onAction={setAction} />
       </div>
       {action && <DecisionDialog key={action} action={action} data={data} onClose={() => setAction(null)} onSaved={setData} />}
+      <ConfirmActionPopup
+        open={confirmTake}
+        variant="info"
+        title="Nhận xử lý báo cáo này?"
+        description={`Báo cáo #${report.report_id} sẽ được phân công cho bạn để yêu cầu thông tin bổ sung và đưa ra kết luận.`}
+        confirmLabel="Nhận xử lý"
+        busy={busy}
+        onConfirm={take}
+        onClose={() => setConfirmTake(false)}
+      />
     </>}
   </>;
 }

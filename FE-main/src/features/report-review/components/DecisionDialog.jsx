@@ -2,6 +2,7 @@ import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
 import { labels } from "../format";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 const warnings = {
   REQUEST_POST_CORRECTION: "Người đăng sẽ nhận yêu cầu chỉnh sửa và có thể xem hướng dẫn trong hồ sơ.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
@@ -38,6 +39,7 @@ const batchActions = ["RESOLVE", "DISMISS", ...Object.keys(findings)];
 export default function DecisionDialog({ action, data, onClose, onSaved }) {
   const [selected, setSelected] = useState([]);
   const [sameIncident, setSameIncident] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const structured = action === "CONCLUDE_VIOLATION";
   const [finding, setFinding] = useState("");
   const [measure, setMeasure] = useState("");
@@ -66,9 +68,14 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
     setSameIncident(false);
   }
 
-  async function submit(e) {
+  function submit(e) {
     e.preventDefault();
     if (busy || !decision || (isRecoveryRequest && !holder)) return;
+    setConfirmOpen(true);
+  }
+
+  async function executeSubmit() {
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
@@ -94,9 +101,10 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
       setError(e.message);
     } finally {
       setBusy(false);
+      setConfirmOpen(false);
     }
   }
-  return (
+  return (<>
     <Dialog title={structured ? "Ghi kết luận vi phạm" : labels[action]} busy={busy} onClose={onClose}>
       <form onSubmit={submit} className="rr-stack rr-decision-form">
         {structured && <>
@@ -201,5 +209,16 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
         </footer>
       </form>
     </Dialog>
-  );
+    <ConfirmActionPopup
+        open={confirmOpen}
+        variant={["HIDE_POST", "SUSPEND_ACCOUNT", "CLAIM_VIOLATION_REJECT"].includes(effect) ? "danger" : ["HANDOVER_COMPLETED", "RESOLVE"].includes(effect) ? "success" : "warning"}
+        title={`Xác nhận: ${findings[decision] || labels[decision]}?`}
+        description={warning}
+        confirmLabel="Xác nhận thực hiện"
+        cancelLabel="Quay lại"
+        busy={busy}
+        onConfirm={executeSubmit}
+        onClose={() => setConfirmOpen(false)}
+    />
+  </>);
 }

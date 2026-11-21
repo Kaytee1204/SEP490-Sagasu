@@ -4,9 +4,11 @@ import { CalendarDays } from "lucide-react";
 import { officeApi } from "../api/officeApi";
 import Notice from "./Notice";
 import RequestedInformation from "./RequestedInformation";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
 export default function ReviewForm({ claim, onDone }) {
   const [ending, setEnding] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [form, setForm] = useState({
     decision: claim.status === "NEEDS_INFO" ? "REJECTED" : "APPROVED",
     reason: "",
@@ -26,8 +28,13 @@ export default function ReviewForm({ claim, onDone }) {
       <button type="button" className="of-button of-danger" onClick={() => setEnding(true)}>Từ chối yêu cầu…</button>
     </details>
   </section>;
-  async function submit(e) {
+  function handleFormSubmit(e) {
     e.preventDefault();
+    if (busy || !form.reason.trim()) return;
+    setError("");
+    setConfirmOpen(true);
+  }
+  async function executeSubmit() {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -41,17 +48,40 @@ export default function ReviewForm({ claim, onDone }) {
             ? `${form.scheduledAt}:00+07:00`
             : null,
       });
+      setConfirmOpen(false);
       onDone(r);
     } catch (err) {
       setError(err.message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
   }
+  const confirmMeta =
+    form.decision === "APPROVED"
+      ? {
+          variant: "success",
+          title: "Xác nhận duyệt & hẹn nhận đồ?",
+          description: `Bạn sắp duyệt yêu cầu #${claim.id} của ${claim.claimantName} và gửi email lịch hẹn nhận đồ. Hãy chắc chắn đã đối chiếu kỹ căn cứ sở hữu.`,
+          confirmLabel: "Đồng ý duyệt",
+        }
+      : form.decision === "REJECTED"
+        ? {
+            variant: "danger",
+            title: "Bạn có chắc chắn từ chối?",
+            description: `Yêu cầu nhận đồ #${claim.id} của ${claim.claimantName} sẽ bị từ chối. Hành động này không thể hoàn tác.`,
+            confirmLabel: "Xác nhận từ chối",
+          }
+        : {
+            variant: "info",
+            title: "Gửi yêu cầu bổ sung thông tin?",
+            description: `Hồ sơ #${claim.id} sẽ chuyển sang trạng thái chờ ${claim.claimantName} phản hồi bổ sung căn cứ.`,
+            confirmLabel: "Gửi yêu cầu",
+          };
   return (
     <section className="of-panel">
       <h2>Xét duyệt yêu cầu</h2>
-      <form className="of-form" onSubmit={submit}>
+      <form className="of-form" onSubmit={handleFormSubmit}>
         <Notice error>{error}</Notice>
         <label>
           Quyết định
@@ -156,6 +186,17 @@ export default function ReviewForm({ claim, onDone }) {
         </button>
         {ending && <button type="button" className="of-button" disabled={busy} onClick={() => setEnding(false)}>Tiếp tục chờ bổ sung</button>}
       </form>
+      <ConfirmActionPopup
+        open={confirmOpen}
+        variant={confirmMeta.variant}
+        title={confirmMeta.title}
+        description={confirmMeta.description}
+        confirmLabel={confirmMeta.confirmLabel}
+        cancelLabel="Quay lại"
+        busy={busy}
+        onConfirm={executeSubmit}
+        onClose={() => setConfirmOpen(false)}
+      />
     </section>
   );
 }
