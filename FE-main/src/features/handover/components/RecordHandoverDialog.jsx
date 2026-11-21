@@ -5,6 +5,7 @@ import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 
 export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const dialog = useRef(null);
@@ -14,6 +15,7 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const [note, setNote] = useState('');
   const [files, setFiles] = useState([]);
   const [confirmed, setConfirmed] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setBusy] = useState(false);
   const { prepare, processing } = useImageUploads();
   const busy = submitting || processing;
@@ -55,8 +57,14 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
     } catch (problem) { setError(problem.message); }
   }
 
-  async function submit(event) {
+  function handleFormSubmit(event) {
     event.preventDefault();
+    if (busy || sending.current || !confirmed) return;
+    setError('');
+    setConfirmOpen(true);
+  }
+
+  async function executeSubmit() {
     if (busy || sending.current || !confirmed) return;
     sending.current = true;
     setBusy(true);
@@ -67,11 +75,13 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
       result = await uploadHandover(claim.id, request.current, files);
     } catch (problem) {
       setError(problem.message || 'Chưa thể ghi nhận giao đồ. Vui lòng thử lại.');
+      setConfirmOpen(false);
       return;
     } finally {
       sending.current = false;
       setBusy(false);
     }
+    setConfirmOpen(false);
     onRecorded(result);
   }
 
@@ -79,7 +89,7 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
     onCancel={event => { event.preventDefault(); close(); }}>
     <header><h2 id={titleId}>Ghi nhận đã giao đồ</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
-    <form onSubmit={submit}>
+    <form onSubmit={handleFormSubmit}>
       <div className="handover-record-context"><strong>{claim.postTitle}</strong><p>Người nhận: {claim.claimantName}</p></div>
       <p>Sau khi ghi nhận, người nhận cần xác nhận đã nhận đúng đồ. Ghi nhận giao đồ không thể sửa hoặc rút lại.</p>
       <label className="handover-record-field">Ghi chú (tùy chọn)
@@ -103,5 +113,16 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
         : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
           <button type="submit" className="btn btn-accent" disabled={busy || !confirmed}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>}
     </form>
+    <ConfirmActionPopup
+      open={confirmOpen}
+      variant="success"
+      title="Xác nhận đã giao đồ?"
+      description={`Bạn xác nhận đã bàn giao "${claim.postTitle}" cho ${claim.claimantName}. Thao tác này không thể rút lại.`}
+      confirmLabel="Đã giao đồ"
+      cancelLabel="Quay lại"
+      busy={busy}
+      onConfirm={executeSubmit}
+      onClose={() => setConfirmOpen(false)}
+    />
   </dialog>;
 }

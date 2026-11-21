@@ -129,8 +129,8 @@ function ReceiptEditor({ receipt, categories, locations }) {
 
   const complete = [!!form.title.trim(), !!form.categoryId, !!form.description.trim(), !!form.conditionAtReceipt.trim(), !!form.foundLocation.trim(), !!form.foundAt, kept.length + files.length > 0].filter(Boolean).length;
   return <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
-    <Link to={receipt ? `/approver/receipts/${receipt.id}` : '/approver/receipts'} className="mb-5 inline-flex items-center gap-2 text-base font-medium text-slate-600 hover:text-teal-700"><ArrowLeft size={16} />{receipt ? 'Về chi tiết phiếu' : 'Phiếu tiếp nhận'}</Link>
-    <div className="mb-6"><p className="mb-2 text-sm font-bold tracking-wide text-teal-700">Tiếp nhận tại văn phòng</p><h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">{receipt ? 'Hoàn thiện phiếu nháp' : 'Lập phiếu tiếp nhận'}</h1><p className="mt-2 text-base leading-6 text-slate-600">Ghi nhận tài sản đã được mang đến văn phòng. Lưu nháp, xem lại thông tin và xác nhận tiếp nhận để đăng bài.</p></div>
+    <Link to={receipt ? `/approver/receipts/${receipt.id}` : '/approver/receipts'} className="mb-5 inline-flex items-center gap-2 text-base font-medium text-slate-600 hover:text-teal-700"><ArrowLeft size={16} />{receipt ? 'Về chi tiết hồ sơ' : 'Hồ sơ tiếp nhận'}</Link>
+    <div className="mb-6"><p className="mb-2 text-sm font-bold tracking-wide text-teal-700">Tiếp nhận tại văn phòng</p><h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">{receipt ? 'Hoàn thiện hồ sơ nháp' : 'Lập hồ sơ tiếp nhận'}</h1><p className="mt-2 text-base leading-6 text-slate-600">Ghi nhận tài sản đã được mang đến văn phòng. Lưu nháp, xem lại thông tin và xác nhận tiếp nhận để đăng bài.</p></div>
     <form ref={formElement} onSubmit={save} noValidate>
       <fieldset disabled={busy} className="min-w-0">
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -172,8 +172,8 @@ export default function IntakeFormPage() {
   const { id } = useParams();
   const loaded = useReceipt(id, true, approverApi);
   if (loaded.loading) return <ReceiptLoading />;
-  if (loaded.error) return <div className="mx-auto max-w-3xl space-y-4 p-6"><Link to="/approver/receipts" className="text-base text-teal-700">← Phiếu tiếp nhận</Link><ReceiptError message={loaded.error} onRetry={loaded.reload} /></div>;
-  if (loaded.receipt && !loaded.receipt.canProcess) return <div className="mx-auto max-w-3xl space-y-4 p-6"><ReceiptError message="Phiếu này đã chuyển xử lý và không còn được chỉnh sửa." /><Link to={`/approver/receipts/${id}`} className="text-base font-semibold text-teal-700">Xem chi tiết phiếu →</Link></div>;
-  if (!loaded.categories.length) return <div className="mx-auto max-w-3xl space-y-4 p-6"><Link to="/approver/receipts" className="text-base text-teal-700">← Phiếu tiếp nhận</Link><ReceiptError message="Chưa có danh mục đang hoạt động. Vui lòng liên hệ người quản lý để bổ sung danh mục." onRetry={loaded.reload} /></div>;
+  if (loaded.error) return <div className="mx-auto max-w-3xl space-y-4 p-6"><Link to="/approver/receipts" className="text-base text-teal-700">← Hồ sơ tiếp nhận</Link><ReceiptError message={loaded.error} onRetry={loaded.reload} /></div>;
+  if (loaded.receipt && !loaded.receipt.canProcess) return <div className="mx-auto max-w-3xl space-y-4 p-6"><ReceiptError message="Hồ sơ này đã chuyển xử lý và không còn được chỉnh sửa." /><Link to={`/approver/receipts/${id}`} className="text-base font-semibold text-teal-700">Xem chi tiết hồ sơ →</Link></div>;
+  if (!loaded.categories.length) return <div className="mx-auto max-w-3xl space-y-4 p-6"><Link to="/approver/receipts" className="text-base text-teal-700">← Hồ sơ tiếp nhận</Link><ReceiptError message="Chưa có danh mục đang hoạt động. Vui lòng liên hệ người quản lý để bổ sung danh mục." onRetry={loaded.reload} /></div>;
   return <ReceiptEditor key={`${id || 'new'}:${loaded.receipt?.updatedAt || ''}`} receipt={loaded.receipt} categories={loaded.categories} locations={loaded.locations || []} />;
 }

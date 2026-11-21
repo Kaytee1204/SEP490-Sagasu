@@ -188,9 +188,6 @@ export function useAccountDashboard() {
   };
 
   const handleSoftDelete = async (account) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa mềm tài khoản #${account.id} (${account.email})?`)) {
-      return;
-    }
     try {
       await accountApi.softDeleteAccount(account.id);
       showToast(`Đã xóa mềm tài khoản #${account.id} (${account.email})`);

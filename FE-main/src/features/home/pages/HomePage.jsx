@@ -34,25 +34,25 @@ const PROCESS_STEPS = [
   {
     code: 'BƯỚC 01',
     title: 'Đăng thông tin',
-    desc: 'Tải ảnh, nhập thời gian và vị trí ước tính một cách nhanh chóng.',
+    desc: 'Tải ảnh, vị trí và thời gian.',
     icon: UploadCloud,
   },
   {
     code: 'BƯỚC 02',
     title: 'AI so khớp',
-    desc: 'Hệ thống tự động đối chiếu hình ảnh và thông tin bài đăng liên quan.',
+    desc: 'Tự động gợi ý bài đăng phù hợp.',
     icon: Cpu,
   },
   {
     code: 'BƯỚC 03',
     title: 'Xác minh bí mật',
-    desc: 'Chủ nhân trả lời các câu hỏi đặc trưng để xác minh quyền sở hữu an toàn.',
+    desc: 'Trả lời câu hỏi xác nhận chủ sở hữu.',
     icon: ShieldCheck,
   },
   {
     code: 'BƯỚC 04',
     title: 'Trao trả an toàn',
-    desc: 'Hẹn gặp tại điểm tiếp nhận trong trường hoặc nhận trực tiếp tại Văn phòng.',
+    desc: 'Hẹn gặp trực tiếp hoặc tại Văn phòng.',
     icon: Handshake,
   },
 ];
@@ -60,28 +60,28 @@ const PROCESS_STEPS = [
 const UTILITY_CARDS = [
   {
     title: 'Tìm đồ thất lạc',
-    desc: 'Tìm kiếm đồ thất lạc bằng từ khóa hoặc bộ lọc',
+    desc: 'Lọc nhanh theo từ khóa',
     to: '/tim-kiem',
     icon: Search,
     tone: 'indigo',
   },
   {
     title: 'Đăng bài tìm đồ',
-    desc: 'Đăng bài tìm đồ nhanh chóng',
+    desc: 'Tạo tin báo mất đồ',
     to: '/dang-tin',
     icon: Plus,
     tone: 'mint',
   },
   {
     title: 'Đăng bài nhặt được',
-    desc: 'Chia sẻ đồ nhặt được để trả lại chủ nhân',
+    desc: 'Chia sẻ đồ vừa nhặt',
     to: '/dang-tin-nhat-duoc',
     icon: Box,
     tone: 'sky',
   },
   {
     title: 'Xem báo cáo',
-    desc: 'Theo dõi tình trạng các yêu cầu của bạn',
+    desc: 'Theo dõi phản ánh',
     to: '/bao-cao-cua-toi',
     icon: FileText,
     tone: 'slate',
@@ -127,7 +127,7 @@ export default function HomePage() {
   const [showAllNews, setShowAllNews] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
 
-  const orgName = user?.organizationName || user?.unitName || 'Trường Đại học FPT';
+  const orgName = user?.organizationName || user?.unitName || 'Trường Đại học Sakura';
 
   useEffect(() => {
     let active = true;
@@ -194,8 +194,7 @@ export default function HomePage() {
               tìm lại những điều quan trọng
             </h1>
             <p className="home-v2-hero-desc">
-              Cùng Sagasu xây dựng một môi trường văn minh, giúp đỡ nhau tìm và trả lại đồ thất lạc tại{' '}
-              {orgName}.
+              Tìm lại và trao trả đồ thất lạc nhanh chóng tại {orgName}.
             </p>
 
             <form className="home-v2-search" onSubmit={handleSearchSubmit} role="search">
@@ -204,7 +203,7 @@ export default function HomePage() {
                 type="search"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                placeholder="Tìm kiếm đồ thất lạc, yêu cầu nhận đồ..."
+                placeholder="Tìm kiếm đồ thất lạc..."
                 aria-label="Tìm kiếm đồ thất lạc"
               />
               <button type="submit" className="home-v2-search-btn">
@@ -221,7 +220,6 @@ export default function HomePage() {
           <div className="home-v2-process-head">
             <span className="home-v2-eyebrow-pill">QUY TRÌNH ĐƠN GIẢN</span>
             <h2 id="home-process-heading">4 bước xác minh &amp; nhận lại đồ</h2>
-            <p>Quy trình khép kín giúp hạn chế tối đa rủi ro nhận hàng giả mạo danh</p>
           </div>
 
           <div className="home-v2-steps-grid">
@@ -348,7 +346,6 @@ export default function HomePage() {
                   <NewsCover article={article} />
                   <div className="home-news-body">
                     <h3>{article.title}</h3>
-                    <p className="home-news-summary">{article.summary}</p>
                     <div className="home-news-meta">
                       <span className="home-news-author">
                         <User size={13} aria-hidden="true" />

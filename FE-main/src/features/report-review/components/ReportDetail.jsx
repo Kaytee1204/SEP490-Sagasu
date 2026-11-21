@@ -8,10 +8,12 @@ import DecisionDialog from "./DecisionDialog";
 import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
 import useReviewResource from "../hooks/useReviewResource";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 export default function ReportDetail({ id, onBack, onRelated }) {
   const [tab, setTab] = useState("overview"),
     [inquiryOpen, setInquiryOpen] = useState(false),
     [action, setAction] = useState(null),
+    [confirmTake, setConfirmTake] = useState(false),
     [busy, setBusy] = useState(false),
     [refresh, setRefresh] = useState(0);
   const { data, error, setData, setError } = useReviewResource(
@@ -29,8 +31,10 @@ export default function ReportDetail({ id, onBack, onRelated }) {
           action: "TAKE",
         }),
       );
+      setConfirmTake(false);
     } catch (e) {
       setError(e.message);
+      setConfirmTake(false);
     } finally {
       setBusy(false);
     }
@@ -186,7 +190,7 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               ) : data.canTake ? (
                 <>
                   <p>Nhận xử lý để yêu cầu bổ sung và ghi kết luận.</p>
-                  <button disabled={busy} className="rr-primary" onClick={take}>
+                  <button disabled={busy} className="rr-primary" onClick={() => setConfirmTake(true)}>
                     {busy ? "Đang nhận…" : "Nhận xử lý"}
                   </button>
                 </>
@@ -255,6 +259,17 @@ export default function ReportDetail({ id, onBack, onRelated }) {
               onSaved={setData}
             />
           )}
+          <ConfirmActionPopup
+            open={confirmTake}
+            variant="info"
+            title="Nhận xử lý báo cáo này?"
+            description={`Báo cáo #${r.report_id} sẽ được phân công cho bạn để yêu cầu thông tin bổ sung và đưa ra kết luận cuối cùng.`}
+            confirmLabel="Nhận xử lý"
+            cancelLabel="Hủy bỏ"
+            busy={busy}
+            onConfirm={take}
+            onClose={() => setConfirmTake(false)}
+          />
         </>
       )}
     </>

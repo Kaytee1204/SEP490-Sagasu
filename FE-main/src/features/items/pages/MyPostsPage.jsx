@@ -5,6 +5,7 @@ import { ArrowDownWideNarrow, CircleCheck, CircleX, Clock3, Eye, EyeOff, Layers3
 import { useAuth } from '@/context/AuthContext';
 import { getMyPosts, deletePost } from '../api/postApi';
 import Pagination from '@/components/common/Pagination';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import MyPostCard from '../components/my-posts/MyPostCard';
 import MyPostsEmptyState from '../components/my-posts/MyPostsEmptyState';
 import MyPostsFilterBar from '../components/my-posts/MyPostsFilterBar';
@@ -160,6 +161,7 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const inFlight = useRef(false);
   const dialog = useRef(null);
   const [discard, setDiscard] = useState(false);
@@ -169,13 +171,19 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
     return () => { element.close(); document.body.style.overflow = overflow; if (focus?.isConnected) focus.focus(); };
   }, []);
   const close = () => { if (inFlight.current) return; if (reason.trim()) setDiscard(true); else onCancel(); };
-  async function submit(event) {
+  function handleFormSubmit(event) {
     event.preventDefault();
     if (inFlight.current) return;
     if (!reason.trim()) { setError('Vui lòng nhập lý do.'); return; }
+    setError('');
+    setConfirmOpen(true);
+  }
+  async function executeSubmit() {
+    if (inFlight.current) return;
+    if (!reason.trim()) { setError('Vui lòng nhập lý do.'); return; }
     inFlight.current = true; setBusy(true); setError('');
-    try { await deletePost(post.id, reason.trim()); await onSuccess(); }
-    catch (err) { setError(err.message); setBusy(false); inFlight.current = false; }
+    try { await deletePost(post.id, reason.trim()); setConfirmOpen(false); await onSuccess(); }
+    catch (err) { setError(err.message); setConfirmOpen(false); setBusy(false); inFlight.current = false; }
   }
   return <dialog ref={dialog} aria-labelledby="delete-post-title" className="card my-post-dialog" onCancel={event => { event.preventDefault(); close(); }}>
       <header className="my-post-hide-heading"><span><EyeOff size={21} aria-hidden="true" /></span><h2 id="delete-post-title">Ẩn bài đăng?</h2>
@@ -183,7 +191,7 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
       </header>
       <div className="my-post-hide-context"><strong>{post.title}</strong><span>{post.categoryName}</span></div>
       <p>Bài đăng sẽ ngừng hiển thị công khai. Dữ liệu và lịch sử xử lý vẫn được giữ.</p>
-      <form className="my-post-hide-form" onSubmit={submit}>
+      <form className="my-post-hide-form" onSubmit={handleFormSubmit}>
         <label htmlFor="deletion-reason" className="input-label">Lý do ẩn bài *</label>
         <textarea id="deletion-reason" className="input" required maxLength={1000} rows={4}
           placeholder="Nhập lý do bạn muốn ẩn bài đăng…"
@@ -195,5 +203,16 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
         <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ bài đăng</button>
           <button className="btn btn-primary" disabled={busy}><EyeOff size={16} aria-hidden="true" />{busy ? 'Đang ẩn…' : 'Ẩn bài đăng'}</button></footer>}
       </form>
+      <ConfirmActionPopup
+        open={confirmOpen}
+        variant="warning"
+        title="Bạn có chắc chắn ẩn bài đăng?"
+        description={`Bài đăng "${post.title}" sẽ ngừng hiển thị trên danh sách tìm kiếm công khai.`}
+        confirmLabel="Xác nhận ẩn"
+        cancelLabel="Giữ bài đăng"
+        busy={busy}
+        onConfirm={executeSubmit}
+        onClose={() => setConfirmOpen(false)}
+      />
   </dialog>;
 }

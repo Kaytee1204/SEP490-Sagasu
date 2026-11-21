@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { reviewClaim } from '../api/claimApi';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import './RejectClaimDialog.css';
 
 const REASONS = ['Thông tin mô tả chưa khớp với món đồ', 'Bằng chứng chưa đủ để xác minh', 'Câu trả lời xác minh chưa phù hợp'];
@@ -12,6 +13,7 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
   const [preset, setPreset] = useState('');
   const [detail, setDetail] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reason = [preset === 'OTHER' ? '' : preset, detail.trim()].filter(Boolean).join(' — ');
@@ -35,8 +37,14 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
     else onClose();
   }
 
-  async function submit(event) {
+  function handleFormSubmit(event) {
     event.preventDefault();
+    if (sending.current || !reason) return;
+    setError('');
+    setConfirmOpen(true);
+  }
+
+  async function executeSubmit() {
     if (sending.current || !reason) return;
     sending.current = true;
     setBusy(true);
@@ -45,11 +53,13 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
       await reviewClaim(claim.id, { decision: 'REJECTED', reason, expectedVersion: claim.version });
     } catch (problem) {
       setError(problem.message || 'Chưa thể từ chối yêu cầu. Vui lòng thử lại.');
+      setConfirmOpen(false);
       return;
     } finally {
       sending.current = false;
       setBusy(false);
     }
+    setConfirmOpen(false);
     onRejected();
   }
 
@@ -57,7 +67,7 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
     onCancel={event => { event.preventDefault(); close(); }}>
     <header><h2 id={titleId}>Từ chối yêu cầu nhận đồ</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
-    <form onSubmit={submit}>
+    <form onSubmit={handleFormSubmit}>
       <p>Yêu cầu của <strong>{claim.claimantName}</strong> cho <strong>{claim.postTitle}</strong>.</p>
       <p className="claims-muted">Lý do sẽ được gửi cho người yêu cầu. Họ có thể gửi hồ sơ mới với căn cứ phù hợp hơn.</p>
       <fieldset disabled={busy}><legend>Lý do từ chối *</legend>
@@ -82,5 +92,16 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
           {busy ? 'Đang gửi…' : 'Xác nhận từ chối'}</button>
       </footer>}
     </form>
+    <ConfirmActionPopup
+      open={confirmOpen}
+      variant="danger"
+      title="Bạn có chắc chắn từ chối?"
+      description={`Yêu cầu nhận đồ của ${claim.claimantName} cho "${claim.postTitle}" sẽ bị từ chối và thông báo cho người yêu cầu.`}
+      confirmLabel="Xác nhận từ chối"
+      cancelLabel="Quay lại"
+      busy={busy}
+      onConfirm={executeSubmit}
+      onClose={() => setConfirmOpen(false)}
+    />
   </dialog>;
 }

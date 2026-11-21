@@ -1,20 +1,54 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bookmark, FileText, HandHelping, Flag, MessageCircle, KeyRound, Plus, LogOut, User, LayoutDashboard, ChevronDown, Menu, X, Home, Search } from 'lucide-react';
+import {
+  Bookmark,
+  FileText,
+  HandHelping,
+  Flag,
+  MessageCircle,
+  KeyRound,
+  Plus,
+  LogOut,
+  User,
+  LayoutDashboard,
+  ChevronDown,
+  ChevronRight,
+  Shield,
+  LayoutGrid,
+  ArrowRight,
+  Menu,
+  X,
+  Home,
+  Search,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useChat } from '@/features/chat/hooks/useChat';
 import SagasuLogo from '@/assets/Sagasu_logo_color.svg';
 import ChatBadgeLink from '@/features/chat/components/ChatBadgeLink';
 import NotificationBell from '@/features/notifications/components/NotificationBell';
 
+function getInitials(name) {
+  if (!name) return 'U';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function AvatarDropdown() {
   const [open, setOpen] = useState(false);
+  const [activitiesExpanded, setActivitiesExpanded] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
-  const { user, isAdmin, isApprover, logout } = useAuth();
+  const { user, isAdmin, isManager, isApprover, logout } = useAuth();
+  const { unread: chatUnread = 0 } = useChat() || {};
 
   // Close on outside click
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -28,74 +62,45 @@ function AvatarDropdown() {
   const rawName = user?.fullName || user?.name || user?.email || 'Người dùng';
   const displayName = String(rawName).replace(/\s*\((manager|admin|user|approver|staff)\)\s*$/i, '').trim();
   const displayEmail = user?.email || '';
-  const displayOrg = user?.organizationName || user?.unitName || 'Trường Đại học FPT';
+  const displayOrg = user?.organizationName || user?.unitName || 'Trường Đại học Sakura';
+  const initials = getInitials(displayName);
 
-  const roleLabels = {
-    ADMIN: 'Quản trị viên',
-    MANAGER: 'Quản lý tổ chức',
-    APPROVER: 'Staff',
-    OFFICER: 'Staff',
-    USER: 'Thành viên',
-  };
   const rawRole = user?.role ? String(user.role).toUpperCase() : 'USER';
-  const shortRoleBadge = rawRole === 'APPROVER' ? 'STAFF' : rawRole;
-  const roleName = roleLabels[rawRole] || shortRoleBadge;
-
-  const avatarSrc = user?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1e6b6b&textColor=ffffff`;
-
-  const menuItems = [
-    { icon: User, label: 'Hồ sơ cá nhân', to: '/ho-so' },
-    { icon: KeyRound, label: 'Đổi mật khẩu', to: '/ho-so?action=password' },
-    { icon: FileText, label: 'Bài đăng của tôi', to: '/bai-dang-cua-toi' },
-    { icon: Bookmark, label: 'Bài đăng đã lưu', to: '/bai-dang-da-luu' },
-    { icon: HandHelping, label: 'Yêu cầu nhận đồ', to: '/claim-cua-toi' },
-    { icon: Flag, label: 'Báo cáo của tôi', to: '/bao-cao-cua-toi' },
-    { icon: MessageCircle, label: 'Tin nhắn', to: '/tin-nhan' },
-  ];
-
-  if (isAdmin) {
-    menuItems.push({ icon: LayoutDashboard, label: 'Trang quản trị & Quản lý', to: '/admin' });
-  }
-  if (isApprover) {
-    menuItems.push({ icon: LayoutDashboard, label: 'Phiếu tiếp nhận', to: '/approver/receipts' });
-  }
+  const shortRoleBadge = (rawRole === 'APPROVER' || rawRole === 'OFFICER') ? 'STAFF' : rawRole;
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} className="relative">
       {/* Trigger */}
       <button
         id="nav-avatar-btn"
         onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '6px',
-          background: 'none', border: '1.5px solid var(--border-strong)',
-          borderRadius: '999px', padding: '3px 10px 3px 3px',
-          cursor: 'pointer', transition: 'all 200ms',
-          color: 'var(--text-primary)',
-        }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
+        className="flex items-center gap-2.5 bg-white border-1.5 border-teal-700/80 hover:border-teal-700 rounded-full py-1.5 pl-1.5 pr-3 shadow-xs transition-all cursor-pointer"
+        style={{ backgroundColor: '#ffffff' }}
         aria-label="Tài khoản"
         aria-expanded={open}
       >
-        <img
-          src={avatarSrc}
-          alt={displayName}
-          style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
-        />
-        <div className="hidden sm:flex flex-col items-start leading-[1.15]">
-          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{displayName}</span>
-          <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase' }}>
+        {user?.avatarUrl ? (
+          <img
+            src={user.avatarUrl}
+            alt={displayName}
+            className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+          />
+        ) : (
+          <div className="w-7 h-7 rounded-full bg-[#1e6b6b] text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
+            {initials}
+          </div>
+        )}
+        <div className="hidden sm:flex flex-col items-start leading-tight text-left">
+          <span className="text-[13px] font-bold text-slate-900" style={{ color: '#0f172a' }}>
+            {displayName}
+          </span>
+          <span className="text-[10px] font-bold text-teal-700 tracking-wider uppercase">
             {shortRoleBadge}
           </span>
         </div>
         <ChevronDown
-          size={13}
-          style={{
-            transition: 'transform 200ms cubic-bezier(0.34,1.56,0.64,1)',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            color: 'var(--text-muted)',
-          }}
+          size={14}
+          className={`text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
@@ -103,88 +108,192 @@ function AvatarDropdown() {
       {open && (
         <div
           id="nav-avatar-dropdown"
-          style={{
-            position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-            width: '270px', maxWidth: 'calc(100vw - 24px)', background: 'var(--bg-surface)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius-xl)',
-            boxShadow: 'var(--shadow-xl)',
-            zIndex: 1000,
-            animation: 'fadeInUp 180ms cubic-bezier(0.34,1.56,0.64,1)',
-            overflow: 'hidden',
-          }}
+          className="absolute top-[calc(100%+8px)] right-0 w-[315px] max-w-[calc(100vw-24px)] bg-white border border-slate-200 rounded-2xl shadow-2xl z-[1000] overflow-hidden animate-in fade-in zoom-in-95 duration-150 font-sans"
+          style={{ backgroundColor: '#ffffff' }}
         >
-          {/* User brief */}
-          <div style={{
-            padding: '14px 16px',
-            background: 'var(--bg-canvas)',
-            borderBottom: '1px solid var(--border)',
-          }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-              {displayName}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', wordBreak: 'break-all' }}>
-              {displayEmail}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '6px' }}>
-              <span style={{
-                fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em',
-                background: 'var(--status-found-bg)', color: 'var(--status-found)',
-                border: '1px solid rgba(16,185,129,0.2)',
-                padding: '1px 7px', borderRadius: '4px',
-              }}>
-                {roleName}
-              </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{displayOrg}</span>
+          {/* User brief header */}
+          <div className="p-4 flex items-center gap-3 bg-slate-50/80 border-b border-slate-100">
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={displayName}
+                className="w-12 h-12 rounded-full object-cover border border-slate-200 flex-shrink-0"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-[#1e6b6b] text-white font-bold flex items-center justify-center text-base flex-shrink-0 shadow-xs">
+                {initials}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="font-bold text-slate-900 text-base truncate" style={{ color: '#0f172a' }}>
+                {displayName}
+              </div>
+              <div className="text-slate-500 text-[12.5px] truncate mt-0.5">
+                {displayEmail}
+              </div>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className="text-[10.5px] font-bold text-teal-800 bg-teal-50 uppercase tracking-wider px-2 py-0.5 rounded-full border border-teal-200">
+                  {shortRoleBadge}
+                </span>
+                <span className="text-slate-500 text-[12px] truncate">
+                  {displayOrg}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Menu links */}
-          <div style={{ padding: '8px' }}>
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              return (
+          {/* Section 1: Tài khoản (Giữ nguyên như cũ) */}
+          <div className="p-2 border-b border-slate-100">
+            <div className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider px-3 py-1.5">
+              Tài khoản
+            </div>
+            <Link
+              to="/ho-so"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors text-[14.5px] font-medium"
+            >
+              <div className="flex items-center gap-3">
+                <User size={17} className="text-slate-400" />
+                <span>Hồ sơ cá nhân</span>
+              </div>
+              <ChevronRight size={15} className="text-slate-400" />
+            </Link>
+            <Link
+              to="/ho-so?action=password"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors text-[14.5px] font-medium"
+            >
+              <div className="flex items-center gap-3">
+                <KeyRound size={17} className="text-slate-400" />
+                <span>Đổi mật khẩu</span>
+              </div>
+              <ChevronRight size={15} className="text-slate-400" />
+            </Link>
+          </div>
+
+          {/* Section 2: Hoạt động của tôi (Có mục tổng, ấn vào xổ ra các mục bài đăng) */}
+          <div className="p-2 border-b border-slate-100">
+            <button
+              type="button"
+              onClick={() => setActivitiesExpanded(prev => !prev)}
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-800 hover:bg-slate-100 transition-colors text-[14.5px] font-semibold cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <FileText size={17} className="text-teal-600" />
+                <span>Hoạt động của tôi</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {chatUnread > 0 && !activitiesExpanded && (
+                  <span className="bg-[#ef4444] text-white text-[11px] font-bold min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center">
+                    {chatUnread > 99 ? '99+' : chatUnread}
+                  </span>
+                )}
+                <ChevronDown
+                  size={16}
+                  className={`text-slate-400 transition-transform duration-200 ${activitiesExpanded ? 'rotate-180 text-teal-700' : ''}`}
+                />
+              </div>
+            </button>
+
+            {activitiesExpanded && (
+              <div className="mt-1 pl-4 pr-1 py-1 space-y-1 animate-in slide-in-from-top-1 duration-150 bg-slate-50/70 rounded-xl">
                 <Link
-                  key={item.to}
-                  to={item.to}
+                  to="/bai-dang-cua-toi"
                   onClick={() => setOpen(false)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '9px 10px',
-                    borderRadius: 'var(--radius-md)',
-                    color: 'var(--text-secondary)',
-                    textDecoration: 'none', fontSize: '0.875rem',
-                    transition: 'all 150ms',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-canvas)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-xs transition-all text-[14px] font-medium"
                 >
-                  <Icon size={15} strokeWidth={1.8} />
-                  {item.label}
+                  <div className="flex items-center gap-2.5">
+                    <FileText size={16} className="text-sky-500" />
+                    <span>Bài đăng của tôi</span>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300" />
                 </Link>
-              );
-            })}
+                <Link
+                  to="/bai-dang-da-luu"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-xs transition-all text-[14px] font-medium"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Bookmark size={16} className="text-sky-500" />
+                    <span>Bài đăng đã lưu</span>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300" />
+                </Link>
+                <Link
+                  to="/claim-cua-toi"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-xs transition-all text-[14px] font-medium"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <HandHelping size={16} className="text-sky-500" />
+                    <span>Yêu cầu nhận đồ</span>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300" />
+                </Link>
+                <Link
+                  to="/bao-cao-cua-toi"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-xs transition-all text-[14px] font-medium"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Flag size={16} className="text-sky-500" />
+                    <span>Báo cáo của tôi</span>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300" />
+                </Link>
+                <Link
+                  to="/tin-nhan"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-slate-700 hover:bg-white hover:text-slate-900 hover:shadow-xs transition-all text-[14px] font-medium"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MessageCircle size={16} className="text-sky-500" />
+                    <span>Tin nhắn</span>
+                  </div>
+                  {chatUnread > 0 ? (
+                    <span className="bg-[#ef4444] text-white text-[11px] font-bold min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center">
+                      {chatUnread > 99 ? '99+' : chatUnread}
+                    </span>
+                  ) : (
+                    <ChevronRight size={14} className="text-slate-300" />
+                  )}
+                </Link>
+              </div>
+            )}
           </div>
 
-          {/* Logout */}
-          <div style={{ padding: '8px', borderTop: '1px solid var(--border)' }}>
+          {/* Section 3: Trang quản lý (Giữ nguyên thẻ như cũ) */}
+          {(isApprover || isAdmin || isManager) && (
+            <div className="p-2 border-b border-slate-100">
+              <Link
+                to={isApprover ? '/approver/receipts' : '/admin'}
+                onClick={() => setOpen(false)}
+                className="block p-3 rounded-xl bg-slate-50/90 border border-slate-200 hover:bg-teal-50/60 hover:border-teal-300 transition-all group"
+              >
+                <div className="flex items-center gap-1.5 text-slate-500 text-[12px] font-medium mb-1.5">
+                  <Shield size={14} className="text-teal-700" />
+                  <span>{isApprover ? 'Quản lý · chỉ dành cho staff' : 'Quản lý · chỉ dành cho quản trị'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 font-bold text-slate-900 text-[14.5px]">
+                    <LayoutGrid size={17} className="text-teal-800" />
+                    <span>Trang quản lý</span>
+                  </div>
+                  <ArrowRight size={15} className="text-slate-400 group-hover:text-teal-700 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </Link>
+            </div>
+          )}
+
+          {/* Section 4: Đăng xuất (Giữ nguyên như cũ) */}
+          <div className="p-2">
             <button
               id="nav-logout-btn"
               onClick={handleLogout}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '9px 10px', width: '100%',
-                borderRadius: 'var(--radius-md)',
-                color: '#e03e2d', background: 'none', border: 'none',
-                fontSize: '0.875rem', cursor: 'pointer',
-                transition: 'all 150ms', fontFamily: 'var(--font-body)',
-                textAlign: 'left',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(224,62,45,0.08)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-600 hover:bg-rose-50 transition-colors text-[14.5px] font-medium text-left cursor-pointer"
             >
-              <LogOut size={15} strokeWidth={1.8} />
-              Đăng xuất
+              <LogOut size={17} className="text-rose-500" />
+              <span>Đăng xuất</span>
             </button>
           </div>
         </div>
@@ -463,7 +572,7 @@ export default function Navbar() {
                       className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-teal-700 bg-teal-50/50 hover:bg-teal-50"
                     >
                       <LayoutDashboard size={16} className="text-teal-600" />
-                      <span>Phiếu tiếp nhận</span>
+                      <span>Hồ sơ tiếp nhận</span>
                     </Link>
                   )}
                 </div>

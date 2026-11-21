@@ -2,6 +2,7 @@ import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
 import { labels } from "../format";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 const warnings = {
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
   SUSPEND_ACCOUNT:
@@ -30,16 +31,23 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
     [basis, setBasis] = useState(""),
     [targetId, setTarget] = useState(""),
     [custodyVerified, setCustody] = useState(false),
+    [confirmOpen, setConfirmOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  async function submit(e) {
+  function handleFormSubmit(e) {
     e.preventDefault();
+    if (busy || !conclusion.trim() || !basis.trim() || (selected.length > 0 && !sameIncident)) return;
+    setError("");
+    setConfirmOpen(true);
+  }
+  async function executeSubmit() {
     if (busy) return;
     setBusy(true);
     setError("");
     try {
       if (selected.length) {
         await reviewApi.batch({reports:[data.report,...candidates.filter(r => selected.includes(r.report_id))].map(r => ({id:r.report_id,version:r.version})), action, conclusion:conclusion.trim(), basis:basis.trim(), sameIncidentConfirmed:sameIncident});
+        setConfirmOpen(false);
         onSaved(await reviewApi.detail(data.report.report_id));
         onClose();
         return;
@@ -54,16 +62,18 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           custodyVerified,
         }),
       );
+      setConfirmOpen(false);
       onClose();
     } catch (e) {
       setError(e.message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
   }
   return (
     <Dialog title={labels[action]} busy={busy} onClose={onClose}>
-      <form onSubmit={submit} className="rr-stack">
+      <form onSubmit={handleFormSubmit} className="rr-stack">
         <p className="rr-callout">{warnings[action]}</p>
         {candidates.length > 0 && <fieldset className="rr-batch-selection">
           <legend>Áp dụng cho báo cáo cùng sự việc</legend>
@@ -158,6 +168,17 @@ export default function DecisionDialog({ action, data, onClose, onSaved }) {
           </button>
         </footer>
       </form>
+      <ConfirmActionPopup
+        open={confirmOpen}
+        variant={["HIDE_POST", "SUSPEND_ACCOUNT", "CLAIM_REJECTED"].includes(action) ? "danger" : ["HANDOVER_COMPLETED", "RESOLVE"].includes(action) ? "success" : "warning"}
+        title={`Xác nhận: ${labels[action]}?`}
+        description={warnings[action]}
+        confirmLabel="Xác nhận thực hiện"
+        cancelLabel="Quay lại"
+        busy={busy}
+        onConfirm={executeSubmit}
+        onClose={() => setConfirmOpen(false)}
+      />
     </Dialog>
   );
 }
