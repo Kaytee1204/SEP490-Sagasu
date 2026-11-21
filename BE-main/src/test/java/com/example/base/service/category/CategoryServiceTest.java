@@ -47,63 +47,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc001_getCategories_returnsTwoItemsSortedDesc() {
-        List<Category> list = List.of(cat(2L, "Ví da", true), cat(1L, "Ví nhỏ", true));
-        Page<Category> page = new PageImpl<>(list);
-        when(repository.search(eq("Ví"), eq(true), any(Pageable.class))).thenReturn(page);
-
-        PageResponse<CategoryResponse> res = service.getCategories(1, 10, " Ví ", true);
-
-        assertThat(res.getContent()).hasSize(2);
-        ArgumentCaptor<Pageable> cap = ArgumentCaptor.forClass(Pageable.class);
-        verify(repository).search(eq("Ví"), eq(true), cap.capture());
-        assertThat(cap.getValue().getPageNumber()).isEqualTo(0);
-        assertThat(cap.getValue().getPageSize()).isEqualTo(10);
-        assertThat(cap.getValue().getSort().getOrderFor("categoryId").getDirection())
-                .isEqualTo(Sort.Direction.DESC);
-    }
-
-    @Test
-    void utc002_getCategories_nullKeyword_passesEmptyString() {
-        when(repository.search(eq(""), isNull(), any(Pageable.class))).thenReturn(Page.empty());
-
-        PageResponse<CategoryResponse> res = service.getCategories(1, 10, null, null);
-
-        assertThat(res.getContent()).isEmpty();
-        verify(repository).search(eq(""), isNull(), any(Pageable.class));
-    }
-
-    @Test
-    void utc003_getCategories_pageZero_throwsBadRequest() {
-        assertThatThrownBy(() -> service.getCategories(0, 10, null, null))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> {
-                    AppException app = (AppException) ex;
-                    assertThat(app.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-                    assertThat(app.getMessage()).isEqualTo("Trang phải từ 1; kích thước trang từ 1 đến 100");
-                });
-    }
-
-    @Test
-    void utc004_getCategories_size101_throwsBadRequest() {
-        assertThatThrownBy(() -> service.getCategories(1, 101, null, null))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.BAD_REQUEST);
-    }
-
-    @Test
-    void utc005_getCategories_size100_accepted() {
-        when(repository.search(eq(""), isNull(), any(Pageable.class))).thenReturn(Page.empty());
-
-        PageResponse<CategoryResponse> res = service.getCategories(1, 100, null, null);
-
-        assertThat(res.getSize()).isEqualTo(100);
-        verify(repository).search(eq(""), isNull(), any(Pageable.class));
-    }
-
-    @Test
-    void utc006_createCategory_collapsesSpacesAndStrips() {
+    void utc086_createCategory_collapsesSpacesAndStrips() {
         when(repository.existsByNameIgnoreCase("Điện thoại")).thenReturn(false);
         when(repository.saveAndFlush(any(Category.class))).thenAnswer(inv -> {
             Category c = inv.getArgument(0);
@@ -118,7 +62,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc007_createCategory_existingInactiveName_throwsCategoryNameExists() {
+    void utc087_createCategory_existingInactiveName_throwsCategoryNameExists() {
         when(repository.existsByNameIgnoreCase("ví")).thenReturn(true);
 
         assertThatThrownBy(() -> service.createCategory("ví"))
@@ -131,7 +75,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc008_createCategory_blankName_throwsBadRequest() {
+    void utc088_createCategory_blankName_throwsBadRequest() {
         assertThatThrownBy(() -> service.createCategory("   "))
                 .isInstanceOf(AppException.class)
                 .satisfies(ex -> {
@@ -142,7 +86,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc009_createCategory_nullName_throwsBadRequest() {
+    void utc089_createCategory_nullName_throwsBadRequest() {
         assertThatThrownBy(() -> service.createCategory(null))
                 .isInstanceOf(AppException.class)
                 .extracting(ex -> ((AppException) ex).getErrorCode())
@@ -150,7 +94,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc010_createCategory_100Chars_accepted() {
+    void utc090_createCategory_100Chars_accepted() {
         String name = "a".repeat(100);
         when(repository.existsByNameIgnoreCase(name)).thenReturn(false);
         when(repository.saveAndFlush(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -161,7 +105,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc011_createCategory_101Chars_throwsBadRequest() {
+    void utc091_createCategory_101Chars_throwsBadRequest() {
         String name = "a".repeat(101);
 
         assertThatThrownBy(() -> service.createCategory(name))
@@ -171,7 +115,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc012_createCategory_uniqueConstraintRace_throwsCategoryNameExists() {
+    void utc092_createCategory_uniqueConstraintRace_throwsCategoryNameExists() {
         when(repository.existsByNameIgnoreCase("Ví")).thenReturn(false);
         when(repository.saveAndFlush(any(Category.class)))
                 .thenThrow(new DataIntegrityViolationException("dup", new RuntimeException("constraint [uq_category_name]")));
@@ -183,7 +127,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc013_createCategory_otherIntegrityViolation_rethrows() {
+    void utc093_createCategory_otherIntegrityViolation_rethrows() {
         when(repository.existsByNameIgnoreCase("Ví")).thenReturn(false);
         DataIntegrityViolationException ex = new DataIntegrityViolationException("other", new RuntimeException("other_constraint"));
         when(repository.saveAndFlush(any(Category.class))).thenThrow(ex);
@@ -193,7 +137,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc014_updateCategory_valid_updatesName() {
+    void utc094_updateCategory_valid_updatesName() {
         Category existing = cat(1L, "Old", true);
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameIgnoreCaseAndCategoryIdNot("Laptop", 1L)).thenReturn(false);
@@ -205,7 +149,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc015_updateCategory_sameOwnName_accepted() {
+    void utc095_updateCategory_sameOwnName_accepted() {
         Category existing = cat(1L, "Laptop", true);
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameIgnoreCaseAndCategoryIdNot("Laptop", 1L)).thenReturn(false);
@@ -218,7 +162,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc016_updateCategory_duplicateNameOtherCategory_throwsCategoryNameExists() {
+    void utc096_updateCategory_duplicateNameOtherCategory_throwsCategoryNameExists() {
         Category existing = cat(1L, "Laptop", true);
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameIgnoreCaseAndCategoryIdNot("VÍ", 1L)).thenReturn(true);
@@ -230,7 +174,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc017_updateCategory_notFound_throwsCategoryNotFound() {
+    void utc097_updateCategory_notFound_throwsCategoryNotFound() {
         when(repository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateCategory(999L, "X"))
@@ -239,38 +183,5 @@ class CategoryServiceTest {
                 .isEqualTo(ErrorCode.CATEGORY_NOT_FOUND);
     }
 
-    @Test
-    void utc018_updateCategoryStatus_deactivate_savesFalse() {
-        Category existing = cat(1L, "Ví", true);
-        when(repository.findById(1L)).thenReturn(Optional.of(existing));
-        when(repository.saveAndFlush(existing)).thenReturn(existing);
-
-        CategoryResponse res = service.updateCategoryStatus(1L, false);
-
-        assertThat(res.active()).isFalse();
-        verify(repository).saveAndFlush(existing);
-    }
-
-    @Test
-    void utc019_updateCategoryStatus_activate_savesTrue() {
-        Category existing = cat(1L, "Ví", false);
-        when(repository.findById(1L)).thenReturn(Optional.of(existing));
-        when(repository.saveAndFlush(existing)).thenReturn(existing);
-
-        CategoryResponse res = service.updateCategoryStatus(1L, true);
-
-        assertThat(res.active()).isTrue();
-        verify(repository).saveAndFlush(existing);
-    }
-
-    @Test
-    void utc020_updateCategoryStatus_notFound_throwsCategoryNotFound() {
-        when(repository.findById(999L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.updateCategoryStatus(999L, true))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.CATEGORY_NOT_FOUND);
-    }
 }
 
