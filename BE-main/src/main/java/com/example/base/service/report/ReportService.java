@@ -69,7 +69,7 @@ public class ReportService {
                 Detail duplicate=retry(actor,request.clientRequestId(),prepared.hash());
                 if(duplicate!=null)return duplicate;
                 checkTarget(request,actor);
-                String column=switch(request.targetType()){case "POST"->"post_id";case "CLAIM"->"claim_id";default->"reported_account_id";};
+                String column="POST".equals(request.targetType())?"post_id":"claim_id";
                 if(jdbc.queryForObject("select count(*) from report where reporter_id=? and status in ('OPEN','IN_REVIEW') and "+column+"=?",Long.class,actor,request.targetId())>0)
                     throw new AppException(ErrorCode.REPORT_DUPLICATE);
                 String group=reasonGroup(request.targetType(),request.targetId());
@@ -102,7 +102,7 @@ public class ReportService {
     }
     @Transactional(propagation=Propagation.MANDATORY)
     public Report insertAppeal(long actor,long claimId,String text,String reasonCode,UUID request,String hash,List<WorkflowImages.Image> uploaded) {
-        var reason = reasonCode == null ? new ReportReasonService.Reason("APPEAL_LEGACY","Kháng cáo kết quả nhận đồ",true)
+        var reason = reasonCode == null ? new ReportReasonService.Reason("APPEAL_LEGACY","Tranh chấp kết quả nhận đồ",true)
                 : reasons.require("CLAIM_APPEAL",reasonCode,text);
         return persist(actor,"HANDOVER_ISSUE","CLAIM",claimId,text,reason,request,hash,uploaded,false);
     }
@@ -217,7 +217,7 @@ public class ReportService {
         if(r.reasonCode()==null || r.reasonCode().isBlank() || r.reasonCode().length()>64)throw new AppException(ErrorCode.REPORT_REASON_INVALID);
     }
     private void validateTarget(String type,Long id) {
-        if(id==null || id<1 || !Set.of("POST","CLAIM","USER").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
+        if(id==null || id<1 || !Set.of("POST","CLAIM").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
     }
     private void checkTarget(Submit r,long actor) {
         boolean allowed=switch(r.targetType()) {
@@ -229,8 +229,6 @@ public class ReportService {
                 yield post!=null && post.getDeletedAt()==null && "VISIBLE".equals(post.getModerationStatus());
             }
             case "CLAIM" -> {Claim c=em.find(Claim.class,r.targetId()); yield c!=null && ((c.isOffice() && c.getClaimant()!=null && c.getClaimant().getId()==actor) || claimPolicy.reviewer(c,em.find(Account.class,actor)));}
-            case "USER" -> r.targetId()!=actor && em.find(Account.class,r.targetId())!=null && jdbc.queryForObject("select count(*) from post where account_id=? and deleted_at is null and moderation_status='VISIBLE'",Long.class,r.targetId())>0
-                || r.targetId()!=actor && jdbc.queryForObject("select count(*) from chat_participant a join chat_participant b using(conversation_id) where a.account_id=? and b.account_id=?",Long.class,actor,r.targetId())>0;
             default -> false;
         };
         if(!allowed)throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);

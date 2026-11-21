@@ -14,6 +14,10 @@
 .handover-record-dialog footer { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; }
 .handover-record-files li { display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .handover-record-files button { min-height:44px; flex-shrink:0; text-decoration:underline; }
+.handover-photo-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.handover-photo-previews li { overflow: hidden; border: 1px solid #cce4e0; border-radius: 10px; }
+.handover-photo-previews img { display: block; width: 100%; height: 96px; object-fit: contain; background: #f2f8f7; }
+.handover-photo-previews button { width: 100%; min-height: 44px; color: #1e6b6b; font-size: .85rem; }
 .handover-record-discard { display:grid; gap:12px; padding:14px; background:#fff7ed; border-radius:10px; }
 .handover-record-dialog :focus-visible { outline:2px solid #1e6b6b; outline-offset:3px; }
 .handover-record-dialog button:disabled { opacity:.55; cursor:not-allowed; }

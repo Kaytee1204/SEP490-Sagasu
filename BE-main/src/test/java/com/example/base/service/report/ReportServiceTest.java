@@ -212,16 +212,8 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc012_create_reportSelf_targetUnavailable() {
-        assertCode(() -> service.create(submit("USER", 7L, "x"), files, user), ErrorCode.REPORT_TARGET_UNAVAILABLE);
-    }
-
-    @Test
-    void utc013_create_userWithVisiblePost_created() {
-        when(em.find(Account.class, 8L)).thenReturn(new Account());
-        when(jdbc.queryForObject(contains("from post where account_id"), eq(Long.class), eq(8L))).thenReturn(1L);
-
-        assertThat(service.create(submit("USER", 8L, "spam"), files, user).targetType()).isEqualTo("USER");
+    void create_accountReportsAreRetired() {
+        assertCode(() -> service.create(submit("USER", 8L, "spam"), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test

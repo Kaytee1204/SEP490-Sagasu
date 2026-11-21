@@ -117,3 +117,13 @@
   .report-dialog form > footer { flex-wrap:nowrap; }
   .report-dialog form > footer .btn { flex:1; }
 }
+
+.report-next-step { border-inline-start: 4px solid #35897c; }
+.report-next-step > p { margin: 8px 0; }
+.report-next-step .report-back, .report-next-step .btn { margin-top: 8px; }
+.report-inquiry, #ket-qua { scroll-margin-top: 86px; }
+.report-exchange-archive { margin-top: 10px; }
+.report-exchange-archive summary { color: #216a57; font-size: .88rem; font-weight: 650; cursor: pointer; }
+.report-detail-page details.report-history { padding-block: 0; }
+.report-detail-page .report-history > summary { padding-block: 12px; }
+.report-detail-page .report-history[open] { padding-bottom: 14px; }

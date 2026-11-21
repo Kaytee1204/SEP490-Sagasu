@@ -11,19 +11,34 @@ final class ReportQueueSql {
   static final String OTHER_APPEALS_PENDING = """
       exists (
         select 1 from p2p_claim_appeal sibling join report q on q.report_id=sibling.report_id
-        where sibling.approval_id=approval.approval_id and q.status in ('OPEN','IN_REVIEW')
+        join p2p_claim_approval sibling_round on sibling_round.approval_id=sibling.approval_id
+        join claim sibling_claim on sibling_claim.claim_id=sibling_round.approved_claim_id
+        where approval.approval_id is not null and sibling_claim.post_id=p.post_id and q.status in ('OPEN','IN_REVIEW')
       )
       """;
   static final String REOPEN_ALLOWED = """
-      approval.appeal_until <= now() and not pending.waiting_other_appeals
-        and p.moderation_status='VISIBLE'
+      not pending.waiting_other_appeals
+        and p.post_type='FOUND' and p.moderation_status='VISIBLE'
         and not exists (select 1 from item_receipt receipt where receipt.post_id=p.post_id)
         and not exists (select 1 from p2p_handover handover where handover.claim_id=chosen.claim_id and handover.status<>'CANCELLED')
         and not exists (select 1 from report_hold hold where hold.post_id=p.post_id and hold.released_at is null)
         and not exists (
+          select 1 from p2p_handover_issue issue join report dispute using(report_id)
+          join claim disputed on disputed.claim_id=dispute.claim_id
+          where disputed.post_id=p.post_id and issue.phase='BEFORE' and dispute.status in ('OPEN','IN_REVIEW'))
+        and not exists (
           select 1 from p2p_claim_appeal related join report_recovery x using(report_id)
           where related.approval_id=approval.approval_id and x.confirmed_at is null)
       """;
+
+  // The report conclusion and the approval round can finish at different times.
+  static final String APPEAL_STEP = """
+      case when r.status='RESOLVED' and (%s) then
+        case when pending.waiting_other_appeals then 'WAIT_APPEALS'
+          when (%s) then 'READY_TO_REOPEN'
+          else 'VERIFY_CUSTODY' end
+      end
+      """.formatted(ACTIVE_APPROVAL, REOPEN_ALLOWED);
 
   // OFFSET 0 preserves these lateral stages so PostgreSQL computes each report's facts
   // once instead of inlining the same correlated subqueries into every priority expression.
@@ -83,7 +98,6 @@ final class ReportQueueSql {
           when facts.recovery_pending then 'WAITING_RECOVERY'
           when inquiry.reply_overdue then null
           when inquiry.waiting_reply then 'WAITING_REPLY'
-          when facts.accepted_appeal and approval.appeal_until>now() then 'WAITING_APPEAL_WINDOW'
           when facts.accepted_appeal and pending.waiting_other_appeals then 'WAITING_OTHER_APPEALS'
           when facts.accepted_appeal and not (%s) then 'WAITING_REOPEN'
         end as waiting_reason

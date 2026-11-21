@@ -92,10 +92,38 @@ function Records({ title, rows }) {
     </section>
   ) : null;
 }
+function ClaimEvidence({ data }) {
+  const { description, evidence_note, claim_id, claimant_name, ...facts } = data.claim;
+  const images = data.claimEvidence || [];
+  return <section className="rr-card rr-claim-proof">
+    <div className="rr-row">
+      <h3>Căn cứ nhận đồ</h3><small>Yêu cầu #{claim_id}{claimant_name && ` · ${claimant_name}`}</small>
+    </div>
+    <p className="rr-proof-note">{description || "Chưa cung cấp căn cứ nhận đồ."}</p>
+    {evidence_note && <p className="rr-description"><strong>Thông tin bổ sung</strong> · {evidence_note}</p>}
+    <h4>Ảnh bằng chứng <small>({images.length})</small></h4>
+    {images.length > 0 ? <Gallery images={images} /> : <p className="rr-muted">Hồ sơ không đính kèm ảnh.</p>}
+    {!!data.answers?.length && <>
+      <h4>Câu trả lời xác minh <small>({data.answers.length})</small></h4>
+      <dl className="rr-proof-answers">
+        {data.answers.map((answer, index) => <div key={index}>
+          <dt>
+            {answer.section_title && answer.section_title !== data.answers[index - 1]?.section_title &&
+              <strong className="rr-proof-group">{answer.section_title}</strong>}
+            {answer.question_label}
+          </dt>
+          <dd>{answer.answer_text || "Chưa trả lời"}</dd>
+        </div>)}
+      </dl>
+    </>}
+    <Facts data={facts} />
+  </section>;
+}
 export default function ContextPanel({ data, snapshot = false }) {
   if (!data) return <Empty>Chưa có dữ liệu đối chiếu.</Empty>;
   return (
-    <div className="rr-stack">
+    <div className="rr-stack rr-evidence-sections">
+      {data.claim && <ClaimEvidence data={data} />}
       {data.post && (
         <section className="rr-card">
           <div className="rr-row">
@@ -108,19 +136,6 @@ export default function ContextPanel({ data, snapshot = false }) {
           </div>
           <Facts data={data.post} />
           <Gallery images={data.postImages} />
-        </section>
-      )}
-      {data.claim && (
-        <section className="rr-card">
-          <h3>Yêu cầu nhận đồ #{data.claim.claim_id}</h3>
-          <Facts data={data.claim} />
-          {data.answers?.map((a, i) => (
-            <div className="rr-answer" key={i}>
-              <strong>{a.question_label}</strong>
-              <p>{a.answer_text}</p>
-            </div>
-          ))}
-          <Gallery images={data.claimEvidence} />
         </section>
       )}
       {!!data.claimSupplements?.length && <section className="rr-card"><h3>Thông tin bổ sung cho yêu cầu nhận đồ</h3>{data.claimSupplements.map(entry => <div className="rr-record" key={entry.claim_activity_id}><strong>{entry.actor} · {date(entry.created_at)}</strong><p className="rr-description">{entry.reason}</p><Gallery images={entry.images} /></div>)}</section>}

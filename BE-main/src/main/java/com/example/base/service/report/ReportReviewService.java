@@ -172,7 +172,7 @@ public class ReportReviewService {
         left(msg.body,240) as message_preview, msg.message_type,
         coalesce(nullif(c.claimant_name,''), claimant.full_name) as claimant_name, c.status as claim_status,
         p.post_id as related_post_id, p.moderation_status,
-        case when appeal.report_id is not null then 'Kháng cáo kết quả nhận đồ'
+        case when appeal.report_id is not null then 'Tranh chấp kết quả nhận đồ'
           else coalesce(nullif(r.reason_label_snapshot,''),case when r.kind='HANDOVER_ISSUE'
           then 'Sự cố bàn giao' else 'Báo cáo vi phạm' end) end as reason_label,
         pickup.next_pickup, queue_state.work_state, queue_state.priority_rank, queue_state.priority_reason,
@@ -188,13 +188,20 @@ public class ReportReviewService {
     var rows = jdbc.queryForList(
       "with queue_rows as (" + grouped + ") select queue_rows.*, "
         + "(select jsonb_object_agg(reason_label, amount)::text from "
-        + "(select reason_label,count(*) as amount from queue_rows sibling where sibling.report_key=queue_rows.report_key group by reason_label) reasons) as reason_summary "
+        + "(select reason_label,count(*) as amount from queue_rows sibling where sibling.report_key=queue_rows.report_key group by reason_label) reasons) as reason_summary, "
+        + """
+          (select jsonb_build_object('storage_key', image.storage_key, 'image_url', image.image_url)::text
+             from post_image image where image.post_id=queue_rows.related_post_id
+             order by image.sort_order limit 1) as post_thumbnail
+          """
         + "from queue_rows " + (targetId == null ? "where object_row=1 " : "")
         + "order by " + order + " limit 12 offset ?",
       params.toArray()
     );
     rows.forEach(row -> {
       row.put("reason_summary", context.parse((String) row.get("reason_summary")));
+      String thumbnail = (String) row.remove("post_thumbnail");
+      if (thumbnail != null) row.put("post_thumbnail", context.withUrls(context.parse(thumbnail)));
       if ("READY".equals(row.get("work_state"))) {
         Instant submitted = row.get("created_at") instanceof OffsetDateTime dt ? dt.toInstant()
             : ((Timestamp) row.get("created_at")).toInstant();
@@ -327,14 +334,14 @@ public class ReportReviewService {
           (%s) as active,
           approval.appeal_until <= now() as window_elapsed,
           pending.waiting_other_appeals,
-          (%s) as ready_for_reopen
-        from p2p_claim_appeal a
+          (%s) as ready_for_reopen, (%s) as follow_up
+        from p2p_claim_appeal a join report r on r.report_id=a.report_id
         join p2p_claim_approval approval using (approval_id)
         join claim chosen on chosen.claim_id=approval.approved_claim_id
         join post p on p.post_id=chosen.post_id
         cross join lateral (select %s as waiting_other_appeals) pending
         where a.report_id=?
-        """.formatted(ReportQueueSql.ACTIVE_APPROVAL, ReportQueueSql.REOPEN_ALLOWED, ReportQueueSql.OTHER_APPEALS_PENDING), reportId);
+        """.formatted(ReportQueueSql.ACTIVE_APPROVAL, ReportQueueSql.REOPEN_ALLOWED, ReportQueueSql.APPEAL_STEP, ReportQueueSql.OTHER_APPEALS_PENDING), reportId);
   }
 
   private static String caseKind(Map<String, Object> report, Map<String, Object> appeal) {
@@ -381,21 +388,19 @@ public class ReportReviewService {
     if (!open(report)) {
       if (!activeAppeal || !"RESOLVED".equals(report.get("status"))) return List.of();
       var actions = new ArrayList<String>();
-      if (!recoveryRequested) actions.add("REQUEST_ITEM_RECOVERY");
       if (recoveryPending) actions.add("CONFIRM_ITEM_RECOVERY");
       if (!recoveryPending && Boolean.TRUE.equals(appeal.get("ready_for_reopen"))) actions.add("APPEAL_REOPEN");
       return actions;
     }
     var actions = new ArrayList<String>();
     if ("CLAIM_APPEAL".equals(kind)) {
-      if (activeAppeal && !recoveryRequested) actions.add("REQUEST_ITEM_RECOVERY");
       if (!recoveryPending) actions.add("APPEAL_KEEP");
       if (activeAppeal) actions.add("APPEAL_REQUIRE_REVIEW");
     } else if ("HANDOVER_ISSUE".equals(kind)) {
       var post = (Map<String, Object>) current.getOrDefault("post", Map.of());
-      if (held && !recoveryRequested) actions.add("RELEASE");
+      if (held && !recoveryRequested && !"BEFORE".equals(issuePhase)) actions.add("RELEASE");
       if (!held && canHold(post)) actions.add("HOLD");
-      if ((p2pDispute || issuePhase!=null) && !recoveryRequested) actions.add("REQUEST_ITEM_RECOVERY");
+      if (!"BEFORE".equals(issuePhase) && (p2pDispute || issuePhase!=null) && !recoveryRequested) actions.add("REQUEST_ITEM_RECOVERY");
       if (!recoveryPending) {
         if (p2pDispute) actions.addAll(List.of("HANDOVER_COMPLETED","HANDOVER_CONTINUE","HANDOVER_RETRY","HANDOVER_REOPEN"));
         else if ("BEFORE".equals(issuePhase)) actions.addAll(List.of("HANDOVER_CONTINUE","HANDOVER_REOPEN","DISMISS"));
@@ -577,7 +582,9 @@ public class ReportReviewService {
     var appeal = appeal(reportId);
     String kind = caseKind(r, appeal);
     boolean afterAppealConclusion = "RESOLVED".equals(r.get("status")) && "CLAIM_APPEAL".equals(kind);
-    if ("APPEAL_REOPEN".equals(action) || (afterAppealConclusion && Set.of("REQUEST_ITEM_RECOVERY","CONFIRM_ITEM_RECOVERY").contains(action)))
+    if ("REQUEST_ITEM_RECOVERY".equals(action) && "CLAIM_APPEAL".equals(kind))
+      throw bad("Hồ sơ tranh chấp này chỉ dùng để xem lại kết quả chọn người nhận.");
+    if ("APPEAL_REOPEN".equals(action) || (afterAppealConclusion && "CONFIRM_ITEM_RECOVERY".equals(action)))
       requireAssignee(r, actor, request.version());
     else processing(r, actor, request.version());
     String conclusion = text(request.conclusion()),
@@ -601,6 +608,8 @@ public class ReportReviewService {
     switch (effect) {
       case "VIOLATION", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE" -> requireGeneralConclusion(reportId);
       case "HOLD", "RELEASE" -> {
+        if ("RELEASE".equals(action) && "BEFORE".equals(issuePhase(reportId)))
+          throw bad("Cần kết luận sự cố trước khi cho phép bàn giao.");
         if ("RELEASE".equals(action) && recoveryRequested(reportId) && recovery.isEmpty())
           throw bad("Cần xác minh kết quả thu hồi trước khi gỡ tạm dừng.");
         @SuppressWarnings("unchecked")
@@ -653,8 +662,8 @@ public class ReportReviewService {
       }
       case "REQUEST_ITEM_RECOVERY" -> {
         String phase = issuePhase(reportId);
-        if (phase==null && !activeP2pDispute(reportId) && !Boolean.TRUE.equals(appeal.get("active")))
-          throw bad("Chỉ yêu cầu thu hồi khi còn tranh chấp bàn giao hoặc kháng cáo đang giữ món đồ.");
+        if ("BEFORE".equals(phase) || (phase==null && !activeP2pDispute(reportId)))
+          throw bad("Chỉ yêu cầu thu hồi trong hồ sơ sự cố sau khi đã ghi nhận giao đồ.");
         if (recoveryRequested(reportId)) throw bad("Đã gửi yêu cầu thu hồi món đồ.");
         @SuppressWarnings("unchecked")
         var post = (Map<String, Object>) current.getOrDefault("post", Map.of());
@@ -673,7 +682,7 @@ public class ReportReviewService {
               select ?,?,?,inquiry_id from inquiry
             """, reportId,holder,actor.getId(),"Vui lòng phản hồi kết quả thu hồi món đồ. "
                 + conclusion.substring(0, Math.min(4800, conclusion.length())),due,reportId,holder,due);
-        if (!afterAppealConclusion && !afterHandover) holdItem(reportId, id(post, "post_id"), actor.getId(), conclusion);
+        if (!afterHandover) holdItem(reportId, id(post, "post_id"), actor.getId(), conclusion);
         for (Long recipient : participantsFor(r)) {
           if (holder.equals(recipient)) notifications.notifyUser(recipient,"REPORT_INFORMATION","Cần phản hồi về việc thu hồi món đồ",
               conclusion,"/bao-cao/" + reportId + "#phan-hoi",false);
@@ -707,7 +716,7 @@ public class ReportReviewService {
           if (!Boolean.TRUE.equals(appeal.get("active"))) throw bad("Lần chấp thuận này không còn hiệu lực.");
           if ("APPEAL_REOPEN".equals(action)) {
             if (!"RESOLVED".equals(status) || !Boolean.TRUE.equals(appeal.get("ready_for_reopen")))
-              throw bad("Cần có kết luận xét lại, hết hạn gửi kháng cáo và xử lý xong mọi kháng cáo cùng đợt.");
+              throw bad("Cần có kết luận xét lại, xử lý xong các tranh chấp còn mở và xác minh điều kiện thu hồi chấp thuận.");
             requireCustody(request);
             claims.reopenApprovalFromAppeal(id(appeal, "approved_claim_id"), id(appeal, "approval_id"),
                 claimNote(reportId, conclusion), user);
@@ -716,7 +725,9 @@ public class ReportReviewService {
         }
       }
       case "RESOLVE", "DISMISS" -> {
-        if ("CLAIM_APPEAL".equals(kind)) throw bad("Chọn quyết định xử lý kháng cáo.");
+        if ("CLAIM_APPEAL".equals(kind)) throw bad("Chọn quyết định xử lý tranh chấp.");
+        if ("RESOLVE".equals(action) && "BEFORE".equals(issuePhase(reportId)))
+          throw bad("Cần chọn kết quả trao trả cho sự cố trước khi bàn giao.");
         requireGeneralConclusion(reportId);
         next = "DISMISS".equals(action) ? "REJECTED" : "RESOLVED";
       }
@@ -763,6 +774,13 @@ public class ReportReviewService {
       reportId
     );
     if (finished) {
+      // Keep only a pending recovery inquiry when an upheld appeal still needs follow-up.
+      jdbc.update("""
+          update report_inquiry i set closed_at=now()
+          where i.report_id=? and i.responded_at is null and i.closed_at is null
+            and not (? and exists (select 1 from report_recovery x where x.report_id=i.report_id
+                and x.inquiry_id=i.inquiry_id and x.confirmed_at is null))
+          """, reportId, "APPEAL_REQUIRE_REVIEW".equals(action));
       chat.notifyAppealChanged(reportId);
       jdbc.update(
         "update report_hold set released_at=now() where report_id=? and released_at is null",
@@ -922,11 +940,14 @@ public class ReportReviewService {
     if (beforeHandover && "HANDOVER_REOPEN".equals(action) && Boolean.TRUE.equals(jdbc.queryForObject("""
         select exists (
           select 1 from p2p_claim_approval a where a.approved_claim_id=? and a.closed_at is null
-            and (a.appeal_until>now() or exists (
+            and ((a.appeal_until>now() and not exists (
+              select 1 from p2p_claim_appeal p join report r using(report_id)
+              where p.approval_id=a.approval_id and r.status='RESOLVED')) or exists (
               select 1 from p2p_claim_appeal p join report r using(report_id)
               where p.approval_id=a.approval_id and r.status in ('OPEN','IN_REVIEW')))
+        )
         """, Boolean.class,c.get("claim_id"))))
-      throw bad("Cần chờ hết hạn và xử lý các kháng cáo đang mở trước khi thay đổi người nhận.");
+      throw bad("Chưa thể thay đổi người nhận khi còn tranh chấp đang mở hoặc lượt chấp thuận còn trong hạn gửi tranh chấp và chưa có kết luận yêu cầu xét lại.");
     if ("HANDOVER_COMPLETED".equals(action)) {
       jdbc.update(
         "update p2p_handover set status='COMPLETED',confirmed_by=?,confirmed_at=now(),updated_at=now(),version=version+1 where handover_id=?",

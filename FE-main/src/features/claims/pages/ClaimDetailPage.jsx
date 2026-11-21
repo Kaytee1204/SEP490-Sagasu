@@ -45,8 +45,10 @@ function ClaimDetail({ postId, id }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [revokeOpen, setRevokeOpen] = useState(false);
   const [pendingDirectAction, setPendingDirectAction] = useState(null);
+  const [revokeAction, setRevokeAction] = useState(null);
+  const [focusReview, setFocusReview] = useState(false);
+  const reviewForm = useRef(null);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
   const refreshClaim = useCallback(() => {
@@ -75,6 +77,13 @@ function ClaimDetail({ postId, id }) {
   }, [postId, id,revision,focusRevision,claimNotification]);
   const loadedClaimId = claim?.id;
   const canRevokeApproval = claim?.canRevokeApproval;
+  const canReview = claim?.canReview;
+  useEffect(() => {
+    if (focusReview && canReview) {
+      reviewForm.current?.focus();
+      setFocusReview(false);
+    }
+  }, [focusReview, canReview]);
   useEffect(() => {
     if (!loadedClaimId || !['#handover', '#review-approval'].includes(location.hash)) return;
     const step = document.getElementById(location.hash.slice(1)) || document.getElementById('handover');
@@ -115,7 +124,8 @@ function ClaimDetail({ postId, id }) {
       <div className="claim-detail-layout">
         <div className="claim-detail-main">
           {showHandover ? <HandoverPanel claim={claim} onChanged={refreshClaim} showSubmission={isClaimant}
-            onRevokeApproval={canRevokeApproval ? () => setRevokeOpen(true) : undefined} />
+            onRevokeApproval={canRevokeApproval ? () => setRevokeAction('revoke') : undefined}
+            onContinueReview={canRevokeApproval ? () => setRevokeAction('continue') : undefined} />
             : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} isClaimant={isClaimant} />}
           {claim.claimType === 'P2P' && claim.status === 'PENDING' && isClaimant &&
             <ClaimAppealPanel claim={claim} focusRevision={focusRevision} notificationId={claimNotification} />}
@@ -123,7 +133,7 @@ function ClaimDetail({ postId, id }) {
           <ClaimVerificationPanel claim={claim} onPreviewImage={setPreviewImageId} />
         </div>
         <aside className="claim-detail-sidebar" aria-label="Thông tin và xử lý yêu cầu">
-      {claim.canReview && <form className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); if (!reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; } setPendingDirectAction({ action: 'review', decision: event.nativeEvent.submitter?.value || decision }); }}>
+      {claim.canReview && <form ref={reviewForm} tabIndex={-1} aria-label="Xét duyệt yêu cầu nhận đồ" className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); if (!reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; } setPendingDirectAction({ action: 'review', decision: event.nativeEvent.submitter?.value || decision }); }}>
         <h2><ClipboardCheck size={20} aria-hidden="true" />Xét duyệt yêu cầu</h2>
         <p>Đối chiếu căn cứ và ảnh bằng chứng để xác định đúng người nhận.</p>
         {claim.claimType !== 'P2P' && <label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
@@ -183,9 +193,12 @@ function ClaimDetail({ postId, id }) {
         setClaim(current => ({ ...current, status: 'APPROVED', canReview: false }));
         getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
       }} />}
-    {revokeOpen && claim?.canRevokeApproval && <RevokeClaimApprovalDialog claim={claim}
-      onClose={() => { setRevokeOpen(false); setFocusRevision(value => value + 1); }} onRevoked={() => {
-        setRevokeOpen(false); setError(''); setNotice('Đã thu hồi chấp thuận. Hồ sơ trở lại chờ xét duyệt.');
+    {revokeAction && claim?.canRevokeApproval && <RevokeClaimApprovalDialog claim={claim}
+      continueReview={revokeAction === 'continue'}
+      initialReason={revokeAction === 'continue' ? 'Mở lại xét duyệt theo kết luận tranh chấp.' : ''}
+      onClose={() => { setRevokeAction(null); setFocusRevision(value => value + 1); }} onRevoked={() => {
+        setFocusReview(revokeAction === 'continue');
+        setRevokeAction(null); setError(''); setNotice('Đã thu hồi chấp thuận. Hồ sơ trở lại chờ xét duyệt.');
         setClaim(current => ({ ...current, status: 'PENDING', canRevokeApproval: false, canOpenChat: false }));
         getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
         getPostDetail(postId).then(setPost).catch(() => {});

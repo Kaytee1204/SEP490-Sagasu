@@ -170,6 +170,7 @@ class P2pClaimAppealServiceTest {
         "-1, false, false, CLEARED",
         "-1, true, false, UNDER_REVIEW",
         "-1, false, true, REVIEW_REQUIRED",
+        "1, false, true, REVIEW_REQUIRED",
         "1, true, true, UNDER_REVIEW"
     })
     void handoverStateDependsOnBothDeadlineAndReportDecisions(long deadlineOffset, boolean pending, boolean upheld,
@@ -181,6 +182,7 @@ class P2pClaimAppealServiceTest {
 
         assertEquals(state, window.state());
         assertEquals(state != P2pClaimAppealService.State.CLEARED, window.blocksHandover());
+        assertEquals(state == P2pClaimAppealService.State.REVIEW_REQUIRED, service.canReopenFromDecision(selected, 3L));
     }
 
     private void givenSubmission(CustomUserDetails user) {

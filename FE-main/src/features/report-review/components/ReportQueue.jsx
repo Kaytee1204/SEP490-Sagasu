@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, ArrowRight, Clock, Flag, Inbox, Package, RefreshCw, Scale, Search, SlidersHorizontal, X,
+  ArrowLeft, ArrowRight, Inbox, Search, SlidersHorizontal, X,
 } from "lucide-react";
 import ReportGroup from "./ReportGroup";
 import { ErrorBox } from "./Shared";
@@ -19,21 +19,8 @@ const assignees = {
   UNASSIGNED: "Chưa nhận",
   MINE: "Tôi phụ trách",
 };
-const kindIcons = { GENERAL: Flag, HANDOVER_ISSUE: Package, CLAIM_APPEAL: Scale };
-const violationTargets = { ALL: "Tất cả đối tượng", POST: reportTargets.POST, CLAIM: reportTargets.CLAIM, USER: reportTargets.USER };
+const violationTargets = { ALL: "Tất cả đối tượng", POST: reportTargets.POST, CLAIM: reportTargets.CLAIM };
 const isReportReference = value => /^(?:#\s*)?[0-9]+$/.test(value.trim());
-
-function WorkShift({ calendar }) {
-  if (!calendar) return null;
-  const day = new Intl.DateTimeFormat("vi-VN", { weekday: "long", day: "numeric", month: "numeric", timeZone: calendar.zone });
-  const time = new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: calendar.zone });
-  const start = new Date(calendar.shiftStartsAt);
-  return <p className="rr-work-shift">
-    <Clock size={15} aria-hidden="true" />
-    {calendar.workingNow ? "Trong giờ làm việc" : "Ngoài giờ làm việc"} ·
-    {" "}{calendar.workingNow ? "Ca hiện tại" : "Ca kế tiếp"} {day.format(start)}, {time.format(start)}–{time.format(new Date(calendar.shiftEndsAt))}
-  </p>;
-}
 
 export default function ReportQueue({ kind, reportPath }) {
   const [params, setParams] = useSearchParams();
@@ -82,9 +69,18 @@ export default function ReportQueue({ kind, reportPath }) {
       window.clearInterval(timer);
     };
   }, []);
-  const { data, error, refreshing } = useReviewResource("queue", filters, reload);
+  const { data, error } = useReviewResource("queue", filters, reload);
+  useEffect(() => {
+    if (data && filters.page > Math.max(1, data.totalPages)) {
+      setParams(old => {
+        const next = new URLSearchParams(old);
+        if (data.totalPages > 1) next.set("page", String(data.totalPages));
+        else next.delete("page");
+        return next;
+      }, { replace: true });
+    }
+  }, [data, filters.page, setParams]);
   const loading = !data && !error;
-  const PageIcon = kindIcons[kind];
 
   function updateFilters(changes) {
     setParams(old => {
@@ -109,21 +105,8 @@ export default function ReportQueue({ kind, reportPath }) {
     updateFilters({ assignee: defaults.assignee, target: defaults.target, q: "" });
   }
 
-  return <section className="rr-queue-panel" aria-labelledby="rr-results-title" aria-busy={loading}>
+  return <section className="rr-queue-panel" aria-label="Hồ sơ báo cáo" aria-busy={loading}>
       <div className="rr-queue-toolbar">
-        <div className="rr-queue-title">
-          <span className="rr-queue-title-icon"><PageIcon size={19} aria-hidden="true" /></span>
-          <div>
-            <h2 id="rr-results-title">{lookupById ? "Kết quả tra mã" : queues[filters.queue]}</h2>
-            {data && <p role="status">{data.totalElements} hồ sơ
-              {data.totalReports > data.totalElements && ` · ${data.totalReports} báo cáo`}</p>}
-          </div>
-          <button type="button" className="rr-queue-refresh" onClick={() => setReload(value => value + 1)}
-            disabled={refreshing} aria-label="Làm mới danh sách">
-            <RefreshCw size={16} aria-hidden="true" /> <span>Làm mới</span>
-          </button>
-        </div>
-        <WorkShift calendar={data?.workCalendar} />
         <div className="rr-queue-views" role="group" aria-label="Hàng đợi xử lý">
           {Object.entries(queues).map(([value, label]) => (
             <button type="button" key={value} aria-pressed={!lookupById && filters.queue === value} onClick={() => selectQueue(value)}>
@@ -171,6 +154,8 @@ export default function ReportQueue({ kind, reportPath }) {
         <strong>{lookupById ? "Không tìm thấy mã báo cáo trong trang này"
           : isFiltered ? "Không có hồ sơ phù hợp"
           : filters.queue === "READY" ? "Hiện chưa có hồ sơ cần xử lý" : "Hàng đợi đang trống"}</strong>
+        {isFiltered && <button type="button" onClick={resetFilters}>Xóa bộ lọc để xem lại</button>}
+        {!isFiltered && filters.queue === "READY" && <button type="button" onClick={() => selectQueue("WAITING")}>Xem hồ sơ đang chờ</button>}
       </div>}
       {data?.content.length > 0 && <div className="rr-queue-results">
         <table className="rr-queue-table" aria-label="Danh sách hồ sơ báo cáo" role="table">
@@ -182,7 +167,7 @@ export default function ReportQueue({ kind, reportPath }) {
             <th scope="col" role="columnheader"><span className="sr-only">Mở hồ sơ</span></th>
           </tr></thead>
           {data.content.map(report => <ReportGroup key={`${kind}:${report.report_id}`} report={report}
-            filters={filters} reportPath={reportPath} timeZone={data.workCalendar?.zone} />)}
+            filters={filters} reportPath={reportPath} revision={reload} timeZone={data.workCalendar?.zone} />)}
         </table>
       </div>}
       {data?.totalPages > 1 && <nav className="rr-queue-pagination" aria-label="Trang hồ sơ">

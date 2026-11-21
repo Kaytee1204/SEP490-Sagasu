@@ -61,7 +61,7 @@ export default function ConfirmReceiptDialog({ claim, handover, onClose, onConfi
       <ul className="handover-confirm-effects">
         <li>Hồ sơ nhận đồ hoàn tất; bài đăng chuyển sang đã trao trả.</li>
         <li>Cuộc trò chuyện chuyển sang chỉ đọc, vẫn giữ lịch sử.</li>
-        <li>Bạn không thể báo sự cố bàn giao tại đây sau khi xác nhận.</li>
+        <li>Bạn có thể báo sự cố phát hiện sau khi xác nhận trong vòng 7 ngày.</li>
       </ul>
       {onReportIssue && <div className="handover-record-context"><p>Chưa nhận được đồ hoặc có vấn đề?</p>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={onReportIssue}>Báo sự cố bàn giao</button></div>}

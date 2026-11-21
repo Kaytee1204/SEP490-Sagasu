@@ -52,7 +52,7 @@ export default function FinderAppealAction({ report, claimPath }) {
           <RotateCcw size={15} aria-hidden="true" />{busy ? "Đang kiểm tra…" : "Thu hồi để xét lại"}
         </button>}
     {claim && createPortal(
-      <RevokeClaimApprovalDialog claim={claim} initialReason={`Xét duyệt lại theo kết luận kháng cáo #${reportId}.`}
+      <RevokeClaimApprovalDialog claim={claim} initialReason={`Xét duyệt lại theo kết luận tranh chấp #${reportId}.`}
         cancelLabel="Quay lại" onClose={() => setClaim(null)}
         onRevoked={() => navigate(reviewPath, { state: { revokedClaimId: claimId } })} />,
       document.body,

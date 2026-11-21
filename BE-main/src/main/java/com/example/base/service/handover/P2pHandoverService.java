@@ -60,6 +60,7 @@ public class P2pHandoverService {
         var tx=new TransactionTemplate(transactions);
         Detail old=tx.execute(status->{Claim c=claim(claimId);participant(c,actor); Detail retry=recordRetry(c,actor,request.clientRequestId(),prepared.hash());if(retry==null)requireRecord(c,actor,request.expectedClaimVersion());return retry;});
         if(old!=null)return old;
+        if (prepared.images().isEmpty()) throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID, "Vui lòng thêm ít nhất một ảnh bàn giao.");
         var uploaded=images.upload("handovers/"+claimId,prepared); boolean[] inserted={false};
         try {Detail result=tx.execute(status->{
             Claim c=lock(claimId); actors.actor(user);participant(c,actor);
@@ -135,25 +136,20 @@ public class P2pHandoverService {
             if ("DURING".equals(phase)) {
                 jdbc.update("insert into p2p_handover_issue(report_id,handover_id) values(?,?)",report.getId(),h.getId());
                 h.reportIssue();
-            } else {
-                jdbc.update("insert into p2p_handover_issue(report_id,handover_id,phase) values(?,?,?)",
-                        report.getId(),h==null?null:h.getId(),phase);
-            }
-            if ("BEFORE".equals(phase)) jdbc.update(
-                    "insert into report_hold(report_id,post_id,actor_id,reason) values(?,?,?,?)",
-                    report.getId(),c.getPost().getId(),actor,"Đang xác minh sự cố trước khi bàn giao.");
-            if (!"AFTER".equals(phase)) {
                 c.touchWorkflow();
                 activities.save(new ClaimActivity(c,em.find(Account.class,actor),"REPORT_ISSUE","APPROVED","Báo cáo sự cố #"+report.getId()));
+            } else {
+                jdbc.update("insert into p2p_handover_issue(report_id,handover_id,phase) values(?,?,?)",
+                        report.getId(),h.getId(),phase);
             }
             claims.flush();handovers.flush();conversations.notifyChanged(c);
             long other=c.getClaimant().getId()==actor?c.getPost().getAccount().getId():c.getClaimant().getId();
             jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing",
                     report.getId(),other);
             notifications.notifyUser(other,"HANDOVER_DISPUTED",
-                "Có báo cáo sự cố bàn giao đồ (#" + c.getId() + ")",
+                "Có báo cáo sự cố bàn giao đồ (#" + report.getId() + ")",
                 "Có báo cáo sự cố liên quan đến bài đăng \"" + c.getPost().getTitle() + "\". Lý do: " + reason,
-                "/bai-dang/" + c.getPost().getId() + "/claims/" + c.getId(),true);
+                "/bao-cao/" + report.getId(),true);
             notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",
                 "Báo cáo sự cố bàn giao P2P mới (#" + report.getId() + ")",
                 "Có báo cáo sự cố bàn giao cho hồ sơ #" + claimId + ". Lý do: " + reason,
@@ -162,12 +158,20 @@ public class P2pHandoverService {
         });if(!inserted[0])images.cleanup(uploaded);return result;}catch(RuntimeException ex){images.cleanup(uploaded);throw ex;}
     }
     private String requireIssue(Claim c,P2pHandover h,long version) {
+        if (h == null) {
+            throw new AppException(ErrorCode.HANDOVER_STATE_CHANGED,
+                "Chỉ có thể báo sự cố sau khi người nhặt ghi nhận đã giao đồ.");
+        }
         String phase=issuePhase(c,h);
-        if(phase==null || (h==null?c.getVersion():h.getVersion())!=version || activeIssue(c,h)!=null) throw changed();
+        if(phase==null || h.getVersion()!=version || issueId(h.getId())!=null) throw changed();
+        if (reportHolds.held(c.getPost().getId())) {
+            throw new AppException(ErrorCode.HANDOVER_STATE_CHANGED,
+                "Bàn giao đang tạm dừng để xử lý tranh chấp. Vui lòng theo dõi tiến trình nhận đồ.");
+        }
         return phase;
     }
     private String issuePhase(Claim c,P2pHandover h) {
-        if(h==null) return ready(c)?"BEFORE":null;
+        if(h==null) return null;
         if("WAITING_CONFIRMATION".equals(h.getStatus()) && ready(c)) return "DURING";
         if("COMPLETED".equals(h.getStatus()) && "COMPLETED".equals(c.getStatus()) && h.getConfirmedAt()!=null
                 && OffsetDateTime.now().isBefore(h.getConfirmedAt().plusDays(7))) return "AFTER";
@@ -193,10 +197,10 @@ public class P2pHandoverService {
     private void requireRecord(Claim c,long actor,long version) {
         reportHolds.requireAvailable(c.getPost().getId());
         if(c.getPost().getAccount().getId()!=actor)throw new AppException(ErrorCode.FORBIDDEN);
-        if(!ready(c)||c.getVersion()!=version||handovers.existsByClaimId(c.getId()))throw changed();
+        if(!ready(c)||c.getVersion()!=version||handovers.existsByClaimId(c.getId())||activeIssue(c,null)!=null)throw changed();
         var window = appeals.handoverWindow(c);
         if (window != null && window.blocksHandover()) {
-            throw new AppException(ErrorCode.HANDOVER_STATE_CHANGED, "Bàn giao đang tạm dừng do kháng cáo. Vui lòng kiểm tra tiến trình nhận đồ.");
+            throw new AppException(ErrorCode.HANDOVER_STATE_CHANGED, "Bàn giao đang tạm dừng do tranh chấp. Vui lòng kiểm tra tiến trình nhận đồ.");
         }
     }
     private boolean ready(Claim c) {return !c.isOffice()&&"APPROVED".equals(c.getStatus())&&routing.matches(c,Set.of("RESERVED"));}
@@ -219,8 +223,8 @@ public class P2pHandoverService {
         String phase=issuePhase(c,h);
         var evidence=h==null?List.<ReportService.Evidence>of():jdbc.query("select * from p2p_handover_evidence where handover_id=? order by sort_order",(rs,n)->new ReportService.Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),h.getId());
         return new Detail(h==null?null:h.getId(),c.getId(),h==null?"NOT_RECORDED":h.getStatus(),h==null?null:h.getNote(),h==null?null:h.getRecordedAt(),h==null?null:h.getConfirmedAt(),h==null?c.getVersion():h.getVersion(),
-            h==null&&ready&&c.getPost().getAccount().getId()==actor&&!held&&(appealWindow==null||!appealWindow.blocksHandover()),
-            canRespond,phase!=null&&reportId==null,evidence,issue,held,appealWindow,
+            h==null&&reportId==null&&ready&&c.getPost().getAccount().getId()==actor&&!held&&(appealWindow==null||!appealWindow.blocksHandover()),
+            canRespond,phase!=null&&reportId==null&&!held,evidence,issue,held,appealWindow,
             h!=null&&h.getConfirmedBy()!=null&&!Objects.equals(h.getConfirmedBy(),c.getClaimant().getId()),phase);
     }
     private AppException invalid(){return new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);}

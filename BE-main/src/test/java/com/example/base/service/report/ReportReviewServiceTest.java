@@ -504,20 +504,16 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void pendingRecoveryAfterAppealConclusionPreservesTheConclusion() {
+    void appealCannotStartItemRecoveryBeforeOrAfterConclusion() {
         report.put("kind", "HANDOVER_ISSUE");
         report.put("status", "RESOLVED");
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
                 "active", true, "ready_for_reopen", false));
 
-        service.act(5L, action("REQUEST_ITEM_RECOVERY", 8L, false), user);
-
-        verify(jdbc).update(startsWith("update report set status=?"), eq("RESOLVED"),
-                eq(false), eq("Conclusion"), eq(false), eq(1L), eq(false), eq(5L));
-        verify(jdbc, never()).update(contains("insert into report_hold"), any(), any(), any(), any());
-        verify(notifications).notifyUser(7L, "REPORT_RECOVERY_REQUESTED", "Yêu cầu thu hồi món đồ",
-                "Conclusion", "/bao-cao/5", false);
-        verifyNoInteractions(claims);
+        assertBad(() -> service.act(5L, action("REQUEST_ITEM_RECOVERY", 8L, false), user), "Hồ sơ tranh chấp này chỉ dùng để xem lại");
+        report.put("status", "IN_REVIEW");
+        assertBad(() -> service.act(5L, action("REQUEST_ITEM_RECOVERY", 8L, false), user), "Hồ sơ tranh chấp này chỉ dùng để xem lại");
+        verifyNoInteractions(notifications, claims);
     }
 
     @Test
@@ -540,8 +536,9 @@ class ReportReviewServiceTest {
         report.put("kind", "HANDOVER_ISSUE");
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
                 "active", true, "ready_for_reopen", true));
-        assertBad(() -> service.act(5L, action("RESOLVE"), user), "quyết định xử lý kháng cáo");
+        assertBad(() -> service.act(5L, action("RESOLVE"), user), "quyết định xử lý tranh chấp");
         service.act(5L, action("APPEAL_REQUIRE_REVIEW"), user);
+        verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L), eq(true));
         verifyStatusUpdate("RESOLVED");
         verifyNoInteractions(claims);
 
@@ -596,6 +593,7 @@ class ReportReviewServiceTest {
     void utc088_resolve_resolvedAndHoldReleased() {
         service.act(5L, action("RESOLVE"), user);
         verifyStatusUpdate("RESOLVED");
+        verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L), eq(false));
         verify(jdbc).update(contains("update report_hold set released_at=now()"), eq(5L));
         verify(chat).notifyAppealChanged(5L);
     }
@@ -610,6 +608,14 @@ class ReportReviewServiceTest {
     @Test
     void utc090_resolve_activeP2pDispute_mustUseHandoverOutcome() {
         when(jdbc.queryForObject(contains("p2p_handover_issue"), eq(Boolean.class), any(Object[].class))).thenReturn(true);
+        assertBad(() -> service.act(5L, action("RESOLVE"), user), "kết quả trao trả");
+    }
+
+    @Test
+    void beforeHandoverIssueRequiresExplicitDecisionBeforeRelease() {
+        report.put("kind", "HANDOVER_ISSUE");
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "BEFORE"));
+        assertBad(() -> service.act(5L, action("RELEASE"), user), "kết luận sự cố");
         assertBad(() -> service.act(5L, action("RESOLVE"), user), "kết quả trao trả");
     }
 

@@ -6,19 +6,19 @@ import {
 import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
-import useLoad from '@/features/office/hooks/useLoad';
+import useReportResource from '../hooks/useReportResource';
 import { getReportWorkspace } from '../api/reportApi';
 import { reportStatuses, reportTitles } from '../constants/reportConstants';
-import { formatReportDate, reportDetailPath, reportsPath, reportSubject } from '../utils/reportUtils';
+import { appealSteps, formatReportDate, reportDetailPath, reportsPath, reportSubject } from '../utils/reportUtils';
 import '../styles/Reports.css';
 
 const reportTypes = {
   ALL: 'Tất cả loại',
   VIOLATION: 'Vi phạm',
   HANDOVER_ISSUE: 'Sự cố bàn giao',
-  CLAIM_APPEAL: 'Kháng cáo',
+  CLAIM_APPEAL: 'Tranh chấp',
 };
-const statusFilters = { ALL: 'Tất cả', IN_PROGRESS: 'Đang xử lý', FINISHED: 'Đã có kết quả' };
+const statusFilters = { ALL: 'Tất cả', ACTION: 'Cần tôi xử lý', IN_PROGRESS: 'Đang xử lý', FINISHED: 'Đã kết thúc' };
 const targetIcons = {
   POST: FileText, USER: UserRound, CLAIM: ClipboardCheck, MESSAGE: MessageSquare,
   HANDOVER_ISSUE: Handshake, CLAIM_APPEAL: Scale,
@@ -39,9 +39,9 @@ function MyReports() {
   const type = Object.hasOwn(reportTypes, params.get('type')) ? params.get('type') : 'ALL';
   const requestedPage = Number(params.get('page'));
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 && requestedPage <= 2147483647 ? requestedPage : 1;
-  const { data, loading, error, reload } = useLoad(
-    () => getReportWorkspace({ page, mine, status, type }),
+  const { data, loading, error, reload } = useReportResource(
     `${mine}:${status}:${type}:${page}`,
+    () => getReportWorkspace({ page, mine, status, type }),
   );
 
   useEffect(() => {
@@ -107,7 +107,7 @@ function MyReports() {
           </label>
         </div>
       </div>
-      {loading && <p className="reports-count" role="status">Đang tải báo cáo…</p>}
+      {loading && !data && <p className="reports-count" role="status">Đang tải báo cáo…</p>}
       {error && <div className="report-card">
         <p className="report-error" role="alert">{error}</p>
         <button className="btn btn-ghost" type="button" onClick={reload}>Thử tải lại</button>
@@ -144,10 +144,10 @@ function ReportRow({ report, returnTo }) {
   const needsAction = report.needs_reply || report.needs_reopen;
   const isFinished = finished(report.status);
   const state = report.needs_reply ? 'Cần bạn phản hồi'
-    : report.needs_reopen ? 'Cần xét lại người nhận' : reportStatuses[report.status];
+    : report.needs_reopen ? 'Cần xét lại người nhận' : appealSteps[report.appeal_step] || reportStatuses[report.status];
   const action = report.needs_reply ? 'Gửi thông tin bổ sung'
-    : report.needs_reopen ? 'Xem việc cần làm' : isFinished ? 'Xem kết quả' : 'Xem tiến trình';
-  const hash = report.needs_reply ? '#phan-hoi' : isFinished ? '#ket-qua' : '';
+    : report.needs_reopen ? 'Xem việc cần làm' : report.appeal_step ? 'Xem bước tiếp theo' : isFinished ? 'Xem kết quả' : 'Xem tiến trình';
+  const hash = report.needs_reply ? '#phan-hoi' : report.appeal_step ? '#buoc-tiep-theo' : isFinished ? '#ket-qua' : '';
   return (
     <article className={`report-entry${needsAction ? ' report-entry-action' : ''}`}>
       <span className="report-entry-icon"><Icon size={19} aria-hidden="true" /></span>
@@ -160,7 +160,7 @@ function ReportRow({ report, returnTo }) {
         </div>
       </div>
       <div className="report-entry-actions">
-        <span className={`report-state report-state-${needsAction ? 'ACTION' : report.status}`}>{state}</span>
+        <span className={`report-state report-state-${needsAction ? 'ACTION' : report.appeal_step ? 'IN_REVIEW' : report.status}`}>{state}</span>
         <Link className={`btn ${needsAction ? 'btn-accent' : 'btn-ghost'}`}
           to={reportDetailPath(report.report_id) + hash} state={{ returnTo }}
           aria-label={`${action} báo cáo #${report.report_id}`}>

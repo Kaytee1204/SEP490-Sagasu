@@ -4,7 +4,7 @@ export const reportTypes = {
   CLAIM: 'Yêu cầu nhận đồ',
   MESSAGE: 'Tin nhắn',
   HANDOVER_ISSUE: 'Sự cố bàn giao',
-  CLAIM_APPEAL: 'Kháng cáo kết quả nhận đồ',
+  CLAIM_APPEAL: 'Tranh chấp kết quả nhận đồ',
 };
 
 export const reportTitles = {
@@ -13,7 +13,7 @@ export const reportTitles = {
   CLAIM: 'Báo cáo yêu cầu nhận đồ',
   MESSAGE: 'Báo cáo tin nhắn',
   HANDOVER_ISSUE: 'Báo sự cố bàn giao',
-  CLAIM_APPEAL: 'Kháng cáo kết quả nhận đồ',
+  CLAIM_APPEAL: 'Tranh chấp kết quả nhận đồ',
 };
 
 export const reportStatuses = {OPEN:'Chờ xử lý',IN_REVIEW:'Đang xem xét',RESOLVED:'Đã giải quyết',REJECTED:'Đã bác bỏ'};

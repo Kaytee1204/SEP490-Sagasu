@@ -71,7 +71,7 @@ public class ReportReviewController {
 
     @PostMapping("/{id}/actions")
     @Operation(
-            summary = "[13.7] Xử lý vi phạm, sự cố bàn giao hoặc kháng cáo (MANAGER)",
+            summary = "[13.7] Xử lý vi phạm, sự cố bàn giao hoặc tranh chấp (MANAGER)",
             description = "Chọn action từ chi tiết báo cáo. Với kết luận VIOLATION có thể gửi thêm measure trong availableMeasures để áp dụng cùng kết luận. Thu hồi chấp thuận hoặc hủy bàn giao để mở lại xét duyệt cần xác minh nơi giữ đồ."
     )
     public ApiResponse<?> action(
