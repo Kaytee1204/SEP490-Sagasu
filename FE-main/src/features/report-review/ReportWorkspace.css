@@ -693,28 +693,12 @@
   background: var(--review-soft);
 }
 
-.rr-evidence-person {
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: 3px;
-}
-
-.rr .rr-evidence-person small:first-child {
-  display: flex;
-  align-items: flex-start;
-  gap: 5px;
+.rr .rr-evidence-role {
+  display: block;
+  margin-top: 2px;
   color: var(--review-accent);
-  font-weight: 650;
-}
-
-.rr-evidence-person svg {
-  flex-shrink: 0;
-  margin-top: 3px;
-}
-
-.rr-evidence-person .rr-badge {
-  white-space: normal;
+  font-size: .75rem;
+  line-height: 1.35;
 }
 
 .rr-evidence-row .rr-gallery {
@@ -982,6 +966,8 @@
 .rr-participants .rr-people { display: block; margin-top: 6px; }
 .rr-participants .rr-people > div { gap: 2px; padding: 7px 0; border: 0; border-radius: 0; font-size: .85rem; }
 .rr-participants .rr-people > div + div { border-top: 1px solid var(--review-line); }
+.rr-person-case-role { color: var(--review-accent); font-weight: 650; }
+.rr-person-account { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 @container (max-width: 735px) {
   .rr-review-sheet { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .rr-sheet-main, .rr-sheet-side { display: contents; }

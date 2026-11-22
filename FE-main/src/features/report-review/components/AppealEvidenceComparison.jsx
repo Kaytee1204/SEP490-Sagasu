@@ -1,5 +1,5 @@
-import { Scale, UserRound } from "lucide-react";
-import { Badge, Gallery } from "./Shared";
+import { Scale } from "lucide-react";
+import { Gallery } from "./Shared";
 
 function indexedAnswers(answers = []) {
   const occurrences = new Map();
@@ -28,13 +28,15 @@ export default function AppealEvidenceComparison({ current, approved }) {
     </div>
     <div className="rr-evidence-grid" role="table" aria-label="Đối chiếu căn cứ nhận đồ">
       <div className="rr-evidence-row rr-evidence-head" role="row">
-        <div role="columnheader" className="rr-evidence-question">Căn cứ</div>
-        {candidates.map(({ label, context }) => <div key={label} role="columnheader" className="rr-evidence-person">
-          <small><UserRound size={14} aria-hidden="true" />{label}</small>
-          <strong>{context.claim?.claimant_name || label}</strong>
-          {context.claim?.claim_id && <small>Yêu cầu #{context.claim.claim_id}</small>}
-          {context.claim?.status && <Badge value={context.claim.status} />}
-        </div>)}
+        <div role="columnheader" className="rr-evidence-question">Nội dung đối chiếu</div>
+        {candidates.map(({ label, context }) => {
+          const account = context.participants?.find(person => person.id === context.claim?.claimant_id);
+          const name = account?.full_name || context.claim?.claimant_name;
+          return <div key={label} role="columnheader">
+            <strong>{name || label}</strong>
+            {name && <small className="rr-evidence-role">{label}</small>}
+          </div>;
+        })}
       </div>
       {[["description", "Căn cứ nhận đồ"], ["evidence_note", "Thông tin bổ sung"]].map(([key, label]) => (
         (current.claim?.[key] || approved.claim?.[key]) && <div key={key} className="rr-evidence-row" role="row">

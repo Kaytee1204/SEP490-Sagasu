@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronDown, ClipboardCheck, History, MessageSquare, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { reviewApi } from "../api";
 import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
-import { appealActionHelp, availableRecipients, date, labels, officeAppealActionHelp, reviewKinds } from "../format";
+import { appealActionHelp, availableRecipients, date, labels, officeAppealActionHelp, participantRoles, reviewKinds } from "../format";
 import ContextPanel from "./ContextPanel";
 import DecisionDialog from "./DecisionDialog";
 import Inquiries from "./Inquiries";
@@ -40,22 +40,26 @@ function Submission({ data }) {
 }
 
 function RelatedInformation({ data, onRelated }) {
-  const { current, report, related } = data;
-  const relatedReports = data.caseKind === "CLAIM_APPEAL" ? related.filter(item => item.same_approval) : related;
+  const { current, related } = data;
+  const isAppeal = data.caseKind === "CLAIM_APPEAL";
+  const relatedReports = isAppeal ? related.filter(item => item.same_approval) : related;
   return <div className="rr-stack">
     {current.participants.length > 0 && <section className="rr-card rr-participants">
       <h2>Người liên quan</h2>
       <div className="rr-people">
-        {current.participants.map(person => <div key={person.id}>
-          <strong>{person.full_name}</strong>
-          <small>{person.email}</small>
-          <span>{person.id === report.reporter_id ? "Người gửi báo cáo · " : ""}{labels[person.role]}</span>
-          <Badge value={person.status} />
-        </div>)}
+        {current.participants.map(person => {
+          const roles = participantRoles(data, person.id);
+          return <div key={person.id}>
+            <strong>{person.full_name}</strong>
+            {roles.length > 0 && <span className="rr-person-case-role">{roles.join(" · ")}</span>}
+            <small>{person.email}</small>
+            <div className="rr-person-account"><small>{labels[person.role]}</small><Badge value={person.status} /></div>
+          </div>;
+        })}
       </div>
     </section>}
     {relatedReports.length > 0 && <section className="rr-card">
-      <h2>{data.caseKind === "CLAIM_APPEAL" ? "Tranh chấp cùng lần duyệt" : "Báo cáo liên quan"}</h2>
+      <h2>{isAppeal ? "Tranh chấp cùng lần duyệt" : "Báo cáo liên quan"}</h2>
       <div className="rr-related-list">
         {relatedReports.map(item => <button type="button" className="rr-related" key={item.report_id} onClick={() => onRelated(item.report_id)}>
           <span><strong>#{item.report_id} · {item.reason_label_snapshot || labels[item.kind]}</strong><small>{date(item.created_at)}</small></span>

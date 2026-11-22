@@ -95,8 +95,12 @@ class ReportReviewServiceTest {
     }
 
     private void givenTotals(long reports, long groups) {
-        when(jdbc.queryForMap(startsWith("select count(*) as reports"), any(Object[].class)))
-                .thenReturn(Map.of("reports", reports, "groups", groups));
+        givenTotals(reports, groups, 0L, 0L);
+    }
+
+    private void givenTotals(long reports, long groups, long ready, long waiting) {
+        when(jdbc.queryForMap(startsWith("select count(*) filter (where in_list) as reports"), any(Object[].class)))
+                .thenReturn(Map.of("reports", reports, "groups", groups, "ready", ready, "waiting", waiting));
     }
 
     private void givenVisiblePost() {
@@ -148,20 +152,23 @@ class ReportReviewServiceTest {
         service.list(1, "ALL", "ALL", "ALL", "50%_off", user);
 
         ArgumentCaptor<Object[]> cap = ArgumentCaptor.forClass(Object[].class);
-        verify(jdbc).queryForMap(startsWith("select count(*) as reports"), cap.capture());
+        verify(jdbc).queryForMap(startsWith("select count(*) filter (where in_list) as reports"), cap.capture());
         assertThat(cap.getValue()).contains("%50\\%\\_off%");
     }
 
     @Test
     void assigneeCombinesWithTheSelectedQueue() {
-        givenTotals(0L, 0L);
-        service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "WAITING", null, "MINE", user);
+        givenTotals(4L, 3L, 2L, 3L);
+        var result = service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "WAITING", null, "MINE", user);
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
         verify(jdbc).queryForMap(sql.capture(), args.capture());
-        assertThat(sql.getValue()).contains("queue_state.work_state='WAITING'", "r.assigned_to=?");
+        assertThat(sql.getValue()).contains("(queue_state.work_state='WAITING') as in_list", "r.assigned_to=?",
+                "filter (where work_state='READY') as ready", "filter (where work_state='WAITING') as waiting");
         assertThat(args.getValue()).contains(1L);
+        assertThat(result).containsEntry("totalElements", 3L)
+                .containsEntry("countsByQueue", Map.of("READY", 2L, "WAITING", 3L));
     }
 
     @Test
@@ -182,9 +189,9 @@ class ReportReviewServiceTest {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
         verify(jdbc).queryForMap(sql.capture(), args.capture());
-        assertThat(sql.getValue()).contains("else r.kind end=?", "and r.report_id=?")
+        assertThat(sql.getValue()).contains("else r.kind end=?", "(r.report_id=?) as in_list")
                 .doesNotContain("and queue_state.work_state='READY'", "and r.assigned_to=?", "r.description ilike");
-        assertThat(args.getValue()).contains("GENERAL", 52L).doesNotContain("OPEN", "POST");
+        assertThat(args.getValue()).startsWith(52L).contains("GENERAL").doesNotContain("OPEN", "POST");
         assertThat(result).containsEntry("page", 1);
     }
 

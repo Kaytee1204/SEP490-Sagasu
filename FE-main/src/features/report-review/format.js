@@ -126,6 +126,18 @@ export const date = (value) =>
     ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
     : "Chưa ghi nhận";
 
+export function participantRoles(data, accountId) {
+  const { report, caseKind, approvedContext, appeal } = data;
+  const isAppeal = caseKind === "CLAIM_APPEAL";
+  const roles = [];
+  if (accountId === report.reporter_id) roles.push(isAppeal ? "Người gửi tranh chấp" : "Người gửi báo cáo");
+  if (isAppeal && accountId === approvedContext?.claim?.claimant_id) roles.push("Người được chấp thuận");
+  if (isAppeal && appeal && accountId === appeal.finder_id) {
+    roles.push(appeal.claim_type === "P2P" ? "Người đăng bài (người nhặt được)" : "Người đăng bài");
+  }
+  return roles;
+}
+
 export function availableRecipients(data) {
   const waiting = new Set(data.inquiries.filter(i => !i.responded_at && !i.closed_at).map(i => i.recipient_id));
   return data.current.participants.filter(person => !waiting.has(person.id));

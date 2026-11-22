@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox, Gallery, Empty } from "./Shared";
-import { availableRecipients, date } from "../format";
+import { availableRecipients, date, participantRoles } from "../format";
 export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
-  const recipients = availableRecipients(draftData || data);
+  const inquiryData = draftData || data;
+  const recipients = availableRecipients(inquiryData);
   const [recipientId, setRecipient] = useState(""),
     [question, setQuestion] = useState(""),
     [busy, setBusy] = useState(false),
@@ -87,9 +88,9 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
                 onChange={(e) => setRecipient(e.target.value)}
               >
                 <option value="">Chọn người liên quan</option>
-                {recipients.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name} · {p.email}
+                {recipients.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {[...participantRoles(inquiryData, person.id), person.full_name, person.email].filter(Boolean).join(" · ")}
                   </option>
                 ))}
               </select>

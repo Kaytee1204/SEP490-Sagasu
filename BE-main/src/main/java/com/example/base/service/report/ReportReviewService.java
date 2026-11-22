@@ -127,10 +127,15 @@ public class ReportReviewService {
     String query = q.strip();
     var reference = REPORT_REFERENCE.matcher(query);
     boolean lookupById = targetId == null && reference.matches();
-    if (lookupById) {
-      where += " and r.report_id=?";
-      args.add(parseReportId(reference.group(1)));
-    } else {
+    List<Long> selectionArgs = lookupById ? List.of(parseReportId(reference.group(1))) : List.of();
+    String selection = lookupById ? "r.report_id=?" : switch (queue) {
+      case "READY", "WAITING", "HISTORY" -> "queue_state.work_state='" + queue + "'";
+      case "UNASSIGNED" -> "queue_state.work_state='READY' and r.assigned_to is null";
+      case "MINE" -> "queue_state.work_state<>'HISTORY' and r.assigned_to=" + actor.getId();
+      case "REPLIED" -> "queue_state.work_state='READY' and facts.new_reply";
+      default -> "true";
+    };
+    if (!lookupById) {
       where += """
         and (?='ALL' or r.status=?)
         and (?='ALL' or case when r.post_id is not null then 'POST' when r.claim_id is not null
@@ -145,13 +150,6 @@ public class ReportReviewService {
           """;
         args.addAll(Collections.nCopies(5, pattern));
       }
-      where += switch(queue) {
-        case "READY", "WAITING", "HISTORY" -> " and queue_state.work_state='" + queue + "'";
-        case "UNASSIGNED" -> " and queue_state.work_state='READY' and r.assigned_to is null";
-        case "MINE" -> " and queue_state.work_state<>'HISTORY' and r.assigned_to=" + actor.getId();
-        case "REPLIED" -> " and queue_state.work_state='READY' and facts.new_reply";
-        default -> "";
-      };
       if ("UNASSIGNED".equals(assignee)) where += " and r.assigned_to is null";
       if ("MINE".equals(assignee)) {
         where += " and r.assigned_to=?";
@@ -173,15 +171,27 @@ public class ReportReviewService {
           when r.message_id is not null then 'MESSAGE:'||r.message_id
           else 'USER:'||r.reported_account_id end
         """.strip();
-    String tally = "count(distinct " + objectKey + ")";
-    var totals = jdbc.queryForMap("select count(*) as reports, " + tally + " as groups, "
-        + tally + " filter (where r.kind='GENERAL' and appeal.report_id is null) as violations, "
-        + tally + " filter (where r.kind='HANDOVER_ISSUE' and appeal.report_id is null) as handover_issues, "
-        + tally + " filter (where appeal.report_id is not null) as claim_appeals" + where, args.toArray());
+    var tallyArgs = new ArrayList<Object>(selectionArgs);
+    tallyArgs.addAll(args);
+    var totals = jdbc.queryForMap("""
+        select count(*) filter (where in_list) as reports,
+          count(distinct report_key) filter (where in_list) as groups,
+          count(distinct report_key) filter (where in_list and kind='GENERAL' and not is_appeal) as violations,
+          count(distinct report_key) filter (where in_list and kind='HANDOVER_ISSUE' and not is_appeal) as handover_issues,
+          count(distinct report_key) filter (where in_list and is_appeal) as claim_appeals,
+          count(distinct report_key) filter (where work_state='READY') as ready,
+          count(distinct report_key) filter (where work_state='WAITING') as waiting
+        from (
+          select %s as report_key, queue_state.work_state, r.kind, appeal.report_id is not null as is_appeal,
+            (%s) as in_list
+          %s
+        ) classified
+        """.formatted(objectKey, selection, where), tallyArgs.toArray());
     long reportCount = ((Number) totals.get("reports")).longValue();
     long count = targetId == null ? ((Number) totals.get("groups")).longValue() : reportCount;
     int resultPage = lookupById ? 1 : page;
     var params = new ArrayList<>(args);
+    params.addAll(selectionArgs);
     params.add((resultPage - 1) * 12);
     String projection = """
       select r.report_id,case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end as kind,
@@ -202,7 +212,7 @@ public class ReportReviewService {
         step.waiting_reason, approval.appeal_until, facts.new_reply as has_new_reply,
         queue_state.work_state='READY' and not inquiry.asked and decisions.latest_decision is null
           and r.status in ('OPEN','IN_REVIEW') as needs_first_response,
-      """ + objectKey + " as report_key" + where;
+      """ + objectKey + " as report_key" + where + " and " + selection;
     String order = "priority_rank,next_pickup nulls last,created_at,report_id";
     String grouped = "select ranked.*, count(*) over(partition by report_key) as object_count,"
       + " count(*) filter (where status in ('OPEN','IN_REVIEW')) over(partition by report_key) as open_count,"
@@ -250,6 +260,7 @@ public class ReportReviewService {
       "countsByKind", Map.of("GENERAL", totals.getOrDefault("violations", 0),
           "HANDOVER_ISSUE", totals.getOrDefault("handover_issues", 0),
           "CLAIM_APPEAL", totals.getOrDefault("claim_appeals", 0)),
+      "countsByQueue", Map.of("READY", totals.get("ready"), "WAITING", totals.get("waiting")),
       "workCalendar", Map.of("zone", calendar.zone(), "workingNow", !now.isBefore(shift.start()),
           "shiftStartsAt", shift.start().toString(), "shiftEndsAt", shift.end().toString())
     );

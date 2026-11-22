@@ -70,7 +70,7 @@ export default function ReportQueue({ kind, reportPath }) {
       window.clearInterval(timer);
     };
   }, []);
-  const { data, error } = useReviewResource("queue", filters, reload);
+  const { data, error, countsByQueue } = useReviewResource("queue", filters, reload);
   useEffect(() => {
     if (data && filters.page > Math.max(1, data.totalPages)) {
       setParams(old => {
@@ -111,8 +111,8 @@ export default function ReportQueue({ kind, reportPath }) {
         <div className="rr-queue-views" role="group" aria-label="Hàng đợi xử lý">
           {Object.entries(queues).map(([value, label]) => (
             <button type="button" key={value} aria-pressed={!lookupById && filters.queue === value} onClick={() => selectQueue(value)}>
-              {label}{!lookupById && filters.queue === value && data?.totalElements > 0 &&
-                <span className="rr-tab-count">{data.totalElements}</span>}
+              {label}{value !== "HISTORY" &&
+                <span className="rr-tab-count">{countsByQueue?.[value] ?? "–"}</span>}
             </button>
           ))}
         </div>

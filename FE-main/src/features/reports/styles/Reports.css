@@ -129,8 +129,25 @@
 }
 
 .report-next-step { border-inline-start: 4px solid #35897c; }
-.report-next-step > p { margin: 8px 0; }
-.report-next-step .report-back, .report-next-step .btn { margin-top: 8px; }
+.report-next-copy > p { margin: 8px 0; }
+.report-next-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
+.report-next-actions svg { flex-shrink: 0; }
+.report-next-step-pending {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding-block: 16px;
+  background: #f8fbfa;
+}
+.report-next-step-pending .report-next-copy { flex: 1 1 245px; min-width: 0; }
+.report-next-step-pending .report-next-copy > p { margin: 4px 0 0; color: #536c72; font-size: .88rem; }
+.report-next-step-pending .report-next-actions { max-width: 100%; margin-top: 0; }
+@media (max-width: 520px) {
+  .report-next-step-pending .report-next-actions { width: 100%; }
+  .report-next-step-pending .report-next-actions .btn { flex: 1 1 auto; }
+}
 .report-inquiry, #ket-qua { scroll-margin-top: 86px; }
 .report-exchange-archive { margin-top: 10px; }
 .report-exchange-archive summary { color: #216a57; font-size: .88rem; font-weight: 650; cursor: pointer; }
