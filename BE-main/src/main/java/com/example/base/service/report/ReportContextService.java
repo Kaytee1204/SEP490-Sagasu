@@ -99,13 +99,15 @@ public class ReportContextService {
           claim
         )
       );
-      result.put(
-        "p2pHandover",
-        one(
-          "select h.handover_id,h.status,h.recorded_by,h.recorded_at,h.note,h.confirmed_by,h.confirmed_at,a.full_name as recorded_by_name,b.full_name as confirmed_by_name from p2p_handover h join accounts a on a.id=h.recorded_by left join accounts b on b.id=h.confirmed_by where h.claim_id=?",
-          claim
-        )
-      );
+      var p2pHandover = one("""
+          select h.handover_id,h.status,h.recorded_by,h.recorded_at,h.note,h.confirmed_by,h.confirmed_at,
+            a.full_name as recorded_by_name,b.full_name as confirmed_by_name
+          from p2p_handover h join accounts a on a.id=h.recorded_by left join accounts b on b.id=h.confirmed_by
+          left join p2p_handover_issue i on i.report_id=?
+          where h.claim_id=? and (i.report_id is null or i.handover_id=h.handover_id)
+          order by h.handover_id desc limit 1
+          """, id(report, "report_id"), claim);
+      result.put("p2pHandover", p2pHandover);
       result.put(
         "officeHandover",
         one(
@@ -116,8 +118,8 @@ public class ReportContextService {
       result.put(
         "handoverEvidence",
         jdbc.queryForList(
-          "select e.storage_key,e.original_name from p2p_handover_evidence e join p2p_handover h using(handover_id) where h.claim_id=? union all select e.storage_key,e.original_name from office_handover_evidence e join office_handover h using(handover_id) where h.claim_id=?",
-          claim,
+          "select e.storage_key,e.original_name from p2p_handover_evidence e where e.handover_id=? union all select e.storage_key,e.original_name from office_handover_evidence e join office_handover h using(handover_id) where h.claim_id=?",
+          id(p2pHandover, "handover_id"),
           claim
         )
       );
@@ -197,6 +199,14 @@ public class ReportContextService {
     Set<Long> ids = new LinkedHashSet<>();
     ids.add(id(report, "reporter_id"));
     ids.add(id(report, "reported_account_id"));
+    if ("HANDOVER_ISSUE".equals(report.get("kind"))) {
+      ids.add(id(one("""
+          select chosen.claimant_id from p2p_claim_appeal appeal
+          join p2p_claim_approval approval using (approval_id)
+          join claim chosen on chosen.claim_id = approval.approved_claim_id
+          where appeal.report_id = ?
+          """, report.get("report_id")), "claimant_id"));
+    }
     if (post != null) {
       ids.add(
         id(

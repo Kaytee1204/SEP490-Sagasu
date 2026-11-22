@@ -9,6 +9,7 @@ import com.example.base.repository.ClaimRepository;
 import com.example.base.repository.PostRepository;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.chat.ChatAccessPolicy;
+import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.report.ReportService;
 import com.example.base.service.report.WorkflowImages;
@@ -41,6 +42,7 @@ public class P2pClaimAppealService {
     private final PostRepository posts;
     private final ClaimRoutingPolicy routing;
     private final ChatAccessPolicy actors;
+    private final ChatConversationService chat;
     private final EntityManager entityManager;
     private final PlatformTransactionManager transactions;
     private final WorkflowImages images;
@@ -53,7 +55,9 @@ public class P2pClaimAppealService {
     }
     public record Status(long approvalId, OffsetDateTime deadline, State state, boolean canAppeal,
                          Long reportId, String reportStatus) {}
-    public record Submit(Long approvalId, String reason, UUID clientRequestId) {}
+    public record Submit(Long approvalId, String reason, UUID clientRequestId, String reasonCode) {
+        public Submit(Long approvalId,String reason,UUID clientRequestId) { this(approvalId,reason,clientRequestId,null); }
+    }
     public record Submitted(long reportId) {}
     private record Approval(long id, long selectedClaimId, OffsetDateTime deadline, boolean pending, boolean upheld) {
         State stateAt(OffsetDateTime now) {
@@ -75,7 +79,7 @@ public class P2pClaimAppealService {
             notifications.notifyUser(claimant.getClaimant().getId(), "CLAIM_APPEAL_WINDOW",
                     "Một yêu cầu nhận đồ khác đã được chấp thuận",
                     "Một yêu cầu khác cho bài «" + selected.getPost().getTitle()
-                            + "» đã được chấp thuận. Nếu bạn có căn cứ sở hữu, hãy gửi kháng cáo trước "
+                            + "» đã được chấp thuận. Nếu bạn có căn cứ sở hữu, hãy gửi tranh chấp trước "
                             + LOCAL_DEADLINE.format(deadline) + ".",
                     claimPath(claimant), false);
         }
@@ -114,6 +118,12 @@ public class P2pClaimAppealService {
         return new HandoverWindow(approval.deadline(), approval.stateAt(OffsetDateTime.now()));
     }
 
+    public boolean canReopenFromDecision(Claim selected, long approvalId) {
+        Approval approval = activeApproval(selected.getPost().getId());
+        return approval != null && approval.id() == approvalId && approval.selectedClaimId() == selected.getId()
+                && approval.stateAt(OffsetDateTime.now()) == State.REVIEW_REQUIRED;
+    }
+
     @Transactional(readOnly = true)
     public Status status(long claimId, CustomUserDetails user) {
         long actor = actors.actor(user).getId();
@@ -146,11 +156,17 @@ public class P2pClaimAppealService {
         }
         long actor = actors.actor(user).getId();
         String reason = request.reason().strip();
-        var prepared = images.prepare("P2P_APPEAL:" + claimId + ":" + request.approvalId() + ":" + reason, files);
+        String reasonCode = request.reasonCode();
+        if (reasonCode != null && (reasonCode.isBlank() || reasonCode.length() > 64))
+            throw new AppException(ErrorCode.REPORT_REASON_INVALID);
+        String payload = "P2P_APPEAL:" + claimId + ":" + request.approvalId() + ":";
+        var prepared = images.prepare(payload + (reasonCode == null ? "" : reasonCode + ":") + reason, files);
         var tx = new TransactionTemplate(transactions);
         Submitted retry = tx.execute(status -> {
             Claim claim = claims.findById(claimId).orElseThrow(this::missing);
-            return checkSubmission(claim, actor, request, prepared.hash());
+            Submitted existing = checkSubmission(claim, actor, request, prepared.hash());
+            if (existing == null && reasonCode != null) reports.validateReason("CLAIM_APPEAL", reasonCode, reason);
+            return existing;
         });
         if (retry != null) return retry;
 
@@ -168,12 +184,12 @@ public class P2pClaimAppealService {
                 Submitted duplicate = checkSubmission(claim, actor, request, prepared.hash());
                 if (duplicate != null) return duplicate;
 
-                String description = "Kháng cáo kết quả xét duyệt yêu cầu nhận đồ\n\n" + reason;
-                var report = reports.insert(actor, "HANDOVER_ISSUE", "CLAIM", claimId, description,
+                var report = reports.insertAppeal(actor, claimId, reason, reasonCode,
                         request.clientRequestId(), prepared.hash(), uploaded);
                 jdbc.update("insert into p2p_claim_appeal(approval_id, appellant_claim_id, report_id) values (?, ?, ?)",
                         request.approvalId(), claimId, report.getId());
                 used[0] = true;
+                chat.notifyAppealChanged(report.getId());
                 notifyAppeal(post, actor, report.getId());
                 return new Submitted(report.getId());
             });
@@ -193,13 +209,13 @@ public class P2pClaimAppealService {
                 if (!existing.hash().equals(hash)) throw new AppException(ErrorCode.WORKFLOW_DUPLICATE_PAYLOAD);
                 return new Submitted(existing.id());
             }
-            throw new AppException(ErrorCode.REPORT_DUPLICATE, "Bạn đã gửi kháng cáo cho lần chấp thuận này.");
+            throw new AppException(ErrorCode.REPORT_DUPLICATE, "Bạn đã gửi tranh chấp cho lần chấp thuận này.");
         }
         Approval approval = activeApproval(claim.getPost().getId());
         if (approval == null || approval.id() != request.approvalId() || approval.selectedClaimId() == claim.getId()
                 || !routing.matches(claim, RESERVED) || !"PENDING".equals(claim.getStatus())
                 || !OffsetDateTime.now().isBefore(approval.deadline())) {
-            throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Hồ sơ đã thay đổi hoặc hết thời hạn kháng cáo.");
+            throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Hồ sơ đã thay đổi hoặc hết thời hạn gửi tranh chấp.");
         }
         return null;
     }
@@ -230,13 +246,12 @@ public class P2pClaimAppealService {
 
     private void notifyAppeal(Post post, long actor, long reportId) {
         notifications.notifyRoles(List.of(AccountRole.MANAGER), actor, "REPORT_CREATED",
-                "Có kháng cáo kết quả nhận đồ (#" + reportId + ")",
-                "Đối chiếu hồ sơ trước khi bàn giao. Chọn «Bác bỏ báo cáo» để giữ kết quả; "
-                        + "chọn «Giải quyết báo cáo» nếu cần người nhặt thu hồi và xét lại.",
-                "/admin/reports/" + reportId, false);
+                "Có tranh chấp kết quả nhận đồ (#" + reportId + ")",
+                "Đối chiếu hồ sơ rồi chọn giữ kết quả hoặc ghi kết luận cần xét lại người nhận.",
+                "/admin/reports/" + reportId + "?kind=CLAIM_APPEAL", false);
         claims.findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(post.getId(), "APPROVED").ifPresent(selected -> {
-            String title = "Bàn giao được tạm dừng để xét kháng cáo";
-            String message = "Có kháng cáo cho bài «" + post.getTitle() + "». Hãy chờ kết quả trước khi giao đồ.";
+            String title = "Bàn giao được tạm dừng để xử lý tranh chấp";
+            String message = "Có tranh chấp cho bài «" + post.getTitle() + "». Hãy chờ kết quả trước khi giao đồ.";
             notifications.notifyUser(post.getAccount().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), false);
             notifications.notifyUser(selected.getClaimant().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), false);
         });

@@ -9,7 +9,6 @@ import ChatList from '../components/ChatList';
 import ChatThread from '../components/ChatThread';
 import ChatItemPanel from '../components/ChatItemPanel';
 import '../styles/Chat.css';
-import ReportButton from '@/features/reports/components/ReportButton';
 
 export default function ChatPage() {
   const { conversationId } = useParams();
@@ -45,7 +44,6 @@ function ChatPanel({ id }) {
         <div className="chat-peer-info"><h2 title={chat.otherName}>{chat.otherName || 'Thành viên'}</h2>
           <p title={chat.postTitle}>{chat.postTitle}</p>
           {!online && <small role="status" className="chat-muted">Đang kết nối lại…</small>}</div>
-        <div className="chat-header-report"><ReportButton type="USER" id={chat.otherAccountId} targetLabel={chat.otherName} label="Báo cáo tài khoản"/></div>
       </div>
       <div className="chat-header-actions">
         <button ref={itemButton} type="button" className="chat-header-action" aria-expanded={itemOpen} aria-controls={itemOpen ? 'chat-item-panel' : undefined}

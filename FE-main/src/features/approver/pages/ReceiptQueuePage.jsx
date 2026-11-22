@@ -1,86 +1,365 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { approverApi } from '../api/approverApi';
 import { Link } from 'react-router-dom';
-import { Plus, Search, RefreshCw, ClipboardList, ArrowUpRight, MapPin, Pencil } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpDown,
+  Calendar,
+  Filter,
+  Inbox,
+  MapPin,
+  Plus,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  Tags,
+} from 'lucide-react';
 import Pagination from '@/components/common/Pagination';
 import { useIntakeReceipts } from '@/features/receipt/hooks/useIntakeReceipts';
 import ReceiptStatusBadge from '@/features/receipt/components/ReceiptStatusBadge';
 import { ReceiptImage } from '@/features/receipt/components/ReceiptImagePicker';
 import { ReceiptError, ReceiptLoading } from '@/features/receipt/components/ReceiptFeedback';
 import { receiptDate } from '@/features/receipt/receiptUtils';
-
-function Actions({ receipt }) {
-  return <div className="flex items-center gap-2">
-    <Link to={`/approver/receipts/${receipt.id}`} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-teal-300 hover:text-teal-700">Xem phiếu<ArrowUpRight size={14} /></Link>
-    {receipt.canProcess && <Link to={`/approver/receipts/${receipt.id}/edit`} aria-label={`Sửa ${receipt.title}`} className="rounded-lg p-2 text-slate-600 hover:bg-teal-50 hover:text-teal-700"><Pencil size={16} /></Link>}
-  </div>;
-}
-
-function StorageNote({ receipt }) {
-  return <p className={`mt-2 max-w-48 text-sm leading-5 ${receipt.storageLocationName ? 'text-slate-600' : 'text-amber-700'}`}>{receipt.storageLocationName ? `Lưu giữ: ${receipt.storageLocationName}` : 'Cần bổ sung nơi lưu trữ trước khi xác nhận'}</p>;
-}
+import { TIME_RANGE_OPTIONS, matchesTimeFilter } from '@/features/claims/utils/claimUtils';
+import '@/features/office/StaffWorkspace.css';
 
 const RECEIPT_FILTER_TABS = [
-  ['ALL', 'Tất cả'],
-  ['DRAFT', 'Bản nháp'],
-  ['REJECTED', 'Từ chối'],
-  ['IN_STORAGE', 'Đã tiếp nhận'],
-  ['RETURNED', 'Đã trao trả'],
+  { value: 'ALL', label: 'Tất cả' },
+  { value: 'DRAFT', label: 'Bản nháp', tone: 'warning' },
+  { value: 'IN_STORAGE', label: 'Đã tiếp nhận' },
+  { value: 'RETURNED', label: 'Đã trao trả' },
+  { value: 'REJECTED', label: 'Từ chối' },
 ];
 
 export default function ReceiptQueuePage() {
   const data = useIntakeReceipts(approverApi);
-  const filtered = data.filters.keyword.trim() || data.filters.filter !== 'ALL';
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [storageFilter, setStorageFilter] = useState('ALL');
+  const [timeRange, setTimeRange] = useState('ALL');
+  const [sortOrder, setSortOrder] = useState('NEWEST');
   const [tabCounts, setTabCounts] = useState({});
 
   useEffect(() => {
     let active = true;
     Promise.allSettled(
-      RECEIPT_FILTER_TABS.map(([value]) =>
+      RECEIPT_FILTER_TABS.map(({ value }) =>
         approverApi.list({ page: 1, keyword: data.filters.keyword, filter: value }),
       ),
     ).then((settled) => {
       if (!active) return;
       const next = {};
-      RECEIPT_FILTER_TABS.forEach(([value], idx) => {
+      RECEIPT_FILTER_TABS.forEach(({ value }, idx) => {
         const item = settled[idx];
         next[value] = item?.status === 'fulfilled' ? Number(item.value?.totalElements ?? 0) : 0;
       });
       setTabCounts(next);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [data.filters.keyword, data.totalElements]);
 
-  return <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="mb-2 text-sm font-bold tracking-wide text-teal-700">Văn phòng · Tiếp nhận tài sản</p><h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Phiếu tiếp nhận</h1><p className="mt-2 max-w-xl text-base leading-6 text-slate-600">Ghi nhận tài sản mang đến văn phòng, xác nhận nơi lưu trữ và đăng tin tìm chủ sở hữu.</p></div>
-      <Link to="/approver/receipts/new" className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-teal-800"><Plus size={18} />Tạo phiếu tiếp nhận</Link>
-    </div>
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="space-y-4 border-b border-slate-100 p-4 sm:p-5">
-        <div className="flex gap-3"><div className="relative flex-1 sm:max-w-md"><Search size={17} className="absolute left-3.5 top-3 text-slate-600" /><input type="search" value={data.filters.keyword} onChange={(e) => data.change('keyword', e.target.value)} maxLength={200} aria-label="Tìm phiếu" placeholder="Tìm tên đồ vật, mã phiếu hoặc địa điểm…" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-base outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" /></div>
-          <button type="button" disabled={data.loading} onClick={data.reload} aria-label="Tải lại danh sách" className="rounded-xl border border-slate-200 px-3 text-slate-600 hover:bg-slate-50 disabled:opacity-40"><RefreshCw size={17} className={data.loading ? 'animate-spin' : ''} /></button></div>
-        <div className="flex flex-wrap gap-2" aria-label="Lọc trạng thái">{RECEIPT_FILTER_TABS.map(([value, label]) => {
-          const count = tabCounts[value];
-          const activeTab = data.filters.filter === value;
-          return <button key={value} type="button" aria-pressed={activeTab} onClick={() => data.change('filter', value)} className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition ${activeTab ? 'bg-teal-700 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}>
-            <span>{label}</span>
-            {typeof count === 'number' && (
-              <span className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${activeTab ? 'bg-white/20 text-white' : value === 'DRAFT' && count > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-200/80 text-slate-700'}`}>
-                {count}
-              </span>
+  const categoryOptions = useMemo(() => {
+    const names = new Set();
+    (data.content || []).forEach((r) => {
+      if (r.categoryName) names.add(r.categoryName);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [data.content]);
+
+  const displayedContent = useMemo(() => {
+    const filtered = (data.content || []).filter((r) => {
+      if (categoryFilter !== 'ALL' && r.categoryName !== categoryFilter) return false;
+      if (storageFilter === 'ASSIGNED' && !r.storageLocationName) return false;
+      if (storageFilter === 'UNASSIGNED' && Boolean(r.storageLocationName)) return false;
+      if (timeRange !== 'ALL' && !matchesTimeFilter(r.recordedAt || r.foundAt, timeRange, '', '')) {
+        return false;
+      }
+      return true;
+    });
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      const diff =
+        new Date(a.recordedAt || a.foundAt || 0).getTime() -
+        new Date(b.recordedAt || b.foundAt || 0).getTime();
+      return sortOrder === 'OLDEST' ? diff : -diff;
+    });
+    return sorted;
+  }, [data.content, categoryFilter, storageFilter, timeRange, sortOrder]);
+
+  const hasActiveFilter =
+    Boolean(data.filters?.keyword?.trim?.()) ||
+    data.filters.filter !== 'ALL' ||
+    categoryFilter !== 'ALL' ||
+    storageFilter !== 'ALL' ||
+    timeRange !== 'ALL' ||
+    sortOrder !== 'NEWEST';
+
+  const [showExtraFilters, setShowExtraFilters] = useState(false);
+  const extraActiveCount = (categoryFilter !== 'ALL' ? 1 : 0) + (storageFilter !== 'ALL' ? 1 : 0);
+  const isExtraOpen = showExtraFilters || extraActiveCount > 0;
+
+  const resetAllFilters = () => {
+    data.reset();
+    setCategoryFilter('ALL');
+    setStorageFilter('ALL');
+    setTimeRange('ALL');
+    setSortOrder('NEWEST');
+    setShowExtraFilters(false);
+  };
+
+  return (
+    <div className="sw-page">
+      <header className="sw-heading">
+        <h1>Hồ sơ tiếp nhận</h1>
+      </header>
+
+      {/* Card 1: Filter Controls */}
+      <section className="sw-controls" aria-label="Bộ lọc hồ sơ tiếp nhận">
+        <div className="sw-controls-top">
+          <label className="sw-search">
+            <Search size={17} aria-hidden="true" />
+            <input
+              type="search"
+              value={data.filters.keyword}
+              onChange={(e) => data.change('keyword', e.target.value)}
+              maxLength={200}
+              aria-label="Tìm hồ sơ tiếp nhận"
+              placeholder="Tìm tên đồ vật, mã hồ sơ hoặc địa điểm…"
+            />
+          </label>
+
+          <Link to="/approver/receipts/new" className="sw-primary-btn">
+            <Plus size={16} aria-hidden="true" />
+            Tạo hồ sơ tiếp nhận
+          </Link>
+        </div>
+
+        <div className="sw-filter-row">
+          <div className="sw-status-group">
+            <span className="sw-filter-label">Trạng thái</span>
+            <div className="sw-status-pills" role="group" aria-label="Lọc trạng thái hồ sơ">
+              {RECEIPT_FILTER_TABS.map((tab) => {
+                const count = tabCounts[tab.value];
+                const activeTab = data.filters.filter === tab.value;
+                const isWarn = tab.tone === 'warning' && typeof count === 'number' && count > 0;
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    aria-pressed={activeTab}
+                    onClick={() => data.change('filter', tab.value)}
+                    className={`${activeTab ? 'is-active' : ''} ${isWarn ? 'is-warning' : ''}`.trim()}
+                  >
+                    {tab.label}
+                    {typeof count === 'number' ? ` (${count})` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="sw-dropdowns">
+            <div className="sw-field">
+              <label htmlFor="sw-receipt-time">
+                <Calendar size={13} aria-hidden="true" />
+                Thời gian
+              </label>
+              <select
+                id="sw-receipt-time"
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+              >
+                {TIME_RANGE_OPTIONS.filter((o) => o.value !== 'CUSTOM').map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sw-field">
+              <label htmlFor="sw-receipt-sort">
+                <ArrowUpDown size={13} aria-hidden="true" />
+                Sắp xếp
+              </label>
+              <select
+                id="sw-receipt-sort"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+              >
+                <option value="NEWEST">Mới nhất trước</option>
+                <option value="OLDEST">Cũ nhất trước</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              className={`sw-extra-toggle-btn ${isExtraOpen ? 'is-active' : ''}`}
+              onClick={() => setShowExtraFilters((v) => !v)}
+              title="Bộ lọc nâng cao"
+              aria-expanded={isExtraOpen}
+            >
+              <SlidersHorizontal size={13} aria-hidden="true" />
+              Lọc thêm {extraActiveCount > 0 ? `(${extraActiveCount})` : ''}
+            </button>
+
+            {hasActiveFilter && (
+              <button type="button" className="sw-reset-btn" onClick={resetAllFilters}>
+                <RotateCcw size={13} aria-hidden="true" />
+                Đặt lại
+              </button>
             )}
-          </button>;
-        })}</div>
-      </div>
-      {data.loading ? <ReceiptLoading /> : data.error ? <div className="p-5"><ReceiptError message={data.error} onRetry={data.reload} /></div> : !data.content.length ? <div className="flex flex-col items-center px-5 py-16 text-center"><div className="mb-4 rounded-2xl bg-teal-50 p-4 text-teal-600"><ClipboardList size={32} strokeWidth={1.5} /></div><h2 className="font-semibold text-slate-800">{filtered ? 'Không tìm thấy phiếu phù hợp' : 'Bắt đầu với phiếu đầu tiên'}</h2><p className="mb-5 mt-2 max-w-sm text-base leading-6 text-slate-600">{filtered ? 'Thử từ khóa khác hoặc bỏ bộ lọc để xem lại danh sách.' : 'Tạo phiếu, lưu ảnh và thông tin tài sản. Bạn sẽ xem lại trước khi xác nhận tiếp nhận và đăng bài.'}</p>{filtered ? <button type="button" onClick={data.reset} className="text-base font-semibold text-teal-700">Xóa bộ lọc</button> : <Link to="/approver/receipts/new" className="text-base font-semibold text-teal-700">+ Tạo phiếu tiếp nhận</Link>}</div> : <>
-        <div className="hidden overflow-x-auto lg:block"><table className="w-full text-left text-base"><thead className="border-b border-slate-100 bg-slate-50/70 text-sm text-slate-600"><tr>{['Hồ sơ đồ vật', 'Nơi & thời gian nhặt', 'Trạng thái', ''].map((label) => <th key={label} className="px-5 py-3.5 font-medium" scope="col">{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.content.map((receipt) => <tr key={receipt.id} className="hover:bg-slate-50/60">
-          <td className="px-5 py-4"><Link to={`/approver/receipts/${receipt.id}`} className="flex items-center gap-3"><ReceiptImage key={receipt.thumbnailUrl} src={receipt.thumbnailUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" /><div className="min-w-0"><p className="max-w-64 truncate font-semibold text-slate-800">{receipt.title}</p><p className="mt-1 text-sm text-slate-600">Phiếu #{receipt.id} · {receipt.categoryName} · {'Tiếp nhận trực tiếp'}</p></div></Link></td>
-          <td className="px-5 py-4"><p className="max-w-52 truncate text-slate-600" title={receipt.foundLocation}>{receipt.foundLocation}</p><p className="mt-1 text-sm text-slate-600">{receiptDate(receipt.foundAt)}</p></td><td className="px-5 py-4"><ReceiptStatusBadge receipt={receipt} /><StorageNote receipt={receipt} /></td><td className="px-5 py-4"><Actions receipt={receipt} /></td>
-        </tr>)}</tbody></table></div>
-        <div className="divide-y divide-slate-100 lg:hidden">{data.content.map((receipt) => <article key={receipt.id} className="space-y-4 p-4"><div className="flex gap-3"><ReceiptImage key={receipt.thumbnailUrl} src={receipt.thumbnailUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /><div className="min-w-0"><Link to={`/approver/receipts/${receipt.id}`} className="block break-words font-semibold text-slate-800">{receipt.title}</Link><p className="mb-2 mt-1 text-sm text-slate-600">#{receipt.id} · {receipt.categoryName}</p><ReceiptStatusBadge receipt={receipt} /><StorageNote receipt={receipt} /></div></div><div className="flex gap-2 text-sm text-slate-600"><MapPin size={15} className="shrink-0" /><div><p className="break-words">{receipt.foundLocation}</p><p className="mt-1">{receiptDate(receipt.foundAt)}</p></div></div><Actions receipt={receipt} /></article>)}</div>
-      </>}
+          </div>
+        </div>
+
+        {isExtraOpen && (
+          <div className="sw-extra-filter-bar" role="group" aria-label="Bộ lọc nâng cao">
+            <div className="sw-field">
+              <label htmlFor="sw-receipt-cat">
+                <Tags size={13} aria-hidden="true" />
+                Danh mục
+              </label>
+              <select
+                id="sw-receipt-cat"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="ALL">Tất cả danh mục</option>
+                {categoryOptions.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sw-field">
+              <label htmlFor="sw-receipt-shelf">
+                <Filter size={13} aria-hidden="true" />
+                Vị trí kho
+              </label>
+              <select
+                id="sw-receipt-shelf"
+                value={storageFilter}
+                onChange={(e) => setStorageFilter(e.target.value)}
+              >
+                <option value="ALL">Mọi tình trạng kệ</option>
+                <option value="ASSIGNED">Đã gán vị trí</option>
+                <option value="UNASSIGNED">Chưa gán vị trí</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Card 2: Table / Empty */}
+      {data.loading ? (
+        <div className="sw-empty-card">
+          <ReceiptLoading />
+        </div>
+      ) : data.error ? (
+        <div className="sw-empty-card">
+          <ReceiptError message={data.error} onRetry={data.reload} />
+        </div>
+      ) : !displayedContent.length ? (
+        <div className="sw-empty-card">
+          <Inbox size={32} strokeWidth={1.6} aria-hidden="true" />
+          <h3>{hasActiveFilter ? 'Không tìm thấy hồ sơ phù hợp' : 'Chưa có hồ sơ tiếp nhận nào'}</h3>
+          <p>
+            {hasActiveFilter
+              ? 'Thử đổi từ khóa hoặc đặt lại bộ lọc để xem toàn bộ danh sách.'
+              : 'Khi lập hồ sơ tiếp nhận tài sản mang đến văn phòng, hồ sơ sẽ hiển thị tại đây.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="sw-results-bar">
+            <h2>Danh sách biên bản tiếp nhận</h2>
+            <span className="sw-results-count">
+              {displayedContent.length} / {data.totalElements} phiếu
+            </span>
+          </div>
+
+          <div className="sw-table-card">
+            <div className="sw-table-head sw-grid-receipts" aria-hidden="true">
+              <span>Hồ sơ đồ vật</span>
+              <span>Nơi & thời gian nhặt</span>
+              <span>Vị trí lưu kho</span>
+              <span>Trạng thái</span>
+              <span style={{ textAlign: 'right' }}>Thao tác</span>
+            </div>
+
+            <div className="sw-table-body">
+              {displayedContent.map((receipt) => (
+                <article key={receipt.id} className="sw-table-row sw-grid-receipts">
+                  <div className="sw-item-cell">
+                    <div className="sw-thumb">
+                      <ReceiptImage
+                        key={receipt.thumbnailUrl}
+                        src={receipt.thumbnailUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="sw-item-text">
+                      <Link className="sw-item-title" to={`/approver/receipts/${receipt.id}`}>
+                        {receipt.title}
+                      </Link>
+                      <div className="sw-item-sub">
+                        <span className="sw-code-tag">
+                          {receipt.receiptCode || `#${receipt.id}`}
+                        </span>
+                        <span>{receipt.categoryName}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sw-meta-cell">
+                    <strong title={receipt.foundLocation}>{receipt.foundLocation}</strong>
+                    <small>{receiptDate(receipt.foundAt)}</small>
+                  </div>
+
+                  <div>
+                    <span
+                      className={`sw-shelf-tag ${!receipt.storageLocationName ? 'is-missing' : ''}`}
+                      title={receipt.storageLocationName || 'Chưa gán vị trí kho'}
+                    >
+                      <MapPin size={13} aria-hidden="true" />
+                      <span>{receipt.storageLocationName || 'Chưa gán kệ'}</span>
+                    </span>
+                  </div>
+
+                  <div>
+                    <ReceiptStatusBadge receipt={receipt} />
+                  </div>
+
+                  <div className="sw-action-cell">
+                    <Link
+                      to={`/approver/receipts/${receipt.id}`}
+                      className={`sw-action-pill ${receipt.canProcess ? 'is-solid' : 'is-default'}`}
+                    >
+                      {receipt.canProcess ? 'Xem & xác nhận' : 'Xem phiếu'}
+                      <ArrowRight size={14} aria-hidden="true" />
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="sw-pagination">
+            <span>
+              Trang {data.filters.page} / {data.totalPages} · Tổng {data.totalElements} phiếu
+            </span>
+            <Pagination
+              currentPage={data.filters.page}
+              totalPages={data.totalPages}
+              onPageChange={data.setPage}
+            />
+          </div>
+        </>
+      )}
     </div>
-    {!data.loading && !data.error && <div className="flex flex-wrap items-center justify-between gap-4 px-1"><p className="text-sm text-slate-600">{data.totalElements ? `Hiển thị ${(data.filters.page - 1) * 10 + 1}–${Math.min(data.filters.page * 10, data.totalElements)} trong ${data.totalElements} phiếu` : '0 phiếu'}</p><Pagination currentPage={data.filters.page} totalPages={data.totalPages} onPageChange={data.setPage} /></div>}
-  </div>;
+  );
 }

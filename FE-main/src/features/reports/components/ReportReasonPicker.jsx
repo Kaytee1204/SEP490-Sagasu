@@ -1,10 +1,10 @@
 import { useId } from 'react';
 import '../styles/Reports.css';
 
-export default function ReportReasonPicker({ options, error, reload, value, onChange, disabled }) {
+export default function ReportReasonPicker({ options, error, reload, value, onChange, disabled, label = 'Lý do báo cáo' }) {
   const name = useId();
   return <fieldset className="report-reason-picker" disabled={disabled}>
-    <legend>Lý do báo cáo <span aria-hidden="true">*</span></legend>
+    <legend>{label} <span aria-hidden="true">*</span></legend>
     {error ? <div className="report-catalog-error" role="alert">
       <p>{error}</p><button type="button" className="btn btn-ghost" onClick={reload}>Thử lại</button>
     </div> : !options ? <p role="status">Đang tải lý do…</p> :

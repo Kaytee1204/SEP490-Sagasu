@@ -6,7 +6,7 @@ import java.util.UUID;
 @Entity @Table(name="p2p_handover") @Getter @NoArgsConstructor(access=AccessLevel.PROTECTED)
 public class P2pHandover {
     @Id @GeneratedValue(strategy=GenerationType.IDENTITY) @Column(name="handover_id") private Long id;
-    @Column(name="claim_id",nullable=false,unique=true) private long claimId;
+    @Column(name="claim_id",nullable=false) private long claimId;
     @Column(nullable=false,length=32) private String status="WAITING_CONFIRMATION";
     @Column(name="recorded_by",nullable=false) private long recordedBy;
     @Column(name="recorded_at",nullable=false) private OffsetDateTime recordedAt;

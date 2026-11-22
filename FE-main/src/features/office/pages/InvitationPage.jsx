@@ -5,6 +5,7 @@ import { invitationApi, intakeInvitationApi } from "../api/invitationApi";
 import { date } from "../officeUtils";
 import Notice from "../components/Notice";
 import IntakeReplyReason from "../components/IntakeReplyReason";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import "../Office.css";
 import "../PersonalOffice.css";
 
@@ -45,6 +46,7 @@ function InvitationContent({ hash, intake }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [decision, setDecision] = useState(proposed);
   const [reason, setReason] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -88,8 +90,10 @@ function InvitationContent({ hash, intake }) {
     setError("");
     try {
       setData(await api.respond(token, decision, intake ? reason.trim() : null));
+      setConfirmOpen(false);
     } catch (failure) {
       setError(failure.message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
@@ -154,7 +158,12 @@ function InvitationContent({ hash, intake }) {
                 className="of-form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  submit();
+                  if (intake && decision === "DECLINE" && !reason.trim()) {
+                    setError("Vui lòng nhập lý do cần đổi lịch.");
+                    return;
+                  }
+                  setError("");
+                  setConfirmOpen(true);
                 }}
               >
                 <fieldset className="of-invitation-options" disabled={busy}>
@@ -201,6 +210,17 @@ function InvitationContent({ hash, intake }) {
                 Lời mời chưa sẵn sàng. Vui lòng liên hệ văn phòng.
               </Notice>
             )}
+            <ConfirmActionPopup
+              open={confirmOpen}
+              variant={decision === "CONFIRM" ? "success" : "danger"}
+              title={decision === "CONFIRM" ? "Xác nhận đồng ý lịch hẹn?" : intake ? "Gửi đề nghị đổi lịch?" : "Bạn có chắc chắn từ chối?"}
+              description={decision === "CONFIRM" ? `Bạn xác nhận sẽ đến văn phòng vào lúc ${date(data.scheduledAt)} tại ${data.location}.` : intake ? "Văn phòng sẽ nhận được lý do và sắp xếp lại lịch mới." : "Lịch hẹn sẽ bị hủy và yêu cầu nhận đồ này sẽ kết thúc. Hành động này không thể hoàn tác."}
+              confirmLabel={decision === "CONFIRM" ? "Đồng ý lịch hẹn" : intake ? "Gửi đề nghị" : "Xác nhận từ chối"}
+              cancelLabel="Quay lại"
+              busy={busy}
+              onConfirm={submit}
+              onClose={() => setConfirmOpen(false)}
+            />
           </>
         )}
         <p className="of-muted">

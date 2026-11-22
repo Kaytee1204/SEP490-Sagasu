@@ -3,15 +3,22 @@ import { officeApi } from "../api/officeApi";
 import Notice from "./Notice";
 import RequestedInformation from "./RequestedInformation";
 import EvidencePicker from "./EvidencePicker";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
 export default function SupplementForm({ claim, onDone }) {
   const [information, setInformation] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [files, setFiles] = useState([]);
   const [processing, setProcessing] = useState(false);
-  async function submit(e) {
+  function handleFormSubmit(e) {
     e.preventDefault();
+    if (busy || processing || !information.trim()) return;
+    setError("");
+    setConfirmOpen(true);
+  }
+  async function executeSubmit() {
     if (busy || processing || !information.trim()) return;
     setBusy(true);
     setError("");
@@ -20,9 +27,11 @@ export default function SupplementForm({ claim, onDone }) {
         information: information.trim(),
         expectedVersion: claim.version,
       }, files);
+      setConfirmOpen(false);
       onDone();
     } catch (err) {
       setError(err.message);
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
@@ -32,7 +41,7 @@ export default function SupplementForm({ claim, onDone }) {
       <h2>Bổ sung thông tin</h2>
       <RequestedInformation claim={claim} />
       <p className="of-muted">Trả lời nội dung văn phòng đang hỏi. Sau khi gửi, yêu cầu của bạn sẽ được xét duyệt lại.</p>
-      <form className="of-form" onSubmit={submit}>
+      <form className="of-form" onSubmit={handleFormSubmit}>
         <Notice error>{error}</Notice>
         <label>
           Thông tin bạn bổ sung *
@@ -53,6 +62,17 @@ export default function SupplementForm({ claim, onDone }) {
           {busy ? "Đang gửi…" : "Gửi thông tin bổ sung"}
         </button>
       </form>
+      <ConfirmActionPopup
+        open={confirmOpen}
+        variant="info"
+        title="Gửi thông tin bổ sung?"
+        description="Nội dung và ảnh bổ sung sẽ được gửi đến nhân viên văn phòng để tiếp tục xét duyệt hồ sơ của bạn."
+        confirmLabel="Xác nhận gửi"
+        cancelLabel="Kiểm tra lại"
+        busy={busy}
+        onConfirm={executeSubmit}
+        onClose={() => setConfirmOpen(false)}
+      />
     </section>
   );
 }

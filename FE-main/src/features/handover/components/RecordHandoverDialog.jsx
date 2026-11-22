@@ -5,6 +5,19 @@ import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
+
+function HandoverPhotoPreview({ file }) {
+  const image = useRef(null);
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    image.current.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return <img ref={image} alt={`Xem trước ảnh ${file.name}`} />;
+}
 
 export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const dialog = useRef(null);
@@ -14,9 +27,11 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const [note, setNote] = useState('');
   const [files, setFiles] = useState([]);
   const [confirmed, setConfirmed] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setBusy] = useState(false);
   const { prepare, processing } = useImageUploads();
   const busy = submitting || processing;
+  const canSubmit = confirmed && files.length > 0 && !busy;
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
 
@@ -55,9 +70,15 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
     } catch (problem) { setError(problem.message); }
   }
 
-  async function submit(event) {
+  function handleFormSubmit(event) {
     event.preventDefault();
-    if (busy || sending.current || !confirmed) return;
+    if (!canSubmit || sending.current) return;
+    setError('');
+    setConfirmOpen(true);
+  }
+
+  async function executeSubmit() {
+    if (!canSubmit || sending.current) return;
     sending.current = true;
     setBusy(true);
     setError('');
@@ -67,11 +88,13 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
       result = await uploadHandover(claim.id, request.current, files);
     } catch (problem) {
       setError(problem.message || 'Chưa thể ghi nhận giao đồ. Vui lòng thử lại.');
+      setConfirmOpen(false);
       return;
     } finally {
       sending.current = false;
       setBusy(false);
     }
+    setConfirmOpen(false);
     onRecorded(result);
   }
 
@@ -79,20 +102,21 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
     onCancel={event => { event.preventDefault(); close(); }}>
     <header><h2 id={titleId}>Ghi nhận đã giao đồ</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
-    <form onSubmit={submit}>
+    <form onSubmit={handleFormSubmit}>
       <div className="handover-record-context"><strong>{claim.postTitle}</strong><p>Người nhận: {claim.claimantName}</p></div>
       <p>Sau khi ghi nhận, người nhận cần xác nhận đã nhận đúng đồ. Ghi nhận giao đồ không thể sửa hoặc rút lại.</p>
+      <div className="handover-record-field"><span>Ảnh bàn giao (bắt buộc)</span>
+        <span className="claims-muted">{IMAGE_FORMATS} · Chọn từ 1 đến 5 ảnh, tối đa 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
+        <ImageUploadButton label="Thêm ảnh bàn giao" disabled={busy||files.length>=5} onChange={pickImages} /></div>
+      <ImageProcessingStatus active={processing} />
+      {files.length > 0 && <ul className="handover-photo-previews" aria-label="Ảnh bàn giao đã chọn">{files.map((file, index) => <li key={`${file.name}:${index}`}>
+        <HandoverPhotoPreview file={file} />
+        <button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {
+          setFiles(current => current.filter((_, position) => position !== index)); request.current = null;
+        }}>Bỏ ảnh</button></li>)}</ul>}
       <label className="handover-record-field">Ghi chú (tùy chọn)
         <textarea maxLength={2000} value={note} disabled={busy} placeholder="Ví dụ: Đã giao kèm các phụ kiện…"
           onChange={event => { setNote(event.target.value); request.current = null; setDiscard(false); }} /></label>
-      <div className="handover-record-field"><span>Ảnh bàn giao (tùy chọn)</span>
-        <span className="claims-muted">{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
-        <ImageUploadButton label="Thêm ảnh bàn giao" disabled={busy||files.length>=5} onChange={pickImages} /></div>
-      <ImageProcessingStatus active={processing} />
-      {files.length > 0 && <ul className="handover-record-files">{files.map((file, index) => <li key={`${file.name}:${index}`}>
-        <span>{file.name}</span><button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {
-          setFiles(current => current.filter((_, position) => position !== index)); request.current = null;
-        }}>Bỏ ảnh</button></li>)}</ul>}
       <label className="handover-record-confirm"><input type="checkbox" checked={confirmed} disabled={busy} required
         onChange={event => { setConfirmed(event.target.checked); setDiscard(false); }} />
         Tôi xác nhận đã giao đồ thực tế cho người nhận.</label>
@@ -101,7 +125,18 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
         <footer><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></footer></div>
         : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !confirmed}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>}
+          <button type="submit" className="btn btn-accent" disabled={!canSubmit}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>}
     </form>
+    <ConfirmActionPopup
+      open={confirmOpen}
+      variant="success"
+      title="Xác nhận đã giao đồ?"
+      description={`Bạn xác nhận đã bàn giao "${claim.postTitle}" cho ${claim.claimantName}. Thao tác này không thể rút lại.`}
+      confirmLabel="Đã giao đồ"
+      cancelLabel="Quay lại"
+      busy={busy}
+      onConfirm={executeSubmit}
+      onClose={() => setConfirmOpen(false)}
+    />
   </dialog>;
 }

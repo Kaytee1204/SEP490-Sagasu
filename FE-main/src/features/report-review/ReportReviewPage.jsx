@@ -1,27 +1,29 @@
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import { Navigate, useSearchParams } from "react-router-dom";
 import ReportQueue from "./components/ReportQueue";
+import { reviewKinds } from "./format";
+import { reportReviewListPath, reportReviewRoot } from "./routes";
 import "./ReportReview.css";
-export default function ReportReviewPage() {
-  const navigate=useNavigate();
-  const [params] = useSearchParams(),
-    id = params.get("id");
-  if(id){const next=new URLSearchParams(params);next.delete('id');return <Navigate replace to={`/admin/reports/${id}${next.size?`?${next}`:''}`}/>;}
-  return (
-    <main className="rr">
-      <header className="rr-header">
-        <div>
-          <span className="rr-eyebrow">
-            <ShieldCheck size={17} /> QUẢN LÝ · SAGASU
-          </span>
-          <h1>Báo cáo & phản ánh</h1>
-          <p>
-            Đối chiếu thông tin từ các bên, ghi nhận căn cứ và theo dõi kết quả
-            xử lý.
-          </p>
-        </div>
-      </header>
-      <ReportQueue onOpen={value=>navigate(`/admin/reports/${value}${params.size ? `?${params}` : ""}`)}/>
-    </main>
-  );
+import "./ReportWorkspace.css";
+
+export default function ReportReviewPage({ kind }) {
+  const [params] = useSearchParams();
+  const id = params.get("id");
+  const next = new URLSearchParams(params);
+  if (id) {
+    next.delete("id");
+    return <Navigate replace to={`${reportReviewRoot}/${id}${next.size ? `?${next}` : ""}`} />;
+  }
+  if (!kind) {
+    const path = reportReviewListPath(next.get("kind"));
+    next.delete("kind");
+    return <Navigate replace to={`${path}${next.size ? `?${next}` : ""}`} />;
+  }
+
+  next.set("kind", kind);
+  return <section className="rr rr-workspace" aria-labelledby="rr-queue-title">
+    <header className="rr-workspace-heading">
+      <h1 id="rr-queue-title">{reviewKinds[kind]}</h1>
+    </header>
+    <ReportQueue key={kind} kind={kind} reportPath={value => `${reportReviewRoot}/${value}?${next}`} />
+  </section>;
 }

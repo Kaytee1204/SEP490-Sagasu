@@ -13,6 +13,7 @@ import RejectClaimDialog from '../components/RejectClaimDialog';
 import CancelClaimDialog from '../components/CancelClaimDialog';
 import RevokeClaimApprovalDialog from '../components/RevokeClaimApprovalDialog';
 import ApproveClaimDialog from '../components/ApproveClaimDialog';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import ReportButton from '@/features/reports/components/ReportButton';
 import HandoverPanel from '@/features/handover/components/HandoverPanel';
 import { useChat } from '@/features/chat/hooks/useChat';
@@ -44,7 +45,10 @@ function ClaimDetail({ postId, id }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [pendingDirectAction, setPendingDirectAction] = useState(null);
+  const [revokeAction, setRevokeAction] = useState(null);
+  const [focusReview, setFocusReview] = useState(false);
+  const reviewForm = useRef(null);
   const [busy, setBusy] = useState(false);
   const [previewImageId, setPreviewImageId] = useState(null);
   const refreshClaim = useCallback(() => {
@@ -73,11 +77,18 @@ function ClaimDetail({ postId, id }) {
   }, [postId, id,revision,focusRevision,claimNotification]);
   const loadedClaimId = claim?.id;
   const canRevokeApproval = claim?.canRevokeApproval;
+  const canReview = claim?.canReview;
+  useEffect(() => {
+    if (focusReview && canReview) {
+      reviewForm.current?.focus();
+      setFocusReview(false);
+    }
+  }, [focusReview, canReview]);
   useEffect(() => {
     if (!loadedClaimId || !['#handover', '#review-approval'].includes(location.hash)) return;
-    const section = location.hash === '#review-approval' && canRevokeApproval ? 'review-approval' : 'handover';
-    document.getElementById(section)?.scrollIntoView({ block: 'start' });
-  }, [loadedClaimId, location.hash, canRevokeApproval]);
+    const step = document.getElementById(location.hash.slice(1)) || document.getElementById('handover');
+    step?.scrollIntoView({ block: 'start' });
+  }, [loadedClaimId, location.hash]);
   async function act(action, reviewDecision = decision) {
     if (inFlight.current) return;
     if (action === 'review' && !reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; }
@@ -112,15 +123,17 @@ function ClaimDetail({ postId, id }) {
       <ClaimDetailSummary claim={claim} post={post} />
       <div className="claim-detail-layout">
         <div className="claim-detail-main">
-          {showHandover ? <HandoverPanel claim={claim} onChanged={refreshClaim} showSubmission={isClaimant} />
-            : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} showProgress={isClaimant && claim.claimType === 'P2P'} />}
+          {showHandover ? <HandoverPanel claim={claim} onChanged={refreshClaim} showSubmission={isClaimant}
+            onRevokeApproval={canRevokeApproval ? () => setRevokeAction('revoke') : undefined}
+            onContinueReview={canRevokeApproval ? () => setRevokeAction('continue') : undefined} />
+            : (!claim.canReview || claim.status !== 'PENDING') && <ClaimStatusPanel claim={claim} isClaimant={isClaimant} />}
           {claim.claimType === 'P2P' && claim.status === 'PENDING' && isClaimant &&
             <ClaimAppealPanel claim={claim} focusRevision={focusRevision} notificationId={claimNotification} />}
           {claim.claimType === 'OFFICE' && <p className="claim-detail-office-note">Món đồ do văn phòng tiếp nhận lưu giữ. Hồ sơ và việc nhận đồ được xử lý qua bên tiếp nhận.</p>}
           <ClaimVerificationPanel claim={claim} onPreviewImage={setPreviewImageId} />
         </div>
         <aside className="claim-detail-sidebar" aria-label="Thông tin và xử lý yêu cầu">
-      {claim.canReview && <form className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); act('review', event.nativeEvent.submitter?.value || decision); }}>
+      {claim.canReview && <form ref={reviewForm} tabIndex={-1} aria-label="Xét duyệt yêu cầu nhận đồ" className="claim-panel claim-form claim-detail-review" onSubmit={event => { event.preventDefault(); if (!reason.trim()) { setError('Vui lòng nhập lý do xét duyệt.'); return; } setPendingDirectAction({ action: 'review', decision: event.nativeEvent.submitter?.value || decision }); }}>
         <h2><ClipboardCheck size={20} aria-hidden="true" />Xét duyệt yêu cầu</h2>
         <p>Đối chiếu căn cứ và ảnh bằng chứng để xác định đúng người nhận.</p>
         {claim.claimType !== 'P2P' && <label>Kết quả<select disabled={busy} value={decision} onChange={event => setDecision(event.target.value)}>
@@ -131,10 +144,6 @@ function ClaimDetail({ postId, id }) {
           <button type="button" className="btn btn-ghost claim-detail-reject" disabled={busy} onClick={() => setRejectOpen(true)}><XCircle size={18} aria-hidden="true" />Từ chối yêu cầu</button>
         </div> : <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu kết quả xét duyệt'}</button>}
       </form>}
-      {canRevokeApproval && <section id="review-approval" className="claim-panel claim-detail-review">
-        <h2>Xét duyệt lại người nhận</h2><p>Thu hồi chấp thuận nếu cần kiểm tra lại căn cứ trước khi giao đồ.</p>
-        <button type="button" className="btn btn-ghost" onClick={() => setRevokeOpen(true)}>Thu hồi chấp thuận</button>
-      </section>}
       <ClaimParticipantPanel claim={claim} />
       <ClaimActivityTimeline activities={claim.activities} />
       <div className="claim-detail-secondary-actions">
@@ -142,14 +151,30 @@ function ClaimDetail({ postId, id }) {
       {claim.canCancel && claim.claimType !== 'P2P' && <section className="claim-detail-office-cancel"><h2>Hủy yêu cầu nhận đồ</h2><p>Chỉ hủy được trước khi bàn giao. Lịch sử và bằng chứng của hồ sơ vẫn được giữ lại.</p>
         {!confirmCancel ? <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => setConfirmCancel(true)}>Hủy yêu cầu nhận đồ</button>
           : <div className="claim-form"><p>Bạn xác nhận hủy claim này?</p><label>Lý do hủy (không bắt buộc)<textarea disabled={busy} maxLength={2000} value={cancelReason} onChange={event => setCancelReason(event.target.value)} /></label>
-            <div className="claim-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('cancel')}>Xác nhận hủy</button>
+            <div className="claim-actions"><button type="button" className="btn btn-primary" disabled={busy} onClick={() => setPendingDirectAction({ action: 'cancel' })}>Xác nhận hủy</button>
               <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirmCancel(false)}>Giữ claim</button></div></div>}
       </section>}
-      <ReportButton type="CLAIM" id={claim.id} targetLabel={claim.postTitle} label="Báo cáo yêu cầu này" />
+      {(claim.claimType !== 'P2P' || Number(claim.claimantId) !== Number(user?.id)) &&
+        <ReportButton type="CLAIM" id={claim.id} targetLabel={claim.postTitle} label="Báo cáo yêu cầu này" />}
       </div>
         </aside>
       </div>
     </>}
+    <ConfirmActionPopup
+      open={Boolean(pendingDirectAction)}
+      variant={pendingDirectAction?.action === 'cancel' ? 'warning' : pendingDirectAction?.decision === 'REJECTED' ? 'danger' : 'success'}
+      title={pendingDirectAction?.action === 'cancel' ? 'Bạn có chắc chắn hủy yêu cầu?' : pendingDirectAction?.decision === 'REJECTED' ? 'Xác nhận từ chối yêu cầu?' : 'Xác nhận chấp thuận yêu cầu?'}
+      description={pendingDirectAction?.action === 'cancel' ? 'Yêu cầu nhận đồ này sẽ bị hủy. Hồ sơ và bằng chứng đã gửi vẫn được giữ lại.' : 'Kết quả xét duyệt sẽ được lưu và thông báo đến người yêu cầu.'}
+      confirmLabel={pendingDirectAction?.action === 'cancel' ? 'Đồng ý hủy' : 'Xác nhận lưu'}
+      cancelLabel="Quay lại"
+      busy={busy}
+      onConfirm={async () => {
+        if (!pendingDirectAction) return;
+        await act(pendingDirectAction.action, pendingDirectAction.decision);
+        setPendingDirectAction(null);
+      }}
+      onClose={() => !busy && setPendingDirectAction(null)}
+    />
     {rejectOpen && claim?.canReview && claim.claimType === 'P2P' && <RejectClaimDialog claim={claim}
       onClose={() => setRejectOpen(false)} onRejected={() => {
         setRejectOpen(false); setReason(''); setError(''); setNotice('Đã từ chối yêu cầu nhận đồ.');
@@ -168,9 +193,12 @@ function ClaimDetail({ postId, id }) {
         setClaim(current => ({ ...current, status: 'APPROVED', canReview: false }));
         getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
       }} />}
-    {revokeOpen && claim?.canRevokeApproval && <RevokeClaimApprovalDialog claim={claim}
-      onClose={() => { setRevokeOpen(false); setFocusRevision(value => value + 1); }} onRevoked={() => {
-        setRevokeOpen(false); setError(''); setNotice('Đã thu hồi chấp thuận. Hồ sơ trở lại chờ xét duyệt.');
+    {revokeAction && claim?.canRevokeApproval && <RevokeClaimApprovalDialog claim={claim}
+      continueReview={revokeAction === 'continue'}
+      initialReason={revokeAction === 'continue' ? 'Mở lại xét duyệt theo kết luận tranh chấp.' : ''}
+      onClose={() => { setRevokeAction(null); setFocusRevision(value => value + 1); }} onRevoked={() => {
+        setFocusReview(revokeAction === 'continue');
+        setRevokeAction(null); setError(''); setNotice('Đã thu hồi chấp thuận. Hồ sơ trở lại chờ xét duyệt.');
         setClaim(current => ({ ...current, status: 'PENDING', canRevokeApproval: false, canOpenChat: false }));
         getClaimOnPost(postId, id).then(setClaim).catch(problem => setError(problem.message));
         getPostDetail(postId).then(setPost).catch(() => {});

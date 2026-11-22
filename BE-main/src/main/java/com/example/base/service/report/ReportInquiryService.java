@@ -21,8 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class ReportInquiryService {
 
-  private static final String PARTICIPANT_REPORT_COLUMNS = """
-      r.report_id, r.status, r.resolution_note,
+  static final String REPORT_SUBJECT_COLUMNS = """
       case
         when appeal.report_id is not null then 'CLAIM_APPEAL'
         when r.kind = 'HANDOVER_ISSUE' then 'HANDOVER_ISSUE'
@@ -32,12 +31,16 @@ public class ReportInquiryService {
         when r.reported_account_id is not null then 'USER'
       end as report_type,
       coalesce(nullif(btrim(p.title), ''), nullif(btrim(a.full_name), '')) as report_subject,
-      coalesce(r.post_id, c.post_id, conversation.post_id, r.reported_account_id) as report_subject_id,
-      case when appeal.report_id is null then r.reason_label_snapshot end as report_reason,
-      case when p.account_id = ? then approved.claim_id end as finder_approved_claim_id
+      coalesce(r.post_id, c.post_id, conversation.post_id, r.reported_account_id) as report_subject_id
       """;
 
-  private static final String PARTICIPANT_REPORT_JOINS = """
+  private static final String PARTICIPANT_REPORT_COLUMNS = """
+      r.report_id, r.status, r.resolution_note, %s,
+      case when appeal.report_id is null then r.reason_label_snapshot end as report_reason,
+      case when p.account_id = ? then chosen.claim_id end as finder_approved_claim_id
+      """.formatted(REPORT_SUBJECT_COLUMNS);
+
+  static final String PARTICIPANT_REPORT_JOINS = """
       left join p2p_claim_appeal appeal on appeal.report_id = r.report_id
       left join claim c on c.claim_id = r.claim_id
       left join chat_message m on m.message_id = r.message_id
@@ -45,8 +48,8 @@ public class ReportInquiryService {
       left join post p on p.post_id = coalesce(r.post_id, c.post_id, conversation.post_id)
       left join accounts a on a.id = r.reported_account_id
       left join p2p_claim_approval approval on approval.approval_id = appeal.approval_id and approval.closed_at is null
-      left join claim approved on approved.claim_id = approval.approved_claim_id and approved.post_id = p.post_id
-          and approved.status = 'APPROVED' and approved.claim_type = 'P2P'
+      left join claim chosen on chosen.claim_id = approval.approved_claim_id and chosen.post_id = p.post_id
+          and chosen.status = 'APPROVED' and chosen.claim_type = 'P2P'
           and p.status = 'RESERVED' and p.custody_mode = 'P2P'
       """;
 
@@ -74,14 +77,15 @@ public class ReportInquiryService {
   ) {
     Account actor = access.require(user, AccountRole.MANAGER);
     var r = reviews.lock(report);
-    reviews.processing(r, actor, request.version());
+    if (reviews.canFollowUpRecovery(r)) reviews.requireAssignee(r, actor, request.version());
+    else reviews.processing(r, actor, request.version());
     if (
       !reviews.participants(context.context(r)).contains(request.recipientId())
     ) throw bad("Người được hỏi phải liên quan đến vụ việc.");
     if (
       Boolean.TRUE.equals(
         jdbc.queryForObject(
-          "select exists(select 1 from report_inquiry where report_id=? and recipient_id=? and responded_at is null)",
+          "select exists(select 1 from report_inquiry where report_id=? and recipient_id=? and responded_at is null and closed_at is null)",
           Boolean.class,
           report,
           request.recipientId()
@@ -89,11 +93,12 @@ public class ReportInquiryService {
       )
     ) throw bad("Người này đang có câu hỏi chưa phản hồi.");
     jdbc.update(
-      "insert into report_inquiry(report_id,recipient_id,created_by,question) values(?,?,?,?)",
+      "insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at) values(?,?,?,?,?)",
       report,
       request.recipientId(),
       actor.getId(),
-      request.question().strip()
+      request.question().strip(),
+      reviews.responseDue()
     );
     jdbc.update(
       "update report set version=version+1,updated_at=now() where report_id=?",
@@ -113,7 +118,7 @@ public class ReportInquiryService {
       "REPORT_INFORMATION",
       "Cần bổ sung thông tin cho báo cáo #" + report,
       request.question(),
-      "/bao-cao-trao-doi",
+      "/bao-cao/" + report + "#phan-hoi",
       false
     );
     return reviews.detail(report, user);
@@ -123,25 +128,33 @@ public class ReportInquiryService {
   public List<Map<String, Object>> mine(CustomUserDetails user) {
     long actor = access.require(user).getId();
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.question, i.created_at, i.response, i.responded_at, %s
+        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at, %s
         from report_inquiry i join report r using (report_id)
         %s
         where i.recipient_id = ?
         order by i.created_at desc
         limit 100
         """.formatted(PARTICIPANT_REPORT_COLUMNS, PARTICIPANT_REPORT_JOINS), actor, actor);
-    rows.forEach(r ->
-      r.put(
-        "evidence",
-        context.withUrls(
-          jdbc.queryForList(
-            "select evidence_id,storage_key,original_name from report_reply_evidence where inquiry_id=?",
-            r.get("inquiry_id")
-          )
-        )
-      )
-    );
+    attachEvidence(rows);
     return rows;
+  }
+
+  List<Map<String, Object>> forReport(long reportId, long recipientId) {
+    var rows = jdbc.queryForList("""
+        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at, r.status
+        from report_inquiry i join report r using (report_id)
+        where i.report_id = ? and i.recipient_id = ?
+        order by i.created_at desc, i.inquiry_id desc
+        """, reportId, recipientId);
+    attachEvidence(rows);
+    return rows;
+  }
+
+  private void attachEvidence(List<Map<String, Object>> rows) {
+    rows.forEach(row -> row.put("evidence", context.withUrls(jdbc.queryForList(
+        "select evidence_id,storage_key,original_name from report_reply_evidence where inquiry_id=?",
+        row.get("inquiry_id")
+    ))));
   }
 
   @Transactional(readOnly = true)
@@ -151,7 +164,7 @@ public class ReportInquiryService {
         select r.resolved_at, %s
         from report r join report_recipient x using (report_id)
         %s
-        where x.account_id = ?
+        where x.account_id = ? and r.status in ('RESOLVED','REJECTED')
         order by r.resolved_at desc
         limit 100
         """.formatted(PARTICIPANT_REPORT_COLUMNS, PARTICIPANT_REPORT_JOINS), actor, actor);
@@ -182,7 +195,8 @@ public class ReportInquiryService {
           "select * from report_inquiry where inquiry_id=? for update",
           inquiry
         );
-        if (!reviews.open(r)) throw bad("Báo cáo đã kết thúc.");
+        if (!reviews.open(r) && !reviews.canFollowUpRecovery(r)) throw bad("Báo cáo đã kết thúc.");
+        if (i.get("closed_at") != null) throw bad("Yêu cầu bổ sung này đã kết thúc.");
         if (i.get("responded_at") != null) throw bad(
           "Phản hồi đã được ghi nhận và giữ nguyên. Hãy tải lại."
         );
@@ -217,7 +231,7 @@ public class ReportInquiryService {
           "REPORT_REPLY",
           "Có phản hồi cho báo cáo #" + r.get("report_id"),
           "Mở hồ sơ để xem thông tin bổ sung.",
-          "/admin/reports?id=" + r.get("report_id"),
+          "/admin/reports/" + r.get("report_id") + "#trao-doi",
           false
         );
         return Map.of("saved", true);

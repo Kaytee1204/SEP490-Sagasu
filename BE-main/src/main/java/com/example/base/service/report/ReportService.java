@@ -23,7 +23,6 @@ public class ReportService {
     private final ReportRepository reports;
     private final EntityManager em;
     private final ChatAccessPolicy actors;
-    private final ChatService chats;
     private final ClaimRoutingPolicy claimPolicy;
     private final JdbcTemplate jdbc;
     private final WorkflowImages images;
@@ -70,7 +69,7 @@ public class ReportService {
                 Detail duplicate=retry(actor,request.clientRequestId(),prepared.hash());
                 if(duplicate!=null)return duplicate;
                 checkTarget(request,actor);
-                String column=switch(request.targetType()){case "POST"->"post_id";case "CLAIM"->"claim_id";case "MESSAGE"->"message_id";default->"reported_account_id";};
+                String column="POST".equals(request.targetType())?"post_id":"claim_id";
                 if(jdbc.queryForObject("select count(*) from report where reporter_id=? and status in ('OPEN','IN_REVIEW') and "+column+"=?",Long.class,actor,request.targetId())>0)
                     throw new AppException(ErrorCode.REPORT_DUPLICATE);
                 String group=reasonGroup(request.targetType(),request.targetId());
@@ -80,7 +79,8 @@ public class ReportService {
                 notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",
                     "Báo cáo vi phạm mới (#" + created.getId() + ")",
                     "Người dùng vừa gửi báo cáo đối với " + request.targetType() + " #" + request.targetId() + ": " + created.getDescription(),
-                    "/admin/reports",false);
+                    "/admin/reports/" + created.getId() + "?kind="
+                        + ("HANDOVER_ISSUE".equals(group) ? "HANDOVER_ISSUE" : "GENERAL"),false);
                 return detail(created);
             });
             // A concurrent identical request won after our upload. Delete only our unused objects.
@@ -98,6 +98,16 @@ public class ReportService {
     public Report insert(long actor,String kind,String type,long target,String text,String reasonCode,UUID request,String hash,List<WorkflowImages.Image> uploaded) {
         String group="HANDOVER_ISSUE".equals(kind)?"HANDOVER_ISSUE":type;
         var reason=reasons.require(group,reasonCode,text);
+        return persist(actor,kind,type,target,text,reason,request,hash,uploaded,"HANDOVER_ISSUE".equals(group));
+    }
+    @Transactional(propagation=Propagation.MANDATORY)
+    public Report insertAppeal(long actor,long claimId,String text,String reasonCode,UUID request,String hash,List<WorkflowImages.Image> uploaded) {
+        var reason = reasonCode == null ? new ReportReasonService.Reason("APPEAL_LEGACY","Tranh chấp kết quả nhận đồ",true)
+                : reasons.require("CLAIM_APPEAL",reasonCode,text);
+        return persist(actor,"HANDOVER_ISSUE","CLAIM",claimId,text,reason,request,hash,uploaded,false);
+    }
+    private Report persist(long actor,String kind,String type,long target,String text,ReportReasonService.Reason reason,
+                           UUID request,String hash,List<WorkflowImages.Image> uploaded,boolean linkOfficeHandover) {
         // Preserve a complete summary for existing consumers, while exposing the selected reason separately.
         String summary=reason.label()+(text.isBlank()?"":"\n\n"+text);
         if(summary.length()>5000)throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
@@ -109,7 +119,7 @@ public class ReportService {
         // DaiHV integration: keep the source content before later edits and retain referenced assets.
         context.capture(report.getId(),"SUBMISSION");
         // DaiHV case review: notify the case owner; preserve the team's independent report submission.
-        if("CLAIM".equals(type) && "HANDOVER_ISSUE".equals(kind))
+        if("CLAIM".equals(type) && linkOfficeHandover)
             jdbc.update("insert into office_handover_issue(report_id,handover_id) select ?,handover_id from office_handover where claim_id=? on conflict do nothing",report.getId(),target);
         return report;
     }
@@ -134,8 +144,22 @@ public class ReportService {
     }
     @Transactional(readOnly=true)
     public ReportReasonService.Options reasonOptions(String targetType,long targetId,boolean handoverIssue,CustomUserDetails user) {
+        if ("CLAIM_APPEAL".equals(targetType)) {
+            validateTarget("CLAIM",targetId);
+            long actor=actors.actor(user).getId();
+            Claim claim=em.find(Claim.class,targetId);
+            if(claim==null || claim.isOffice() || claim.getClaimant()==null || claim.getClaimant().getId()!=actor)
+                throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);
+            return reasons.options("CLAIM_APPEAL");
+        }
         validateTarget(targetType,targetId);
         long actor=actors.actor(user).getId();
+        if (handoverIssue && "CLAIM".equals(targetType)) {
+            Claim claim=em.find(Claim.class,targetId);
+            if(claim!=null && !claim.isOffice() && claim.getClaimant()!=null
+                && (claim.getClaimant().getId()==actor || claim.getPost().getAccount().getId()==actor))
+                return reasons.options("HANDOVER_ISSUE");
+        }
         checkTarget(new Submit(targetType,targetId,null,null,null),actor);
         if(handoverIssue && !"CLAIM".equals(targetType))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
         return reasons.options(handoverIssue?"HANDOVER_ISSUE":reasonGroup(targetType,targetId));
@@ -193,7 +217,7 @@ public class ReportService {
         if(r.reasonCode()==null || r.reasonCode().isBlank() || r.reasonCode().length()>64)throw new AppException(ErrorCode.REPORT_REASON_INVALID);
     }
     private void validateTarget(String type,Long id) {
-        if(id==null || id<1 || !Set.of("POST","CLAIM","MESSAGE","USER").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
+        if(id==null || id<1 || !Set.of("POST","CLAIM").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
     }
     private void checkTarget(Submit r,long actor) {
         boolean allowed=switch(r.targetType()) {
@@ -204,10 +228,7 @@ public class ReportService {
                     throw new AppException(ErrorCode.REPORT_SELF_POST_NOT_ALLOWED);
                 yield post!=null && post.getDeletedAt()==null && "VISIBLE".equals(post.getModerationStatus());
             }
-            case "CLAIM" -> {Claim c=em.find(Claim.class,r.targetId()); yield c!=null && ((c.getClaimant()!=null && c.getClaimant().getId()==actor) || claimPolicy.reviewer(c,em.find(Account.class,actor)));}
-            case "MESSAGE" -> {ChatMessage m=em.find(ChatMessage.class,r.targetId()); if(m!=null)chats.requireMember(m.getConversationId(),actor); yield m!=null;}
-            case "USER" -> r.targetId()!=actor && em.find(Account.class,r.targetId())!=null && jdbc.queryForObject("select count(*) from post where account_id=? and deleted_at is null and moderation_status='VISIBLE'",Long.class,r.targetId())>0
-                || r.targetId()!=actor && jdbc.queryForObject("select count(*) from chat_participant a join chat_participant b using(conversation_id) where a.account_id=? and b.account_id=?",Long.class,actor,r.targetId())>0;
+            case "CLAIM" -> {Claim c=em.find(Claim.class,r.targetId()); yield c!=null && ((c.isOffice() && c.getClaimant()!=null && c.getClaimant().getId()==actor) || claimPolicy.reviewer(c,em.find(Account.class,actor)));}
             default -> false;
         };
         if(!allowed)throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);

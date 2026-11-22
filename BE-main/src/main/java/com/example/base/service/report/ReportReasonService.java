@@ -19,11 +19,11 @@ public class ReportReasonService {
     private final JdbcTemplate jdbc;
 
     public static final Set<String> VALID_GROUPS = Set.of(
-            "POST", "USER", "CLAIM", "MESSAGE", "HANDOVER_ISSUE");
+            "POST", "CLAIM", "HANDOVER_ISSUE", "CLAIM_APPEAL");
 
     // Office review integration: these allegations need context beyond the selected label.
     private static final Set<String> CONTEXT_REQUIRED = Set.of(
-            "POST_FALSE_INFO", "POST_SCAM", "USER_IMPERSONATION", "USER_HARASSMENT",
+            "POST_FALSE_INFO", "POST_SCAM", "POST_PRIVACY", "USER_IMPERSONATION", "USER_HARASSMENT",
             "USER_SCAM", "USER_PRIVACY", "CLAIM_FALSE_OWNERSHIP", "CLAIM_FALSE_EVIDENCE",
             "CLAIM_CONFLICTING_INFO");
 
@@ -56,6 +56,7 @@ public class ReportReasonService {
     public record StatusRequest(boolean active) {}
 
     public Options options(String group) {
+        requireSelectableGroup(group);
         return new Options(group, jdbc.query("""
                 select code, label, description_required from report_reason
                 where target_group = ? and active = true order by sort_order, code
@@ -63,6 +64,7 @@ public class ReportReasonService {
     }
 
     public Reason require(String group, String code, String description) {
+        requireSelectableGroup(group);
         Reason reason = jdbc.query("""
                 select code, label, description_required from report_reason
                 where target_group = ? and code = ? and active = true
@@ -74,13 +76,17 @@ public class ReportReasonService {
         return reason;
     }
 
+    private static void requireSelectableGroup(String group) {
+        if (group == null || !VALID_GROUPS.contains(group)) throw new AppException(ErrorCode.REPORT_REASON_INVALID);
+    }
+
     @Transactional(readOnly = true)
     public List<AdminReasonItem> listAdmin(String targetGroup, Boolean active, String keyword) {
         StringBuilder sql = new StringBuilder("""
                 select r.code, r.target_group, r.label, r.description_required, r.active, r.sort_order,
                        (select count(*) from report rep where rep.reason_code = r.code) as usage_count
                 from report_reason r
-                where 1 = 1
+                where r.target_group not in ('MESSAGE', 'USER')
                 """);
         List<Object> params = new ArrayList<>();
 
@@ -110,7 +116,7 @@ public class ReportReasonService {
                     when 'POST' then 1
                     when 'USER' then 2
                     when 'CLAIM' then 3
-                    when 'MESSAGE' then 4
+                    when 'HANDOVER_ISSUE' then 4
                     else 5
                  end, r.sort_order asc, r.code asc
                 """);
@@ -198,6 +204,7 @@ public class ReportReasonService {
             throw new AppException(ErrorCode.BAD_REQUEST, "Dữ liệu cập nhật không hợp lệ.");
         }
         AdminReasonItem existing = getByCode(code);
+        validateGroup(existing.targetGroup());
         String group = (request.targetGroup() != null && !request.targetGroup().isBlank())
                 ? validateGroup(request.targetGroup())
                 : existing.targetGroup();
@@ -226,6 +233,7 @@ public class ReportReasonService {
     @Transactional
     public AdminReasonItem updateStatus(String code, boolean active) {
         AdminReasonItem existing = getByCode(code);
+        validateGroup(existing.targetGroup());
         jdbc.update("update report_reason set active = ? where code = ?", active, existing.code());
         return getByCode(existing.code());
     }
@@ -233,6 +241,7 @@ public class ReportReasonService {
     @Transactional
     public Map<String, Object> delete(String code) {
         AdminReasonItem existing = getByCode(code);
+        validateGroup(existing.targetGroup());
         if (existing.usageCount() > 0) {
             jdbc.update("update report_reason set active = false where code = ?", existing.code());
             return Map.of(

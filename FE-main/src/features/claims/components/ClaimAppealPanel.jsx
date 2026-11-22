@@ -6,6 +6,9 @@ import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import useImageUploads from '@/hooks/useImageUploads';
 import { getClaimAppeal, submitClaimAppeal } from '../api/claimApi';
 import ReportProgress from '@/features/reports/components/ReportProgress';
+import ReportReasonPicker from '@/features/reports/components/ReportReasonPicker';
+import useReportReasons from '@/features/reports/hooks/useReportReasons';
+import { reportDescriptionHint } from '@/features/reports/utils/reportDescriptionHints';
 
 export default function ClaimAppealPanel({ claim, focusRevision, notificationId }) {
   const [appeal, setAppeal] = useState(null);
@@ -41,29 +44,31 @@ export default function ClaimAppealPanel({ claim, focusRevision, notificationId 
 
   if (!appeal && !loadError) return null;
   return <section className="claim-panel claim-appeal-panel" aria-labelledby="claim-appeal-title">
-    <h2 id="claim-appeal-title"><Scale size={19} aria-hidden="true" />Kháng cáo kết quả xét duyệt</h2>
+    <h2 id="claim-appeal-title"><Scale size={19} aria-hidden="true" />Tranh chấp kết quả xét duyệt</h2>
     {loadError && <div role="alert" className="claim-alert">
       <p>{loadError}</p>
       <button type="button" className="btn btn-ghost" onClick={() => setRefresh(value => value + 1)}>Tải lại trạng thái</button>
     </div>}
     {appeal?.reportId ? <>
       <ReportProgress status={appeal.reportStatus || 'OPEN'} appeal compact />
-      <Link className="btn btn-ghost" to={`/bao-cao/${appeal.reportId}`}>Xem kháng cáo</Link>
+      <Link className="btn btn-ghost" to={`/bao-cao/${appeal.reportId}`}>Xem tranh chấp</Link>
     </> : appeal && <>
       <p>Một yêu cầu nhận đồ khác đã được chấp thuận. Hồ sơ của bạn vẫn đang chờ.</p>
       {appeal.canAppeal ? <>
-        <p>Hạn gửi kháng cáo <strong>{new Date(deadline).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</strong></p>
+        <p>Hạn gửi tranh chấp <strong>{new Date(deadline).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</strong></p>
         <AppealForm key={appeal.approvalId} claimId={claim.id} approvalId={appeal.approvalId}
           onSubmitted={reportId => {
             setAppeal(current => ({ ...current, canAppeal: false, reportId, reportStatus: 'OPEN' }));
             setRefresh(value => value + 1);
           }} />
-      </> : <p>Đã hết thời hạn gửi kháng cáo cho lần chấp thuận này.</p>}
+      </> : <p>Đã hết thời hạn gửi tranh chấp cho lần chấp thuận này.</p>}
     </>}
   </section>;
 }
 
 function AppealForm({ claimId, approvalId, onSubmitted }) {
+  const catalog = useReportReasons('CLAIM_APPEAL', claimId);
+  const [reasonCode, setReasonCode] = useState('');
   const [reason, setReason] = useState('');
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -72,6 +77,7 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
   const requestId = useRef(null);
   const { prepare, processing } = useImageUploads();
   const disabled = busy || processing;
+  const hasAvailableReason = catalog.options?.reasons.some(item => item.code === reasonCode);
 
   async function pickImages(event) {
     const selected = Array.from(event.target.files);
@@ -94,18 +100,18 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
 
   async function submit(event) {
     event.preventDefault();
-    if (sending.current || disabled || !reason.trim()) return;
+    if (sending.current || disabled || !hasAvailableReason || !reason.trim()) return;
     sending.current = true;
     setBusy(true);
     setError('');
     requestId.current ||= crypto.randomUUID();
     try {
       const result = await submitClaimAppeal(claimId, {
-        approvalId, reason: reason.trim(), clientRequestId: requestId.current,
+        approvalId, reasonCode, reason: reason.trim(), clientRequestId: requestId.current,
       }, files);
       onSubmitted(result.reportId);
     } catch (problem) {
-      setError(problem.message || 'Chưa gửi được kháng cáo. Vui lòng thử lại.');
+      setError(problem.message || 'Chưa gửi được tranh chấp. Vui lòng thử lại.');
     } finally {
       sending.current = false;
       setBusy(false);
@@ -113,9 +119,12 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
   }
 
   return <details className="claim-appeal-disclosure">
-    <summary>Gửi kháng cáo</summary>
+    <summary>Gửi tranh chấp</summary>
     <form className="claim-form" onSubmit={submit}>
-      <label>Lý do và căn cứ sở hữu *
+      <ReportReasonPicker {...catalog} label="Lý do tranh chấp" value={reasonCode} disabled={disabled}
+        onChange={value => { setReasonCode(value); requestId.current = null; }} />
+      <label>Nội dung tranh chấp *
+        {reasonCode && <small>{reportDescriptionHint(reasonCode)}</small>}
         <textarea required maxLength={4500} disabled={disabled} value={reason}
           onChange={event => { setReason(event.target.value); requestId.current = null; }}
           placeholder="Nêu đặc điểm hoặc bằng chứng cho thấy món đồ là của bạn." />
@@ -134,7 +143,7 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
       )}</ul>}
       {error && <p className="claim-alert" role="alert">{error}</p>}
       <div className="claim-actions">
-        <button type="submit" className="btn btn-accent" disabled={disabled || !reason.trim()}>{busy ? 'Đang gửi…' : 'Gửi cho quản lý'}</button>
+        <button type="submit" className="btn btn-accent" disabled={disabled || !hasAvailableReason || !reason.trim()}>{busy ? 'Đang gửi…' : 'Gửi cho quản lý'}</button>
       </div>
     </form>
   </details>;

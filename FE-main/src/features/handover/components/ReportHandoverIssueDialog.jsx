@@ -85,7 +85,9 @@ export default function ReportHandoverIssueDialog({ claim, handover, onClose, on
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
     <form onSubmit={submit}>
       <div className="handover-record-context"><strong>{claim.postTitle}</strong><p>Người giao: {claim.finderName}</p></div>
-      <p>Báo cáo sẽ được chuyển đến Manager và khóa hoàn tất bàn giao. Hai bên vẫn có thể chat. Nội dung đã gửi không thể sửa hoặc rút lại.</p>
+      <p>{handover.issuePhase === 'AFTER'
+        ? 'Quản lý sẽ xem xét sự cố dựa trên hồ sơ bàn giao và căn cứ bạn cung cấp.'
+        : 'Quản lý sẽ xem xét sự cố. Việc xác nhận đã nhận đồ sẽ tạm dừng trong lúc xử lý.'}</p>
       <ReportReasonPicker options={options} error={catalogError} reload={reload} value={reasonCode} disabled={busy}
         onChange={code => { setReasonCode(code); request.current = null; setDiscard(false); setError(''); }} />
       <label className="handover-record-field">Mô tả chi tiết sự cố *

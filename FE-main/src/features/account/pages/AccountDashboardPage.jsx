@@ -1,8 +1,9 @@
 // src/features/account/pages/AccountDashboardPage.jsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus, Upload, CheckCircle2, AlertCircle, Users, UserCheck, Ban, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 import { useAccountDashboard } from '../hooks/useAccountDashboard';
 import AccountFilterBar from '../components/AccountFilterBar';
 import AccountTable from '../components/AccountTable';
@@ -11,6 +12,8 @@ import AccountImportModal from '../components/AccountImportModal';
 
 export default function AccountDashboardPage() {
   const { user } = useAuth();
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
   const {
     accounts,
     loading,
@@ -240,8 +243,8 @@ export default function AccountDashboardPage() {
           accounts={accounts}
           loading={loading}
           openCrudModal={openCrudModal}
-          onToggleLock={handleToggleLock}
-          onSoftDelete={handleSoftDelete}
+          onToggleLock={(acc) => setConfirmTarget({ type: 'lock', account: acc })}
+          onSoftDelete={(acc) => setConfirmTarget({ type: 'delete', account: acc })}
         />
 
         {/* Pagination Footer (Backend Paginated) */}
@@ -286,6 +289,58 @@ export default function AccountDashboardPage() {
         onImport={handleExcelImport}
         importing={importing}
         importResult={importResult}
+      />
+
+      {/* Confirm Lock / Soft Delete Popup */}
+      <ConfirmActionPopup
+        open={Boolean(confirmTarget)}
+        variant={
+          confirmTarget?.type === 'delete'
+            ? 'danger'
+            : confirmTarget?.account?.status === 'SUSPENDED'
+              ? 'success'
+              : 'warning'
+        }
+        title={
+          confirmTarget?.type === 'delete'
+            ? 'Xóa mềm tài khoản?'
+            : confirmTarget?.account?.status === 'SUSPENDED'
+              ? 'Mở khóa tài khoản?'
+              : 'Tạm khóa tài khoản?'
+        }
+        description={
+          confirmTarget
+            ? confirmTarget.type === 'delete'
+              ? `Bạn có chắc chắn muốn xóa mềm tài khoản #${confirmTarget.account.id} (${confirmTarget.account.email})? Tài khoản này sẽ ngừng truy cập hệ thống.`
+              : confirmTarget.account.status === 'SUSPENDED'
+                ? `Mở khóa để tài khoản #${confirmTarget.account.id} (${confirmTarget.account.email}) có thể đăng nhập và sử dụng hệ thống trở lại.`
+                : `Tài khoản #${confirmTarget.account.id} (${confirmTarget.account.email}) sẽ bị tạm khóa truy cập hệ thống.`
+            : ''
+        }
+        confirmLabel={
+          confirmTarget?.type === 'delete'
+            ? 'Xác nhận xóa'
+            : confirmTarget?.account?.status === 'SUSPENDED'
+              ? 'Đồng ý mở khóa'
+              : 'Đồng ý khóa'
+        }
+        cancelLabel="Hủy bỏ"
+        busy={actionBusy}
+        onConfirm={async () => {
+          if (!confirmTarget || actionBusy) return;
+          setActionBusy(true);
+          try {
+            if (confirmTarget.type === 'delete') {
+              await handleSoftDelete(confirmTarget.account);
+            } else {
+              await handleToggleLock(confirmTarget.account);
+            }
+          } finally {
+            setActionBusy(false);
+            setConfirmTarget(null);
+          }
+        }}
+        onClose={() => !actionBusy && setConfirmTarget(null)}
       />
     </div>
   );

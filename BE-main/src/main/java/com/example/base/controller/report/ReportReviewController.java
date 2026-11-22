@@ -41,7 +41,7 @@ public class ReportReviewController {
     @GetMapping
     @Operation(
             summary = "[13.5] Hàng đợi danh sách báo cáo vi phạm & tranh chấp dành cho Quản lý (MANAGER)",
-            description = "Lọc status, kind, target, q; queue: ALL, UNASSIGNED, MINE, WAITING, REPLIED. Mặc định mỗi dòng đại diện một đối tượng, object_count là số báo cáo phù hợp bộ lọc. Truyền target + targetId để xem từng báo cáo. Sắp theo nguy cơ giao nhận/ưu tiên Manager rồi thời gian chờ."
+            description = "Lọc theo loại báo cáo, hàng đợi và người phụ trách (assignee: ALL, UNASSIGNED, MINE). Từ khóa là mã báo cáo, có thể kèm #, sẽ tìm chính xác trong mọi hàng đợi của loại báo cáo được chọn."
     )
     public ApiResponse<?> list(
             @RequestParam(name = "page", defaultValue = "1") int page,
@@ -50,10 +50,11 @@ public class ReportReviewController {
             @RequestParam(name = "target", defaultValue = "ALL") String target,
             @RequestParam(name = "q", defaultValue = "") String q,
             @RequestParam(name = "queue", defaultValue = "ALL") String queue,
+            @RequestParam(name = "assignee", defaultValue = "ALL") String assignee,
             @RequestParam(name = "targetId", required = false) Long targetId,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user
     ) {
-        return ApiResponse.ok(reviews.list(page, status, kind, target, q, queue, targetId, user));
+        return ApiResponse.ok(reviews.list(page, status, kind, target, q, queue, targetId, assignee, user));
     }
 
     @GetMapping("/{id}")
@@ -70,7 +71,8 @@ public class ReportReviewController {
 
     @PostMapping("/{id}/actions")
     @Operation(
-            summary = "[13.7] Thực hiện thao tác xử lý báo cáo (TAKE / HOLD / RELEASE / HIDE_POST / SUSPEND_ACCOUNT / RESOLVE / DISMISS) dành cho MANAGER"
+            summary = "[13.7] Xử lý vi phạm, sự cố bàn giao hoặc tranh chấp (MANAGER)",
+            description = "Chọn action từ chi tiết báo cáo. Với kết luận VIOLATION có thể gửi thêm measure trong availableMeasures để áp dụng cùng kết luận. Thu hồi chấp thuận hoặc hủy bàn giao để mở lại xét duyệt cần xác minh nơi giữ đồ."
     )
     public ApiResponse<?> action(
             @PathVariable("id") long id,

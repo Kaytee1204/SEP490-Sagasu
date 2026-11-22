@@ -12,6 +12,7 @@ import java.util.Objects;
 public class ChatAccessPolicy {
     private final AccountRepository accounts;
     private final ItemReceiptRepository receipts;
+    private final ChatQueryRepository queries;
 
     public Account actor(CustomUserDetails user) {
         if (user == null) throw new AppException(ErrorCode.UNAUTHORIZED);
@@ -39,6 +40,8 @@ public class ChatAccessPolicy {
                 || !eligible(claim)) return "Yêu cầu nhận đồ hoặc bài đăng không còn cho phép gửi tin. Bạn vẫn có thể xem lịch sử.";
         if (!active(conversation.getClaimant()) || !active(conversation.getPost().getAccount()))
             return "Một tài khoản hiện không thể tham gia trò chuyện. Lịch sử vẫn được giữ.";
+        if (queries.isAppealLocked(claim.getId()))
+            return "Chat đang tạm khóa do tranh chấp kết quả nhận đồ. Bạn vẫn có thể xem lịch sử và theo dõi hồ sơ nhận đồ.";
         return null;
     }
 }

@@ -15,11 +15,12 @@ import { useAuth } from '@/context/AuthContext';
 import { SavedPostsContext } from '@/features/items/context/SavedPostsContext';
 import { getMyPosts } from '@/features/items/api/postApi';
 import { getMyClaims, getReceivedClaims } from '@/features/claims/api/claimApi';
-import { getMyReports } from '@/features/reports/api/reportApi';
+import { getReportActionCounts } from '@/features/reports/api/reportApi';
 import { getUnreadCount } from '@/features/chat/api/chatApi';
 import './AccountSidebarLayout.css';
 
 const STORAGE_KEY = 'sagasu_account_sidebar_collapsed';
+const NO_REPORT_ACTIONS = { mine: 0, related: 0 };
 
 const ACCOUNT_NAV_ITEMS = [
   {
@@ -105,36 +106,35 @@ export default function AccountSidebarLayout() {
     postsTotal: 0,
     postsPending: 0,
     claimsPending: 0,
-    reportsOpen: 0,
-    reportsTotal: 0,
+    reportActions: NO_REPORT_ACTIONS,
     unreadMessages: 0,
   });
 
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
+    let lastRequest = 0;
 
     const loadCounts = async () => {
+      const request = ++lastRequest;
       const results = await Promise.allSettled([
         getMyPosts(1, 'ALL', 'ALL'),
         getMyPosts(1, 'PENDING', 'ALL'),
         getReceivedClaims(1, 'PENDING'),
         getMyClaims(1, 'PENDING'),
-        getMyReports(1, 'OPEN', 'ALL'),
-        getMyReports(1, 'IN_REVIEW', 'ALL'),
-        getMyReports(1, 'ALL', 'ALL'),
+        getReportActionCounts(),
         getUnreadCount(),
       ]);
 
-      if (!active) return;
+      if (!active || request !== lastRequest) return;
 
+      const reportActions = results[4];
       setCounts({
         postsTotal: readTotal(results[0]),
         postsPending: readTotal(results[1]),
         claimsPending: readTotal(results[2]) + readTotal(results[3]),
-        reportsOpen: readTotal(results[4]) + readTotal(results[5]),
-        reportsTotal: readTotal(results[6]),
-        unreadMessages: readTotal(results[7]),
+        reportActions: reportActions.status === 'fulfilled' ? reportActions.value ?? NO_REPORT_ACTIONS : NO_REPORT_ACTIONS,
+        unreadMessages: readTotal(results[5]),
       });
     };
 
@@ -148,6 +148,7 @@ export default function AccountSidebarLayout() {
     };
   }, [user?.id, location.pathname]);
 
+  const reportsNeedingAction = counts.reportActions.mine + counts.reportActions.related;
   const accountBadges = {
     posts:
       counts.postsPending > 0
@@ -180,19 +181,13 @@ export default function AccountSidebarLayout() {
           }
         : null,
     reports:
-      counts.reportsOpen > 0
+      reportsNeedingAction > 0
         ? {
-            count: counts.reportsOpen,
+            count: reportsNeedingAction,
             tone: 'danger',
-            title: `${counts.reportsOpen} báo cáo đang chờ xử lý`,
+            title: `${reportsNeedingAction} báo cáo cần bạn xử lý`,
           }
-        : counts.reportsTotal > 0
-          ? {
-              count: counts.reportsTotal,
-              tone: 'neutral',
-              title: `${counts.reportsTotal} báo cáo`,
-            }
-          : null,
+        : null,
     messages:
       counts.unreadMessages > 0
         ? {
@@ -290,7 +285,7 @@ export default function AccountSidebarLayout() {
       </aside>
 
       <div className="account-shell-content">
-        <Outlet context={{ accountBadges }} />
+        <Outlet context={{ accountBadges, reportActions: counts.reportActions }} />
       </div>
     </div>
   );

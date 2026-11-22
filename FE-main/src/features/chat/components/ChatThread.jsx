@@ -7,7 +7,6 @@ import ChatAttachments from './ChatAttachments';
 import LocationPicker from './LocationPicker';
 import ChatLocation from './ChatLocation';
 import CameraCapture from './CameraCapture';
-import ReportButton from '@/features/reports/components/ReportButton';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_ACCEPT } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
@@ -197,7 +196,6 @@ export default function ChatThread({ chat }) {
         {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
         <div className="chat-message-footer">
           <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
-          {String(row.senderId)!==String(user.id)&&<ReportButton type="MESSAGE" id={row.id} targetLabel={row.body?.slice(0, 120) || "Tin nhắn đính kèm"} label="Báo cáo tin nhắn"/>}
           {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
             && <small className="chat-read-receipt"><CheckCheck size={14} aria-hidden="true" />{row.readAt ? `Đã xem lúc ${receiptTime(row.readAt)}` : 'Đã xem'}</small>}
         </div>

@@ -168,7 +168,7 @@ export default function OfficeClaimForm({ counter = false }) {
                 <SearchBox
                   value={query}
                   onChange={setQuery}
-                  placeholder="Tìm tên đồ vật hoặc mã phiếu tiếp nhận…"
+                  placeholder="Tìm tên đồ vật hoặc mã hồ sơ tiếp nhận…"
                 />
                 <LoadState state={stored}>
                   {stored.data && (

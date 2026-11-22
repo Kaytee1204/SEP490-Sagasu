@@ -28,7 +28,9 @@ public class ReportBatchService {
 
   @Transactional
   public void conclude(Request request, CustomUserDetails user) {
-    if (!Set.of("RESOLVE","DISMISS").contains(request.action()) || !request.sameIncidentConfirmed())
+    boolean canBatch = Set.of("RESOLVE","DISMISS").contains(request.action())
+        || ReportReviewService.VIOLATION_FINDINGS.contains(request.action());
+    if (!canBatch || !request.sameIncidentConfirmed())
       throw bad("Chọn kết luận và xác nhận các báo cáo cùng sự việc.");
     var entries = request.reports().stream().sorted(Comparator.comparing(Entry::id)).toList();
     if (entries.stream().map(Entry::id).distinct().count()!=entries.size()) throw bad("Báo cáo bị chọn trùng.");

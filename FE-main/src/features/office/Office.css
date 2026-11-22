@@ -1144,3 +1144,310 @@
 .of-leave-confirm .of-leave-button { background:#fff; color:#9f3143; border-color:#e2e8f0; }
 .of-leave-confirm .of-leave-button:hover { background:#fff1f2; border-color:#fecdd3; }
 @media(max-width:420px) { .of-leave-confirm footer { flex-direction:column-reverse; } .of-leave-confirm footer .of-button { width:100%; } }
+
+/* ── Unified Staff Workspace Design (Forest-Emerald harmonized with MyClaimsPage) ── */
+.office-page:not(.office-personal) {
+  color: #173f37;
+}
+
+.office-page:not(.office-personal) .of-eyebrow {
+  color: #1c6b4d;
+  letter-spacing: 0.08em;
+}
+
+.office-page:not(.office-personal) h1 {
+  color: #173f37;
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  letter-spacing: -0.025em;
+}
+
+.office-page:not(.office-personal) .of-button {
+  border-color: #cbded2;
+  color: #2d6a53;
+  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 15px;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.office-page:not(.office-personal) .of-button:hover {
+  background: #f2f8f4;
+  border-color: #89b59a;
+  color: #173f37;
+}
+
+.office-page:not(.office-personal) .of-button.of-primary {
+  background: #1c6b4d;
+  border-color: #1c6b4d;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(28, 107, 77, 0.2);
+}
+
+.office-page:not(.office-personal) .of-button.of-primary:hover {
+  background: #15573e;
+  border-color: #15573e;
+  color: #ffffff;
+}
+
+.office-page:not(.office-personal) .of-button.of-danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fff5f5;
+}
+
+.office-page:not(.office-personal) .of-button.of-danger:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #991b1b;
+}
+
+.office-page:not(.office-personal) .of-panel {
+  border-color: #e1ebe4;
+  border-radius: 18px;
+  box-shadow: 0 2px 10px rgba(23, 63, 55, 0.03);
+}
+
+.office-page:not(.office-personal) .of-search {
+  border-color: #cdded0;
+  background: #ffffff;
+  border-radius: 11px;
+}
+
+.office-page:not(.office-personal) .of-search:focus-within {
+  background: #ffffff;
+  border-color: #1c6b4d;
+  outline: 2px solid rgba(28, 107, 77, 0.14);
+}
+
+.office-page:not(.office-personal) .of-select select {
+  border-color: #cdded0;
+  background: #ffffff;
+  border-radius: 9px;
+  color: #244b3c;
+  min-height: 38px;
+}
+
+.office-page:not(.office-personal) .of-select select:focus {
+  background: #ffffff;
+  border-color: #1c6b4d;
+  outline: 2px solid rgba(28, 107, 77, 0.14);
+}
+
+/* Quick Status / Shelf Filter Tabs Bar */
+.of-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.of-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.of-filter-tab:hover {
+  background: #eef2fb;
+  border-color: #cbd5f5;
+  color: #1e3a8a;
+}
+
+.of-filter-tab.is-active {
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #ffffff;
+}
+
+.of-filter-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 21px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.of-filter-tab.is-active .of-filter-tab-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.of-filter-tab-count.is-attention {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.of-filter-tab-count.is-danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.of-filter-tab.is-active .of-filter-tab-count.is-attention,
+.of-filter-tab.is-active .of-filter-tab-count.is-danger {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+/* Clear-filters bar & results meta */
+.of-filter-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 14px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #eef2f6;
+  font-size: 13.5px;
+  color: #475569;
+}
+
+.of-filter-meta strong {
+  color: #0f172a;
+}
+
+.of-clear-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  border: 1px solid #fecaca;
+  background: #fff5f5;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.of-clear-filter-btn:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+/* Cleaner staff worklist & storage rows */
+.office-page:not(.office-personal) .of-worklist {
+  border-color: #e6ebf2;
+  border-radius: 14px;
+}
+
+.office-page:not(.office-personal) .of-worklist-header {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 12px 18px;
+}
+
+.office-page:not(.office-personal) .of-worklist-row {
+  padding: 16px 18px;
+  border-top-color: #edf1f7;
+  transition: background 140ms ease;
+}
+
+.office-page:not(.office-personal) .of-worklist-row:hover {
+  background: #f8fafd;
+}
+
+.office-page:not(.office-personal) .of-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.office-page:not(.office-personal) .of-table td {
+  border-bottom-color: #edf1f7;
+}
+
+.office-page:not(.office-personal) .of-table tbody tr:hover {
+  background: #f8fafd;
+}
+
+.office-page:not(.office-personal) .of-table a:not(.of-button) {
+  color: #0f172a;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.office-page:not(.office-personal) .of-table a:not(.of-button):hover {
+  color: #1e3a8a;
+  text-decoration: underline;
+}
+
+.office-page:not(.office-personal) .of-storage-row {
+  border-color: #e6ebf2;
+  border-radius: 14px;
+  padding: 18px 20px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.office-page:not(.office-personal) .of-storage-row:hover {
+  border-color: #cbd5f5;
+  box-shadow: 0 4px 14px rgba(30, 58, 138, 0.05);
+}
+
+.office-page:not(.office-personal) .of-storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.of-code-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: #eef2fb;
+  color: #1e3a8a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.of-shelf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.of-shelf-pill.is-missing {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.of-claim-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}

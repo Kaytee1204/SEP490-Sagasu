@@ -56,3 +56,10 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     tags-sorter: alpha
+
+report-review:
+  calendar:
+    zone: ${REPORT_REVIEW_CALENDAR_ZONE:Asia/Ho_Chi_Minh}
+    work-days: ${REPORT_REVIEW_CALENDAR_WORK_DAYS:MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY}
+    sessions: ${REPORT_REVIEW_CALENDAR_SESSIONS:08:00-12:00,13:00-17:00}
+    holidays: ${REPORT_REVIEW_CALENDAR_HOLIDAYS:}

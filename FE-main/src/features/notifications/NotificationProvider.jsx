@@ -223,6 +223,13 @@ export default function NotificationProvider({ children }) {
               return [incoming, ...prev].slice(0, 30);
             });
             setUnreadCount((prev) => prev + 1);
+            if (incoming.type?.startsWith('REPORT_') || ['HANDOVER_DISPUTED', 'CLAIM_REVIEW_REOPENED', 'CLAIM_APPROVAL_REVOKED'].includes(incoming.type)) {
+              window.dispatchEvent(new Event('report-workspace-updated'));
+              window.dispatchEvent(new Event('sagasu-counts-changed'));
+            }
+            if (incoming.type === 'REPORT_CREATED' || incoming.type === 'REPORT_REPLY') {
+              window.dispatchEvent(new Event('report-review-changed'));
+            }
 
             const isAlreadyOnChat =
               incoming.type === 'CHAT_MESSAGE' &&

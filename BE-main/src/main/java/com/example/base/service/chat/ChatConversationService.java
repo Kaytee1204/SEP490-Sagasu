@@ -39,4 +39,16 @@ public class ChatConversationService {
         conversations.findByPost_IdAndClaimant_Id(claim.getPost().getId(), claim.getClaimant().getId())
                 .ifPresent(c -> events.changed(c.getId(), "CONVERSATION_UPDATED"));
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void notifyAppealChanged(long reportId) {
+        conversations.findActiveConversationIdForAppeal(reportId)
+                .ifPresent(conversationId -> events.changed(conversationId, "CONVERSATION_UPDATED"));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void notifyHandoverChanged(long claimId) {
+        conversations.findByLatestClaim_Id(claimId)
+                .ifPresent(conversation -> events.changed(conversation.getId(), "CONVERSATION_UPDATED"));
+    }
 }
