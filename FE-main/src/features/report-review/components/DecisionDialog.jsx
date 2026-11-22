@@ -31,6 +31,10 @@ const findings = {
   NO_VIOLATION: labels.NO_VIOLATION,
   INSUFFICIENT_EVIDENCE: labels.INSUFFICIENT_EVIDENCE,
 };
+const appealFindings = {
+  INSUFFICIENT_EVIDENCE: "Chưa đủ căn cứ để thay đổi người nhận",
+  INVALID_CLAIM: "Đã xác minh yêu cầu nhận đồ của người gửi tranh chấp là sai",
+};
 const batchActions = ["RESOLVE", "DISMISS", ...Object.keys(findings)];
 
 export default function DecisionDialog({ action: initialAction, data, onClose, onSaved }) {
@@ -66,20 +70,23 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const [conclusion, setConclusion] = useState(""),
     [basis, setBasis] = useState(""),
     [holder, setHolder] = useState(""),
+    [appealFinding, setAppealFinding] = useState(""),
     [custodyVerified, setCustody] = useState(false),
     [wrongRecipientVerified, setWrongRecipientVerified] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const accountAction = ["WARN_ACCOUNT", "SUSPEND_ACCOUNT"].includes(effect);
   const isRecoveryRequest = action === "REQUEST_ITEM_RECOVERY";
+  const isKeepApproval = action === "APPEAL_KEEP";
   const isWrongRecipientDecision = action === "APPEAL_WRONG_RECIPIENT";
   const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
   const requiresCustody = isWrongRecipientDecision || requiresRecoveryCheck
     || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
-    || (action === "APPEAL_KEEP" && data.recoveryRequested);
+    || (isKeepApproval && data.recoveryRequested);
   const officeAppeal = data.appeal?.claim_type === "OFFICE";
   const warning = (data.caseKind === "CLAIM_APPEAL" && (officeAppeal ? officeAppealActionHelp : appealActionHelp)[effect]) || warnings[effect];
-  const unresolvedInquiries = data.inquiries.some(item => !item.responded_at && !item.closed_at);
+  const unresolvedInquiries = data.inquiries.filter(item => !item.responded_at && !item.closed_at);
+  const overdue = unresolvedInquiries.some(item => item.overdue);
   function changeDecision(setValue, value) {
     setValue(value);
     setSelected([]);
@@ -88,13 +95,14 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
 
   const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim()
     || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified)
+    || (isKeepApproval && !appealFinding)
     || (isWrongRecipientDecision && !wrongRecipientVerified) || (selected.length > 0 && !sameIncident);
 
   function submit(event) {
     event.preventDefault();
     if (!cannotSubmit) {
       setError("");
-      if (isWrongRecipientDecision || action === "APPEAL_KEEP") void executeSubmit();
+      if (isWrongRecipientDecision || isKeepApproval) void executeSubmit();
       else setConfirmOpen(true);
     }
   }
@@ -119,6 +127,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           basis: basis.trim(),
           targetId: isRecoveryRequest ? Number(holder) : accountAction ? data.report.reported_account_id : null,
           custodyVerified,
+          ...(isKeepApproval && { appealFinding }),
           ...(isWrongRecipientDecision && { wrongRecipientVerified }),
         }),
       );
@@ -163,7 +172,23 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             </select>
           </label>}
         </>}
-        {warning && <p className="rr-callout">{warning}</p>}
+        {isKeepApproval && <>
+          <fieldset className="rr-decision-choice" disabled={busy}>
+            <legend>Căn cứ giữ người đã duyệt *</legend>
+            {Object.entries(appealFindings).map(([value, label]) => <label key={value}>
+              <input type="radio" name="appealFinding" value={value} required checked={appealFinding === value}
+                onChange={() => setAppealFinding(value)} />
+              {label}
+            </label>)}
+          </fieldset>
+          {appealFinding === "INSUFFICIENT_EVIDENCE" && <p className="rr-callout">
+            Kết thúc tranh chấp và giữ nguyên yêu cầu nhận đồ của người gửi.
+          </p>}
+          {appealFinding === "INVALID_CLAIM" && <p className="rr-callout">
+            Bác yêu cầu nhận đồ của người gửi tranh chấp và chặn tài khoản đó gửi lại yêu cầu trên bài đăng này.
+          </p>}
+        </>}
+        {!isKeepApproval && warning && <p className="rr-callout">{warning}</p>}
         {candidates.length > 0 && <fieldset className="rr-batch-selection">
           <legend>Áp dụng cho báo cáo cùng sự việc</legend>
           <p>Mặc định chỉ kết luận báo cáo #{data.report.report_id}. Chỉ chọn thêm sau khi đã đối chiếu từng nội dung và bằng chứng. Các báo cáo mới gửi sau này không tự nhận kết luận này.</p>
@@ -187,7 +212,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           Nội dung gửi cho người liên quan{" "}
           *
           <textarea
-            autoFocus={!structured && !interim && !outcome}
+            autoFocus={!structured && !interim && !outcome && !isKeepApproval}
             required
             maxLength={5000}
             rows={3}
@@ -206,7 +231,8 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             onChange={(e) => setBasis(e.target.value)}
             placeholder={isWrongRecipientDecision
               ? "Ghi rõ căn cứ nào cho thấy người được duyệt không phải chủ món đồ."
-              : "Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."}
+              : appealFinding === "INVALID_CLAIM" ? "Ghi rõ bằng chứng cho thấy yêu cầu nhận đồ của người gửi là sai."
+                : "Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."}
           />
         </label>
         {isWrongRecipientDecision && <label className="rr-check">
@@ -240,10 +266,10 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           "HANDOVER_REOPEN",
           "APPEAL_KEEP",
           "APPEAL_WRONG_RECIPIENT",
-        ].includes(decision)) && unresolvedInquiries && (
+        ].includes(decision)) && unresolvedInquiries.length > 0 && (
             <p className="rr-callout">
-              Vẫn còn yêu cầu bổ sung chưa được trả lời. Nếu đã đủ căn cứ, ghi
-              rõ lý do kết luận ở trên.
+              {overdue ? "Đã quá hạn bổ sung thông tin. Hãy kết luận dựa trên căn cứ hiện có."
+                : "Vẫn còn yêu cầu bổ sung chưa được trả lời. Nếu đã đủ căn cứ, ghi rõ lý do kết luận ở trên."}
             </p>
           )}
         <ErrorBox>{error}</ErrorBox>
@@ -256,7 +282,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             disabled={cannotSubmit}
           >
             {busy ? "Đang lưu…" : isWrongRecipientDecision ? "Xác nhận mở lại xét duyệt"
-              : action === "APPEAL_KEEP" ? labels.APPEAL_KEEP
+              : isKeepApproval ? labels.APPEAL_KEEP
               : structured || outcome ? "Xác nhận kết luận" : "Xác nhận xử lý"}
           </button>
         </footer>

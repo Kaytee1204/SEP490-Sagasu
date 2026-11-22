@@ -50,7 +50,9 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
         <h3>Yêu cầu từ quản lý</h3>
         <time dateTime={i.created_at}>{formatReportDate(i.created_at)}</time>
         <p>{i.question}</p>
-        {i.response_due_at && !i.responded_at && replyOpen && <p>Hạn phản hồi · {formatReportDate(i.response_due_at)}</p>}
+        {i.response_due_at && replyOpen && <p>
+          {i.overdue ? "Đã quá hạn phản hồi" : "Hạn phản hồi"} · {formatReportDate(i.response_due_at)}
+        </p>}
       </div>
       {i.responded_at ? (
         <>

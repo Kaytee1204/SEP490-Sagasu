@@ -364,8 +364,9 @@ public class ClaimService {
     public void rejectClaimAfterAppeal(long claimId, String reason, CustomUserDetails user) {
         Account manager = activeManager(user);
         lockPost(claimPostId(claimId));
-        Claim claim = lockClaim(claimId);
-        if (claim.isOffice() || !"PENDING".equals(claim.getStatus())) throw stateChanged();
+        Claim claim = lockClaimForWorkflow(claimId);
+        if (claim.getClaimant() == null) throw missing();
+        if (!"PENDING".equals(claim.getStatus())) throw stateChanged();
         rejectClaim(claim, manager, reason);
     }
 
@@ -375,7 +376,8 @@ public class ClaimService {
         claims.flush();
         notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_REJECTED",
                 "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối", reason,
-                "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId(), true);
+                claim.isOffice() ? "/van-phong/claims/" + claim.getId()
+                        : "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId(), true);
     }
 
     private void reopenApproval(Claim claim, Post post, Account actor, String reason) {

@@ -95,7 +95,8 @@ public class DataInitializer {
             "db/migrations/32_rename_appeal_label.sql",
             "db/migrations/33_retire_account_report_reasons.sql",
             "db/migrations/34_p2p_handover_issue_intake.sql",
-            "db/migrations/35_shared_claim_appeals.sql"
+            "db/migrations/35_shared_claim_appeals.sql",
+            "db/migrations/36_report_inquiry_reminders.sql"
     );
 
     @Bean

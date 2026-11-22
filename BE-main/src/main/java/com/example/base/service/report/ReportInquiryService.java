@@ -11,6 +11,7 @@ import jakarta.validation.constraints.*;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,6 +70,36 @@ public class ReportInquiryService {
 
   public record Reply(@NotBlank @Size(max = 5000) String response) {}
 
+  @Scheduled(fixedDelay = 60000, initialDelay = 60000)
+  @Transactional
+  public void remindBeforeDeadline() {
+    var due = jdbc.queryForList("""
+        with pending as (
+          select i.inquiry_id from report_inquiry i join report r using (report_id)
+          where i.responded_at is null and i.closed_at is null and i.reminded_at is null
+            and i.response_due_at > now() and i.response_due_at <= now() + interval '1 hour'
+            and r.status in ('OPEN', 'IN_REVIEW')
+          order by i.response_due_at, i.inquiry_id
+          limit 100
+          for update of i skip locked
+        )
+        update report_inquiry i set reminded_at = now()
+        from pending where i.inquiry_id = pending.inquiry_id
+        returning i.report_id, i.recipient_id
+        """);
+    for (var inquiry : due) {
+      long reportId = id(inquiry, "report_id");
+      notifications.notifyUser(
+          id(inquiry, "recipient_id"),
+          "REPORT_INFORMATION",
+          "Sắp đến hạn bổ sung báo cáo #" + reportId,
+          "Mở báo cáo để xem yêu cầu và gửi thông tin trước hạn.",
+          "/bao-cao/" + reportId + "#phan-hoi",
+          false
+      );
+    }
+  }
+
   @Transactional
   public Map<String, Object> ask(
     long report,
@@ -98,7 +129,7 @@ public class ReportInquiryService {
       request.recipientId(),
       actor.getId(),
       request.question().strip(),
-      reviews.responseDue()
+      reviews.inquiryResponseDue()
     );
     jdbc.update(
       "update report set version=version+1,updated_at=now() where report_id=?",
@@ -128,7 +159,8 @@ public class ReportInquiryService {
   public List<Map<String, Object>> mine(CustomUserDetails user) {
     long actor = access.require(user).getId();
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at, %s
+        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
+          (i.responded_at is null and i.closed_at is null and i.response_due_at <= now()) as overdue, %s
         from report_inquiry i join report r using (report_id)
         %s
         where i.recipient_id = ?
@@ -141,7 +173,8 @@ public class ReportInquiryService {
 
   List<Map<String, Object>> forReport(long reportId, long recipientId) {
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at, r.status
+        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
+          (i.responded_at is null and i.closed_at is null and i.response_due_at <= now()) as overdue, r.status
         from report_inquiry i join report r using (report_id)
         where i.report_id = ? and i.recipient_id = ?
         order by i.created_at desc, i.inquiry_id desc

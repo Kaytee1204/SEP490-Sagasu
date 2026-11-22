@@ -19,6 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -541,33 +543,41 @@ class ReportReviewServiceTest {
         verifyNoInteractions(claims);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"P2P", "OFFICE"})
+    void verifiedInvalidClaimBlocksTheAppellantAndClosesTheDispute(String claimType) {
+        report.put("kind", "HANDOVER_ISSUE");
+        report.put("claim_id", 41L);
+        rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
+                "active", true, "claim_type", claimType));
+        ctx.put("claim", row("claim_id", 41L, "claimant_id", 7L, "claim_type", claimType, "status", "PENDING"));
+
+        assertThat((List<?>) service.detail(5L, user).get("actions")).hasSize(1);
+        assertBad(() -> service.act(5L, action("APPEAL_REJECT_CLAIM"), user), "Thao tác không hợp lệ");
+        assertBad(() -> service.act(5L, action("APPEAL_KEEP"), user), "Chọn căn cứ giữ người đã duyệt");
+        service.act(5L, new ReportReviewService.Action(3L, "APPEAL_KEEP", "Conclusion", "Basis", null,
+                false, null, false, ReportReviewService.AppealFinding.INVALID_CLAIM), user);
+
+        verify(claims).rejectClaimAfterAppeal(eq(41L), contains("Bạn không thể gửi lại"), eq(user));
+        verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
+                eq("APPEAL_REJECT_CLAIM"), eq("Conclusion"), eq("Basis"), anyString(), anyString());
+        verifyStatusUpdate("REJECTED");
+    }
+
     @Test
-    void keepingApprovalBlocksTheAppellantAndClosesTheDispute() {
+    void insufficientEvidenceClosesTheDisputeAndLeavesPendingClaimUntouched() {
         report.put("kind", "HANDOVER_ISSUE");
         report.put("claim_id", 41L);
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L, "active", true));
         ctx.put("claim", row("claim_id", 41L, "claimant_id", 7L, "claim_type", "P2P", "status", "PENDING"));
 
-        assertThat((List<?>) service.detail(5L, user).get("actions")).hasSize(1);
-        assertBad(() -> service.act(5L, action("APPEAL_REJECT_CLAIM"), user), "Thao tác không hợp lệ");
-        service.act(5L, action("APPEAL_KEEP"), user);
-
-        verify(claims).rejectClaimAfterAppeal(eq(41L), contains("Bạn không thể gửi lại"), eq(user));
-        verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
-                eq("APPEAL_KEEP"), eq("Conclusion"), eq("Basis"), anyString(), anyString());
-        verifyStatusUpdate("REJECTED");
-    }
-
-    @Test
-    void keepingApprovalCanCloseADisputeEvenIfTheAppellantHasWithdrawn() {
-        report.put("kind", "HANDOVER_ISSUE");
-        report.put("claim_id", 41L);
-        rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L, "active", true));
-        ctx.put("claim", row("claim_id", 41L, "claimant_id", 7L, "claim_type", "P2P", "status", "CANCELLED"));
-
-        service.act(5L, action("APPEAL_KEEP"), user);
+        service.act(5L, new ReportReviewService.Action(3L, "APPEAL_KEEP", "Conclusion", "Basis", null,
+                false, null, false, ReportReviewService.AppealFinding.INSUFFICIENT_EVIDENCE), user);
 
         verifyNoInteractions(claims);
+        verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
+                eq("APPEAL_INSUFFICIENT"), eq("Conclusion"), eq("Basis"), anyString(), anyString());
+        verify(jdbc).update(contains("update report_inquiry i set closed_at"), eq(5L));
         verifyStatusUpdate("REJECTED");
     }
 

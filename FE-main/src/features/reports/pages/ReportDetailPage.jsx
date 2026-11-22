@@ -19,6 +19,7 @@ const outcomeLabels = {
   NO_VIOLATION: 'Không phát hiện vi phạm',
   INSUFFICIENT_EVIDENCE: 'Chưa đủ căn cứ',
   APPEAL_KEEP: 'Giữ kết quả nhận đồ',
+  APPEAL_INSUFFICIENT: 'Giữ người đã duyệt vì chưa đủ căn cứ thay đổi',
   APPEAL_REJECT_CLAIM: 'Yêu cầu bị bác và không thể gửi lại trên bài đăng này',
   APPEAL_REQUIRE_REVIEW: 'Quản lý đã yêu cầu xét lại người nhận',
   APPEAL_WRONG_RECIPIENT: 'Quản lý xác nhận đã duyệt nhầm người nhận',
@@ -115,7 +116,9 @@ function ReportDetail({ id }) {
         </header>
         <section id="buoc-tiep-theo" tabIndex={-1} className="report-card report-detail-section report-next-step">
           <h2>{pending ? 'Bạn cần phản hồi' : recoveryPending ? 'Chờ xác nhận thu hồi món đồ' : appealSteps[report.appeal_step] || (concluded ? 'Kết quả xử lý' : 'Bước tiếp theo')}</h2>
-          {pending && <><p>Quản lý đã gửi câu hỏi cho bạn. Mở yêu cầu để xem nội dung và hạn phản hồi.</p>
+          {pending && <><p>{awaitingReply.some(item => item.overdue)
+            ? 'Yêu cầu bổ sung đã quá hạn. Quản lý có thể kết luận dựa trên thông tin hiện có. Bạn vẫn có thể gửi phản hồi khi hồ sơ còn mở.'
+            : 'Quản lý đã gửi câu hỏi cho bạn. Mở yêu cầu để xem nội dung và hạn phản hồi.'}</p>
             <a className="btn btn-accent" href="#phan-hoi">Trả lời quản lý <ArrowRight size={15} aria-hidden="true" /></a></>}
           {recoveryPending && !pending && <p>Người giữ đồ phản hồi trong hồ sơ của mình. Quản lý đối chiếu bằng chứng và xác nhận việc thu hồi.</p>}
           {report.appeal_step && !report.needs_reopen && <p>{appealInstruction(report.appeal_step, office)}</p>}
@@ -130,6 +133,7 @@ function ReportDetail({ id }) {
           </div>}
           {concluded && report.outcome === 'HANDOVER_RETRY' && <p>Người nhặt hẹn giao lại với người đã được chấp thuận, sau đó ghi nhận lượt giao mới trong yêu cầu nhận đồ.</p>}
           {concluded && report.outcome === 'APPEAL_KEEP' && report.mine && !office && <p>Yêu cầu của bạn đã kết thúc. Bạn không thể gửi lại yêu cầu hoặc tranh chấp trên bài đăng này.</p>}
+          {concluded && report.outcome === 'APPEAL_INSUFFICIENT' && report.mine && <p>Tranh chấp này đã kết thúc. Trạng thái yêu cầu nhận đồ của bạn được giữ nguyên.</p>}
           {concluded && (report.outcome === 'HANDOVER_REOPEN' || report.approval_reopened) &&
             <p>{office ? 'Văn phòng xét duyệt lại' : 'Người nhặt xét lại'} các yêu cầu của bài đăng. Theo dõi kết quả trong hồ sơ của bạn.</p>}
           {correction && <div className="report-appeal-next">

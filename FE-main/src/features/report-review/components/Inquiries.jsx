@@ -59,6 +59,7 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
           </div>
           <small>{date(i.created_at)}</small>
           {i.response_due_at && !i.responded_at && !i.closed_at && <small> · Hạn phản hồi {date(i.response_due_at)}</small>}
+          {i.reminded_at && <small> · Đã nhắc lúc {date(i.reminded_at)}</small>}
           <p><strong>Quản lý hỏi</strong><br />{i.question}</p>
           {i.responded_at && (
             <blockquote>
@@ -76,6 +77,7 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
           onClose={() => setOpen(false)}
         >
           <form className="rr-stack" onSubmit={ask}>
+            <p className="rr-muted">Người nhận có 12 giờ làm việc để trả lời. Hết hạn, hồ sơ về mục Cần xử lý để bạn kết luận dựa trên căn cứ hiện có.</p>
             <label>
               Người nhận *
               <select

@@ -72,7 +72,7 @@ public class ReportReviewController {
     @PostMapping("/{id}/actions")
     @Operation(
             summary = "[13.7] Xử lý vi phạm, sự cố bàn giao hoặc tranh chấp (MANAGER)",
-            description = "Chọn action từ chi tiết báo cáo. Với kết luận VIOLATION có thể gửi thêm measure trong availableMeasures để áp dụng cùng kết luận. Thu hồi chấp thuận hoặc hủy bàn giao để mở lại xét duyệt cần xác minh nơi giữ đồ."
+            description = "Chọn action từ chi tiết báo cáo. Với VIOLATION có thể gửi measure từ availableMeasures. Với APPEAL_KEEP cần chọn appealFinding: INSUFFICIENT_EVIDENCE (giữ yêu cầu đang chờ) hoặc INVALID_CLAIM (bác yêu cầu và chặn gửi lại trên cùng bài). Mở lại xét duyệt cần xác minh nơi giữ đồ."
     )
     public ApiResponse<?> action(
             @PathVariable("id") long id,
@@ -85,7 +85,7 @@ public class ReportReviewController {
     @PostMapping("/{id}/inquiries")
     @Operation(
             summary = "[13.8] Manager gửi yêu cầu giải trình / bổ sung thông tin (Inquiry) tới các bên liên quan",
-            description = "Tạo câu hỏi điều tra (report_inquiry) và gửi thông báo cho người dùng liên quan."
+            description = "Tạo câu hỏi điều tra với hạn phản hồi 12 giờ làm việc và gửi thông báo cho người dùng liên quan."
     )
     public ApiResponse<?> ask(
             @PathVariable("id") long id,

@@ -42,6 +42,8 @@ public class ReportReviewService {
   private final ClaimService claims;
   private final ReportReviewCalendar calendar;
 
+  public enum AppealFinding { INSUFFICIENT_EVIDENCE, INVALID_CLAIM }
+
   public record Action(
     @NotNull @PositiveOrZero Long version,
     @NotBlank String action,
@@ -50,7 +52,8 @@ public class ReportReviewService {
     Long targetId,
     boolean custodyVerified,
     @Size(max = 32) String measure,
-    boolean wrongRecipientVerified
+    boolean wrongRecipientVerified,
+    AppealFinding appealFinding
   ) {
     public Action(Long version, String action, String conclusion, String basis, Long targetId, boolean custodyVerified) {
       this(version, action, conclusion, basis, targetId, custodyVerified, null);
@@ -59,6 +62,11 @@ public class ReportReviewService {
     public Action(Long version, String action, String conclusion, String basis, Long targetId,
         boolean custodyVerified, String measure) {
       this(version, action, conclusion, basis, targetId, custodyVerified, measure, false);
+    }
+
+    public Action(Long version, String action, String conclusion, String basis, Long targetId,
+        boolean custodyVerified, String measure, boolean wrongRecipientVerified) {
+      this(version, action, conclusion, basis, targetId, custodyVerified, measure, wrongRecipientVerified, null);
     }
   }
 
@@ -393,8 +401,8 @@ public class ReportReviewService {
     return (String) context.one("select phase from p2p_handover_issue where report_id=?",reportId).get("phase");
   }
 
-  OffsetDateTime responseDue() {
-    return calendar.responseDue(Instant.now(),1).atOffset(ZoneOffset.UTC);
+  OffsetDateTime inquiryResponseDue() {
+    return calendar.inquiryResponseDue(Instant.now()).atOffset(ZoneOffset.UTC);
   }
 
   boolean canFollowUpRecovery(Map<String, Object> report) {
@@ -624,6 +632,7 @@ public class ReportReviewService {
     if (measure != null && (!"VIOLATION".equals(action) || !violationMeasures(r, current).contains(measure)))
       throw bad("Biện pháp không phù hợp với kết luận hoặc đối tượng được báo cáo.");
     String next = violationFinding ? ("VIOLATION".equals(action) ? "RESOLVED" : "REJECTED") : status;
+    String recordedAction = action;
     String effect = measure == null ? action : measure;
     var recovery = recovery(reportId);
     if (!recovery.isEmpty() && recovery.get("confirmed_at")==null && Set.of(
@@ -697,7 +706,7 @@ public class ReportReviewService {
         Long holder = request.targetId();
         if (holder==null || !participantsFor(r).contains(holder))
           throw bad("Chọn người đang giữ món đồ trong danh sách người liên quan.");
-        var due = responseDue();
+        var due = calendar.responseDue(Instant.now(), 1).atOffset(ZoneOffset.UTC);
         jdbc.update("""
             with inquiry as (
               insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at)
@@ -734,7 +743,13 @@ public class ReportReviewService {
       case "APPEAL_KEEP" -> {
         requireKind(kind, "CLAIM_APPEAL");
         if (recoveryRequested(reportId)) requireCustody(request);
-        if (!"OFFICE".equals(appeal.get("claim_type")) && pendingAppealingClaim(r, current)) {
+        if (request.appealFinding() == null)
+          throw bad("Chọn căn cứ giữ người đã duyệt trước khi lưu kết luận.");
+        recordedAction = switch (request.appealFinding()) {
+          case INSUFFICIENT_EVIDENCE -> "APPEAL_INSUFFICIENT";
+          case INVALID_CLAIM -> "APPEAL_REJECT_CLAIM";
+        };
+        if (request.appealFinding() == AppealFinding.INVALID_CLAIM && pendingAppealingClaim(r, current)) {
           claims.rejectClaimAfterAppeal(id(r, "claim_id"),
               claimNote(reportId, conclusion) + " Bạn không thể gửi lại yêu cầu trên bài đăng này.", user);
         }
@@ -788,13 +803,13 @@ public class ReportReviewService {
       "insert into report_decision(report_id,actor_id,action,conclusion,basis,before_state,after_state) values(?,?,?,?,?,?::jsonb,?::jsonb)",
       reportId,
       actor.getId(),
-      action,
+      recordedAction,
       conclusion,
       basis,
       context.json(before),
       context.json(afterState)
     );
-    history(reportId, actor.getId(), action, status, next, conclusion, basis);
+    history(reportId, actor.getId(), recordedAction, status, next, conclusion, basis);
     boolean finished = open(r) && Set.of("RESOLVED", "REJECTED").contains(next);
     jdbc.update(
       "update report set status=?,resolution_note=case when ? then ? else resolution_note end,resolved_by=case when ? then ? else resolved_by end,resolved_at=case when ? then now() else resolved_at end,version=version+1,updated_at=now() where report_id=?",
@@ -914,7 +929,7 @@ public class ReportReviewService {
 
   private static boolean pendingAppealingClaim(Map<String, Object> report, Map<String, Object> current) {
     if (!(current.get("claim") instanceof Map<?, ?> claim)) return false;
-    return "P2P".equals(claim.get("claim_type")) && "PENDING".equals(claim.get("status"))
+    return "PENDING".equals(claim.get("status"))
         && Objects.equals(report.get("claim_id"), claim.get("claim_id"))
         && Objects.equals(report.get("reporter_id"), claim.get("claimant_id"));
   }

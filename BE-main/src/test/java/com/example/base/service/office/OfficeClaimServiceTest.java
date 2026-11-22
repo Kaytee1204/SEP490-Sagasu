@@ -7,6 +7,7 @@ import com.example.base.exception.ErrorCode;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.claim.OfficeClaimService;
+import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.storage.ImageStorage;
 import com.example.base.storage.ImageValidator;
@@ -93,6 +94,7 @@ class OfficeClaimServiceTest {
     @Mock PlatformTransactionManager transactions;
     @Mock EntityManager em;
     @Mock NotificationService notifications;
+    @Mock P2pClaimAppealService appeals;
 
     @InjectMocks
     OfficeClaimService service;

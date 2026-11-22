@@ -21,6 +21,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 
 import static com.example.base.service.report.SqlStub.row;
@@ -89,10 +90,12 @@ class ReportInquiryServiceTest {
 
     @Test
     void utc100_ask_participant_insertsInquiryAndNotifies() {
+        var deadline = OffsetDateTime.parse("2026-11-24T09:00:00Z");
+        when(reviews.inquiryResponseDue()).thenReturn(deadline);
         Map<String, Object> res = service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "  Where did you lose it? "), managerUser);
 
         verify(reviews).processing(report, manager, 3L);
-        verify(jdbc).update(contains("response_due_at"), eq(5L), eq(7L), eq(1L), eq("Where did you lose it?"), any());
+        verify(jdbc).update(contains("response_due_at"), eq(5L), eq(7L), eq(1L), eq("Where did you lose it?"), eq(deadline));
         verify(jdbc).update(contains("update report set version=version+1"), eq(5L));
         verify(reviews).history(eq(5L), eq(1L), eq("ASK_INFORMATION"), eq("IN_REVIEW"), eq("IN_REVIEW"), anyString(), anyString());
         verify(notifications).notifyUser(eq(7L), eq("REPORT_INFORMATION"), anyString(), anyString(), eq("/bao-cao/5#phan-hoi"), eq(false));
@@ -116,6 +119,20 @@ class ReportInquiryServiceTest {
         doThrow(OfficeAccess.bad("Cần nhận xử lý báo cáo trước khi thực hiện thao tác."))
                 .when(reviews).processing(any(), any(), anyLong());
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Q"), managerUser), "Cần nhận xử lý");
+    }
+
+    @Test
+    void reminderNotifiesOnlyRecipientsClaimedByTheDatabaseUpdate() {
+        when(jdbc.queryForList(contains("set reminded_at = now()")))
+                .thenReturn(List.of(row("report_id", 5L, "recipient_id", 7L)))
+                .thenReturn(List.of());
+
+        service.remindBeforeDeadline();
+        service.remindBeforeDeadline();
+
+        verify(notifications).notifyUser(7L, "REPORT_INFORMATION", "Sắp đến hạn bổ sung báo cáo #5",
+                "Mở báo cáo để xem yêu cầu và gửi thông tin trước hạn.", "/bao-cao/5#phan-hoi", false);
+        verifyNoMoreInteractions(notifications);
     }
 
     // ---------- mine / results ----------

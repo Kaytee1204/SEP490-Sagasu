@@ -200,7 +200,7 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
   const canAsk = (data.canAsk ?? canProcess) && availableRecipients(data).length > 0;
   const isAppeal = caseKind === "CLAIM_APPEAL";
   const conclusion = data.decisions?.findLast(item => findings.includes(item.action)
-    || ["APPEAL_KEEP", "APPEAL_REJECT_CLAIM", "APPEAL_REQUIRE_REVIEW", "APPEAL_WRONG_RECIPIENT"].includes(item.action));
+    || ["APPEAL_KEEP", "APPEAL_INSUFFICIENT", "APPEAL_REJECT_CLAIM", "APPEAL_REQUIRE_REVIEW", "APPEAL_WRONG_RECIPIENT"].includes(item.action));
   const title = isClosed ? "Tiếp tục xử lý" : caseKind === "HANDOVER_ISSUE" ? "Kết quả bàn giao" : "Kết luận báo cáo";
   const structured = actions.some(value => findings.includes(value));
   const otherActions = actions.filter(value => !itemMeasures.includes(value));
