@@ -15,11 +15,13 @@ export const appealSteps = {
   READY_TO_REOPEN: 'Cần mở lại xét duyệt người nhận',
 };
 
-export function appealInstruction(step) {
+export function appealInstruction(step, office = false) {
   switch (step) {
     case 'WAIT_APPEALS': return 'Quản lý xử lý các tranh chấp còn lại của bài đăng. Món đồ tiếp tục được giữ để đối chiếu.';
     case 'VERIFY_CUSTODY': return 'Quản lý kiểm tra người đang giữ đồ và các điều kiện còn vướng trước khi mở lại xét duyệt.';
-    case 'READY_TO_REOPEN': return 'Người nhặt cần xác nhận vẫn giữ món đồ, sau đó mở lại xét duyệt và quyết định người nhận.';
+    case 'READY_TO_REOPEN': return office
+      ? 'Quản lý có thể xác nhận tài sản còn lưu kho và thu hồi chấp thuận để văn phòng xét duyệt lại.'
+      : 'Người nhặt cần xác nhận vẫn giữ món đồ, sau đó mở lại xét duyệt và quyết định người nhận.';
     default: return '';
   }
 }

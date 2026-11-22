@@ -23,6 +23,7 @@ const violationTargets = { ALL: "Tất cả đối tượng", POST: reportTarget
 const isReportReference = value => /^(?:#\s*)?[0-9]+$/.test(value.trim());
 
 export default function ReportQueue({ kind, reportPath }) {
+  const showReasonColumn = kind !== "CLAIM_APPEAL";
   const [params, setParams] = useSearchParams();
   const advancedId = useId();
   const queue = params.get("queue");
@@ -158,16 +159,17 @@ export default function ReportQueue({ kind, reportPath }) {
         {!isFiltered && filters.queue === "READY" && <button type="button" onClick={() => selectQueue("WAITING")}>Xem hồ sơ đang chờ</button>}
       </div>}
       {data?.content.length > 0 && <div className="rr-queue-results">
-        <table className="rr-queue-table" aria-label="Danh sách hồ sơ báo cáo" role="table">
+        <table className={`rr-queue-table${showReasonColumn ? "" : " rr-queue-table-appeals"}`} aria-label="Danh sách hồ sơ báo cáo" role="table">
           <thead role="rowgroup"><tr role="row">
             <th scope="col" role="columnheader">Hồ sơ</th>
-            <th scope="col" role="columnheader">Lý do / ưu tiên</th>
+            {showReasonColumn && <th scope="col" role="columnheader">Lý do / ưu tiên</th>}
             <th scope="col" role="columnheader">Trạng thái</th>
             <th scope="col" role="columnheader">Phụ trách</th>
             <th scope="col" role="columnheader"><span className="sr-only">Mở hồ sơ</span></th>
           </tr></thead>
           {data.content.map(report => <ReportGroup key={`${kind}:${report.report_id}`} report={report}
-            filters={filters} reportPath={reportPath} revision={reload} timeZone={data.workCalendar?.zone} />)}
+            showReasonColumn={showReasonColumn} filters={filters} reportPath={reportPath}
+            revision={reload} timeZone={data.workCalendar?.zone} />)}
         </table>
       </div>}
       {data?.totalPages > 1 && <nav className="rr-queue-pagination" aria-label="Trang hồ sơ">

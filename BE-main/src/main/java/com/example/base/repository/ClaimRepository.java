@@ -42,9 +42,10 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
         select exists (
             select 1 from claim c
             join p2p_claim_appeal appeal on appeal.appellant_claim_id = c.claim_id
+            join p2p_claim_approval approval on approval.approval_id = appeal.approval_id
             join report_decision d on d.report_id = appeal.report_id
             where c.post_id = :postId and c.claimant_id = :claimantId
-              and d.action in ('APPEAL_KEEP', 'APPEAL_REJECT_CLAIM')
+              and (d.action = 'APPEAL_REJECT_CLAIM' or (approval.custody_mode='P2P' and d.action='APPEAL_KEEP'))
         )
         """, nativeQuery = true)
     boolean hasDisputeRejection(@Param("postId") long postId, @Param("claimantId") long claimantId);

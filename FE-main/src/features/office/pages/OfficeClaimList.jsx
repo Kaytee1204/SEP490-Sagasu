@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { ArrowRight, ArrowUpDown, Calendar, Filter, Inbox, Plus, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { officeApi } from "../api/officeApi";
 import { date, labels, progressLabels } from "../officeUtils";
-import { TIME_RANGE_OPTIONS, matchesTimeFilter } from "@/features/claims/utils/claimUtils";
+import { TIME_RANGE_OPTIONS, claimShortDate } from "@/features/claims/utils/claimUtils";
+import { ClaimPostThumbnail } from "@/features/claims/components/ClaimListShared";
+import "@/features/claims/pages/MyClaimsPage.css";
 import useLoad from "../hooks/useLoad";
 import Badge from "../components/Badge";
 import LoadState from "../components/LoadState";
@@ -38,6 +40,9 @@ const DEFAULT_FILTERS = {
 };
 
 export default function OfficeClaimList({ mine = false }) {
+  const { postId } = useParams();
+  const grouped = !mine && !postId;
+  const filterKey = `office-claims-filters:${mine ? 'true' : postId || 'groups'}`;
   const location = useLocation();
   const returnTo = location.state?.officeClaimReturn;
   const backPath =
@@ -48,7 +53,7 @@ export default function OfficeClaimList({ mine = false }) {
 
   const [filters, setFilters] = useState(() => {
     try {
-      const saved = JSON.parse(sessionStorage.getItem(`office-claims-filters:${mine}`));
+      const saved = JSON.parse(sessionStorage.getItem(filterKey));
       return saved ? { ...DEFAULT_FILTERS, ...saved } : DEFAULT_FILTERS;
     } catch {
       return DEFAULT_FILTERS;
@@ -56,46 +61,22 @@ export default function OfficeClaimList({ mine = false }) {
   });
 
   useEffect(() => {
-    sessionStorage.setItem(`office-claims-filters:${mine}`, JSON.stringify(filters));
-  }, [filters, mine]);
+    sessionStorage.setItem(filterKey, JSON.stringify(filters));
+  }, [filters, filterKey]);
 
-  const apiParams = useMemo(
-    () => ({
-      page: filters.page,
-      q: filters.q,
-      status: filters.status,
-      stage: mine ? "ALL" : filters.stage,
-    }),
-    [filters.page, filters.q, filters.status, filters.stage, mine],
+  const since = useMemo(() => timeFilterStart(filters.timeRange), [filters.timeRange]);
+  const apiParams = { page: filters.page, q: filters.q, status: filters.status };
+  if (!mine) Object.assign(apiParams, {
+    stage: filters.stage, channel: filters.channel, since,
+    oldest: filters.sort === "OLDEST",
+  });
+  const loaded = useLoad(
+    () => grouped ? officeApi.claimGroups(apiParams)
+      : postId ? officeApi.claimsForPost(postId, apiParams) : officeApi.claims(apiParams, true),
+    JSON.stringify(apiParams) + filterKey,
   );
-
-  const state = useLoad(
-    () => officeApi.claims(apiParams, mine),
-    JSON.stringify(apiParams) + mine,
-  );
-
-  const [tabCounts, setTabCounts] = useState({});
-
-  useEffect(() => {
-    if (mine) return;
-    let active = true;
-    Promise.allSettled(
-      STAFF_CLAIM_TABS.map((tab) =>
-        officeApi.claims({ page: 1, q: filters.q, status: tab.value, stage: filters.stage }, false),
-      ),
-    ).then((settled) => {
-      if (!active) return;
-      const next = {};
-      STAFF_CLAIM_TABS.forEach((tab, idx) => {
-        const res = settled[idx];
-        next[tab.value] = res?.status === "fulfilled" ? Number(res.value?.totalElements ?? 0) : 0;
-      });
-      setTabCounts(next);
-    });
-    return () => {
-      active = false;
-    };
-  }, [mine, filters.q, filters.stage, state.data?.totalElements]);
+  const tabCounts = grouped ? loaded.data?.counts : null;
+  const state = grouped ? { ...loaded, data: loaded.data?.page } : loaded;
 
   const base = mine ? "/van-phong/claims" : "/approver/office-claims";
   const [showExtraFilters, setShowExtraFilters] = useState(false);
@@ -117,23 +98,7 @@ export default function OfficeClaimList({ mine = false }) {
         filters.timeRange !== "ALL" ||
         filters.sort !== "NEWEST"));
 
-  const displayedContent = useMemo(() => {
-    const raw = state.data?.content || [];
-    if (mine) return raw;
-    const filtered = raw.filter((item) => {
-      if (filters.channel !== "ALL" && item.channel !== filters.channel) return false;
-      if (filters.timeRange !== "ALL" && !matchesTimeFilter(item.createdAt, filters.timeRange, "", "")) {
-        return false;
-      }
-      return true;
-    });
-    const sorted = [...filtered];
-    sorted.sort((a, b) => {
-      const diff = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
-      return filters.sort === "OLDEST" ? diff : -diff;
-    });
-    return sorted;
-  }, [state.data?.content, mine, filters.channel, filters.timeRange, filters.sort]);
+  const displayedContent = state.data?.content ?? [];
 
   if (mine) {
     return (
@@ -206,7 +171,9 @@ export default function OfficeClaimList({ mine = false }) {
   return (
     <div className="sw-page">
       <header className="sw-heading">
-        <h1>Danh sách yêu cầu nhận đồ</h1>
+        {postId && <Link className="of-back" to={base}>← Danh sách bài đăng</Link>}
+        <h1>{postId ? displayedContent[0]?.postTitle || `Yêu cầu của bài đăng #${postId}` : "Xét duyệt và trao trả tài sản"}</h1>
+        <p>{postId ? `Bài đăng #${postId} · Yêu cầu nhận tài sản` : "Theo dõi và xử lý các yêu cầu nhận tài sản theo bài đăng."}</p>
       </header>
 
       {/* Card 1: Filter Controls */}
@@ -236,7 +203,7 @@ export default function OfficeClaimList({ mine = false }) {
             <div className="sw-status-pills" role="group" aria-label="Lọc theo trạng thái">
               {STAFF_CLAIM_TABS.map((tab) => {
                 const active = filters.status === tab.value;
-                const count = tabCounts[tab.value];
+                const count = tabCounts ? (tabCounts[tab.value] ?? 0) : undefined;
                 const isWarn = tab.tone === "warning" && typeof count === "number" && count > 0;
                 return (
                   <button
@@ -364,6 +331,8 @@ export default function OfficeClaimList({ mine = false }) {
                     : "Các yêu cầu nhận đồ gửi trực tuyến và hồ sơ lập tại quầy sẽ hiển thị tại đây."}
                 </p>
               </div>
+            ) : grouped ? (
+              <ClaimGroups groups={displayedContent} base={base} />
             ) : (
               <>
                 <div className="sw-results-bar">
@@ -384,12 +353,13 @@ export default function OfficeClaimList({ mine = false }) {
 
                   <div className="sw-table-body">
                     {displayedContent.map((c) => {
-                      const canReview = !c.ownRequest && c.status === "PENDING";
+                      const canReview = c.canReview && c.status === "PENDING";
+                      const reviewOnHold = !c.ownRequest && !c.canReview && ["PENDING", "NEEDS_INFO"].includes(c.status);
                       return (
                         <article key={c.id} className="sw-table-row sw-grid-claims">
                           <div className="sw-item-cell">
                             <div className="sw-item-text">
-                              <Link className="sw-item-title" to={`${base}/${c.id}`}>
+                              <Link className="sw-item-title" to={c.ownRequest ? `/van-phong/claims/${c.id}` : `${base}/${c.id}`}>
                                 {c.postTitle}
                               </Link>
                               <div className="sw-item-sub">
@@ -409,6 +379,7 @@ export default function OfficeClaimList({ mine = false }) {
 
                           <div>
                             <ClaimProgress stage={c.stage} scheduledAt={c.collectionAt} />
+                            {reviewOnHold && <div className="sw-item-sub">Đã duyệt yêu cầu khác</div>}
                           </div>
 
                           <div className="sw-meta-cell">
@@ -441,4 +412,41 @@ export default function OfficeClaimList({ mine = false }) {
       </LoadState>
     </div>
   );
+}
+
+function timeFilterStart(range) {
+  const days = { "7D": 7, "30D": 30 }[range];
+  if (days) return new Date(Date.now() - days * 86400000).toISOString();
+  if (range === "TODAY") {
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
+    return `${today}T00:00:00+07:00`;
+  }
+  return null;
+}
+
+function ClaimGroups({ groups, base }) {
+  return <div className="claim-modern-table-card">
+    <div className="claim-modern-table-head" aria-hidden="true">
+      <span className="col-left">Món đồ</span><span className="col-center">Số yêu cầu</span>
+      <span className="col-center">Ngày gần nhất</span><span className="col-center">Trạng thái</span>
+      <span className="col-center">Thao tác</span>
+    </div>
+    <div className="claim-modern-table-body">
+      {groups.map(group => <Link key={group.postId} className="claim-modern-row" to={`${base}/post/${group.postId}`}>
+        <div className="claim-modern-item-cell col-left">
+          <ClaimPostThumbnail url={group.thumbnail} title={group.title} />
+          <div className="claim-modern-item-info">
+            <strong title={group.title}>{group.title}</strong>
+            <span>{group.people} người yêu cầu{group.waiting > 0 ? ` · ${group.waiting} chờ xét duyệt` : ""}</span>
+          </div>
+        </div>
+        <div className="claim-modern-count-cell col-center" data-label="Số yêu cầu">{group.claims} yêu cầu</div>
+        <div className="claim-modern-date-cell col-center" data-label="Ngày gần nhất">{claimShortDate(group.latest)}</div>
+        <div className="claim-modern-status-cell col-center" data-label="Trạng thái">
+          <ClaimProgress stage={group.stage} />
+        </div>
+        <div className="claim-modern-action-cell col-center"><span className="claim-modern-action-pill">Xem yêu cầu</span></div>
+      </Link>)}
+    </div>
+  </div>;
 }

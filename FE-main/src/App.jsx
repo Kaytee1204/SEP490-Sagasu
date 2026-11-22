@@ -201,7 +201,8 @@ function AppRoutes() {
         <Route path="transfers" element={<OfficeTransfers />} />
         <Route path="transfers/new" element={<CounterIntakePage />} />
         <Route path="transfers/:id" element={<OfficeTransferDetailPage />} />
-        <Route path="office-claims" element={<OfficeClaimList />} />
+        <Route path="office-claims" element={<OfficeClaimList key="groups" />} />
+        <Route path="office-claims/post/:postId" element={<OfficeClaimList key="post-claims" />} />
         <Route path="office-claims/new" element={<OfficeClaimForm counter />} />
         <Route path="office-claims/:id" element={<OfficeClaimDetail />} />
         <Route index element={<Navigate to="/approver/receipts" replace />} />

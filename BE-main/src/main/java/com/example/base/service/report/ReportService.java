@@ -151,7 +151,7 @@ public class ReportService {
             validateTarget("CLAIM",targetId);
             long actor=actors.actor(user).getId();
             Claim claim=em.find(Claim.class,targetId);
-            if(claim==null || claim.isOffice() || claim.getClaimant()==null || claim.getClaimant().getId()!=actor)
+            if(claim==null || claim.getClaimant()==null || claim.getClaimant().getId()!=actor)
                 throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);
             return reasons.options("CLAIM_APPEAL");
         }

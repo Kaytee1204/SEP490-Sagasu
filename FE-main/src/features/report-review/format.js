@@ -109,6 +109,11 @@ export const labels = {
   RESCHEDULE: "Hẹn lại",
 };
 
+export const officeAppealActionHelp = {
+  APPEAL_KEEP: "Giữ quyết định đã duyệt đối với phản đối này. Hồ sơ còn chờ tiếp tục được giữ.",
+  APPEAL_WRONG_RECIPIENT: "Tài sản tiếp tục lưu kho. Văn phòng xét duyệt lại sau khi mọi tranh chấp của lần duyệt này đã được xử lý.",
+};
+
 export const appealActionHelp = {
   APPEAL_KEEP: "Giữ người nhận hiện tại. Hồ sơ của người gửi tranh chấp vào lịch sử và họ không thể gửi lại yêu cầu hoặc tranh chấp trên bài đăng này.",
   APPEAL_WRONG_RECIPIENT: "Đưa hồ sơ đã được chấp thuận về chờ xét duyệt và báo cho người nhặt xét lại các hồ sơ còn hợp lệ.",

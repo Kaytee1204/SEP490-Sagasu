@@ -47,6 +47,7 @@ public class OfficeClaimService {
     private final PlatformTransactionManager transactions;
     private final EntityManager em;
     private final com.example.base.service.notification.NotificationService notifications;
+    private final P2pClaimAppealService appeals;
 
     @Transactional(readOnly=true)
     public List<ClaimantOption> findClaimants(String q, CustomUserDetails user) {
@@ -68,10 +69,41 @@ public class OfficeClaimService {
     @Transactional(readOnly=true)
     public PageData<ClaimView> list(int page,String status,String q,String stage,boolean mine,CustomUserDetails user) {
         Account actor=mine?access.require(user):access.require(user,APPROVER);
+        String keyword=listKeyword(status,q);
+        var data=progress.list(page,status,stage,keyword,mine?actor.getId():null);
+        return claimPage(data,actor);
+    }
+
+    @Transactional(readOnly=true, isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public GroupedClaims groups(int page,String status,String q,String stage,String channel,OffsetDateTime since,
+                                boolean oldest,CustomUserDetails user) {
+        access.require(user,APPROVER);
+        var grouped=progress.groups(page,status,stage,listKeyword(status,q),validateChannel(channel),since,oldest);
+        var data=grouped.page();
+        return new GroupedClaims(new PageData<>(data.content().stream().map(row->new ClaimGroup(row.postId(),row.title(),
+            storage.readUrl(row.storageKey(),row.imageUrl()),row.claims(),row.people(),row.waiting(),row.latest(),row.stage())).toList(),
+            data.page(),data.totalElements(),data.totalPages()),grouped.counts());
+    }
+
+    @Transactional(readOnly=true)
+    public PageData<ClaimView> forPost(long postId,int page,String status,String q,String stage,String channel,
+                                     OffsetDateTime since,boolean oldest,CustomUserDetails user) {
+        Account actor=access.require(user,APPROVER);
+        if(postId<1)throw bad("Mã bài đăng không hợp lệ.");
+        return claimPage(progress.list(page,status,stage,listKeyword(status,q),null,postId,validateChannel(channel),since,oldest),actor);
+    }
+
+    private String listKeyword(String status,String q) {
         if(!Set.of("ALL","PENDING","NEEDS_INFO","APPROVED","REJECTED","CANCELLED","COMPLETED","CLOSED").contains(status)) throw bad("Trạng thái không hợp lệ.");
         String keyword=q==null?"":q.strip().toLowerCase(Locale.ROOT);
         if(keyword.length()>200) throw bad("Từ khóa tối đa 200 ký tự.");
-        var data=progress.list(page,status,stage,keyword,mine?actor.getId():null);
+        return keyword;
+    }
+    private String validateChannel(String channel) {
+        if(!Set.of("ALL","ONLINE","COUNTER").contains(channel)) throw bad("Kênh gửi không hợp lệ.");
+        return channel;
+    }
+    private PageData<ClaimView> claimPage(PageData<OfficeClaimProgress.Progress> data,Account actor) {
         var content=data.content().stream().map(row->view(claims.findById(row.id()).orElseThrow(),false,actor.getRole()==APPROVER,actor.getId(),row)).toList();
         return new PageData<>(content,data.page(),data.totalElements(),data.totalPages());
     }
@@ -176,35 +208,53 @@ public class OfficeClaimService {
         if(!"IN_STORAGE".equals(r.getStatus())||!"ACCEPTED".equals(r.getReviewStatus())||r.getReceivedAt()==null)
             throw bad("Văn phòng chưa tiếp nhận hoặc đã trao trả đồ vật.");
     }
-    private record Committed(Long id,String status,boolean sendInvitation) {}
+    private record Committed(Long id,String status,boolean sendInvitation,boolean appealWindow) {}
     private record EmailCheck(@NotBlank @Email String email) {}
     public ReviewResult review(long id,Decision request,CustomUserDetails user) {
         Committed committed=new TransactionTemplate(transactions).execute(tx->{
             Account actor=access.require(user,APPROVER); Claim c=locked(id); eligible(c.getPost()); version(c,request.expectedVersion());
             if(c.getClaimant()!=null && c.getClaimant().getId().equals(actor.getId())) throw bad("Không được tự xét duyệt hồ sơ nhận đồ của mình.");
             if(!Set.of("PENDING","NEEDS_INFO").contains(c.getStatus())) throw bad("Hồ sơ này đã được xử lý. Hãy tải lại.");
+            if ("RESERVED".equals(c.getPost().getStatus())) {
+                throw new AppException(ErrorCode.CLAIM_STATE_INVALID,
+                    "Bài đăng này đã có yêu cầu được duyệt. Hồ sơ hiện tại được giữ để xét tiếp nếu quyết định duyệt được thu hồi.");
+            }
             if(!"PENDING".equals(c.getStatus())&&!"REJECTED".equals(request.decision())) throw bad("Chờ bổ sung thông tin trước khi duyệt.");
             String previous=c.getStatus(); Appointment a=null;
+            OffsetDateTime deadline=null;
             if("APPROVED".equals(request.decision())) {
                 if(c.getClaimant()!=null && claims.hasFailedOfficeVerification(c.getPost().getId(),c.getClaimant().getId()))
                     throw bad("Không thể duyệt: người nhận đã không đạt xác minh tại quầy cho món đồ này.");
                 if(claims.existsByPost_IdAndStatusIn(c.getPost().getId(),List.of("APPROVED"))) throw bad("Đồ vật đã có yêu cầu được duyệt.");
-                if(request.scheduledAt()==null||!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1))) throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
-                if(clean(request.location())==null) throw bad("Nhập địa điểm nhận đồ.");
-                String recipient=clean(request.email()); if(recipient==null) recipient=recipient(c);
-                if(!validator.validate(new EmailCheck(recipient)).isEmpty()) throw bad("Cần email hợp lệ của người nhận để gửi lịch hẹn.");
-                c.contactEmail(recipient.toLowerCase(Locale.ROOT));
-                a=appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),clean(request.appointmentNote())));
                 c.getPost().reserveForClaim();
+                deadline=appeals.open(c);
+                if (deadline==null && request.scheduledAt()!=null) {
+                    if (!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1)))
+                        throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
+                    if (clean(request.location())==null) throw bad("Nhập địa điểm nhận đồ.");
+                    String recipient=clean(request.email());
+                    if (recipient==null) recipient=recipient(c);
+                    if (!validator.validate(new EmailCheck(recipient)).isEmpty())
+                        throw bad("Cần email hợp lệ của người nhận để gửi lịch hẹn.");
+                    c.contactEmail(recipient.toLowerCase(Locale.ROOT));
+                    a=appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),
+                        request.location().strip(),clean(request.appointmentNote())));
+                }
             }
             c.review(request.decision());
             String action=switch(request.decision()) { case "APPROVED"->"APPROVE"; case "REJECTED"->"REJECT"; default->"REQUEST_INFO"; };
             activities.save(new ClaimActivity(c,actor,action,previous,request.reason())); claims.flush();
             if(c.getClaimant()!=null) {
-                if("APPROVED".equals(request.decision())) {
+                if("APPROVED".equals(request.decision()) && a==null) {
+                    notifications.notifyUser(c.getClaimant().getId(),"CLAIM_APPROVED",
+                        "Yêu cầu nhận tài sản #" + c.getId() + " đã được duyệt",
+                        deadline!=null ? "Văn phòng sẽ lập lịch sau khi hết thời hạn gửi tranh chấp và các tranh chấp đã được xử lý."
+                            : "Văn phòng sẽ thông báo khi lập lịch nhận tài sản.",
+                        "/van-phong/claims/" + c.getId(),false);
+                } else if("APPROVED".equals(request.decision())) {
                     notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_SCHEDULED",
                         "Yêu cầu nhận đồ #" + c.getId() + " được duyệt & có lịch hẹn mới",
-                        "Văn phòng đã duyệt hồ sơ \"" + c.getPost().getTitle() + "\" và gửi lịch hẹn nhận đồ tại " + request.location().strip() + ". Vui lòng xác nhận lịch hẹn trong vòng 12 giờ.",
+                        "Văn phòng đã lập lịch tại " + a.getLocation() + ". Hạn phản hồi là 12 giờ từ khi gửi thư mời.",
                         "/van-phong/claims/" + c.getId(),false);
                 } else if("REJECTED".equals(request.decision())) {
                     notifications.notifyUser(c.getClaimant().getId(),"CLAIM_REJECTED",
@@ -218,12 +268,12 @@ public class OfficeClaimService {
                         "/van-phong/claims/" + c.getId(),true);
                 }
             }
-            if("APPROVED".equals(request.decision())) {
+            if("APPROVED".equals(request.decision()) && deadline==null && a!=null) {
                 notifyOtherOfficeClaimants(c);
             }
-            return new Committed(c.getId(),c.getStatus(),a!=null);
+            return new Committed(c.getId(),c.getStatus(),a!=null,deadline!=null);
         });
-        String delivery="NOT_REQUIRED";
+        String delivery=committed.appealWindow()?"APPEAL_WINDOW":"NOT_REQUIRED";
         if(committed.sendInvitation()) {
             try { delivery=invitations.send(committed.id())?"SENT":"FAILED"; }
             catch(RuntimeException failure) {
@@ -292,12 +342,15 @@ public class OfficeClaimService {
     private void version(Claim c,Long v) { if(v==null||v!=c.getVersion()) throw new AppException(ErrorCode.CLAIM_STALE); }
     private ClaimView view(Claim c,boolean detail,boolean reviewer,long actorId,OfficeClaimProgress.Progress phase) {
         var appointment=detail?appointments.findFirstByClaim_IdOrderByIdDesc(c.getId()).map(a->new AppointmentView(a.getId(),a.getScheduledAt(),a.getLocation(),a.getNote(),a.getStatus(),a.getResponseStatus(),a.getResponseDeadline(),a.getCancellationReason())).orElse(null):null;
+        boolean ownRequest = c.getClaimant() != null && c.getClaimant().getId() == actorId;
+        boolean canReview = reviewer && !ownRequest && Set.of("PENDING", "NEEDS_INFO").contains(c.getStatus())
+            && !"RESERVED".equals(c.getPost().getStatus());
         return new ClaimView(c.getId(),c.getPost().getId(),c.getPost().getTitle(),c.getStatus(),c.getSubmissionChannel(),
             c.getClaimant()==null?null:c.getClaimant().getId(),c.getClaimantName(),detail?recipient(c):null,detail?c.getClaimantPhone():null,
             person(c.getCreatedBy()),detail?c.getDescription():null,detail?c.getEvidenceNote():null,detail&&reviewer?c.getPost().getPrivateIdentifiers():null,c.getVersion(),c.getCreatedAt(),
             detail&&reviewer?receipts.findByPostId(c.getPost().getId()).map(management::receiptView).orElse(null):null,
             detail?c.getEvidence().stream().map(e->new ClaimDetailDto.EvidenceDto(e.getId(),storage.readUrl(e.getStorageKey(),null),e.getOriginalName(),e.getMimeType(),e.getSizeBytes())).toList():List.of(),
-            detail?activities.findByClaim_IdOrderByCreatedAtAscIdAsc(c.getId()).stream().map(e->new ClaimDetailDto.ActivityDto(e.getId(),e.getAction(),person(e.getActor()),e.getFromStatus(),e.getToStatus(),e.getReason(),e.getCreatedAt())).toList():List.of(),appointment,detail?c.getAnswers().stream().map(a->new AnswerView(a.getId(),a.getQuestionLabel(),a.getAnswerText(),a.getSectionTitle())).toList():List.of(),phase.stage(),phase.scheduledAt(),reviewer&&(c.getClaimant()==null||c.getClaimant().getId()!=actorId)&&Set.of("PENDING","NEEDS_INFO").contains(c.getStatus()),c.getClaimant()!=null&&c.getClaimant().getId()==actorId);
+            detail?activities.findByClaim_IdOrderByCreatedAtAscIdAsc(c.getId()).stream().map(e->new ClaimDetailDto.ActivityDto(e.getId(),e.getAction(),person(e.getActor()),e.getFromStatus(),e.getToStatus(),e.getReason(),e.getCreatedAt())).toList():List.of(),appointment,detail?c.getAnswers().stream().map(a->new AnswerView(a.getId(),a.getQuestionLabel(),a.getAnswerText(),a.getSectionTitle())).toList():List.of(),phase.stage(),phase.scheduledAt(),canReview,ownRequest);
     }
 }
 

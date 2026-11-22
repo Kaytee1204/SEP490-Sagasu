@@ -5,20 +5,28 @@ final class ReportQueueSql {
 
   // These predicates are shared with the appeal detail to keep the queue and the reopen action in sync.
   static final String ACTIVE_APPROVAL = """
-      approval.closed_at is null and chosen.status='APPROVED' and chosen.claim_type='P2P'
-        and p.status='RESERVED' and p.custody_mode='P2P' and p.deleted_at is null
+      approval.closed_at is null and chosen.status='APPROVED' and chosen.claim_type=p.custody_mode
+        and approval.custody_mode=chosen.claim_type
+        and p.status='RESERVED' and p.deleted_at is null
       """;
   static final String OTHER_APPEALS_PENDING = """
       exists (
         select 1 from p2p_claim_appeal sibling join report q on q.report_id=sibling.report_id
         join p2p_claim_approval sibling_round on sibling_round.approval_id=sibling.approval_id
         join claim sibling_claim on sibling_claim.claim_id=sibling_round.approved_claim_id
-        where approval.approval_id is not null and sibling_claim.post_id=p.post_id and q.status in ('OPEN','IN_REVIEW')
+        where approval.approval_id is not null and sibling_claim.post_id=p.post_id
+          and (approval.custody_mode='P2P' or sibling_round.approval_id=approval.approval_id)
+          and q.status in ('OPEN','IN_REVIEW')
       )
       """;
   static final String APPROVAL_CAN_BE_REOPENED = """
       p.post_type='FOUND' and p.moderation_status='VISIBLE'
-        and not exists (select 1 from item_receipt receipt where receipt.post_id=p.post_id)
+        and ((chosen.claim_type='P2P' and not exists (select 1 from item_receipt receipt where receipt.post_id=p.post_id))
+          or (chosen.claim_type='OFFICE' and exists (
+            select 1 from item_receipt receipt where receipt.post_id=p.post_id and receipt.status='IN_STORAGE'
+          ) and not exists (
+            select 1 from office_handover office_record where office_record.claim_id=chosen.claim_id
+          )))
         and not exists (select 1 from p2p_handover handover where handover.claim_id=chosen.claim_id and handover.status<>'CANCELLED')
         and not exists (select 1 from report_hold hold where hold.post_id=p.post_id and hold.released_at is null)
         and not exists (

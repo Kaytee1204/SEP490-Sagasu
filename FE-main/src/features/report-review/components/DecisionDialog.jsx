@@ -2,7 +2,7 @@ import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
-import { appealActionHelp, labels } from "../format";
+import { appealActionHelp, labels, officeAppealActionHelp } from "../format";
 const warnings = {
   REQUEST_POST_CORRECTION: "Người đăng sẽ nhận yêu cầu chỉnh sửa và có thể xem hướng dẫn trong hồ sơ.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
@@ -77,7 +77,8 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const requiresCustody = isWrongRecipientDecision || requiresRecoveryCheck
     || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
     || (action === "APPEAL_KEEP" && data.recoveryRequested);
-  const warning = (data.caseKind === "CLAIM_APPEAL" && appealActionHelp[effect]) || warnings[effect];
+  const officeAppeal = data.appeal?.claim_type === "OFFICE";
+  const warning = (data.caseKind === "CLAIM_APPEAL" && (officeAppeal ? officeAppealActionHelp : appealActionHelp)[effect]) || warnings[effect];
   const unresolvedInquiries = data.inquiries.some(item => !item.responded_at && !item.closed_at);
   function changeDecision(setValue, value) {
     setValue(value);
@@ -225,7 +226,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
               checked={custodyVerified}
               onChange={(e) => setCustody(e.target.checked)}
             />
-            {isWrongRecipientDecision ? "Tôi đã xác minh người nhặt vẫn đang giữ món đồ."
+            {isWrongRecipientDecision ? (officeAppeal ? "Tôi đã xác minh tài sản còn lưu kho tại văn phòng." : "Tôi đã xác minh người nhặt vẫn đang giữ món đồ.")
               : action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
               : requiresRecoveryCheck
               ? "Đã xác minh tình trạng món đồ và có đủ căn cứ áp dụng kết quả bàn giao này."

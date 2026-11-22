@@ -179,6 +179,22 @@ public class OfficeWorkflowController {
         return ApiResponse.ok(invitations.respondOnSite(id, request, user));
     }
 
+    @PostMapping("/claims/{id}/schedule")
+    @Operation(summary = "Lập lịch sau khi yêu cầu đủ điều kiện trao trả")
+    public ApiResponse<ReviewResult> schedule(
+            @PathVariable("id") long id, @Valid @RequestBody Schedule r,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(returns.schedule(id,r,user));
+    }
+
+    @PostMapping("/claims/{id}/revoke")
+    @Operation(summary = "Thu hồi chấp thuận để xét duyệt lại yêu cầu tại văn phòng")
+    public ApiResponse<Workflow> revoke(
+            @PathVariable("id") long id, @Valid @RequestBody VersionedReason r,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(returns.revoke(id,r,user));
+    }
+
     @PostMapping("/claims/{id}/reschedule")
     @Operation(
             summary = "[11.12] Đặt lại lịch hẹn mới (Reschedule) cho người nhận đồ tại Văn phòng",

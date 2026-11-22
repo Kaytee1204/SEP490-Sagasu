@@ -157,7 +157,8 @@ public class ReportReviewService {
       args.add(targetId);
     }
     String objectKey = """
-        case when appeal.report_id is not null then 'APPEAL:'||r.report_id
+        case when appeal.report_id is not null and approval.custody_mode='OFFICE' then 'OFFICE_APPEAL:'||appeal.approval_id
+          when appeal.report_id is not null then 'APPEAL:'||r.report_id
           when r.kind='HANDOVER_ISSUE' then 'HANDOVER:'||r.claim_id
           when r.post_id is not null then 'POST:'||r.post_id
           when r.claim_id is not null then 'CLAIM:'||r.claim_id
@@ -176,6 +177,7 @@ public class ReportReviewService {
     params.add((resultPage - 1) * 12);
     String projection = """
       select r.report_id,case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end as kind,
+        approval.custody_mode as appeal_custody_mode,
         r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.reason_code,
         case when appeal.report_id is null then r.reason_label_snapshot end as reason_label_snapshot,
         r.status,r.created_at,
@@ -332,12 +334,14 @@ public class ReportReviewService {
         """
         select x.report_id,case when sibling.report_id is not null then 'CLAIM_APPEAL' else x.kind end as kind,
           x.status,x.version,x.assigned_to,x.reason_code,x.reason_label_snapshot,x.description,x.post_id,x.claim_id,
-          x.message_id,x.reported_account_id,x.resolution_note,x.created_at
+          x.message_id,x.reported_account_id,x.resolution_note,x.created_at,
+          coalesce(sibling.approval_id=cast(? as bigint),false) as same_approval
         from report x left join p2p_claim_appeal sibling on sibling.report_id=x.report_id
         where x.report_id<>? and (x.post_id=? or x.claim_id=? or x.message_id=? or x.reported_account_id=?
           or sibling.approval_id=?)
-        order by x.created_at desc limit 30
+        order by same_approval desc,x.created_at desc limit 30
         """,
+        appeal.get("approval_id"),
         reportId,
         r.get("post_id"),
         r.get("claim_id"),
@@ -352,6 +356,7 @@ public class ReportReviewService {
   private Map<String, Object> appeal(long reportId) {
     return context.one("""
         select approval.approval_id, approval.approved_claim_id, approval.appeal_until, p.post_id, p.account_id as finder_id,
+          approval.custody_mode as claim_type,
           (%s) as active,
           approval.appeal_until <= now() as window_elapsed,
           pending.waiting_other_appeals,
@@ -729,7 +734,7 @@ public class ReportReviewService {
       case "APPEAL_KEEP" -> {
         requireKind(kind, "CLAIM_APPEAL");
         if (recoveryRequested(reportId)) requireCustody(request);
-        if (pendingAppealingClaim(r, current)) {
+        if (!"OFFICE".equals(appeal.get("claim_type")) && pendingAppealingClaim(r, current)) {
           claims.rejectClaimAfterAppeal(id(r, "claim_id"),
               claimNote(reportId, conclusion) + " Bạn không thể gửi lại yêu cầu trên bài đăng này.", user);
         }
@@ -744,8 +749,10 @@ public class ReportReviewService {
         if (!request.wrongRecipientVerified())
           throw bad("Cần xác nhận đã đối chiếu căn cứ cho thấy người được chấp thuận không phải chủ món đồ.");
         requireCustody(request);
-        claims.reopenApprovalForReview(id(appeal, "approved_claim_id"), claimNote(reportId, conclusion), user);
-        closeOtherAppeals(reportId, id(appeal, "approval_id"), actor.getId());
+        if (!"OFFICE".equals(appeal.get("claim_type"))) {
+          claims.reopenApprovalForReview(id(appeal, "approved_claim_id"), claimNote(reportId, conclusion), user);
+          closeOtherAppeals(reportId, id(appeal, "approval_id"), actor.getId());
+        }
         next = "RESOLVED";
       }
       case "RESOLVE", "DISMISS" -> {
@@ -772,7 +779,8 @@ public class ReportReviewService {
     var afterState = new LinkedHashMap<String, Object>();
     afterState.put("reportStatus", next);
     afterState.put("context", after);
-    if ("APPEAL_WRONG_RECIPIENT".equals(action)) afterState.put("approvalReopened", true);
+    boolean officeAppeal = "OFFICE".equals(appeal.get("claim_type"));
+    if ("APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal) afterState.put("approvalReopened", true);
     if (measure != null) afterState.put("appliedMeasure", measure);
     context.retainAssets(reportId, current, "DECISION");
     context.retainAssets(reportId, after, "DECISION");
@@ -805,8 +813,11 @@ public class ReportReviewService {
         "update report_hold set released_at=now() where report_id=? and released_at is null",
         reportId
       );
+      if (officeAppeal && Boolean.TRUE.equals(appeal.get("active"))) {
+        reopenOfficeAfterAppeals(appeal, actor.getId(), user);
+      }
       Set<Long> recipients = participantsFor(r);
-      Long finderToReview = "APPEAL_WRONG_RECIPIENT".equals(action) ? id(appeal, "finder_id") : null;
+      Long finderToReview = "APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal ? id(appeal, "finder_id") : null;
       if (finderToReview != null) recipients.add(finderToReview);
       for (Long recipient : recipients) {
         boolean needsReview = Objects.equals(recipient, finderToReview);
@@ -828,6 +839,31 @@ public class ReportReviewService {
         chat.notifyHandoverChanged(id(r, "claim_id"));
     }
     return detail(reportId, user);
+  }
+
+  private void reopenOfficeAfterAppeals(Map<String,Object> appeal, long actorId, CustomUserDetails user) {
+    long approvalId=id(appeal,"approval_id");
+    var result=context.one("""
+        select r.report_id,r.resolution_note from p2p_claim_appeal a join report r using(report_id)
+        join report_decision d using(report_id)
+        where a.approval_id=? and r.status='RESOLVED' and d.action='APPEAL_WRONG_RECIPIENT'
+          and not exists (
+            select 1 from p2p_claim_appeal b join report pending using(report_id)
+            where b.approval_id=a.approval_id and pending.status in ('OPEN','IN_REVIEW')
+          )
+        order by d.decision_id desc limit 1
+        """,approvalId);
+    if (result.isEmpty()) return;
+    long acceptedReport=id(result,"report_id");
+    claims.reopenOfficeApprovalFromAppeal(id(appeal,"approved_claim_id"),approvalId,
+        claimNote(acceptedReport,(String)result.get("resolution_note")),user);
+    jdbc.update("""
+        update report_decision set after_state=after_state||'{"approvalReopened":true}'::jsonb
+        where report_id=? and action='APPEAL_WRONG_RECIPIENT'
+        """,acceptedReport);
+    notifications.notifyRoles(List.of(AccountRole.APPROVER),actorId,"CLAIM_REVIEW_REOPENED",
+        "Yêu cầu nhận tài sản được mở lại để xét duyệt", "Quản lý đã kết luận tranh chấp cho lần duyệt trước.",
+        "/approver/office-claims/post/"+id(appeal,"post_id"),false);
   }
 
   private void closeOtherAppeals(long reportId, long approvalId, long actorId) {

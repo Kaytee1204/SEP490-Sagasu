@@ -79,7 +79,9 @@ function ReportDetail({ id }) {
   const awaitingReply = inquiries.filter(item => pending && !item.responded_at && !item.closed_at);
   const previousExchanges = inquiries.filter(item => !pending || item.responded_at || item.closed_at);
   const linkedClaim = report?.finder_approved_claim_id || report?.participant_claim_id;
-  const claimPath = report?.report_subject_id && linkedClaim ? claimDetailPath(report.report_subject_id, linkedClaim) : null;
+  const office = report?.claim_type === 'OFFICE';
+  const claimPath = linkedClaim && (office ? `/van-phong/claims/${linkedClaim}`
+    : report?.report_subject_id ? claimDetailPath(report.report_subject_id, linkedClaim) : null);
   const correction = report?.post_measure === 'REQUEST_POST_CORRECTION' && report.post_owner;
   const recoveryPending = Boolean(report?.recovery_note && !report.recovery_confirmed_at && (!concluded || report.appeal_step));
   const handover = isAppeal || report?.report_type === 'HANDOVER_ISSUE';
@@ -116,7 +118,7 @@ function ReportDetail({ id }) {
           {pending && <><p>Quản lý đã gửi câu hỏi cho bạn. Mở yêu cầu để xem nội dung và hạn phản hồi.</p>
             <a className="btn btn-accent" href="#phan-hoi">Trả lời quản lý <ArrowRight size={15} aria-hidden="true" /></a></>}
           {recoveryPending && !pending && <p>Người giữ đồ phản hồi trong hồ sơ của mình. Quản lý đối chiếu bằng chứng và xác nhận việc thu hồi.</p>}
-          {report.appeal_step && !report.needs_reopen && <p>{appealInstruction(report.appeal_step)}</p>}
+          {report.appeal_step && !report.needs_reopen && <p>{appealInstruction(report.appeal_step, office)}</p>}
           {report.needs_reopen && claimPath && <FinderAppealAction report={report} claimPath={claimPath} />}
           {!pending && !recoveryPending && !report.appeal_step && !concluded && <p>{report.status === 'OPEN'
             ? 'Chờ quản lý nhận hồ sơ. Bạn sẽ nhận thông báo khi cần bổ sung thông tin hoặc khi có kết quả.'
@@ -127,13 +129,14 @@ function ReportDetail({ id }) {
             {report.resolved_at && <time dateTime={report.resolved_at}>Kết luận lúc {formatReportDate(report.resolved_at)}</time>}
           </div>}
           {concluded && report.outcome === 'HANDOVER_RETRY' && <p>Người nhặt hẹn giao lại với người đã được chấp thuận, sau đó ghi nhận lượt giao mới trong yêu cầu nhận đồ.</p>}
-          {concluded && report.outcome === 'APPEAL_KEEP' && report.mine && <p>Yêu cầu của bạn đã kết thúc. Bạn không thể gửi lại yêu cầu hoặc tranh chấp trên bài đăng này.</p>}
-          {concluded && (report.outcome === 'HANDOVER_REOPEN' || report.approval_reopened) && <p>Người nhặt xét lại các yêu cầu của bài đăng. Người yêu cầu theo dõi kết quả trong hồ sơ của mình.</p>}
+          {concluded && report.outcome === 'APPEAL_KEEP' && report.mine && !office && <p>Yêu cầu của bạn đã kết thúc. Bạn không thể gửi lại yêu cầu hoặc tranh chấp trên bài đăng này.</p>}
+          {concluded && (report.outcome === 'HANDOVER_REOPEN' || report.approval_reopened) &&
+            <p>{office ? 'Văn phòng xét duyệt lại' : 'Người nhặt xét lại'} các yêu cầu của bài đăng. Theo dõi kết quả trong hồ sơ của bạn.</p>}
           {correction && <div className="report-appeal-next">
             <p>Quản lý đã yêu cầu bạn chỉnh sửa bài đăng theo kết luận trên.</p>
             <Link className="btn btn-ghost" to={`/chi-tiet/${report.report_subject_id}`}>Mở bài đăng <ArrowRight size={15} aria-hidden="true" /></Link>
           </div>}
-          {isAppeal && report.approval_reopened && report.post_owner && report.report_subject_id
+          {isAppeal && !office && report.approval_reopened && report.post_owner && report.report_subject_id
             ? <Link className="report-back" to={postClaimsPath(report.report_subject_id, 'PENDING')}>Xem yêu cầu chờ xét duyệt <ArrowRight size={15} aria-hidden="true" /></Link>
             : claimPath && !report.needs_reopen && <Link className="report-back" to={handover ? `${claimPath}#handover` : claimPath}>{handover ? "Theo dõi nhận đồ" : "Xem yêu cầu nhận đồ"} <ArrowRight size={15} aria-hidden="true" /></Link>}
         </section>

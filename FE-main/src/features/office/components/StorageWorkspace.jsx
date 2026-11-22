@@ -123,7 +123,8 @@ export default function StorageWorkspace({ locationsOnly = false }) {
   return (
     <div className="sw-page">
       <header className="sw-heading">
-        <h1>{locationsOnly ? "Vị trí lưu trữ kho" : "Đồ đang lưu kho"}</h1>
+        <h1>{locationsOnly ? "Vị trí lưu trữ kho" : "Tài sản lưu kho"}</h1>
+        {!locationsOnly && <p>Tra cứu tài sản đang lưu kho theo vị trí lưu trữ.</p>}
       </header>
 
       <Notice>{message}</Notice>

@@ -58,7 +58,7 @@ function OpenReport({ report, reportPath }) {
   </Link>;
 }
 
-export default function ReportGroup({ report, filters, reportPath, timeZone, revision }) {
+export default function ReportGroup({ report, showReasonColumn, filters, reportPath, timeZone, revision }) {
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
   const { post_id, claim_id, message_id, reported_account_id } = report;
@@ -73,6 +73,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
   const Icon = report.kind === "CLAIM_APPEAL" ? Scale : report.kind === "HANDOVER_ISSUE" ? Package : icons[target];
   const type = report.kind === "CLAIM_APPEAL" ? "Tranh chấp" : report.kind === "HANDOVER_ISSUE"
     ? "Sự cố bàn giao" : `Vi phạm · ${reportTargets[target]}`;
+  const officeAppeal = report.kind === "CLAIM_APPEAL" && report.appeal_custody_mode === "OFFICE";
   const thumbnail = report.post_thumbnail?.url;
   const title = target === "MESSAGE" ? report.message_preview?.trim() || "Tin nhắn đính kèm" : report.subject_title || reportTargets[target];
   const person = target === "CLAIM" ? report.claimant_name : target === "POST" || target === "MESSAGE" ? report.subject_name : "";
@@ -87,7 +88,10 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
             {thumbnail && <img key={thumbnail} src={thumbnail} alt="" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
           </span>
           <div className="rr-case-name">
-            <span className="rr-case-type">{type}</span>
+            <div className="rr-case-tags">
+              <span className="rr-case-type">{type}</span>
+              {officeAppeal && <span className="rr-case-type">Văn Phòng</span>}
+            </div>
             {multiple ? <strong>{title}</strong>
               : <Link to={reportHref(report, reportPath)}>{title}</Link>}
             {!multiple && report.reporter && <small>Người báo cáo · {report.reporter}</small>}
@@ -96,7 +100,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
           </div>
         </div>
       </td>
-      <td role="cell" className="rr-case-reason">
+      {showReasonColumn && <td role="cell" className="rr-case-reason">
         <span className="rr-case-mobile-label">Lý do</span>
         <strong>{primaryReason}</strong>
         {reasons.length > 1 && <small>+{reasons.length - 1} lý do khác</small>}
@@ -105,7 +109,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
         </span>}
         {level && priority && <small>{priority}</small>}
         {appointment && <small>Lịch nhận <time dateTime={report.next_pickup}>{appointment}</time></small>}
-      </td>
+      </td>}
       <td role="cell" className="rr-case-status">
         <span className="rr-case-mobile-label">Trạng thái</span>
         {report.status === "RESOLVED" && report.work_state !== "HISTORY" && report.kind === "CLAIM_APPEAL"
@@ -132,7 +136,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
       </td>
     </tr>
     {multiple && <tr role="row" className="rr-case-expansion" hidden={!expanded}>
-      <td role="cell" colSpan={5} id={contentId}>
+      <td role="cell" colSpan={showReasonColumn ? 5 : 4} id={contentId}>
         {expanded && <Reports filters={{ ...filters, kind: report.kind, target, targetId }} revision={revision} reportPath={reportPath} />}
       </td>
     </tr>}

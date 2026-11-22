@@ -572,7 +572,7 @@ export default function Navbar() {
                       className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-teal-700 bg-teal-50/50 hover:bg-teal-50"
                     >
                       <LayoutDashboard size={16} className="text-teal-600" />
-                      <span>Hồ sơ tiếp nhận</span>
+                      <span>Phiếu tiếp nhận tài sản</span>
                     </Link>
                   )}
                 </div>

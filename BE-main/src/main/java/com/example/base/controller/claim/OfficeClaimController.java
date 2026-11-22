@@ -14,6 +14,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
+import java.time.OffsetDateTime;
+import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequestMapping("/api/office-claims")
@@ -89,6 +91,37 @@ public class OfficeClaimController {
             @RequestParam(name = "stage", defaultValue = "ALL") String stage,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(service.list(page, status, q, stage, false, user));
+    }
+
+    @GetMapping("/groups")
+    @PreAuthorize("hasRole('APPROVER')")
+    @Operation(summary = "Danh sách yêu cầu nhận tài sản văn phòng theo bài đăng")
+    public ApiResponse<GroupedClaims> groups(
+            @RequestParam(name="page",defaultValue="1") int page,
+            @RequestParam(name="status",defaultValue="ALL") String status,
+            @RequestParam(name="q",defaultValue="") String q,
+            @RequestParam(name="stage",defaultValue="ALL") String stage,
+            @RequestParam(name="channel",defaultValue="ALL") String channel,
+            @RequestParam(name="since",required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE_TIME) OffsetDateTime since,
+            @RequestParam(name="oldest",defaultValue="false") boolean oldest,
+            @Parameter(hidden=true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(service.groups(page,status,q,stage,channel,since,oldest,user));
+    }
+
+    @GetMapping("/posts/{postId}")
+    @PreAuthorize("hasRole('APPROVER')")
+    @Operation(summary = "Danh sách yêu cầu của một bài đăng tại văn phòng")
+    public ApiResponse<PageData<ClaimView>> forPost(
+            @PathVariable("postId") long postId,
+            @RequestParam(name="page",defaultValue="1") int page,
+            @RequestParam(name="status",defaultValue="ALL") String status,
+            @RequestParam(name="q",defaultValue="") String q,
+            @RequestParam(name="stage",defaultValue="ALL") String stage,
+            @RequestParam(name="channel",defaultValue="ALL") String channel,
+            @RequestParam(name="since",required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE_TIME) OffsetDateTime since,
+            @RequestParam(name="oldest",defaultValue="false") boolean oldest,
+            @Parameter(hidden=true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(service.forPost(postId,page,status,q,stage,channel,since,oldest,user));
     }
 
     @GetMapping("/mine")

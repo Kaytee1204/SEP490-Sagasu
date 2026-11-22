@@ -188,7 +188,7 @@ export default function AdminOverviewPage() {
                   <Package size={18} />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-slate-800">Tin đăng</div>
+                  <div className="text-xs font-bold text-slate-800">Quản lý bài đăng</div>
                   <div className="text-[11px] text-slate-400">{posts.total ?? 0} bài đăng</div>
                 </div>
               </div>

@@ -43,6 +43,7 @@ public class ClaimService {
     private final ClaimQuestionnaireService questionnaires;
     private final com.example.base.service.chat.ChatConversationService chatConversations;
     private final com.example.base.service.notification.NotificationService notifications;
+    private final com.example.base.service.office.OfficeReturnService officeReturns;
 
     public ClaimResultDto submit(long postId, SubmitClaimRequest request, List<MultipartFile> files, CustomUserDetails user) {
         return create(postId, null, request, files, user);
@@ -340,6 +341,16 @@ public class ClaimService {
     }
 
     @Transactional
+    public void reopenOfficeApprovalFromAppeal(long claimId, long approvalId, String reason, CustomUserDetails user) {
+        activeManager(user);
+        Post post = lockPost(claimPostId(claimId));
+        routing.lockReceipt(post);
+        Claim claim = lockClaimForWorkflow(claimId);
+        if (!claim.isOffice()) throw missing();
+        officeReturns.reopenFromAppeal(claim, approvalId, reason, user);
+    }
+
+    @Transactional
     public void rejectReportedClaim(long claimId, String reason, CustomUserDetails user) {
         Account manager = activeManager(user);
         Post post = lockPost(claimPostId(claimId));
@@ -499,9 +510,13 @@ public class ClaimService {
         return post;
     }
     private Claim lockClaim(long id) {
+        Claim claim = lockClaimForWorkflow(id);
+        if (!"P2P".equals(claim.getClaimType()) || claim.getClaimant() == null) throw missing();
+        return claim;
+    }
+    private Claim lockClaimForWorkflow(long id) {
         Claim claim = claims.findForUpdate(id).orElseThrow(this::missing);
         entityManager.refresh(claim, LockModeType.PESSIMISTIC_WRITE);
-        if (!"P2P".equals(claim.getClaimType()) || claim.getClaimant() == null) throw missing();
         return claim;
     }
     private void requireVersion(Claim claim, Long version) {

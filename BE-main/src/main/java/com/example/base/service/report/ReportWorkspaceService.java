@@ -36,12 +36,13 @@ public class ReportWorkspaceService {
                                 where d.report_id=r.report_id and d.action='REQUEST_ITEM_RECOVERY')
                         )
                     ) as needs_reply,
-                    case when p.account_id = :actor then chosen.claim_id end as finder_approved_claim_id,
-                    case when c.claim_type='P2P' and (c.claimant_id=:actor or p.account_id=:actor) then c.claim_id
+                    case when p.account_id = :actor and chosen.claim_type='P2P' then chosen.claim_id end as finder_approved_claim_id,
+                    case when c.claimant_id=:actor or (c.claim_type='P2P' and p.account_id=:actor) then c.claim_id
                          when chosen.claimant_id=:actor then chosen.claim_id end as participant_claim_id,
+                    c.claim_type,
                     p.account_id=:actor as post_owner,
                     follow_up.step as appeal_step, approval.appeal_until,
-                    coalesce(follow_up.step='READY_TO_REOPEN' and p.account_id=:actor
+                    coalesce(follow_up.step='READY_TO_REOPEN' and chosen.claim_type='P2P' and p.account_id=:actor
                         and chosen.claimant_id<>:actor, false) as needs_reopen,
                     r.resolution_note, r.reason_label_snapshot as report_reason,
                     case when p.deleted_at is null and (p.moderation_status='VISIBLE' or p.account_id=:actor)

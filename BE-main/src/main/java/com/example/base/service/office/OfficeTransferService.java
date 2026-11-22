@@ -196,6 +196,11 @@ public class OfficeTransferService {
             Long receiptId=receipt.getId();
             jdbc.update("update item_receipt set finder_name=?,finder_contact=? where item_receipt_id=?",
                     post.getAccount().getFullName(),post.getAccount().getEmail(),receiptId);
+            jdbc.update("""
+                update p2p_claim_approval a set closed_at=now()
+                from claim c where c.claim_id=a.approved_claim_id and c.post_id=?
+                  and a.custody_mode='P2P' and a.closed_at is null
+                """,post.getId());
             for(Claim claim:dossiers) {
                 String previous=claim.getStatus();
                 claim.transferToOffice(receipt);

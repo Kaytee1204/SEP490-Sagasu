@@ -6,6 +6,7 @@ import SupplementForm from './SupplementForm';
 import OfficeClaimTimeline from './OfficeClaimTimeline';
 import { date } from '../officeUtils';
 import ReportButton from '../../reports/components/ReportButton';
+import ClaimAppealPanel from '@/features/claims/components/ClaimAppealPanel';
 
 export default function PersonalClaimDetail({ claim, workflow, onChanged }) {
   const ended = ['COMPLETED','REJECTED','CANCELLED','CLOSED'].includes(claim.status);
@@ -24,6 +25,7 @@ export default function PersonalClaimDetail({ claim, workflow, onChanged }) {
       </div>
     </header>
     <OfficeReturnPanel claim={claim} state={workflow} mine onChanged={onChanged}/>
+    <ClaimAppealPanel key={claim.id} claim={claim} />
     {claim.ownRequest && claim.status === 'NEEDS_INFO' && <SupplementForm claim={claim} onDone={onChanged}/>}
     <section className="of-panel"><h2>Thông tin yêu cầu</h2><dl className="of-facts"><div><dt>Người yêu cầu nhận đồ</dt><dd>{claim.claimantName}</dd></div><div><dt>Email liên hệ</dt><dd>{claim.claimantEmail || 'Chưa cung cấp'}</dd></div><div><dt>Điện thoại</dt><dd>{claim.claimantPhone || 'Chưa cung cấp'}</dd></div>{claim.channel === 'COUNTER' && <div><dt>Nhân viên tạo yêu cầu</dt><dd>{claim.createdBy}</dd></div>}</dl></section>
     <section className="of-panel"><h2>Căn cứ sở hữu đã gửi</h2><p className="of-prose">{claim.description}</p><dl className="of-question-answers">{(claim.answers || []).map(a=><div key={a.id}><dt>{a.question}</dt><dd className="of-prose">{a.answer}</dd></div>)}</dl>{claim.evidenceNote && <p className="of-callout of-prose">{claim.evidenceNote}</p>}<div className="of-gallery">{(claim.evidence || []).map(e=><a key={e.id} href={e.url} target="_blank" rel="noreferrer"><img src={e.url} alt={e.originalName || 'Bằng chứng sở hữu'}/></a>)}</div></section>
