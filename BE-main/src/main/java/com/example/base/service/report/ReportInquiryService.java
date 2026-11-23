@@ -154,6 +154,10 @@ public class ReportInquiryService {
         default -> throw bad("Hãy chọn nội dung cần xác minh.");
       };
       if (!request.recipientId().equals(expected)) throw bad("Người nhận không đúng vai trò cần xác minh.");
+    } else if ("HANDOVER_ISSUE".equals(r.get("kind")) && appeal.isEmpty() && reviews.open(r) && reviews.issuePhase(report) != null) {
+      if (HandoverVerification.options(r, context.context(r)).stream().noneMatch(option ->
+          option.kind().equals(kind) && request.recipientId().equals(option.recipientId())))
+        throw bad("Hãy chọn việc xác minh phù hợp với người giao hoặc người nhận.");
     } else if (kind != null) throw bad("Yêu cầu xác minh này chỉ dành cho tranh chấp P2P đang xử lý.");
     if (question.isBlank()) throw bad("Hãy ghi rõ chi tiết cần xác minh.");
     if (

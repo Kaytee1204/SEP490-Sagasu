@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { getHandover, uploadHandover } from '../api/handoverApi';
+import { reportDescriptionHint } from "@/features/reports/utils/reportDescriptionHints";
 import ReportReasonPicker from '@/features/reports/components/ReportReasonPicker';
 import { claimDate } from '@/features/claims/utils/claimUtils';
 import useImageUploads from '@/hooks/useImageUploads';
@@ -120,7 +121,7 @@ export default function ReportHandoverIssueDialog({ claim, handover, initialMess
         onChange={code => { setReasonCode(code); request.current = null; setDiscard(false); setError(''); setReasonNotice(''); }} />
       {reasonNotice && <p role="status" className="claims-muted">{reasonNotice}</p>}
       <label className="handover-record-field">Mô tả chi tiết sự cố *
-        <small>Mô tả điều đã xảy ra. Nếu nhớ, hãy ghi thêm thời gian và địa điểm.</small>
+        <small>{reportDescriptionHint(reasonCode)}</small>
         <textarea required maxLength={4800} value={reason} disabled={busy}
           onChange={event => { setReason(event.target.value); request.current = null; setDiscard(false); }} /></label>
       <div className="handover-record-field"><span>Ảnh bằng chứng (tùy chọn)</span>

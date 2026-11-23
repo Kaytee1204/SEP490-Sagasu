@@ -139,7 +139,7 @@ public class P2pHandoverService {
         var prepared=images.prepare(prepKey,files);var tx=new TransactionTemplate(transactions);
         Detail old=tx.execute(status->{Claim c=claim(claimId);participant(c,actor);
             Detail retry=issueRetry(c,actor,request.clientRequestId(),prepared.hash());if(retry!=null)return retry;
-            requireIssue(c,handovers.findByClaimId(claimId).orElse(null),request);
+            requireIssue(c,handovers.findByClaimId(claimId).orElse(null),request,actor);
             messageSnapshot(c,request.messageId());
             if(hasCode)reports.validateReason("HANDOVER_ISSUE",request.reasonCode(),reason);return null;});
         if(old!=null)return old;
@@ -149,7 +149,7 @@ public class P2pHandoverService {
             P2pHandover h=handovers.findByClaimId(claimId).orElse(null);
             if(h!=null) em.refresh(h,LockModeType.PESSIMISTIC_WRITE);
             Detail retry=issueRetry(c,actor,request.clientRequestId(),prepared.hash());if(retry!=null)return retry;
-            String phase=requireIssue(c,h,request);
+            String phase=requireIssue(c,h,request,actor);
             String messageSnapshot=messageSnapshot(c,request.messageId());
             Report report=hasCode
                 ?reports.insert(actor,"HANDOVER_ISSUE","CLAIM",claimId,reason,request.reasonCode(),request.clientRequestId(),prepared.hash(),uploaded)
@@ -189,7 +189,7 @@ public class P2pHandoverService {
             return dto(c,h,actor,report.getId());
         });if(!inserted[0])images.cleanup(uploaded);return result;}catch(RuntimeException ex){images.cleanup(uploaded);throw ex;}
     }
-    private String requireIssue(Claim c,P2pHandover h,IssueRequest request) {
+    private String requireIssue(Claim c,P2pHandover h,IssueRequest request,long actor) {
         String phase=issuePhase(c,h);
         long version=h==null?c.getVersion():h.getVersion();
         if(phase==null || version!=request.expectedVersion() || activeIssue(c,h)!=null) throw changed();
@@ -198,11 +198,26 @@ public class P2pHandoverService {
                 "Hãy tải lại hồ sơ để gửi báo cáo theo giai đoạn trao trả.");
         }
         if (request.expectedPhase()!=null && !phase.equals(request.expectedPhase())) throw changed();
-        if (request.reasonCode()!=null && !ISSUE_REASONS.get(phase).contains(request.reasonCode())) {
+        if (request.reasonCode()!=null && !allowsIssue(c,h,phase,request.reasonCode(),actor)) {
             throw new AppException(ErrorCode.REPORT_REASON_INVALID);
         }
         return phase;
     }
+    private boolean allowsIssue(Claim claim, P2pHandover handover, String phase, String code, long actor) {
+        if (!ISSUE_REASONS.get(phase).contains(code)) return false;
+        boolean giver = Objects.equals(actor, claim.getPost().getAccount().getId());
+        return switch (code) {
+            case "HANDOVER_WRONG_RECIPIENT" -> giver;
+            case "HANDOVER_MISSING_ITEMS", "HANDOVER_WRONG_ITEM", "HANDOVER_CONDITION", "HANDOVER_NOT_RECEIVED" -> !giver;
+            case "HANDOVER_CONFIRMATION_ERROR" -> giver || ("AFTER".equals(phase) && Objects.equals(handover.getConfirmedBy(), actor));
+            case "P2P_HANDOVER_NO_CONTACT" -> {
+                var window = appeals.handoverWindow(claim);
+                yield window == null || !window.blocksHandover();
+            }
+            default -> true;
+        };
+    }
+
     private String messageSnapshot(Claim claim,Long messageId) {
         if (messageId==null) return null;
         return jdbc.query("""
@@ -271,7 +286,17 @@ public class P2pHandoverService {
         String phase=issuePhase(c,h);
         boolean canReport=phase!=null&&reportId==null;
         var issueReasons=canReport ? reportReasons.p2pHandoverOptions().reasons().stream()
-            .filter(reason->ISSUE_REASONS.get(phase).contains(reason.code())).toList()
+            .filter(reason -> allowsIssue(c,h,phase,reason.code(),actor))
+            .map(reason -> new ReportReasonService.Reason(reason.code(), switch (reason.code()) {
+                case "P2P_HANDOVER_NO_CONTACT" -> "Không liên lạc được để giao nhận";
+                case "HANDOVER_WRONG_RECIPIENT" -> "Tôi đã giao và nghi người nhận không đúng";
+                case "HANDOVER_NOT_RECEIVED" -> "Hệ thống ghi đã giao nhưng tôi chưa nhận";
+                case "HANDOVER_WRONG_ITEM" -> "Tôi nhận được món khác";
+                case "HANDOVER_MISSING_ITEMS" -> "Tôi nhận đúng món nhưng thiếu phụ kiện";
+                case "HANDOVER_CONDITION" -> "Món tôi nhận bị hỏng hoặc khác tình trạng";
+                case "HANDOVER_CONFIRMATION_ERROR" -> c.getPost().getAccount().getId()==actor ? "Tôi bấm nhầm Đã giao" : "Tôi bấm nhầm Đã nhận";
+                default -> reason.label();
+            }, reason.requiresDescription())).toList()
             : List.<ReportReasonService.Reason>of();
         var evidence=h==null?List.<ReportService.Evidence>of():jdbc.query("select * from p2p_handover_evidence where handover_id=? order by sort_order",(rs,n)->new ReportService.Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),h.getId());
         return new Detail(h==null?null:h.getId(),c.getId(),h==null?"NOT_RECORDED":h.getStatus(),h==null?null:h.getNote(),h==null?null:h.getRecordedAt(),h==null?null:h.getConfirmedAt(),h==null?c.getVersion():h.getVersion(),

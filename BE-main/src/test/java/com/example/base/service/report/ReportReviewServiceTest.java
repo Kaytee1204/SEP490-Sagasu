@@ -503,13 +503,13 @@ class ReportReviewServiceTest {
     void structuredViolationAppliesTheMeasureAndLogsItWithTheFinding() {
         givenVisiblePost();
 
-        var request = new ReportReviewService.Action(3L, "VIOLATION", "Conclusion", "Basis", null, false, "HIDE_POST");
+        var request = new ReportReviewService.Action(3L, "VIOLATION", "Conclusion", null, null, false, "HIDE_POST");
         service.act(5L, request, user);
 
         verify(moderation).moderate(eq(10L), any(OfficeDtos.Moderation.class), eq(user));
         verifyStatusUpdate("RESOLVED");
         verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L), eq("VIOLATION"), eq("Conclusion"),
-                eq("Basis"), anyString(), contains("\"appliedMeasure\":\"HIDE_POST\""));
+                eq(""), anyString(), contains("\"appliedMeasure\":\"HIDE_POST\""));
     }
 
     @Test
@@ -739,6 +739,39 @@ class ReportReviewServiceTest {
     }
 
     @Test
+    void wrongItemExchangeAsksBothPartiesAndKeepsTheReportOpen() {
+        givenDispute("DISPUTED", "APPROVED");
+        report.put("reason_code","HANDOVER_WRONG_ITEM");
+        ctx.put("post",row("post_id",10L,"account_id",8L));
+        ctx.put("claim",row("claimant_id",7L));
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        service.act(5L, action("HANDOVER_CORRECTION"), user);
+        verifyStatusUpdate("IN_REVIEW");
+        for (long recipient : List.of(7L,8L))
+            verify(jdbc).update(contains("insert into report_inquiry"),eq(5L),eq(recipient),eq(1L),anyString(),any(),eq("HANDOVER_CORRECTION"));
+    }
+
+    @Test
+    void unverifiedHandoverClosesOnlyTheReport() {
+        givenDispute("DISPUTED", "APPROVED");
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        when(jdbc.queryForObject(contains("h.status='DISPUTED'"), eq(Boolean.class), any(Object[].class))).thenReturn(true);
+        service.act(5L, action("HANDOVER_UNVERIFIED"), user);
+        verifyStatusUpdate("RESOLVED");
+        verify(jdbc).update(contains("status='WAITING_CONFIRMATION'"), eq(70L));
+        verify(jdbc, never()).update(contains("set status='COMPLETED'"), any(Object[].class));
+    }
+
+    @Test
+    void tracingTheHolderKeepsTheReportAssignedAndOpen() {
+        givenDispute("DISPUTED", "APPROVED");
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        service.act(5L, action("HANDOVER_VERIFY_HOLDER"), user);
+        verifyStatusUpdate("IN_REVIEW");
+        verify(jdbc, never()).update(contains("update p2p_handover set status"), any(Object[].class));
+    }
+
+    @Test
     void utc092_handoverContinue_backToWaitingConfirmation() {
         givenDispute("DISPUTED", "APPROVED");
 
@@ -754,6 +787,14 @@ class ReportReviewServiceTest {
 
         assertBad(() -> service.act(5L, action("CLAIM_REJECTED", null, true), user), "Thao tác không hợp lệ");
         verify(jdbc, never()).update(contains("update p2p_handover set status='CANCELLED'"), anyLong());
+    }
+
+    @Test
+    void paymentReportCannotReopenRecipientSelection() {
+        givenDispute("DISPUTED", "APPROVED");
+        report.put("reason_code", "P2P_HANDOVER_PAYMENT");
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        assertBad(() -> service.act(5L, action("HANDOVER_REOPEN", null, true), user), "không phù hợp");
     }
 
     @Test

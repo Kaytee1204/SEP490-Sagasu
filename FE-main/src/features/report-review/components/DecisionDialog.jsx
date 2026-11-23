@@ -2,7 +2,7 @@ import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
-import { appealActionHelp, labels, officeAppealActionHelp } from "../format";
+import { appealActionHelp, handoverActionLabel, labels, officeAppealActionHelp } from "../format";
 const warnings = {
   REQUEST_POST_CORRECTION: "Người đăng sẽ nhận yêu cầu chỉnh sửa và có thể xem hướng dẫn trong hồ sơ.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
@@ -12,6 +12,9 @@ const warnings = {
   HOLD: "Tạm dừng tiếp nhận và bàn giao đồ liên quan đến báo cáo này.",
   RELEASE:
     "Gỡ lệnh tạm dừng của báo cáo này. Lệnh từ báo cáo khác vẫn có hiệu lực.",
+  HANDOVER_CORRECTION: "Hai bên sẽ nhận hướng dẫn riêng và có 12 giờ làm việc để phản hồi. Các câu hỏi trước đó được đóng. Hồ sơ tiếp tục mở để quản lý kiểm tra kết quả.",
+  HANDOVER_VERIFY_HOLDER: "Ghi việc cần xác minh cho quản lý phụ trách. Hồ sơ tiếp tục nằm trong hàng Cần xử lý.",
+  HANDOVER_UNVERIFIED: "Đóng báo cáo và gửi lý do cho hai bên. Nếu đang chờ xác nhận bàn giao, người nhận có thể tiếp tục kiểm tra món đồ.",
   HANDOVER_COMPLETED:
     "Xác nhận đồ đã trả đúng người: hoàn tất bàn giao, đóng bài đăng và các yêu cầu đang chờ.",
   HANDOVER_CONTINUE:
@@ -39,22 +42,10 @@ const batchActions = ["RESOLVE", "DISMISS", ...Object.keys(findings)];
 
 export default function DecisionDialog({ action: initialAction, data, onClose, onSaved }) {
   const outcome = initialAction === "CONCLUDE_HANDOVER";
-  const interim = initialAction === "HANDOVER_INTERIM";
-  const [choice, setChoice] = useState("");
-  const action = outcome || interim ? choice : initialAction;
-  const choices = interim ? {
-    HOLD: "Tạm dừng giao nhận trong lúc xác minh",
-    RELEASE: "Gỡ lệnh tạm dừng của hồ sơ này",
-    REQUEST_ITEM_RECOVERY: "Yêu cầu người đang giữ trả lại món đồ",
-    CONFIRM_ITEM_RECOVERY: "Xác nhận đã lấy lại món đồ",
-  } : {
-    HANDOVER_COMPLETED: "Người nhận đã nhận đúng và đủ đồ",
-    HANDOVER_CONTINUE: data.issuePhase === "BEFORE" ? "Hai bên tiếp tục giao theo lịch đã thống nhất" : "Người nhận sẽ tự xác nhận trên lượt giao hiện tại",
-    HANDOVER_RETRY: "Người nhặt đang giữ đồ và sẽ giao lại cho cùng người nhận",
-    HANDOVER_REOPEN: "Đồ đã về tay người nhặt và cần chọn lại người nhận",
-    RESOLVE: "Sự cố đã được khắc phục",
-    DISMISS: "Bác phản ánh sau khi đối chiếu",
-  };
+  const [choice, setChoice] = useState(outcome && data.actions.length === 1 ? data.actions[0] : "");
+  const action = outcome ? choice : initialAction;
+  const measures = ["HANDOVER_CORRECTION", "REQUEST_ITEM_RECOVERY", "CONFIRM_ITEM_RECOVERY", "HANDOVER_VERIFY_HOLDER", "HOLD", "RELEASE"];
+  const outcomes = ["HANDOVER_COMPLETED", "HANDOVER_CONTINUE", "HANDOVER_RETRY", "HANDOVER_REOPEN", "RESOLVE", "DISMISS", "HANDOVER_UNVERIFIED"];
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selected, setSelected] = useState([]);
   const [sameIncident, setSameIncident] = useState(false);
@@ -63,12 +54,11 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const [measure, setMeasure] = useState("");
   const decision = structured ? finding : action;
   const effect = measure || decision;
-  const candidates = !measure && batchActions.includes(decision) ? (data.related || []).filter(r =>
+  const candidates = data.caseKind !== "HANDOVER_ISSUE" && !measure && batchActions.includes(decision) ? (data.related || []).filter(r =>
     ["OPEN","IN_REVIEW"].includes(r.status) && r.assigned_to === data.report.assigned_to &&
     r.kind === data.caseKind &&
     ["reason_code","post_id","claim_id","message_id","reported_account_id"].every(key => (r[key] ?? null) === (data.report[key] ?? null))) : [];
   const [conclusion, setConclusion] = useState(""),
-    [basis, setBasis] = useState(""),
     [holder, setHolder] = useState(""),
     [appealFinding, setAppealFinding] = useState(""),
     [custodyVerified, setCustody] = useState(false),
@@ -80,7 +70,8 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const isKeepApproval = action === "APPEAL_KEEP";
   const isWrongRecipientDecision = action === "APPEAL_WRONG_RECIPIENT";
   const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
-  const requiresCustody = isWrongRecipientDecision || requiresRecoveryCheck
+  const confirmingCorrection = ["HANDOVER_COMPLETED", "RESOLVE"].includes(action) && ["HANDOVER_WRONG_ITEM", "HANDOVER_MISSING_ITEMS"].includes(data.report.reason_code) && data.caseKind === "HANDOVER_ISSUE";
+  const requiresCustody = confirmingCorrection || isWrongRecipientDecision || requiresRecoveryCheck
     || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
     || (isKeepApproval && data.recoveryRequested);
   const officeAppeal = data.appeal?.claim_type === "OFFICE";
@@ -93,7 +84,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
     setSameIncident(false);
   }
 
-  const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim()
+  const cannotSubmit = busy || !decision || !conclusion.trim()
     || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified)
     || (isKeepApproval && !appealFinding)
     || (isWrongRecipientDecision && !wrongRecipientVerified) || (selected.length > 0 && !sameIncident);
@@ -113,7 +104,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
     setError("");
     try {
       if (selected.length) {
-        await reviewApi.batch({reports:[data.report,...candidates.filter(r => selected.includes(r.report_id))].map(r => ({id:r.report_id,version:r.version})), action: decision, conclusion:conclusion.trim(), basis:basis.trim(), sameIncidentConfirmed:sameIncident});
+        await reviewApi.batch({reports:[data.report,...candidates.filter(r => selected.includes(r.report_id))].map(r => ({id:r.report_id,version:r.version})), action: decision, conclusion:conclusion.trim(), sameIncidentConfirmed:sameIncident});
         onSaved(await reviewApi.detail(data.report.report_id));
         onClose();
         return;
@@ -124,7 +115,6 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           action: decision,
           measure: measure || null,
           conclusion: conclusion.trim(),
-          basis: basis.trim(),
           targetId: isRecoveryRequest ? Number(holder) : accountAction ? data.report.reported_account_id : null,
           custodyVerified,
           ...(isKeepApproval && { appealFinding }),
@@ -148,10 +138,10 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
     }
   }
   return (<>
-    <Dialog title={outcome ? "Ghi kết luận sự cố bàn giao" : interim ? "Xử lý trong lúc xác minh" : structured ? "Ghi kết luận vi phạm" : labels[action]} busy={busy} onClose={onClose}>
+    <Dialog title={outcome ? "Xử lý sự cố bàn giao" : structured ? "Ghi kết luận vi phạm" : data.caseKind === "HANDOVER_ISSUE" ? handoverActionLabel(action, data) : labels[action]} busy={busy} onClose={onClose}>
       <form onSubmit={submit} className="rr-stack rr-decision-form">
-        {(outcome || interim) && <label>
-          {outcome ? "Kết quả đã xác minh" : "Việc cần thực hiện"} *
+        {outcome && <label>
+          Chọn cách xử lý *
           <select autoFocus required disabled={busy} value={choice} onChange={event => {
             changeDecision(setChoice, event.target.value);
             setCustody(false);
@@ -159,8 +149,12 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             setError("");
           }}>
             <option value="">Chọn một phương án…</option>
-            {Object.entries(choices).filter(([value]) => data.actions.includes(value)).map(([value, label]) =>
-              <option key={value} value={value}>{label}</option>)}
+            {[["Tiếp tục xử lý", measures], ["Kết luận sự cố", outcomes]].map(([label, options]) => {
+              const available = options.filter(value => data.actions.includes(value));
+              return available.length > 0 && <optgroup key={label} label={label}>
+                {available.map(value => <option key={value} value={value}>{handoverActionLabel(value, data)}</option>)}
+              </optgroup>;
+            })}
           </select>
         </label>}
         {structured && <>
@@ -217,30 +211,16 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           </select>
         </label>}
         <label>
-          Nội dung gửi cho người liên quan{" "}
+          {action === "HANDOVER_VERIFY_HOLDER" ? "Việc quản lý phụ trách cần xác minh" : "Nội dung gửi cho người liên quan"}{" "}
           *
           <textarea
-            autoFocus={!structured && !interim && !outcome && !isKeepApproval}
+            autoFocus={!structured && !outcome && !isKeepApproval}
             required
             maxLength={5000}
             rows={3}
             value={conclusion}
             onChange={(e) => setConclusion(e.target.value)}
             placeholder="Nêu kết quả rõ ràng, không đưa thông tin riêng tư của người khác vào kết luận."
-          />
-        </label>
-        <label>
-          Căn cứ đối chiếu (nội bộ) *
-          <textarea
-            required
-            maxLength={5000}
-            rows={3}
-            value={basis}
-            onChange={(e) => setBasis(e.target.value)}
-            placeholder={isWrongRecipientDecision
-              ? "Ghi rõ căn cứ nào cho thấy người được duyệt không phải chủ món đồ."
-              : appealFinding === "INVALID_CLAIM" ? "Ghi rõ bằng chứng cho thấy yêu cầu nhận đồ của người gửi là sai."
-                : "Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."}
           />
         </label>
         {isWrongRecipientDecision && <label className="rr-check">
@@ -260,7 +240,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
               checked={custodyVerified}
               onChange={(e) => setCustody(e.target.checked)}
             />
-            {isWrongRecipientDecision ? (officeAppeal ? "Tôi đã xác minh tài sản còn lưu kho tại văn phòng." : "Tôi đã xác minh người nhặt vẫn đang giữ món đồ.")
+            {confirmingCorrection ? (data.report.reason_code === "HANDOVER_WRONG_ITEM" ? "Đã xác minh người nhận đang giữ đúng món và đã đối chiếu việc trả lại món giao nhầm, nếu có." : "Đã đối chiếu danh sách phụ kiện và xác minh người nhận đã nhận đủ.") : isWrongRecipientDecision ? (officeAppeal ? "Tôi đã xác minh tài sản còn lưu kho tại văn phòng." : "Tôi đã xác minh người nhặt vẫn đang giữ món đồ.")
               : action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
               : requiresRecoveryCheck
               ? "Đã xác minh tình trạng món đồ và có đủ căn cứ áp dụng kết quả bàn giao này."
@@ -268,6 +248,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           </label>
         )}
         {(batchActions.includes(decision) || [
+          "HANDOVER_UNVERIFIED",
           "HANDOVER_COMPLETED",
           "HANDOVER_CONTINUE",
           "HANDOVER_RETRY",
@@ -291,7 +272,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           >
             {busy ? "Đang lưu…" : isWrongRecipientDecision ? "Xác nhận mở lại xét duyệt"
               : isKeepApproval ? labels.APPEAL_KEEP
-              : structured || outcome ? "Xác nhận kết luận" : "Xác nhận xử lý"}
+              : action === "HANDOVER_CORRECTION" ? "Gửi yêu cầu cho hai bên" : structured || outcomes.includes(action) ? "Xác nhận kết luận" : "Xác nhận xử lý"}
           </button>
         </footer>
       </form>
