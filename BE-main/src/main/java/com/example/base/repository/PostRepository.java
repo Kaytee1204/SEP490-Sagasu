@@ -108,6 +108,40 @@ public interface PostRepository extends JpaRepository<Post, Long>, org.springfra
                                            Pageable pageable);
 
     @Query("""
+            select p.id from Post p
+            where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
+              and p.postType=:oppositeType and p.id <> :excludeId
+              and (:excludeAuthorId is null or (p.createdBy.id <> :excludeAuthorId and p.account.id <> :excludeAuthorId))
+            order by p.createdAt desc, p.id desc
+            """)
+    List<Long> findAllCandidateIdsForCrossMatching(@Param("oppositeType") String oppositeType,
+                                                   @Param("excludeId") long excludeId,
+                                                   @Param("excludeAuthorId") Long excludeAuthorId,
+                                                   Pageable pageable);
+
+    @Query("""
+            select p.id from Post p
+            where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
+            order by p.createdAt desc, p.id desc
+            """)
+    List<Long> findAllOpenVisibleIds(Pageable pageable);
+
+    @Query("""
+            select p.id from Post p
+            where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
+              and p.postType=:postType
+            order by p.createdAt desc, p.id desc
+            """)
+    List<Long> findAllOpenVisibleIdsByType(@Param("postType") String postType);
+
+    @Query("""
+            select count(p) from Post p
+            where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
+              and p.postType=:postType
+            """)
+    long countOpenVisibleByType(@Param("postType") String postType);
+
+    @Query("""
             select distinct p from Post p join fetch p.category join fetch p.createdBy left join fetch p.images
             where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
               and p.postType=:oppositeType and p.id <> :excludeId
