@@ -1,6 +1,6 @@
 import '@/styles/Workspace.css';
-import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import { ArrowUpRight, Building2, Filter, Inbox, Send, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
@@ -66,8 +66,11 @@ function resolveGroupStatus(visibleClaims, incoming) {
 
 function ClaimList({ embedded = false, initialView = 'received' }) {
   const location = useLocation();
+  const outletCtx = useOutletContext() || {};
+  const claimCounts = outletCtx.claimCounts || { receivedPending: 0, sentPending: 0 };
   const [searchParams, setSearchParams] = useSearchParams();
   const postId = validClaimId(searchParams.get('postId')) ? searchParams.get('postId') : null;
+  const autoSwitchedRef = useRef(false);
 
   const [view, setView] = useState(() => {
     const urlView = searchParams.get('view');
@@ -156,6 +159,19 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
   }, [postId, incoming, view, key]);
 
   const loading = snapshot.key !== key;
+
+  // Đồng bộ với badge sidebar: nếu người dùng mở mặc định tab "Người khác yêu cầu" nhưng tab này trống
+  // trong khi tab "Tôi yêu cầu" đang có yêu cầu chờ duyệt -> tự động chuyển sang "Tôi yêu cầu"
+  useEffect(() => {
+    if (autoSwitchedRef.current || embedded || postId) return;
+    if (searchParams.get('view')) return;
+    if (loading || view !== 'received') return;
+    const rawCount = snapshot.result?.content?.length ?? 0;
+    if (rawCount === 0 && claimCounts.sentPending > 0 && claimCounts.receivedPending === 0) {
+      autoSwitchedRef.current = true;
+      setView('sent');
+    }
+  }, [loading, view, snapshot.result, claimCounts.sentPending, claimCounts.receivedPending, embedded, postId, searchParams]);
 
   const { processed, statusCounts } = useMemo(() => {
     const rawGroups = snapshot.result?.content || [];
@@ -262,18 +278,26 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
       <section className="claim-list-controls" aria-label="Bộ lọc danh sách yêu cầu nhận đồ">
         <div className="claim-list-navigation">
           <div className="claim-list-tabs" role="group" aria-label="Loại yêu cầu nhận đồ">
-            {views.map(([value, label, Icon]) => (
-              <button
-                type="button"
-                key={value}
-                aria-pressed={view === value}
-                className={view === value ? 'active' : ''}
-                onClick={() => syncParams({ view: value, page: 1, status: 'ALL' })}
-              >
-                <Icon size={18} aria-hidden="true" />
-                {label}
-              </button>
-            ))}
+            {views.map(([value, label, Icon]) => {
+              const tabPending = value === 'received' ? claimCounts.receivedPending : claimCounts.sentPending;
+              return (
+                <button
+                  type="button"
+                  key={value}
+                  aria-pressed={view === value}
+                  className={view === value ? 'active' : ''}
+                  onClick={() => syncParams({ view: value, page: 1, status: 'ALL' })}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  <span>{label}</span>
+                  {tabPending > 0 && (
+                    <span className="ml-1 inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
+                      {tabPending > 99 ? '99+' : tabPending}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
           <Link
             className="claim-list-office-link"

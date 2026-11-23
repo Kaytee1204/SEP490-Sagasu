@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertCircle, AlertTriangle, Check, Info, X } from 'lucide-react';
 
 const VARIANT_CONFIG = {
@@ -37,70 +38,104 @@ export default function ConfirmActionPopup({
   onConfirm,
   onClose,
 }) {
-  const dialogRef = useRef(null);
   const titleId = useId();
   const descId = useId();
 
   useEffect(() => {
-    const el = dialogRef.current;
-    if (!el) return;
-    if (open && !el.open) {
-      try {
-        el.showModal();
-      } catch {
-        // Fallback if already open
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !busy) {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose?.();
       }
-    } else if (!open && el.open) {
-      el.close();
-    }
-    return () => {
-      if (el.open) el.close();
     };
-  }, [open]);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [open, busy, onClose]);
 
   if (!open) return null;
 
   const cfg = VARIANT_CONFIG[variant] || VARIANT_CONFIG.warning;
   const IconComponent = cfg.Icon;
 
-  return (
-    <dialog
-      ref={dialogRef}
+  const handleClose = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!busy) {
+      onClose?.();
+    }
+  };
+
+  const handleConfirm = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!busy) {
+      onConfirm?.();
+    }
+  };
+
+  const modalNode = (
+    <div
+      role="dialog"
+      aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
-      onCancel={(e) => {
-        e.preventDefault();
-        if (!busy) onClose?.();
-      }}
       onClick={(e) => {
-        if (e.target === dialogRef.current && !busy) {
-          onClose?.();
+        if (e.target === e.currentTarget) {
+          handleClose(e);
         }
       }}
       style={{
-        margin: 'auto',
-        padding: 0,
-        border: 'none',
-        background: 'transparent',
-        maxWidth: '92vw',
-        width: '390px',
-        overflow: 'visible',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10050,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        backgroundColor: 'rgba(15, 23, 42, 0.48)',
+        backdropFilter: 'blur(2px)',
       }}
-      className="backdrop:bg-slate-900/45 backdrop:backdrop-blur-[2px]"
     >
       <div
-        className="relative w-full rounded-[22px] border border-slate-100 bg-white px-6 pb-6 pt-7 text-center shadow-[0_24px_60px_rgba(15,23,42,0.18)] font-sans"
-        style={{ backgroundColor: '#ffffff' }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-[390px] rounded-[22px] border border-slate-100 bg-white px-6 pb-6 pt-7 text-center shadow-[0_24px_60px_rgba(15,23,42,0.18)]"
+        style={{
+          backgroundColor: '#ffffff',
+          fontFamily: 'var(--font-body)',
+        }}
       >
-        {/* Top-right close X */}
+        {/* Top-right close X — isolated via Portal so parent modal CSS never breaks it */}
         <button
           type="button"
           disabled={busy}
-          onClick={() => !busy && onClose?.()}
+          onClick={handleClose}
           aria-label="Đóng"
-          className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 cursor-pointer"
+          style={{
+            position: 'absolute',
+            top: '14px',
+            right: '14px',
+            zIndex: 10,
+            width: '32px',
+            height: '32px',
+            padding: 0,
+            border: 'none',
+            borderRadius: '8px',
+            backgroundColor: 'transparent',
+            color: '#64748b',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: busy ? 'not-allowed' : 'pointer',
+          }}
+          className="transition-colors hover:!bg-slate-100 hover:!text-slate-800 disabled:opacity-50"
         >
-          <X size={18} />
+          <X size={18} strokeWidth={2.2} />
         </button>
 
         {/* Glowing circular icon badge */}
@@ -147,7 +182,7 @@ export default function ConfirmActionPopup({
           <button
             type="button"
             disabled={busy}
-            onClick={onConfirm}
+            onClick={handleConfirm}
             className="inline-flex items-center justify-center rounded-xl bg-[#111827] px-4 py-2.5 text-[14px] font-semibold text-white shadow-xs transition-all hover:bg-[#1f2937] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
           >
             {busy ? 'Đang xử lý…' : confirmLabel}
@@ -155,13 +190,15 @@ export default function ConfirmActionPopup({
           <button
             type="button"
             disabled={busy}
-            onClick={() => !busy && onClose?.()}
+            onClick={handleClose}
             className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
           >
             {cancelLabel}
           </button>
         </div>
       </div>
-    </dialog>
+    </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
 }
