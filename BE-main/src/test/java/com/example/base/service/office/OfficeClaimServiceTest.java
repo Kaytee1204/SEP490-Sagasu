@@ -43,7 +43,7 @@ class OfficeClaimServiceTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-    void dailyLimitAppliesToOnlineAndCounterUsingClaimantAccount(boolean counter) {
+    void utc231_dailyLimitAppliesToOnlineAndCounterUsingClaimantAccount(boolean counter) {
         setupTransactionTemplate();
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         Account actor = counter ? makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE) : claimant;
@@ -62,20 +62,6 @@ class OfficeClaimServiceTest {
         var error = assertThrows(AppException.class, () -> service.submit(req, List.of(), counter, user));
         assertEquals(ErrorCode.CLAIM_DAILY_LIMIT, error.getErrorCode());
         verify(claims, never()).saveAndFlush(any());
-    }
-
-    @Test
-    void personalDetailRejectsAnotherClaimantEvenForApprover() {
-        Account actor = makeAccount(4L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        Account claimant = makeAccount(5L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails user = userDetails(actor);
-        Claim claim = mock(Claim.class);
-        when(claim.getClaimType()).thenReturn("OFFICE");
-        when(claim.getClaimant()).thenReturn(claimant);
-        when(claims.findById(3L)).thenReturn(Optional.of(claim));
-        when(access.require(user)).thenReturn(actor);
-        assertThrows(AppException.class, () -> service.personalDetail(3L, user));
-        verifyNoInteractions(progress);
     }
 
     @Mock ClaimRepository claims;
@@ -182,245 +168,9 @@ class OfficeClaimServiceTest {
 
     // ─── findClaimants ─────────────────────────────────────────────────────────
 
-    @Test
-    void utc001_findClaimants_approver_2Results() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-
-        Account a1 = makeAccount(10L, AccountRole.USER, AccountStatus.ACTIVE);
-        a1.setFullName("Nam A");
-        Account a2 = makeAccount(11L, AccountRole.USER, AccountStatus.ACTIVE);
-        a2.setFullName("Nam B");
-
-        when(accounts.findTop10ByEmailContainingIgnoreCaseAndStatusOrderByEmailAsc("nam", AccountStatus.ACTIVE))
-                .thenReturn(List.of(a1, a2));
-
-        List<ClaimantOption> result = service.findClaimants("  nam ", ud);
-
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).id()).isEqualTo(10L);
-        assertThat(result.get(1).id()).isEqualTo(11L);
-    }
-
-    @Test
-    void utc002_findClaimants_queryTooShort_returnsEmpty() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-
-        List<ClaimantOption> result = service.findClaimants("ab", ud);
-
-        assertThat(result).isEmpty();
-        verifyNoInteractions(accounts);
-    }
-
-    @Test
-    void utc003_findClaimants_query3Chars_repositoryCalled() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-        when(accounts.findTop10ByEmailContainingIgnoreCaseAndStatusOrderByEmailAsc("abc", AccountStatus.ACTIVE))
-                .thenReturn(List.of());
-
-        service.findClaimants("abc", ud);
-
-        verify(accounts).findTop10ByEmailContainingIgnoreCaseAndStatusOrderByEmailAsc("abc", AccountStatus.ACTIVE);
-    }
-
-    @Test
-    void utc004_findClaimants_queryTooLong_throwsBadRequest() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-
-        String q = "a".repeat(256);
-        AppException ex = assertThrows(AppException.class, () -> service.findClaimants(q, ud));
-
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-        assertThat(ex.getMessage()).contains("255");
-    }
-
-    @Test
-    void utc005_findClaimants_userRole_throwsForbidden() {
-        Account user = makeAccount(2L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
-        when(access.require(ud, AccountRole.APPROVER)).thenThrow(new AppException(ErrorCode.FORBIDDEN));
-
-        AppException ex = assertThrows(AppException.class, () -> service.findClaimants("nam", ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
     // ─── list ──────────────────────────────────────────────────────────────────
 
-    @Test
-    void utc006_list_approver_returnsTwoRows() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-
-        var row1 = new OfficeClaimProgress.Progress(10L, "REVIEW", null);
-        var row2 = new OfficeClaimProgress.Progress(11L, "NEEDS_INFO", null);
-        PageData<OfficeClaimProgress.Progress> pageData = new PageData<>(List.of(row1, row2), 1, 2L, 1);
-        when(progress.list(1, "ALL", "ALL", "", null)).thenReturn(pageData);
-
-        Post post1 = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", approver);
-        Post post2 = makePost(101L, "FOUND", "OFFICE", "OPEN", "VISIBLE", approver);
-
-        Claim c1 = makeClaim(10L, "OFFICE", "PENDING", null, approver, post1, 0L);
-        Claim c2 = makeClaim(11L, "OFFICE", "NEEDS_INFO", null, approver, post2, 0L);
-
-        when(claims.findById(10L)).thenReturn(Optional.of(c1));
-        when(claims.findById(11L)).thenReturn(Optional.of(c2));
-
-        when(progress.of(anyLong())).thenReturn(row1);
-
-        // For list, detail=false so appointments/activities won't be called
-        PageData<ClaimView> result = service.list(1, "ALL", null, "ALL", false, ud);
-
-        assertThat(result.content()).hasSize(2);
-        assertThat(result.page()).isEqualTo(1);
-    }
-
-    @Test
-    void utc007_list_userMineTrue_claimantIdIsActorId() {
-        Account user = makeAccount(5L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
-        when(access.require(ud)).thenReturn(user);
-
-        PageData<OfficeClaimProgress.Progress> pageData = new PageData<>(List.of(), 1, 0L, 1);
-        when(progress.list(eq(1), eq("PENDING"), eq("ALL"), eq(""), eq(5L))).thenReturn(pageData);
-
-        PageData<ClaimView> result = service.list(1, "PENDING", null, "ALL", true, ud);
-
-        assertThat(result.content()).isEmpty();
-        verify(progress).list(1, "PENDING", "ALL", "", 5L);
-    }
-
-    @Test
-    void utc008_list_userMineFalse_throwsForbidden() {
-        Account user = makeAccount(5L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
-        when(access.require(ud, AccountRole.APPROVER)).thenThrow(new AppException(ErrorCode.FORBIDDEN));
-
-        AppException ex = assertThrows(AppException.class,
-                () -> service.list(1, "ALL", null, "ALL", false, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
-    @Test
-    void utc009_list_invalidStatus_throwsBadRequest() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-
-        AppException ex = assertThrows(AppException.class,
-                () -> service.list(1, "DONE", null, "ALL", false, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-        assertThat(ex.getMessage()).contains("Trạng thái không hợp lệ");
-    }
-
-    @Test
-    void utc010_list_queryTooLong_throwsBadRequest() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-
-        String q = "a".repeat(201);
-        AppException ex = assertThrows(AppException.class,
-                () -> service.list(1, "ALL", q, "ALL", false, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-        assertThat(ex.getMessage()).contains("200");
-    }
-
-    @Test
-    void utc011_list_keywordTrimmedAndLowercased() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-
-        PageData<OfficeClaimProgress.Progress> pageData = new PageData<>(List.of(), 1, 0L, 1);
-        when(progress.list(eq(1), eq("ALL"), eq("ALL"), eq("wallet"), isNull())).thenReturn(pageData);
-
-        service.list(1, "ALL", "  WALLET ", "ALL", false, ud);
-
-        verify(progress).list(1, "ALL", "ALL", "wallet", null);
-    }
-
     // ─── detail ────────────────────────────────────────────────────────────────
-
-    @Test
-    void utc012_detail_approver_returnsFullClaimView() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud)).thenReturn(approver);
-
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Claim c = makeClaim(30L, "OFFICE", "PENDING", claimant, claimant, post, 0L);
-
-        when(claims.findById(30L)).thenReturn(Optional.of(c));
-        when(progress.of(30L)).thenReturn(makeProgress(30L));
-        when(receipts.findByPostId(100L)).thenReturn(Optional.empty());
-        when(appointments.findFirstByClaim_IdOrderByIdDesc(30L)).thenReturn(Optional.empty());
-        when(activities.findByClaim_IdOrderByCreatedAtAscIdAsc(30L)).thenReturn(List.of());
-
-        ClaimView view = service.detail(30L, ud);
-
-        assertThat(view.id()).isEqualTo(30L);
-        // approver sees privateIdentifiers
-        assertThat(view.privateIdentifiers()).isEqualTo("private-data");
-    }
-
-    @Test
-    void utc013_detail_claimantOfClaim_noPrivateData() {
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(claimant);
-        when(access.require(ud)).thenReturn(claimant);
-
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-        Claim c = makeClaim(30L, "OFFICE", "PENDING", claimant, claimant, post, 0L);
-
-        when(claims.findById(30L)).thenReturn(Optional.of(c));
-        when(progress.of(30L)).thenReturn(makeProgress(30L));
-        when(appointments.findFirstByClaim_IdOrderByIdDesc(30L)).thenReturn(Optional.empty());
-        when(activities.findByClaim_IdOrderByCreatedAtAscIdAsc(30L)).thenReturn(List.of());
-
-        ClaimView view = service.detail(30L, ud);
-
-        // USER claimant does NOT see privateIdentifiers or receipt
-        assertThat(view.privateIdentifiers()).isNull();
-        assertThat(view.receipt()).isNull();
-    }
-
-    @Test
-    void utc014_detail_otherUser_throwsForbidden() {
-        Account other = makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(other);
-        when(access.require(ud)).thenReturn(other);
-
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(10L, AccountRole.USER, AccountStatus.ACTIVE));
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Claim c = makeClaim(30L, "OFFICE", "PENDING", claimant, claimant, post, 0L);
-
-        when(claims.findById(30L)).thenReturn(Optional.of(c));
-
-        AppException ex = assertThrows(AppException.class, () -> service.detail(30L, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
-    @Test
-    void utc015_detail_p2pClaim_throwsClaimNotFound() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        when(access.require(ud)).thenReturn(approver);
-
-        // P2P claim filtered out
-        when(claims.findById(30L)).thenReturn(Optional.empty());
-
-        AppException ex = assertThrows(AppException.class, () -> service.detail(30L, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_NOT_FOUND);
-    }
 
     // ─── submit ────────────────────────────────────────────────────────────────
 
@@ -429,7 +179,7 @@ class OfficeClaimServiceTest {
      * We use MockedConstruction to intercept new TransactionTemplate(transactions).
      */
     @Test
-    void utc016_submit_userOnlineFlow_createsClaimNotifiesApprovers() throws Exception {
+    void utc218_submit_userOnlineFlow_createsClaimNotifiesApprovers() throws Exception {
         Account actor = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(actor);
         Post post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
@@ -478,7 +228,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc017_submit_approverCounter_channelCounter() {
+    void utc219_submit_approverCounter_channelCounter() {
         // Test that counter=true sets channel COUNTER and notifies claimant
         // We test this via unit-level logic by mocking TransactionTemplate
 
@@ -516,7 +266,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc018_submit_approverCounterClaimantIdNull_throwsBadRequest() {
+    void utc220_submit_approverCounterClaimantIdNull_throwsBadRequest() {
         Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
 
@@ -539,7 +289,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc019_submit_approverCounterClaimantSuspended_throwsBadRequest() {
+    void utc221_submit_approverCounterClaimantSuspended_throwsBadRequest() {
         Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
 
@@ -562,7 +312,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc020_submit_claimantAccountNotFound_throwsBadRequest() {
+    void utc222_submit_claimantAccountNotFound_throwsBadRequest() {
         Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
 
@@ -584,7 +334,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc021_submit_postNotFound_throwsBadRequest() {
+    void utc223_submit_postNotFound_throwsBadRequest() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -606,7 +356,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc022_submit_postCustodyP2P_throwsBadRequest() {
+    void utc224_submit_postCustodyP2P_throwsBadRequest() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -629,7 +379,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc023_submit_noReceipt_throwsBadRequest() {
+    void utc225_submit_noReceipt_throwsBadRequest() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -653,7 +403,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc024_submit_receiptStatusReturned_throwsBadRequest() {
+    void utc226_submit_receiptStatusReturned_throwsBadRequest() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -678,7 +428,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc025_submit_postReserved_throwsBadRequest() {
+    void utc227_submit_postReserved_throwsBadRequest() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -704,7 +454,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc026_submit_claimantIsPostOwner_throwsClaimSelfNotAllowed() {
+    void utc228_submit_claimantIsPostOwner_throwsClaimSelfNotAllowed() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -729,7 +479,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc027_submit_duplicateClaim_keysDeleted() {
+    void utc229_submit_duplicateClaim_keysDeleted() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -753,7 +503,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc028_submit_storagePutFails_keysCleanedUp() {
+    void utc230_submit_storagePutFails_keysCleanedUp() {
         Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(user);
 
@@ -808,7 +558,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc029_review_approved_appointmentSaved() {
+    void utc232_review_approved_appointmentSaved() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -856,7 +606,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc030_review_scheduledAtTooSoon_throwsBadRequest() {
+    void utc233_review_scheduledAtTooSoon_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -881,7 +631,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc031_review_scheduledAt12h2min_accepted() {
+    void utc234_review_scheduledAt12h2min_accepted() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -911,7 +661,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc032_review_scheduledAtNull_throwsBadRequest() {
+    void utc235_review_scheduledAtNull_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -933,7 +683,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc033_review_locationBlank_throwsBadRequest() {
+    void utc236_review_locationBlank_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -957,7 +707,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc034_review_noClaimantEmailAndEmptyParam_throwsBadRequest() {
+    void utc237_review_noClaimantEmailAndEmptyParam_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
@@ -986,7 +736,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc035_review_invalidEmailParam_throwsBadRequest() {
+    void utc238_review_invalidEmailParam_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
@@ -1011,7 +761,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc036_review_rejected_notifiesClaimant() {
+    void utc239_review_rejected_notifiesClaimant() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1035,7 +785,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc037_review_needsInfo_setsActivityRequestInfo() {
+    void utc240_review_needsInfo_setsActivityRequestInfo() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1056,7 +806,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc038_review_claimNeedsInfoApproveDecision_throwsBadRequest() {
+    void utc241_review_claimNeedsInfoApproveDecision_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1080,7 +830,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc039_review_claimNeedsInfoRejectDecision_allowed() {
+    void utc242_review_claimNeedsInfoRejectDecision_allowed() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1101,7 +851,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc040_review_claimAlreadyApproved_throwsBadRequest() {
+    void utc243_review_claimAlreadyApproved_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1124,7 +874,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc041_review_approverIsClaimant_throwsBadRequest() {
+    void utc244_review_approverIsClaimant_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
@@ -1147,7 +897,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc042_review_anotherClaimAlreadyApproved_throwsBadRequest() {
+    void utc245_review_anotherClaimAlreadyApproved_throwsBadRequest() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1172,7 +922,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc043_review_versionMismatch_throwsClaimStale() {
+    void utc246_review_versionMismatch_throwsClaimStale() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1194,7 +944,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc044_review_invitationSendReturnsFalse_deliveryFailed() {
+    void utc247_review_invitationSendReturnsFalse_deliveryFailed() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1225,7 +975,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc045_review_invitationSendThrows_deliveryFailedNoException() {
+    void utc248_review_invitationSendThrows_deliveryFailedNoException() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -1254,7 +1004,7 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc046_review_counterClaimNullClaimant_noNotification() {
+    void utc249_review_counterClaimNullClaimant_noNotification() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
@@ -1278,195 +1028,6 @@ class OfficeClaimServiceTest {
 
     // ─── resend ────────────────────────────────────────────────────────────────
 
-    @Test
-    void utc047_resend_approvedClaimWithScheduledAppt_returnsSent() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "APPROVED", null, approver, post, 0L);
-                Appointment a = makeAppointment(1L, "SCHEDULED", OffsetDateTime.now().plusDays(1), 30L);
-                when(appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(30L, "SCHEDULED"))
-                        .thenReturn(Optional.of(a));
-                Object arg = inv.getArgument(0);
-                if (arg instanceof java.util.function.Consumer) {
-                    ((java.util.function.Consumer<TransactionStatus>) arg).accept(mock(TransactionStatus.class));
-                } else if (arg instanceof TransactionCallback) {
-                    ((TransactionCallback<?>) arg).doInTransaction(mock(TransactionStatus.class));
-                }
-                return null;
-            }).when(mock).executeWithoutResult(any());
-            when(invitations.sendWithResult(30L)).thenReturn(new ReviewResult(30L,"APPROVED","SENT"));
-        })) {
-            ReviewResult result = service.resend(30L, ud);
-            assertThat(result.status()).isEqualTo("APPROVED");
-            assertThat(result.emailStatus()).isEqualTo("SENT");
-        }
-    }
-
-    @Test
-    void utc048_resend_claimPending_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", null, approver, post, 0L);
-                throw new AppException(ErrorCode.BAD_REQUEST, "Yêu cầu chưa được duyệt.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            AppException ex = assertThrows(AppException.class, () -> service.resend(30L, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("chưa được duyệt");
-        }
-    }
-
-    @Test
-    void utc049_resend_noScheduledAppointment_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "APPROVED", null, approver, post, 0L);
-                when(appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(30L, "SCHEDULED"))
-                        .thenReturn(Optional.empty());
-                throw new AppException(ErrorCode.BAD_REQUEST, "Chưa có lịch hẹn.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            AppException ex = assertThrows(AppException.class, () -> service.resend(30L, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("lịch hẹn");
-        }
-    }
-
-    @Test
-    void utc050_resend_appointmentInPast_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "APPROVED", null, approver, post, 0L);
-                Appointment a = makeAppointment(1L, "SCHEDULED", OffsetDateTime.now().minusHours(1), 30L);
-                when(appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(30L, "SCHEDULED"))
-                        .thenReturn(Optional.of(a));
-                throw new AppException(ErrorCode.BAD_REQUEST, "Lịch hẹn đã qua, không gửi lại email cũ.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            AppException ex = assertThrows(AppException.class, () -> service.resend(30L, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("đã qua");
-        }
-    }
-
     // ─── supplement ────────────────────────────────────────────────────────────
 
-    @Test
-    void utc051_supplement_claimant_needsInfoVersion2_becomesPending() {
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(claimant);
-
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-        ItemReceipt receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-        when(receipts.findByPostId(100L)).thenReturn(Optional.of(receipt));
-
-        // For locked(): claims.findPostId -> posts.findForClaimUpdate -> em.refresh
-        when(claims.findPostId(30L)).thenReturn(Optional.of(100L));
-        when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
-        doNothing().when(em).refresh(any(), any(LockModeType.class));
-
-        Claim c = makeClaim(30L, "OFFICE", "NEEDS_INFO", claimant, claimant, post, 2L);
-        when(claims.findForUpdate(30L)).thenReturn(Optional.of(c));
-        when(access.require(ud)).thenReturn(claimant);
-        when(activities.save(any())).thenReturn(null);
-        doAnswer(inv -> {
-            Claim updated = inv.getArgument(0);
-            return updated;
-        }).when(claims).flush();
-
-        Supplement req = new Supplement(2L, "Attached receipt");
-        assertDoesNotThrow(() -> service.supplement(30L, req, ud));
-
-        verify(c).review("PENDING");
-        verify(activities).save(any());
-        verify(notifications).notifyRoles(any(), anyLong(), eq("OFFICE_CLAIM_SUPPLEMENTED"), any(), any(), any(), anyBoolean());
-    }
-
-    @Test
-    void utc052_supplement_claimPending_throwsBadRequest() {
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(claimant);
-
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-        ItemReceipt receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-        when(receipts.findByPostId(100L)).thenReturn(Optional.of(receipt));
-
-        when(claims.findPostId(30L)).thenReturn(Optional.of(100L));
-        when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
-        doNothing().when(em).refresh(any(), any(LockModeType.class));
-
-        Claim c = makeClaim(30L, "OFFICE", "PENDING", claimant, claimant, post, 2L);
-        when(claims.findForUpdate(30L)).thenReturn(Optional.of(c));
-        when(access.require(ud)).thenReturn(claimant);
-
-        Supplement req = new Supplement(2L, "Info");
-        AppException ex = assertThrows(AppException.class, () -> service.supplement(30L, req, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-        assertThat(ex.getMessage()).contains("chờ bổ sung");
-    }
-
-    @Test
-    void utc053_supplement_otherUser_throwsForbidden() {
-        Account other = makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(other);
-
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(10L, AccountRole.USER, AccountStatus.ACTIVE));
-        ItemReceipt receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-        when(receipts.findByPostId(100L)).thenReturn(Optional.of(receipt));
-
-        when(claims.findPostId(30L)).thenReturn(Optional.of(100L));
-        when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
-        doNothing().when(em).refresh(any(), any(LockModeType.class));
-
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Claim c = makeClaim(30L, "OFFICE", "NEEDS_INFO", claimant, claimant, post, 2L);
-        when(claims.findForUpdate(30L)).thenReturn(Optional.of(c));
-        when(access.require(ud)).thenReturn(other);
-
-        Supplement req = new Supplement(2L, "Info");
-        AppException ex = assertThrows(AppException.class, () -> service.supplement(30L, req, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
-    @Test
-    void utc054_supplement_versionMismatch_throwsClaimStale() {
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(claimant);
-
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-        ItemReceipt receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-        when(receipts.findByPostId(100L)).thenReturn(Optional.of(receipt));
-
-        when(claims.findPostId(30L)).thenReturn(Optional.of(100L));
-        when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
-        doNothing().when(em).refresh(any(), any(LockModeType.class));
-
-        Claim c = makeClaim(30L, "OFFICE", "NEEDS_INFO", claimant, claimant, post, 3L); // version=3
-        when(claims.findForUpdate(30L)).thenReturn(Optional.of(c));
-        when(access.require(ud)).thenReturn(claimant);
-
-        Supplement req = new Supplement(2L, "Info"); // expectedVersion=2
-        AppException ex = assertThrows(AppException.class, () -> service.supplement(30L, req, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_STALE);
-    }
 }

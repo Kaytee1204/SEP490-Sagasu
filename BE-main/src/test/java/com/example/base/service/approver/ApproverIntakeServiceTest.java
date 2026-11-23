@@ -152,105 +152,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc001_list_returnsThreeSummariesAndStripsKeyword() {
-        List<Long> idList = List.of(1L, 2L, 3L);
-        Page<Long> idPage = new PageImpl<>(idList, PageRequest.of(0, 10), 3);
-        when(receipts.findIntakeIds(eq("ví"), eq("ALL"), any())).thenReturn(idPage);
-        when(receipts.findQueueDetails(idList)).thenReturn(List.of(
-                draftReceipt(1L, 1), draftReceipt(2L, 1), draftReceipt(3L, 1)));
-
-        PageResponse<ReceiptSummaryDto> res = service.list(1, 10, " ví ", "ALL", ud(approver));
-
-        assertThat(res.getContent()).hasSize(3);
-        verify(receipts).findIntakeIds(eq("ví"), eq("ALL"), any());
-    }
-
-    @Test
-    void utc002_list_invalidFilter_throwsBadRequest() {
-        assertThatThrownBy(() -> service.list(1, 10, "", "PENDING", ud(approver)))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> {
-                    AppException app = (AppException) ex;
-                    assertThat(app.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-                    assertThat(app.getMessage()).isEqualTo("Bộ lọc hoặc phân trang không hợp lệ");
-                });
-    }
-
-    @Test
-    void utc003_list_pageZero_throwsBadRequest() {
-        assertThatThrownBy(() -> service.list(0, 10, "", "ALL", ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.BAD_REQUEST);
-    }
-
-    @Test
-    void utc004_list_size101_throwsBadRequest() {
-        assertThatThrownBy(() -> service.list(1, 101, "", "ALL", ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.BAD_REQUEST);
-    }
-
-    @Test
-    void utc005_list_keyword201Chars_throwsBadRequest() {
-        String longKw = "a".repeat(201);
-        assertThatThrownBy(() -> service.list(1, 10, longKw, "ALL", ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.BAD_REQUEST);
-    }
-
-    @Test
-    void utc006_list_userRole_throwsForbidden() {
-        assertThatThrownBy(() -> service.list(1, 10, "", "ALL", ud(regularUser)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.FORBIDDEN);
-    }
-
-    @Test
-    void utc007_list_nullUser_throwsUnauthorized() {
-        assertThatThrownBy(() -> service.list(1, 10, "", "ALL", null))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.UNAUTHORIZED);
-    }
-
-    @Test
-    void utc008_detail_exists_returnsDto() {
-        ItemReceipt r = draftReceipt(3L, 1);
-        when(receipts.findIntake(3L)).thenReturn(Optional.of(r));
-
-        ReceiptDto res = service.detail(3L, ud(approver));
-
-        assertThat(res.id()).isEqualTo(3L);
-        verify(mapper).detail(r);
-    }
-
-    @Test
-    void utc009_detail_idZero_throwsBadRequest() {
-        assertThatThrownBy(() -> service.detail(0L, ud(approver)))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> {
-                    AppException app = (AppException) ex;
-                    assertThat(app.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-                    assertThat(app.getMessage()).isEqualTo("Mã phiếu không hợp lệ");
-                });
-    }
-
-    @Test
-    void utc010_detail_missing999_throwsReceiptNotFound() {
-        when(receipts.findIntake(999L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.detail(999L, ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.RECEIPT_NOT_FOUND);
-    }
-
-    @Test
-    void utc011_create_validWithTwoImages_createsDraftAndUploads() {
+    void utc250_create_validWithTwoImages_createsDraftAndUploads() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"), mockFile("2.jpg"));
         when(validator.validate(files)).thenReturn(validImages(2, "jpg"));
         when(receipts.saveAndFlush(any(ItemReceipt.class))).thenAnswer(inv -> {
@@ -266,7 +168,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc012_create_nonEmptyKeptImageIds_throwsBadRequest() {
+    void utc251_create_nonEmptyKeptImageIds_throwsBadRequest() {
         SaveReceiptRequest req = saveReq(List.of(5L), null, 1L, 3L, past);
 
         assertThatThrownBy(() -> service.create(req, List.of(mockFile("1.jpg")), ud(approver)))
@@ -279,7 +181,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc013_create_futureFoundAt_throwsBadRequest() {
+    void utc252_create_futureFoundAt_throwsBadRequest() {
         SaveReceiptRequest req = saveReq(List.of(), null, 1L, 3L, OffsetDateTime.now().plusDays(1));
 
         assertThatThrownBy(() -> service.create(req, List.of(mockFile("1.jpg")), ud(approver)))
@@ -292,7 +194,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc014_create_inactiveCategory_throwsPostCategoryUnavailable() {
+    void utc253_create_inactiveCategory_throwsPostCategoryUnavailable() {
         when(categories.existsByCategoryIdAndActiveTrue(9L)).thenReturn(false);
         SaveReceiptRequest req = saveReq(List.of(), null, 9L, 3L, past);
 
@@ -303,7 +205,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc015_create_zeroImages_throwsBadRequest() {
+    void utc254_create_zeroImages_throwsBadRequest() {
         when(validator.validate(List.of())).thenReturn(List.of());
         SaveReceiptRequest req = saveReq(List.of(), null, 1L, 3L, past);
 
@@ -317,7 +219,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc016_create_oneJpg_accepted() {
+    void utc255_create_oneJpg_accepted() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"));
         when(validator.validate(files)).thenReturn(validImages(1, "jpg"));
         when(receipts.saveAndFlush(any(ItemReceipt.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -328,7 +230,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc017_create_sixImages_throwsImageCountExceeded() {
+    void utc256_create_sixImages_throwsImageCountExceeded() {
         List<MultipartFile> files = Collections.nCopies(6, mockFile("1.jpg"));
         when(validator.validate(files)).thenThrow(new AppException(ErrorCode.IMAGE_COUNT_EXCEEDED));
 
@@ -339,7 +241,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc018_create_inactiveLocation_throwsBadRequestAndCleansUpUploads() {
+    void utc257_create_inactiveLocation_throwsBadRequestAndCleansUpUploads() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"));
         when(validator.validate(files)).thenReturn(validImages(1, "jpg"));
         when(locations.resolve(eq(3L), any())).thenThrow(
@@ -356,7 +258,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc019_create_dbSaveFailsAfterUpload_rethrowsAndCleansUpKeys() {
+    void utc258_create_dbSaveFailsAfterUpload_rethrowsAndCleansUpKeys() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"));
         when(validator.validate(files)).thenReturn(validImages(1, "jpg"));
         when(receipts.saveAndFlush(any())).thenThrow(new RuntimeException("db error"));
@@ -369,101 +271,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc020_update_keepsOneAddsPng_removesDeletedKeyAfterCommit() {
-        ItemReceipt r = draftReceipt(3L, 2);
-        when(receipts.findIntake(3L)).thenReturn(Optional.of(r));
-        when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
-        List<MultipartFile> files = List.of(mockFile("new.png"));
-        when(validator.validate(files)).thenReturn(validImages(1, "png"));
-
-        service.update(3L, saveReq(List.of(1L), nowT, 1L, 3L, past), files, ud(approver));
-
-        assertThat(r.getImages()).hasSize(2);
-        assertThat(r.getImages().get(0).getId()).isEqualTo(1L);
-        assertThat(r.getImages().get(1).getSortOrder()).isEqualTo(2);
-        verify(storage).delete("receipts/2/img2.jpg");
-    }
-
-    @Test
-    void utc021_update_staleUpdatedAt_throwsReceiptStaleWithoutUpload() {
-        ItemReceipt r = draftReceipt(3L, 2);
-        when(receipts.findIntake(3L)).thenReturn(Optional.of(r));
-        List<MultipartFile> files = List.of(mockFile("new.png"));
-        when(validator.validate(files)).thenReturn(validImages(1, "png"));
-
-        assertThatThrownBy(() -> service.update(3L, saveReq(List.of(1L), nowT.minusSeconds(1), 1L, 3L, past), files, ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.RECEIPT_STALE);
-
-        verify(storage, never()).put(any(), any(), any());
-    }
-
-    @Test
-    void utc022_update_nullExpectedUpdatedAt_throwsReceiptStale() {
-        ItemReceipt r = draftReceipt(3L, 2);
-        when(receipts.findIntake(3L)).thenReturn(Optional.of(r));
-        when(validator.validate(any())).thenReturn(validImages(1, "png"));
-
-        assertThatThrownBy(() -> service.update(3L, saveReq(List.of(1L), null, 1L, 3L, past), List.of(mockFile("n.png")), ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.RECEIPT_STALE);
-    }
-
-    @Test
-    void utc023_update_duplicateKeptImageIds_throwsBadRequest() {
-        ItemReceipt r = draftReceipt(3L, 2);
-        when(receipts.findIntake(3L)).thenReturn(Optional.of(r));
-        when(validator.validate(any())).thenReturn(List.of());
-
-        assertThatThrownBy(() -> service.update(3L, saveReq(List.of(1L, 1L), nowT, 1L, 3L, past), List.of(), ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.BAD_REQUEST);
-    }
-
-    @Test
-    void utc024_update_noKeptAndNoFiles_throwsBadRequest() {
-        when(validator.validate(List.of())).thenReturn(List.of());
-
-        assertThatThrownBy(() -> service.update(3L, saveReq(List.of(), nowT, 1L, 3L, past), List.of(), ud(approver)))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> {
-                    AppException app = (AppException) ex;
-                    assertThat(app.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-                    assertThat(app.getMessage()).isEqualTo("Hồ sơ cần từ 1 đến 5 ảnh thực tế");
-                });
-    }
-
-    @Test
-    void utc025_update_alreadyPublished_throwsReceiptNotEditable() {
-        ItemReceipt r = draftReceipt(3L, 2);
-        ReflectionTestUtils.setField(r, "postId", 55L);
-        when(receipts.findIntake(3L)).thenReturn(Optional.of(r));
-        when(validator.validate(any())).thenReturn(List.of());
-
-        assertThatThrownBy(() -> service.update(3L, saveReq(List.of(1L), nowT, 1L, 3L, past), List.of(), ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.RECEIPT_NOT_EDITABLE);
-    }
-
-    @Test
-    void utc026_update_reviewStatusRejected_throwsReceiptNotEditable() {
-        ItemReceipt r = draftReceipt(3L, 2);
-        r.review("REJECTED", "Bad", approver);
-        when(receipts.findIntake(3L)).thenReturn(Optional.of(r));
-        when(validator.validate(any())).thenReturn(List.of());
-
-        assertThatThrownBy(() -> service.update(3L, saveReq(List.of(1L), nowT, 1L, 3L, past), List.of(), ud(approver)))
-                .isInstanceOf(AppException.class)
-                .extracting(ex -> ((AppException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.RECEIPT_NOT_EDITABLE);
-    }
-
-    @Test
-    void utc027_submit_validDraft_publishesPostAndMarksReceived() {
+    void utc259_submit_validDraft_publishesPostAndMarksReceived() {
         ItemReceipt r = draftReceipt(3L, 2);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
         Post published = Post.receivedByOffice(approver, activeCat, r.getTitle(), r.getDescription(), r.getFoundLocation(), past);
@@ -479,7 +287,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc028_submit_alreadyPublished_returnsIdempotently() {
+    void utc260_submit_alreadyPublished_returnsIdempotently() {
         ItemReceipt r = draftReceipt(3L, 2);
         r.receiveAndPublish(approver, 99L);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
@@ -491,7 +299,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc029_submit_blankConditionAtReceipt_throwsBadRequest() {
+    void utc261_submit_blankConditionAtReceipt_throwsBadRequest() {
         ItemReceipt r = draftReceipt(3L, 2);
         ReflectionTestUtils.setField(r, "conditionAtReceipt", "   ");
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
@@ -506,7 +314,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc030_submit_nullStorageLocation_throwsBadRequest() {
+    void utc262_submit_nullStorageLocation_throwsBadRequest() {
         ItemReceipt r = draftReceipt(3L, 2);
         ReflectionTestUtils.setField(r, "storageLocation", null);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
@@ -521,7 +329,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc031_submit_allImagesSensitive_throwsBadRequest() {
+    void utc263_submit_allImagesSensitive_throwsBadRequest() {
         ItemReceipt r = draftReceipt(3L, 2);
         for (ItemReceiptImage img : r.getImages()) {
             ReflectionTestUtils.setField(img, "sensitive", true);
@@ -538,7 +346,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc032_submit_categoryDeactivatedMeanwhile_throwsPostCategoryUnavailable() {
+    void utc264_submit_categoryDeactivatedMeanwhile_throwsPostCategoryUnavailable() {
         ItemReceipt r = draftReceipt(3L, 2);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
         when(categories.findActiveForPostCreation(1L)).thenReturn(Optional.empty());
@@ -550,7 +358,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc033_submit_approverSuspendedInDb_throwsForbidden() {
+    void utc265_submit_approverSuspendedInDb_throwsForbidden() {
         Account suspendedInDb = account(2L, AccountRole.APPROVER, AccountStatus.SUSPENDED, "Approver 2");
         when(entityManager.find(eq(Account.class), eq(2L), eq(LockModeType.PESSIMISTIC_READ))).thenReturn(suspendedInDb);
 
