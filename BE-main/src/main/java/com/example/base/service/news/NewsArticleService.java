@@ -25,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -97,6 +98,10 @@ public class NewsArticleService {
         Account author = requireStaff(user);
         ValidatedFields fields = validateRequest(request);
 
+        if (repository.existsDuplicateTitle(fields.title())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Tiêu đề bài tin tức đã tồn tại. Vui lòng chọn tiêu đề khác.");
+        }
+
         NewsArticle article = new NewsArticle();
         article.setTitle(fields.title());
         article.setSummary(fields.summary());
@@ -124,11 +129,17 @@ public class NewsArticleService {
 
     @Transactional
     public NewsArticleDto update(Long id, NewsArticleRequest request, MultipartFile coverImage, CustomUserDetails user) {
-        requireStaff(user);
+        Account currentAccount = requireStaff(user);
         ValidatedFields fields = validateRequest(request);
 
         NewsArticle article = repository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy bài tin tức."));
+
+        requireCanModifyArticle(currentAccount, article, "chỉnh sửa");
+
+        if (repository.existsDuplicateTitleExcludingId(fields.title(), id)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Tiêu đề bài tin tức đã tồn tại. Vui lòng chọn tiêu đề khác.");
+        }
 
         article.setTitle(fields.title());
         article.setSummary(fields.summary());
@@ -165,13 +176,30 @@ public class NewsArticleService {
 
     @Transactional
     public void delete(Long id, CustomUserDetails user) {
-        requireStaff(user);
+        Account currentAccount = requireStaff(user);
         NewsArticle article = repository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy bài tin tức."));
+        requireCanModifyArticle(currentAccount, article, "xóa");
         String oldKey = article.getCoverImageKey();
         repository.delete(article);
         if (oldKey != null) {
             safeDeleteKey(oldKey);
+        }
+    }
+
+    private void requireCanModifyArticle(Account currentAccount, NewsArticle article, String actionLabel) {
+        // Manager có toàn quyền xem, sửa, xóa mọi bài tin tức
+        if (currentAccount.getRole() == AccountRole.MANAGER) {
+            return;
+        }
+        // Các tài khoản khác chỉ được sửa/xóa bài do chính mình đăng
+        boolean isAuthor = article.getAuthor() != null
+                && Objects.equals(article.getAuthor().getId(), currentAccount.getId());
+        if (!isAuthor) {
+            throw new AppException(
+                    ErrorCode.FORBIDDEN,
+                    "Chỉ người đăng bài viết hoặc Manager mới có quyền " + actionLabel + " bài tin tức này."
+            );
         }
     }
 

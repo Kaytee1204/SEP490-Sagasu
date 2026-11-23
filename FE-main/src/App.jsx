@@ -192,6 +192,7 @@ function AppRoutes() {
         <Route path="reports/khang-cao" element={<ProtectedRoute managerOnly><AdminReportsPage kind="CLAIM_APPEAL" /></ProtectedRoute>} />
         <Route path="reports/:id" element={<ProtectedRoute managerOnly><ReportReviewDetailPage /></ProtectedRoute>} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
+        <Route path="news" element={<ProtectedRoute managerOnly><ApproverNewsPage /></ProtectedRoute>} />
       </Route>
 
       

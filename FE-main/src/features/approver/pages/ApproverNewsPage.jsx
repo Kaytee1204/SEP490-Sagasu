@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import Pagination from '@/components/common/Pagination';
 import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
+import CharCountHint from '@/components/common/CharCountHint';
+import { useAuth } from '@/context/AuthContext';
 import { newsApi } from '@/features/news/api/newsApi';
 import {
   NEWS_CATEGORIES,
@@ -44,6 +46,12 @@ const EMPTY_FORM = {
 };
 
 export default function ApproverNewsPage() {
+  const { user, isManager } = useAuth();
+  const canModifyArticle = (article) => {
+    if (isManager) return true;
+    if (!user?.id || !article?.authorId) return false;
+    return String(user.id) === String(article.authorId);
+  };
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -479,22 +487,26 @@ export default function ApproverNewsPage() {
                       >
                         <Eye size={16} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(article)}
-                        title="Chỉnh sửa"
-                        className="rounded-lg p-2 text-[#5c7466] hover:bg-[#eef4f0] hover:text-[#1c6b4d]"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget(article)}
-                        title="Xóa bài"
-                        className="rounded-lg p-2 text-[#5c7466] hover:bg-rose-50 hover:text-rose-600"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {canModifyArticle(article) && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(article)}
+                            title="Chỉnh sửa"
+                            className="rounded-lg p-2 text-[#5c7466] hover:bg-[#eef4f0] hover:text-[#1c6b4d]"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(article)}
+                            title="Xóa bài"
+                            className="rounded-lg p-2 text-[#5c7466] hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </article>
                 );
@@ -567,6 +579,7 @@ export default function ApproverNewsPage() {
                   placeholder="VD: Nâng cấp tính năng AI so khớp đồ thất lạc"
                   className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
                 />
+                <CharCountHint value={form.title} max={200} />
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -614,6 +627,7 @@ export default function ApproverNewsPage() {
                   placeholder="Mô tả ngắn gọn nội dung chính hiển thị trên thẻ bài viết…"
                   className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
                 />
+                <CharCountHint value={form.summary} max={500} />
               </div>
 
               <div>
@@ -623,11 +637,13 @@ export default function ApproverNewsPage() {
                 <textarea
                   id="news-content"
                   rows={6}
+                  maxLength={10000}
                   value={form.content}
                   onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
                   placeholder="Nhập nội dung đầy đủ của bài viết. Bạn có thể xuống dòng để chia đoạn rõ ràng…"
                   className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm leading-6 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
                 />
+                <CharCountHint value={form.content} max={10000} />
               </div>
 
               <div>
