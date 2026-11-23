@@ -91,6 +91,12 @@ public class ReportReviewService {
   @Transactional(readOnly = true)
   public Map<String,Object> list(int page, String status, String kind, String target, String q,
       String queue, Long targetId, String assignee, CustomUserDetails user) {
+    return list(page, status, kind, target, q, queue, targetId, assignee, null, user);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String,Object> list(int page, String status, String kind, String target, String q,
+      String queue, Long targetId, String assignee, Long approvalId, CustomUserDetails user) {
     Account actor = access.require(user, AccountRole.MANAGER);
     if (!Set.of("ALL","READY","UNASSIGNED","MINE","WAITING","REPLIED","HISTORY").contains(queue))
       throw bad("Hàng đợi không hợp lệ.");
@@ -105,6 +111,9 @@ public class ReportReviewService {
       !Set.of("ALL", "UNASSIGNED", "MINE").contains(assignee) ||
       q.length() > 200
     ) throw bad("Bộ lọc không hợp lệ.");
+    if (approvalId != null && (approvalId <= 0 || targetId != null || !"CLAIM_APPEAL".equals(kind)))
+      throw bad("Bộ lọc lần duyệt không hợp lệ.");
+    boolean expandedGroup = targetId != null || approvalId != null;
     // Compiling the priority expressions can take longer than reading the report queue itself.
     jdbc.execute("set local jit = off");
     Instant now = Instant.now();
@@ -126,7 +135,7 @@ public class ReportReviewService {
     var args = new ArrayList<Object>(List.of(shift.end().atOffset(ZoneOffset.UTC), kind, kind));
     String query = q.strip();
     var reference = REPORT_REFERENCE.matcher(query);
-    boolean lookupById = targetId == null && reference.matches();
+    boolean lookupById = !expandedGroup && reference.matches();
     List<Long> selectionArgs = lookupById ? List.of(parseReportId(reference.group(1))) : List.of();
     String selection = lookupById ? "r.report_id=?" : switch (queue) {
       case "READY", "WAITING", "HISTORY" -> "queue_state.work_state='" + queue + "'";
@@ -162,6 +171,10 @@ public class ReportReviewService {
       where += " and r." + column + "=?";
       args.add(targetId);
     }
+    if (approvalId != null) {
+      where += " and appeal.approval_id=? and approval.custody_mode='OFFICE'";
+      args.add(approvalId);
+    }
     String objectKey = """
         case when appeal.report_id is not null and approval.custody_mode='OFFICE' then 'OFFICE_APPEAL:'||appeal.approval_id
           when appeal.report_id is not null then 'APPEAL:'||r.report_id
@@ -188,14 +201,14 @@ public class ReportReviewService {
         ) classified
         """.formatted(objectKey, selection, where), tallyArgs.toArray());
     long reportCount = ((Number) totals.get("reports")).longValue();
-    long count = targetId == null ? ((Number) totals.get("groups")).longValue() : reportCount;
+    long count = expandedGroup ? reportCount : ((Number) totals.get("groups")).longValue();
     int resultPage = lookupById ? 1 : page;
     var params = new ArrayList<>(args);
     params.addAll(selectionArgs);
     params.add((resultPage - 1) * 12);
     String projection = """
       select r.report_id,case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end as kind,
-        approval.custody_mode as appeal_custody_mode,
+        appeal.approval_id, approval.custody_mode as appeal_custody_mode,
         r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.reason_code,
         case when appeal.report_id is null then r.reason_label_snapshot end as reason_label_snapshot,
         r.status,r.created_at,
@@ -227,7 +240,7 @@ public class ReportReviewService {
              from post_image image where image.post_id=queue_rows.related_post_id
              order by image.sort_order limit 1) as post_thumbnail
           """
-        + "from queue_rows " + (targetId == null ? "where object_row=1 " : "")
+        + "from queue_rows " + (expandedGroup ? "" : "where object_row=1 ")
         + "order by " + order + " limit 12 offset ?",
       params.toArray()
     );

@@ -295,6 +295,7 @@ export default function StorageWorkspace({ locationsOnly = false }) {
                     <div className="sw-table-card">
                       <div className="sw-table-head sw-grid-storage" aria-hidden="true">
                         <span>Đồ vật & Mã tiếp nhận</span>
+                        <span>Tình trạng</span>
                         <span>Vị trí lưu kho</span>
                         <span>Thông tin tiếp nhận</span>
                         <span style={{ textAlign: "right" }}>Thao tác</span>
@@ -317,9 +318,13 @@ export default function StorageWorkspace({ locationsOnly = false }) {
                                 </Link>
                                 <div className="sw-item-sub">
                                   {item.code && <span className="sw-code-tag">{item.code}</span>}
-                                  {item.condition && <span>{item.condition}</span>}
                                 </div>
                               </div>
+                            </div>
+
+                            <div className="sw-meta-cell sw-storage-condition">
+                              <small>Tình trạng</small>
+                              <span>{item.condition?.trim() || "Chưa ghi nhận"}</span>
                             </div>
 
                             <div>
