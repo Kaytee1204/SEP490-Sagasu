@@ -372,10 +372,10 @@ public class ReportReviewService {
     return out;
   }
 
-  private Map<String, Object> appeal(long reportId) {
+  Map<String, Object> appeal(long reportId) {
     return context.one("""
         select approval.approval_id, approval.approved_claim_id, approval.appeal_until, p.post_id, p.account_id as finder_id,
-          approval.custody_mode as claim_type,
+          approval.custody_mode as claim_type, chosen.claimant_id as approved_recipient_id,
           (%s) as active,
           approval.appeal_until <= now() as window_elapsed,
           pending.waiting_other_appeals,
@@ -834,6 +834,7 @@ public class ReportReviewService {
     );
     if (finished) {
       closeInquiries(reportId);
+      if ("P2P".equals(appeal.get("claim_type"))) jdbc.queryForList("select finish_empty_p2p_window(?)", id(appeal, "post_id"));
       chat.notifyAppealChanged(reportId);
       jdbc.update(
         "update report_hold set released_at=now() where report_id=? and released_at is null",
@@ -901,10 +902,11 @@ public class ReportReviewService {
         """, approvalId, reportId);
     for (var sibling : siblings) {
       long siblingId = id(sibling, "report_id");
-      jdbc.update("""
+      int closed = jdbc.update("""
           update report set status='RESOLVED',resolution_note=?,resolved_by=?,resolved_at=now(),
-            version=version+1,updated_at=now() where report_id=?
+            version=version+1,updated_at=now() where report_id=? and status in ('OPEN','IN_REVIEW')
           """, conclusion, actorId, siblingId);
+      if (closed != 1) continue;
       history(siblingId, actorId, "APPEAL_ROUND_CLOSED", (String) sibling.get("status"), "RESOLVED", conclusion, null);
       closeInquiries(siblingId);
       publishToParticipant(siblingId, id(sibling, "reporter_id"), "REPORT_RESOLVED", "Lượt xét duyệt đã được mở lại", conclusion);
@@ -1060,7 +1062,7 @@ public class ReportReviewService {
           select 1 from p2p_claim_approval a where a.approved_claim_id=? and a.closed_at is null
             and ((a.appeal_until>now() and not exists (
               select 1 from p2p_claim_appeal p join report r using(report_id)
-              where p.approval_id=a.approval_id and r.status='RESOLVED')) or exists (
+              where p.approval_id=a.approval_id and r.status='RESOLVED' and not exists(select 1 from report_decision d where d.report_id=r.report_id and d.action='APPEAL_WITHDRAWN'))) or exists (
               select 1 from p2p_claim_appeal p join report r using(report_id)
               where p.approval_id=a.approval_id and r.status in ('OPEN','IN_REVIEW')))
         )

@@ -95,6 +95,13 @@ public class ReportReviewController {
         return ApiResponse.ok(inquiries.ask(id, request, user));
     }
 
+    @PostMapping("/{id}/inquiries/{inquiryId}/custody")
+    public ApiResponse<?> verifyCustody(@PathVariable("id") long id, @PathVariable("inquiryId") long inquiryId,
+            @Valid @RequestBody ReportInquiryService.CustodyCheck request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(inquiries.verifyOverdueCustody(id, inquiryId, request, user));
+    }
+
     @GetMapping("/inquiries/mine")
     @Operation(
             summary = "[13.9] Danh sách các yêu cầu giải trình (Inquiries) từ Manager gửi cho tôi",

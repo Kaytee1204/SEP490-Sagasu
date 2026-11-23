@@ -9,6 +9,7 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
   const titleId = useId();
   const [note, setNote] = useState('');
   const [evidenceVerified, setEvidenceVerified] = useState(false);
+  const needsBasis = claim.priorWrongRecipientConclusion != null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [discard, setDiscard] = useState(false);
@@ -34,7 +35,7 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
 
   async function submit(event) {
     event.preventDefault();
-    if (sending.current || !evidenceVerified) return;
+    if (sending.current || !evidenceVerified || (needsBasis && !note.trim())) return;
     sending.current = true;
     setBusy(true);
     setError('');
@@ -62,14 +63,15 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
     <form onSubmit={submit}>
       <p>Chấp thuận <strong>{claim.claimantName}</strong> nhận <strong>{claim.postTitle}</strong>.</p>
       <p>Sau khi chấp thuận, hai bên có thể nhắn tin để trao đổi việc nhận đồ.</p>
-      <p className="claim-notice">Nếu còn hồ sơ đang chờ, hệ thống sẽ thông báo cho những người đó và tạm dừng giao đồ trong ít nhất 24 giờ để họ có thể gửi tranh chấp.</p>
+      <p className="claim-notice">Nếu còn hồ sơ đang chờ, hệ thống sẽ thông báo cho những người đó và mở hạn gửi tranh chấp 24 giờ. Có thể bàn giao sớm khi không còn ai có quyền tranh chấp và việc bàn giao đủ điều kiện.</p>
       <label className="claim-reject-option">
         <input type="checkbox" required checked={evidenceVerified} disabled={busy}
           onChange={event => { setEvidenceVerified(event.target.checked); setDiscard(false); }} />
         Tôi đã đối chiếu thông tin trong hồ sơ với món đồ và xác nhận đây là người nhận phù hợp.
       </label>
-      <label className="claim-reject-detail">Ghi chú (tùy chọn)
-        <textarea maxLength={2000} value={note} disabled={busy} placeholder="Ví dụ: Mô tả đúng vết xước ở góc trái…"
+      {needsBasis && <p className="claim-notice"><strong>Kết luận duyệt nhầm trước đó</strong><br />{claim.priorWrongRecipientConclusion}</p>}
+      <label className="claim-reject-detail">{needsBasis ? "Căn cứ mới để chọn lại người này *" : "Ghi chú (tùy chọn)"}
+        <textarea required={needsBasis} maxLength={2000} value={note} disabled={busy} placeholder="Ví dụ: Mô tả đúng vết xước ở góc trái…"
           onChange={event => { setNote(event.target.value); setDiscard(false); }} />
       </label>
       {error && <p role="alert" className="claim-alert">{error}</p>}
@@ -77,7 +79,7 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
         <div className="claim-actions"><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></div></div>
         : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại hồ sơ</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !evidenceVerified}>{busy ? 'Đang lưu…' : 'Chấp thuận nhận đồ'}</button></footer>}
+          <button type="submit" className="btn btn-accent" disabled={busy || !evidenceVerified || (needsBasis && !note.trim())}>{busy ? 'Đang lưu…' : 'Chấp thuận nhận đồ'}</button></footer>}
     </form>
   </dialog>;
 }

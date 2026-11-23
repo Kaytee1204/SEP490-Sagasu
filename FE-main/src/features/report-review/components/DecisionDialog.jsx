@@ -133,6 +133,14 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
       );
       onClose();
     } catch (e) {
+      if (data.caseKind === "CLAIM_APPEAL") {
+        const latest = await reviewApi.detail(data.report.report_id).catch(() => null);
+        if (latest && ["RESOLVED","REJECTED"].includes(latest.report.status)) {
+          onSaved(latest);
+          onClose();
+          return;
+        }
+      }
       setError(e.message);
       setConfirmOpen(false);
     } finally {

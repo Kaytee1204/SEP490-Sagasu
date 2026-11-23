@@ -92,6 +92,28 @@ public class P2pClaimAppealService {
         return deadline;
     }
 
+    public void onPendingClaimWithdrawn(Claim claim) {
+        var reportIds = jdbc.queryForList("select * from withdraw_p2p_appeal(?)", Long.class, claim.getId());
+        for (long reportId : reportIds) {
+            chat.notifyAppealChanged(reportId);
+            var recipients = jdbc.queryForList("""
+                select r.assigned_to from report r where r.report_id=? and r.assigned_to is not null
+                union select chosen.claimant_id from p2p_claim_appeal e join p2p_claim_approval a using(approval_id)
+                join claim chosen on chosen.claim_id=a.approved_claim_id where e.report_id=? and chosen.claimant_id is not null
+                union select account_id from post where post_id=?
+                """, Long.class, reportId, reportId, claim.getPost().getId());
+            for (long recipient : recipients) {
+                boolean manager = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "select assigned_to is not distinct from ? from report where report_id=?", Boolean.class, recipient, reportId));
+                if (!manager) jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing", reportId, recipient);
+                notifications.notifyUser(recipient, "REPORT_RESOLVED", "Người gửi đã rút tranh chấp",
+                    "Yêu cầu nhận đồ đã được rút. Các tranh chấp khác vẫn được xử lý riêng.",
+                    (manager ? "/admin/reports/" : "/bao-cao/") + reportId, false);
+            }
+        }
+        jdbc.queryForList("select finish_empty_p2p_window(?)", claim.getPost().getId());
+    }
+
     public boolean close(Claim selected) {
         return jdbc.update("update p2p_claim_approval set closed_at=now() where approved_claim_id=? and closed_at is null",
                 selected.getId()) > 0;
@@ -256,7 +278,7 @@ public class P2pClaimAppealService {
         return jdbc.query("""
                 select a.approval_id, a.approved_claim_id, a.appeal_until,
                   coalesce(bool_or(r.status in ('OPEN','IN_REVIEW')), false) as pending,
-                  coalesce(bool_or(r.status='RESOLVED'), false) as upheld
+                  coalesce(bool_or(r.status='RESOLVED' and not exists(select 1 from report_decision d where d.report_id=r.report_id and d.action='APPEAL_WITHDRAWN')), false) as upheld
                 from p2p_claim_approval a join claim c on c.claim_id=a.approved_claim_id
                 join post item on item.post_id=c.post_id and item.custody_mode=c.claim_type
                 left join p2p_claim_appeal p on p.approval_id=a.approval_id

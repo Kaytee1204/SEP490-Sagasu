@@ -112,7 +112,7 @@ function PostDetail({ id, onRetry }) {
     time: event.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' }),
   };
   const images = (post.images || []).map(image => imageUrl(image.url)).filter(Boolean);
-  const canUseSmartMatch = post.postType === 'LOST' && (post.canEditOwnPost || isAdmin || isManager);
+  const canUseSmartMatch = post.postType === 'LOST' && post.status === 'OPEN' && (post.canEditOwnPost || isAdmin || isManager);
   const isOwnPost = post.isOwner || post.canEditOwnPost;
   const isFinished = ['RETURNED', 'CLOSED'].includes(post.status);
   // Office integration: personal UI exposes only the owner's P2P review actions.

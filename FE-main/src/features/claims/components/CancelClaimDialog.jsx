@@ -66,6 +66,7 @@ export default function CancelClaimDialog({ claim, onClose, onCancelled }) {
     <form onSubmit={handleFormSubmit}>
       <p>Bạn đang hủy yêu cầu nhận <strong>{claim.postTitle}</strong>.</p>
       <p>Hồ sơ và bằng chứng vẫn được lưu. Bạn có thể gửi yêu cầu mới nếu bài đăng còn cho phép nhận đồ.</p>
+      {claim.status === "PENDING" && <p>Nếu bạn đang tranh chấp bằng hồ sơ này, rút yêu cầu cũng sẽ kết thúc tranh chấp của bạn.</p>}
       {claim.status === 'APPROVED' && <p className="claim-notice">Sau khi hủy, cuộc trò chuyện chỉ còn xem lịch sử. Bạn không thể tiếp tục bàn giao với hồ sơ này.</p>}
       <label className="claim-reject-detail">Lý do hủy (tùy chọn)
         <textarea maxLength={2000} value={reason} disabled={busy} placeholder="Ví dụ: Tôi đã tìm lại được đồ…"

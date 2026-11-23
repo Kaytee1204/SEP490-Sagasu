@@ -594,6 +594,7 @@ class ReportReviewServiceTest {
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
                 "active", true, "can_reopen_approval", true, "post_id", 10L, "finder_id", 8L, "waiting_other_appeals", true));
         rows(jdbc, "where appeal.approval_id=? and r.report_id<>?", row("report_id", 6L, "reporter_id", 9L, "status", "OPEN"));
+        when(jdbc.update(startsWith("update report set status='RESOLVED'"), anyString(), eq(1L), eq(6L))).thenReturn(1);
         assertThat(service.detail(5L, user).get("actions")).isEqualTo(List.of("APPEAL_KEEP", "APPEAL_WRONG_RECIPIENT"));
         assertBad(() -> service.act(5L, action("RESOLVE"), user), "quyết định xử lý tranh chấp");
         assertBad(() -> service.act(5L, action("APPEAL_REQUIRE_REVIEW"), user), "Thao tác không hợp lệ");

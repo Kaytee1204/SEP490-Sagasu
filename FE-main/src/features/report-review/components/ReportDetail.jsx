@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronDown, ClipboardCheck, History, MessageSquare, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { reviewApi } from "../api";
 import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
-import { appealActionHelp, availableRecipients, date, labels, officeAppealActionHelp, participantRoles, reviewKinds } from "../format";
+import { appealActionHelp, usesVerification, verificationOptions, verificationLabels, availableRecipients, date, labels, officeAppealActionHelp, participantRoles, reviewKinds } from "../format";
 import ContextPanel from "./ContextPanel";
 import DecisionDialog from "./DecisionDialog";
 import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
+import { ItemPostSummary } from "@/features/chat/components/ChatItemPanel";
 import AppealEvidenceComparison from "./AppealEvidenceComparison";
 import useReportResource from "@/features/reports/hooks/useReportResource";
 import { appealInstruction, appealSteps } from "@/features/reports/utils/reportUtils";
@@ -53,7 +54,7 @@ function RelatedInformation({ data, onRelated }) {
             <strong>{person.full_name}</strong>
             {roles.length > 0 && <span className="rr-person-case-role">{roles.join(" · ")}</span>}
             <small>{person.email}</small>
-            <div className="rr-person-account"><small>{labels[person.role]}</small><Badge value={person.status} /></div>
+            <div className="rr-person-account"><small>{labels[person.role]}</small>{person.status && person.status !== "ACTIVE" && <Badge value={person.status} />}</div>
           </div>;
         })}
       </div>
@@ -80,11 +81,11 @@ function ContextDisclosure({ title, children }) {
 function Evidence({ data }) {
   const { current, approvedContext } = data;
   return <div className="rr-stack">
-    {approvedContext ? <>
-      <AppealEvidenceComparison current={current} approved={approvedContext} />
-      <ContextDisclosure title="Hồ sơ đầy đủ của người gửi tranh chấp"><ContextPanel data={current} /></ContextDisclosure>
-      <ContextDisclosure title="Hồ sơ đầy đủ của người được chấp thuận"><ContextPanel data={approvedContext} /></ContextDisclosure>
-    </> : <ContextPanel data={current} />}
+    {approvedContext ? <AppealEvidenceComparison current={current} approved={approvedContext} /> : <ContextPanel data={current} />}
+    {data.caseKind === "CLAIM_APPEAL" && current.post?.post_id && <section className="rr-card rr-post-summary">
+      <h2>Bài đăng liên quan</h2>
+      <ItemPostSummary postId={current.post.post_id} post={{ ...current.post, images: current.postImages, locationText: current.post.location_text, eventAt: current.post.event_at, postType: current.post.post_type }} />
+    </section>}
   </div>;
 }
 
@@ -137,9 +138,12 @@ function FollowUp({ data }) {
     text = appealInstruction(appeal.follow_up, appeal.claim_type === "OFFICE");
     if (appeal.follow_up === "READY_TO_REOPEN" && appeal.claim_type !== "OFFICE") owner = "Người nhặt";
   } else if (questions.length && ["OPEN","IN_REVIEW"].includes(report.status)) {
-    const overdue = questions.some(i => i.overdue);
-    text = overdue ? "Đã qua hạn bổ sung. Xem trao đổi và đánh giá các căn cứ hiện có." : "Chờ bổ sung thông tin. Mở Trao đổi để xem câu hỏi và hạn phản hồi của từng người.";
-    if (!overdue) owner = [...new Set(questions.map(i => i.recipient))].join(", ");
+    const overdue = questions.filter(i => i.overdue);
+    const outstanding = overdue.map(i => [i.recipient, verificationLabels[i.verification_kind]].filter(Boolean).join(" · ")).join(", ");
+    text = overdue.length ? `Quá hạn phản hồi của ${outstanding}. Xem trao đổi và kết luận theo căn cứ hiện có.` : "Chờ bổ sung thông tin. Mở Trao đổi để xem câu hỏi và hạn phản hồi của từng người.";
+    if (!overdue.length) owner = [...new Set(questions.map(i => i.recipient))].join(", ");
+  } else if (usesVerification(data) && data.inquiries.some(i => i.verification_kind === "CUSTODY" && (i.response === "Tôi đã giao đồ" || i.verified_custody === "DELIVERED"))) {
+    text = "Đã xác minh món đồ được giao. Kiểm tra bằng chứng bàn giao và xử lý việc giao nhầm qua hồ sơ sự cố bàn giao.";
   } else if (["APPEAL_REOPEN", "HANDOVER_REOPEN"].includes(lastDecision)) {
     text = "Đã mở lại xét duyệt người nhận.";
     owner = appeal?.claim_type === "OFFICE" ? "Văn phòng" : "Người nhặt";
@@ -201,10 +205,10 @@ function AppealActions({ actions, onAction, office }) {
 function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
   const { report, caseKind, hold, actions, canProcess, canTake, conflict, assigneeName } = data;
   const isClosed = ["RESOLVED", "REJECTED"].includes(report.status);
-  const canAsk = (data.canAsk ?? canProcess) && availableRecipients(data).length > 0;
+  const canAsk = (data.canAsk ?? canProcess) && (usesVerification(data) ? verificationOptions(data) : availableRecipients(data)).length > 0;
   const isAppeal = caseKind === "CLAIM_APPEAL";
   const conclusion = data.decisions?.findLast(item => findings.includes(item.action)
-    || ["APPEAL_KEEP", "APPEAL_INSUFFICIENT", "APPEAL_REJECT_CLAIM", "APPEAL_REQUIRE_REVIEW", "APPEAL_WRONG_RECIPIENT"].includes(item.action));
+    || ["APPEAL_WITHDRAWN", "APPEAL_KEEP", "APPEAL_INSUFFICIENT", "APPEAL_REJECT_CLAIM", "APPEAL_REQUIRE_REVIEW", "APPEAL_WRONG_RECIPIENT"].includes(item.action));
   const title = isClosed ? "Tiếp tục xử lý" : caseKind === "HANDOVER_ISSUE" ? "Kết quả bàn giao" : "Kết luận báo cáo";
   const structured = actions.some(value => findings.includes(value));
   const otherActions = actions.filter(value => !itemMeasures.includes(value));
@@ -232,7 +236,7 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
         <button type="button" disabled={busy} className="rr-primary" onClick={take}>{busy ? "Đang nhận…" : "Nhận xử lý"}</button>
       </> : canProcess || canAsk || actions.length > 0 ? <div className="rr-workflow-actions">
         {canAsk && <button type="button" onClick={onAsk}><MessageSquare size={16} aria-hidden="true" />
-          {report.reason_code === "HANDOVER_MISSING_ITEMS" ? "Hỏi về phụ kiện còn thiếu" : "Hỏi người liên quan"}</button>}
+          {usesVerification(data) ? "Yêu cầu xác minh" : report.reason_code === "HANDOVER_MISSING_ITEMS" ? "Hỏi về phụ kiện còn thiếu" : "Hỏi người liên quan"}</button>}
         {isAppeal ? <>
           <AppealActions actions={actions} onAction={onAction} office={data.appeal?.claim_type === "OFFICE"} />
           {canProcess && !actions.includes("APPEAL_WRONG_RECIPIENT") && <p className="rr-callout">

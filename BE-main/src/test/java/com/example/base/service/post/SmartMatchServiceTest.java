@@ -124,7 +124,7 @@ class SmartMatchServiceTest {
         ReflectionTestUtils.setField(service, "aiServiceUrl", "http://127.0.0.1:" + port);
 
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.of(source));
-        when(postRepository.findCandidateIdsForMatching("FOUND", 1L, 10L, PageRequest.of(0, 20)))
+        when(postRepository.findCandidateIdsForMatching(5L, 1L, 10L, PageRequest.of(0, 20)))
                 .thenReturn(List.of(101L, 102L));
         when(postRepository.findVisibleByIds(List.of(101L, 102L))).thenReturn(new ArrayList<>(List.of(cand2, cand1)));
 
@@ -184,14 +184,13 @@ class SmartMatchServiceTest {
     void utc009_findSmartMatches_lostSourceQueriesFound() {
         stubLostSourceNoCandidates();
         service.findSmartMatches(10L, 5L);
-        verify(postRepository).findCandidateIdsForMatching("FOUND", 3L, 10L, PageRequest.of(0, 20));
+        verify(postRepository).findCandidateIdsForMatching(5L, 3L, 10L, PageRequest.of(0, 20));
     }
 
     @Test
-    void utc010_findSmartMatches_foundSourceQueriesLost() {
+    void utc010_findSmartMatches_rejectsFoundSource() {
         stubFoundSourceEmptyBatch();
-        service.findSmartMatches(11L, 5L);
-        verify(postRepository).findCandidateIdsForMatching("LOST", 3L, 11L, PageRequest.of(0, 20));
+        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.findSmartMatches(11L, 5L)));
     }
 
     @Test
@@ -202,9 +201,11 @@ class SmartMatchServiceTest {
     }
 
     @Test
-    void utc012_findSmartMatches_emptyBatchLookupReturnsEmpty() {
-        stubFoundSourceEmptyBatch();
-        assertTrue(service.findSmartMatches(11L, 5L).isEmpty());
+    void utc012_findSmartMatches_rejectsClosedLostSource() {
+        stubLostSourceNoCandidates();
+        Post source = postRepository.findVisibleDetail(10L).orElseThrow();
+        ReflectionTestUtils.setField(source, "status", "CLOSED");
+        assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.findSmartMatches(10L, 5L)));
     }
 
     @Test
@@ -251,7 +252,7 @@ class SmartMatchServiceTest {
         Account creator = account(8L, "Author", AccountRole.USER);
         Post source = lostPost(10L, accountOwner, creator, category(1L, "Wallet"), "Lost", "Desc", "Hall A", baseTime);
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.of(source));
-        when(postRepository.findCandidateIdsForMatching("FOUND", 1L, 10L, PageRequest.of(0, 20)))
+        when(postRepository.findCandidateIdsForMatching(5L, 1L, 10L, PageRequest.of(0, 20)))
                 .thenReturn(List.of());
     }
 
@@ -259,7 +260,7 @@ class SmartMatchServiceTest {
         Account owner = account(5L, "Owner", AccountRole.USER);
         Post lost = lostPost(10L, owner, owner, category(3L, "Phone"), "Phone", "Black", "Hall A", baseTime);
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.of(lost));
-        when(postRepository.findCandidateIdsForMatching("FOUND", 3L, 10L, PageRequest.of(0, 20)))
+        when(postRepository.findCandidateIdsForMatching(5L, 3L, 10L, PageRequest.of(0, 20)))
                 .thenReturn(List.of());
     }
 
@@ -267,9 +268,7 @@ class SmartMatchServiceTest {
         Account owner = account(5L, "Owner", AccountRole.USER);
         Post found = foundPost(11L, owner, category(3L, "Phone"), "Phone", "Black", "Hall A", baseTime);
         when(postRepository.findVisibleDetail(11L)).thenReturn(Optional.of(found));
-        when(postRepository.findCandidateIdsForMatching("LOST", 3L, 11L, PageRequest.of(0, 20)))
-                .thenReturn(List.of(99L));
-        when(postRepository.findVisibleByIds(List.of(99L))).thenReturn(List.of());
+
     }
 
     private void stubWalletCandidate20() {
@@ -278,7 +277,7 @@ class SmartMatchServiceTest {
         Post source = lostPost(10L, owner, owner, cat, "Black wallet", "Leather", "Hall A", baseTime);
         Post cand = foundPost(20L, owner, cat, "Black wallet", "Leather", "Hall A", baseTime);
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.of(source));
-        when(postRepository.findCandidateIdsForMatching("FOUND", 1L, 10L, PageRequest.of(0, 20)))
+        when(postRepository.findCandidateIdsForMatching(5L, 1L, 10L, PageRequest.of(0, 20)))
                 .thenReturn(List.of(20L));
         when(postRepository.findVisibleByIds(List.of(20L))).thenReturn(new ArrayList<>(List.of(cand)));
     }
@@ -302,7 +301,7 @@ class SmartMatchServiceTest {
         Post cand = foundPost(21L, owner, cat, "Black leather wallet", "Found card holder", "Hall A", baseTime);
 
         when(postRepository.findVisibleDetail(10L)).thenReturn(Optional.of(source));
-        when(postRepository.findCandidateIdsForMatching("FOUND", 1L, 10L, PageRequest.of(0, 20)))
+        when(postRepository.findCandidateIdsForMatching(5L, 1L, 10L, PageRequest.of(0, 20)))
                 .thenReturn(List.of(21L));
         when(postRepository.findVisibleByIds(List.of(21L))).thenReturn(new ArrayList<>(List.of(cand)));
 
@@ -424,7 +423,7 @@ class SmartMatchServiceTest {
     private List<SmartMatchItemDto> invokeFallbackWithMockedTimeout(Post source, List<Post> candidates) {
         when(postRepository.findVisibleDetail(anyLong())).thenReturn(Optional.of(source));
         List<Long> ids = candidates.stream().map(Post::getId).toList();
-        when(postRepository.findCandidateIdsForMatching(anyString(), any(), anyLong(), any())).thenReturn(ids);
+        when(postRepository.findCandidateIdsForMatching(anyLong(), any(), anyLong(), any())).thenReturn(ids);
         when(postRepository.findVisibleByIds(ids)).thenReturn(new ArrayList<>(candidates));
 
         try (MockedConstruction<RestTemplate> ignored = mockConstruction(RestTemplate.class,

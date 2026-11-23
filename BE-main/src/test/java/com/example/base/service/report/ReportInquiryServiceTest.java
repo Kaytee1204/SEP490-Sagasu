@@ -92,10 +92,10 @@ class ReportInquiryServiceTest {
     void utc100_ask_participant_insertsInquiryAndNotifies() {
         var deadline = OffsetDateTime.parse("2026-11-24T09:00:00Z");
         when(reviews.inquiryResponseDue()).thenReturn(deadline);
-        Map<String, Object> res = service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "  Where did you lose it? "), managerUser);
+        Map<String, Object> res = service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "  Where did you lose it? ", null), managerUser);
 
         verify(reviews).processing(report, manager, 3L);
-        verify(jdbc).update(contains("response_due_at"), eq(5L), eq(7L), eq(1L), eq("Where did you lose it?"), eq(deadline));
+        verify(jdbc).update(contains("response_due_at"), eq(5L), eq(7L), eq(1L), eq("Where did you lose it?"), eq(deadline), isNull());
         verify(jdbc).update(contains("update report set version=version+1"), eq(5L));
         verify(reviews).history(eq(5L), eq(1L), eq("ASK_INFORMATION"), eq("IN_REVIEW"), eq("IN_REVIEW"), anyString(), anyString());
         verify(notifications).notifyUser(eq(7L), eq("REPORT_INFORMATION"), anyString(), anyString(), eq("/bao-cao/5#phan-hoi"), eq(false));
@@ -104,21 +104,58 @@ class ReportInquiryServiceTest {
 
     @Test
     void utc101_ask_nonParticipant_rejected() {
-        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 99L, "Q"), managerUser), "liên quan");
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 99L, "Q", null), managerUser), "liên quan");
         verify(jdbc, never()).update(contains("insert into report_inquiry"), any(Object[].class));
     }
 
     @Test
     void utc102_ask_pendingInquiryExists_rejected() {
         when(jdbc.queryForObject(contains("from report_inquiry"), eq(Boolean.class), any(Object[].class))).thenReturn(true);
-        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Q"), managerUser), "chưa phản hồi");
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Q", null), managerUser), "chưa phản hồi");
     }
 
     @Test
     void utc103_ask_processingGuardFails_propagates() {
         doThrow(OfficeAccess.bad("Cần nhận xử lý báo cáo trước khi thực hiện thao tác."))
                 .when(reviews).processing(any(), any(), anyLong());
-        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Q"), managerUser), "Cần nhận xử lý");
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Q", null), managerUser), "Cần nhận xử lý");
+    }
+
+    @Test
+    void p2pVerificationUsesOnlyTheParticipantForTheSelectedPurpose() {
+        report.put("reporter_id", 7L);
+        when(reviews.participants(any())).thenReturn(Set.of(7L, 8L, 9L));
+        var appeal = row("claim_type", "P2P", "active", true, "can_reopen_approval", true,
+                "finder_id", 9L, "approved_recipient_id", 8L);
+        when(reviews.appeal(5L)).thenReturn(appeal);
+        service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Ảnh nào cho thấy dấu riêng?", "OWNERSHIP"), managerUser);
+        service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "Vết xước nằm ở đâu?", "DISCREPANCY"), managerUser);
+        service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser);
+        verify(jdbc).update(contains("verification_kind"), eq(5L), eq(9L), eq(1L),
+                eq("Bạn hiện còn giữ món đồ hay đã giao cho người nhận?"), any(), eq("CUSTODY"));
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "?", "OWNERSHIP"), managerUser), "vai trò");
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "?", null), managerUser), "chọn");
+        appeal.put("can_reopen_approval", false);
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser), "trước bàn giao");
+    }
+
+    @Test
+    void custodyOverrideRequiresAnOverdueUnansweredFinderInquiry() {
+        when(reviews.appeal(5L)).thenReturn(row("claim_type","P2P","active",true,"finder_id",9L));
+        var check = new ReportInquiryService.CustodyCheck(3L,"HELD","Tại quầy","Đối chiếu máy và số sê-ri");
+        assertBad(() -> service.verifyOverdueCustody(5L,2L,check,managerUser),"hết hạn");
+        when(jdbc.update(contains("response_due_at<=now()"), any(Object[].class))).thenReturn(1);
+        service.verifyOverdueCustody(5L,2L,check,managerUser);
+        verify(reviews).history(eq(5L),eq(1L),eq("CUSTODY_CHECK"),eq("IN_REVIEW"),eq("IN_REVIEW"),
+                contains("vẫn giữ đồ"),contains("sê-ri"));
+    }
+
+    @Test
+    void finderMustChooseACustodyAnswerBeforeUploadingEvidence() {
+        when(context.one(contains("recipient_id=?"), any(Object[].class)))
+                .thenReturn(row("inquiry_id", 2L, "verification_kind", "CUSTODY"));
+        assertBad(() -> service.reply(2L, new ReportInquiryService.Reply("Không rõ"), files, claimantUser), "giữ đồ");
+        verifyNoInteractions(images);
     }
 
     @Test

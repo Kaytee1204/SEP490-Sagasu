@@ -100,6 +100,9 @@
 .report-inquiry > p, .report-inquiry .report-evidence { margin:0; }
 .report-reply-form { display:grid; gap:12px; }
 .report-reply-form label { display:grid; gap:6px; font-size:.88rem; font-weight:650; }
+.report-custody-choices { display:flex; flex-wrap:wrap; gap:8px; }
+.report-custody-choices legend { margin-bottom:6px; font-weight:650; }
+.report-custody-choices label { display:inline-flex; align-items:center; padding:8px 12px; border:1px solid #c4d8d6; border-radius:8px; cursor:pointer; }
 .report-reply-form textarea { width:100%; min-height:96px; padding:9px 10px; border:1px solid #c4d8d6; border-radius:9px; background:#fff; resize:vertical; font-weight:400; }
 .report-reply-upload { display:grid; justify-items:start; gap:5px; padding:11px 13px; border:1px dashed #cbded2; border-radius:10px; background:#f8fbf9; font-size:.85rem; }
 .report-reply-upload small { color:#536c72; font-size:.76rem; }
@@ -107,7 +110,8 @@
 .report-reply-submit, .report-reply-file { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
 .report-reply-submit { border-top:1px solid #e1ece8; padding-top:12px; }
 .report-card .report-reply-submit p { display:flex; align-items:center; gap:7px; margin:0; font-size:.79rem; color:#536c72; }
-.report-reply-file { font-size:.82rem; }
+.report-reply-file { display:grid; grid-template-columns:auto minmax(0,1fr) auto; font-size:.82rem; }
+.report-reply-file img { width:64px; height:64px; object-fit:contain; background:#f5f8f7; border:1px solid #dae6e3; border-radius:8px; }
 .report-reply-file span { overflow-wrap:anywhere; }
 .report-reply-file button { min-height:36px; color:#92392d; text-decoration:underline; }
 .report-reply-success { color:#23664a; }

@@ -27,6 +27,11 @@ final class ReportQueueSql {
           ) and not exists (
             select 1 from office_handover office_record where office_record.claim_id=chosen.claim_id
           )))
+        and not exists (
+          select 1 from p2p_claim_appeal custody_appeal join report_inquiry inquiry using (report_id)
+          where custody_appeal.approval_id=approval.approval_id and inquiry.verification_kind='CUSTODY'
+            and (inquiry.verified_custody='DELIVERED' or inquiry.response='Tôi đã giao đồ' or (inquiry.responded_at is null and inquiry.closed_at is null))
+        )
         and not exists (select 1 from p2p_handover handover where handover.claim_id=chosen.claim_id and handover.status<>'CANCELLED')
         and not exists (select 1 from report_hold hold where hold.post_id=p.post_id and hold.released_at is null)
         and not exists (
@@ -41,7 +46,7 @@ final class ReportQueueSql {
 
   // The report conclusion and the approval round can finish at different times.
   static final String APPEAL_STEP = """
-      case when r.status='RESOLVED' and (%s) then
+      case when r.status='RESOLVED' and not exists(select 1 from report_decision w where w.report_id=r.report_id and w.action='APPEAL_WITHDRAWN') and (%s) then
         case when pending.waiting_other_appeals then 'WAIT_APPEALS'
           when (%s) then 'READY_TO_REOPEN'
           else 'VERIFY_CUSTODY' end
@@ -74,7 +79,7 @@ final class ReportQueueSql {
       ) decisions
       cross join lateral (select %s as waiting_other_appeals offset 0) pending
       cross join lateral (
-        select r.status='RESOLVED' and appeal.report_id is not null and (%s) as accepted_appeal,
+        select r.status='RESOLVED' and not exists(select 1 from report_decision w where w.report_id=r.report_id and w.action='APPEAL_WITHDRAWN') and appeal.report_id is not null and (%s) as accepted_appeal,
           coalesce(inquiry.latest_reply > greatest(inquiry.latest_question, decisions.latest_decision),false) as new_reply,
           coalesce(pickup.next_pickup < ?::timestamptz,false) as pickup_this_shift,
           decisions.recovery_requested and recovery.confirmed_at is null as recovery_pending,

@@ -238,7 +238,8 @@ public class ClaimService {
                         answer.getTemplateCode(), answer.getTemplateVersion())).toList(), chatConversations.canOpen(claim),
                 claim.getClaimType(), claim.getReceipt() == null || claim.getReceipt().getStorageLocation() == null
                         ? null : claim.getReceipt().getStorageLocation().getName(), claim.getCloseReason(), claim.getClosedAt(),
-                reviewer && revocable(claim), disputeOutcome);
+                reviewer && revocable(claim), disputeOutcome, reviewer && !claim.isOffice() && "PENDING".equals(claim.getStatus())
+                        ? claims.lastWrongRecipientConclusion(id) : null);
     }
 
     @Transactional
@@ -267,6 +268,8 @@ public class ClaimService {
         }
         if (!routing.matches(claim, Set.of("OPEN")) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
         if (approved) {
+            if ((request.reason() == null || request.reason().isBlank()) && claims.lastWrongRecipientConclusion(id) != null)
+                throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Hãy ghi căn cứ mới để chấp thuận lại người từng được xác minh là duyệt nhầm.");
             if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) throw stateChanged();
             if (appeals.hasUnresolvedAppeal(post.getId())) {
                 throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Vui lòng chờ kết quả tranh chấp trước khi chấp thuận người nhận.");
@@ -429,6 +432,7 @@ public class ClaimService {
         chatConversations.notifyChanged(claim);
         activities.save(new ClaimActivity(claim, actor, "CANCEL", previous, request.reason()));
         claims.flush();
+        if ("PENDING".equals(previous) && !claim.isOffice()) appeals.onPendingClaimWithdrawn(claim);
         if ("APPROVED".equals(previous) && "RESERVED".equals(post.getStatus())
                 && !claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) {
             post.reopenAfterClaimCancellation();

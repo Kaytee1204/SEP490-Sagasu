@@ -707,6 +707,17 @@ class ClaimServiceTest {
     }
 
     @Test
+    void selectingPreviousWrongRecipientRequiresNewBasis() {
+        Claim claim = reviewableClaim(554L);
+        when(claims.lastWrongRecipientConclusion(554L)).thenReturn("Dấu nhận dạng không khớp.");
+        assertEquals(ErrorCode.CLAIM_INPUT_INVALID,
+                code(() -> service.review(554L, new ReviewClaimRequest("APPROVED", " ", 0L, true), finderUser)));
+        assertEquals("PENDING", claim.getStatus());
+        service.review(554L, new ReviewClaimRequest("APPROVED", "Đã đối chiếu số sê-ri trên hóa đơn mới.", 0L, true), finderUser);
+        verify(activities).save(argThat(a -> a.getReason().contains("sê-ri")));
+    }
+
+    @Test
     void review_rejectionRequiresReason() {
         reviewableClaim(554L);
         assertEquals(ErrorCode.CLAIM_INPUT_INVALID,

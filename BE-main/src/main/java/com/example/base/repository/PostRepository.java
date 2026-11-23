@@ -98,11 +98,14 @@ public interface PostRepository extends JpaRepository<Post, Long>, org.springfra
     @Query("""
             select p.id from Post p
             where p.moderationStatus='VISIBLE' and p.deletedAt is null and p.status='OPEN'
-              and p.postType=:oppositeType and p.id <> :excludeId
+              and p.postType='FOUND' and p.id <> :excludeId
+              and (:viewerId is null or (p.account.id <> :viewerId and p.createdBy.id <> :viewerId))
+              and not exists (select source.id from Post source where source.id=:excludeId
+                  and (source.account.id=p.account.id or source.account.id=p.createdBy.id))
             order by case when p.category.categoryId = :categoryId then 0 else 1 end asc,
                      p.createdAt desc, p.id desc
             """)
-    List<Long> findCandidateIdsForMatching(@Param("oppositeType") String oppositeType,
+    List<Long> findCandidateIdsForMatching(@Param("viewerId") Long viewerId,
                                            @Param("categoryId") Long categoryId,
                                            @Param("excludeId") long excludeId,
                                            Pageable pageable);

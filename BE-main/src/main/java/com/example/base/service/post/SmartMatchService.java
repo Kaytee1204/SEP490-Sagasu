@@ -66,11 +66,13 @@ public class SmartMatchService {
             throw new AppException(ErrorCode.FORBIDDEN, "Chỉ chủ bài đăng, Quản trị viên (Admin) hoặc Quản lý (Manager) mới có thể sử dụng tính năng đối sánh AI cho bài đăng này.");
         }
 
-        String oppositeType = "LOST".equalsIgnoreCase(source.getPostType()) ? "FOUND" : "LOST";
+        if (!"LOST".equals(source.getPostType()) || !"OPEN".equals(source.getStatus())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Chỉ có thể tìm đồ phù hợp cho bài đăng mất đồ còn mở.");
+        }
         Long categoryId = source.getCategory() != null ? source.getCategory().getCategoryId() : null;
 
         List<Long> candidateIds = postRepository.findCandidateIdsForMatching(
-                oppositeType,
+                viewerId,
                 categoryId,
                 postId,
                 PageRequest.of(0, 20)

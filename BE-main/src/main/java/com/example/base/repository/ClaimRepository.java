@@ -65,6 +65,16 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
                 .map(row -> (String) row[1]).findFirst().orElse(null);
     }
 
+    @Query(value = """
+        select d.conclusion from p2p_claim_approval a join p2p_claim_appeal e using(approval_id)
+        join report_decision d using(report_id)
+        join claim previous on previous.claim_id=a.approved_claim_id
+        join claim candidate on candidate.post_id=previous.post_id and candidate.claimant_id=previous.claimant_id
+        where candidate.claim_id=:claimId and a.custody_mode='P2P' and d.action='APPEAL_WRONG_RECIPIENT'
+        order by d.decision_id desc limit 1
+        """, nativeQuery = true)
+    String lastWrongRecipientConclusion(@Param("claimId") long claimId);
+
     static boolean disputeEndsReview(String outcome) {
         return "APPEAL_KEEP".equals(outcome) || "APPEAL_REJECT_CLAIM".equals(outcome);
     }

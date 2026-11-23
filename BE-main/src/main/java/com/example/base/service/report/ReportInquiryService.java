@@ -65,8 +65,41 @@ public class ReportInquiryService {
   public record Ask(
     @NotNull @PositiveOrZero Long version,
     @NotNull @Positive Long recipientId,
-    @NotBlank @Size(max = 5000) String question
+    @Size(max = 5000) String question,
+    String verificationKind
   ) {}
+
+  public record CustodyCheck(@NotNull @PositiveOrZero Long version, @NotBlank String result,
+      @NotBlank @Size(max=500) String source, @NotBlank @Size(max=5000) String basis) {}
+
+  @Transactional
+  public Map<String,Object> verifyOverdueCustody(long reportId, long inquiryId, CustodyCheck request, CustomUserDetails user) {
+    var manager = access.require(user, AccountRole.MANAGER);
+    var report = reviews.lock(reportId);
+    reviews.processing(report, manager, request.version());
+    var appeal = reviews.appeal(reportId);
+    if (!"P2P".equals(appeal.get("claim_type")) || !Boolean.TRUE.equals(appeal.get("active")))
+      throw bad("Lượt xét duyệt này đã kết thúc.");
+    String result = request.result();
+    if (!Set.of("HELD","DELIVERED","UNKNOWN").contains(result)) throw bad("Chọn tình trạng món đồ.");
+    int changed = jdbc.update("""
+        update report_inquiry set verified_custody=?, verification_source=?, verification_basis=?,
+          closed_at=case when ?='UNKNOWN' then null else now() end
+        where report_id=? and inquiry_id=? and verification_kind='CUSTODY' and recipient_id=?
+          and responded_at is null and closed_at is null and response_due_at<=now()
+        """, result, request.source().strip(), request.basis().strip(), result, reportId, inquiryId, appeal.get("finder_id"));
+    if (changed != 1) throw bad("Yêu cầu đã thay đổi hoặc chưa hết hạn phản hồi.");
+    String note = switch(result) {
+      case "HELD" -> "Quản lý xác minh người nhặt vẫn giữ đồ.";
+      case "DELIVERED" -> "Quản lý xác minh món đồ đã được giao.";
+      default -> "Chưa xác minh được người đang giữ đồ.";
+    };
+    String status = (String) report.get("status");
+    reviews.history(reportId, manager.getId(), "CUSTODY_CHECK", status, status, note,
+        "Nguồn: " + request.source().strip() + "\n" + request.basis().strip());
+    jdbc.update("update report set version=version+1,updated_at=now() where report_id=?", reportId);
+    return reviews.detail(reportId,user);
+  }
 
   public record Reply(@NotBlank @Size(max = 5000) String response) {}
 
@@ -110,6 +143,25 @@ public class ReportInquiryService {
     var r = reviews.lock(report);
     if (reviews.canFollowUpRecovery(r)) reviews.requireAssignee(r, actor, request.version());
     else reviews.processing(r, actor, request.version());
+    var appeal = reviews.appeal(report);
+    String question = Objects.toString(request.question(), "").strip();
+    String kind = request.verificationKind();
+    if ("P2P".equals(appeal.get("claim_type")) && reviews.open(r)) {
+      if (!Boolean.TRUE.equals(appeal.get("active"))) throw bad("Lần chấp thuận này đã kết thúc.");
+      Long expected = switch (Objects.toString(kind, "")) {
+        case "OWNERSHIP" -> id(r, "reporter_id");
+        case "DISCREPANCY" -> id(appeal, "approved_recipient_id");
+        case "CUSTODY" -> {
+          if (!Boolean.TRUE.equals(appeal.get("can_reopen_approval")))
+            throw bad("Món đồ không còn ở bước xác minh trước bàn giao.");
+          question = "Bạn hiện còn giữ món đồ hay đã giao cho người nhận?";
+          yield id(appeal, "finder_id");
+        }
+        default -> throw bad("Hãy chọn nội dung cần xác minh.");
+      };
+      if (!request.recipientId().equals(expected)) throw bad("Người nhận không đúng vai trò cần xác minh.");
+    } else if (kind != null) throw bad("Yêu cầu xác minh này chỉ dành cho tranh chấp P2P đang xử lý.");
+    if (question.isBlank()) throw bad("Hãy ghi rõ chi tiết cần xác minh.");
     if (
       !reviews.participants(context.context(r)).contains(request.recipientId())
     ) throw bad("Người được hỏi phải liên quan đến vụ việc.");
@@ -124,12 +176,13 @@ public class ReportInquiryService {
       )
     ) throw bad("Người này đang có câu hỏi chưa phản hồi.");
     jdbc.update(
-      "insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at) values(?,?,?,?,?)",
+      "insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at,verification_kind) values(?,?,?,?,?,?)",
       report,
       request.recipientId(),
       actor.getId(),
-      request.question().strip(),
-      reviews.inquiryResponseDue()
+      question,
+      reviews.inquiryResponseDue(),
+      kind
     );
     jdbc.update(
       "update report set version=version+1,updated_at=now() where report_id=?",
@@ -142,13 +195,13 @@ public class ReportInquiryService {
       (String) r.get("status"),
       (String) r.get("status"),
       "Đang đối chiếu thêm thông tin với người liên quan.",
-      request.question()
+      question
     );
     notifications.notifyUser(
       request.recipientId(),
       "REPORT_INFORMATION",
       "Cần bổ sung thông tin cho báo cáo #" + report,
-      request.question(),
+      question,
       "/bao-cao/" + report + "#phan-hoi",
       false
     );
@@ -159,7 +212,7 @@ public class ReportInquiryService {
   public List<Map<String, Object>> mine(CustomUserDetails user) {
     long actor = access.require(user).getId();
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
+        select i.inquiry_id, i.verification_kind, i.verified_custody, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
           (i.responded_at is null and i.closed_at is null and i.response_due_at <= now()) as overdue, %s
         from report_inquiry i join report r using (report_id)
         %s
@@ -173,7 +226,7 @@ public class ReportInquiryService {
 
   List<Map<String, Object>> forReport(long reportId, long recipientId) {
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
+        select i.inquiry_id, i.verification_kind, i.verified_custody, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
           (i.responded_at is null and i.closed_at is null and i.response_due_at <= now()) as overdue, r.status
         from report_inquiry i join report r using (report_id)
         where i.report_id = ? and i.recipient_id = ?
@@ -218,6 +271,9 @@ public class ReportInquiryService {
     if (initial.isEmpty()) throw bad(
       "Không tìm thấy yêu cầu bổ sung dành cho bạn."
     );
+    if ("CUSTODY".equals(initial.get("verification_kind"))
+        && !Set.of("Tôi vẫn giữ đồ", "Tôi đã giao đồ").contains(request.response().strip()))
+      throw bad("Chọn tình trạng giữ đồ thực tế.");
     var prepared = images.prepare(request.response().strip(), files);
     var uploaded = images.upload("report-replies/" + inquiry, prepared);
     try {

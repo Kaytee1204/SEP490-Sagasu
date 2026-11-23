@@ -19,6 +19,8 @@ const outcomeLabels = {
   NO_VIOLATION: 'Không phát hiện vi phạm',
   INSUFFICIENT_EVIDENCE: 'Chưa đủ căn cứ',
   APPEAL_KEEP: 'Giữ kết quả nhận đồ',
+  APPEAL_ROUND_CLOSED: "Đã mở lại xét duyệt người nhận",
+  APPEAL_WITHDRAWN: "Người gửi đã rút tranh chấp",
   APPEAL_INSUFFICIENT: 'Giữ người đã duyệt vì chưa đủ căn cứ thay đổi',
   APPEAL_REJECT_CLAIM: 'Yêu cầu bị bác và không thể gửi lại trên bài đăng này',
   APPEAL_REQUIRE_REVIEW: 'Quản lý đã yêu cầu xét lại người nhận',

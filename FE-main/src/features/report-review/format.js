@@ -83,6 +83,8 @@ export const labels = {
   REQUEST_ITEM_RECOVERY: "Yêu cầu thu hồi món đồ",
   CONFIRM_ITEM_RECOVERY: "Xác nhận đã thu hồi món đồ",
   APPEAL_KEEP: "Giữ người đã duyệt",
+  CUSTODY_CHECK: "Xác minh tình trạng món đồ",
+  APPEAL_WITHDRAWN: "Người gửi đã rút tranh chấp",
   APPEAL_INSUFFICIENT: "Giữ người đã duyệt · Chưa đủ căn cứ",
   APPEAL_REJECT_CLAIM: "Yêu cầu nhận đồ sai · Chặn gửi lại",
   APPEAL_REQUIRE_REVIEW: "Yêu cầu xét lại người nhận",
@@ -136,6 +138,34 @@ export function participantRoles(data, accountId) {
     roles.push(appeal.claim_type === "P2P" ? "Người đăng bài (người nhặt được)" : "Người đăng bài");
   }
   return roles;
+}
+
+export const verificationLabels = {
+  OWNERSHIP: "Bổ sung bằng chứng sở hữu",
+  DISCREPANCY: "Làm rõ chi tiết chưa khớp",
+  CUSTODY: "Xác nhận đang giữ đồ",
+};
+
+export function usesVerification(data) {
+  return data.appeal?.claim_type === "P2P" && ["OPEN", "IN_REVIEW"].includes(data.report.status);
+}
+
+export function verificationOptions(data) {
+  if (!data.appeal?.active) return [];
+  const pending = new Set(data.inquiries.filter(i => !i.responded_at && !i.closed_at).map(i => i.recipient_id));
+  const targets = [
+    ["OWNERSHIP", data.report.reporter_id, "Người gửi tranh chấp"],
+    ["DISCREPANCY", data.appeal.approved_recipient_id, "Người được chấp thuận"],
+    ["CUSTODY", data.appeal.finder_id, "Người nhặt"],
+  ];
+  return targets.map(([kind, id, role]) => {
+    const person = data.current.participants.find(p => p.id === id);
+    let reason = "";
+    if (!person) reason = "Chưa xác định người nhận";
+    else if (pending.has(id)) reason = "Đang chờ phản hồi";
+    else if (kind === "CUSTODY" && !data.appeal.can_reopen_approval) reason = "Chưa đủ điều kiện xác minh";
+    return { kind, person, role, reason };
+  });
 }
 
 export function availableRecipients(data) {

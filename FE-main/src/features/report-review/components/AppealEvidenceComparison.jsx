@@ -18,12 +18,15 @@ export default function AppealEvidenceComparison({ current, approved }) {
   ];
   const [appealAnswers, approvedAnswers] = candidates.map(({ context }) => new Map(indexedAnswers(context.answers)));
   const questions = new Map([...appealAnswers, ...approvedAnswers]);
+  const rows = [...questions].map(([key, question]) => {
+    const values = [appealAnswers, approvedAnswers].map(answers => answers.get(key)?.answer_text?.trim() || "");
+    return { key, question, values };
+  }).filter(row => row.values.some(Boolean));
   return <section className="rr-card rr-evidence-comparison" aria-labelledby="rr-evidence-heading">
     <div className="rr-evidence-heading">
       <span className="rr-case-icon"><Scale size={20} aria-hidden="true" /></span>
       <div>
         <h2 id="rr-evidence-heading">Đối chiếu hai hồ sơ nhận đồ</h2>
-        <p>Câu trả lời và ảnh do từng người gửi để quản lý kiểm chứng.</p>
       </div>
     </div>
     <div className="rr-evidence-grid" role="table" aria-label="Đối chiếu căn cứ nhận đồ">
@@ -46,13 +49,13 @@ export default function AppealEvidenceComparison({ current, approved }) {
           </div>)}
         </div>
       ))}
-      {[...questions].map(([key, question]) => <div key={key} className="rr-evidence-row" role="row">
+      {rows.map(({key, question, values}) => <div key={key} className="rr-evidence-row" role="row">
         <div className="rr-evidence-question" role="rowheader">
           {question.section_title && <small>{question.section_title}</small>}
           {question.question_label}
         </div>
-        {[appealAnswers, approvedAnswers].map((answers, index) => <div key={candidates[index].label} role="cell">
-          {answers.get(key)?.answer_text?.trim() || <span className="rr-muted">Chưa trả lời</span>}
+        {values.map((value, index) => <div key={candidates[index].label} role="cell">
+          {value || <span className="rr-muted">Chưa trả lời</span>}
         </div>)}
       </div>)}
       <div className="rr-evidence-row" role="row">
@@ -61,6 +64,14 @@ export default function AppealEvidenceComparison({ current, approved }) {
           {context.claimEvidence?.length ? <Gallery images={context.claimEvidence} /> : <span className="rr-muted">Chưa đính kèm ảnh</span>}
         </div>)}
       </div>
+      {candidates.some(({context}) => context.claimSupplements?.length) && <div className="rr-evidence-row" role="row">
+        <div className="rr-evidence-question" role="rowheader">Bằng chứng bổ sung</div>
+        {candidates.map(({label, context}) => <div key={label} role="cell">
+          {context.claimSupplements?.length ? context.claimSupplements.map(entry => <div key={entry.claim_activity_id}>
+            <p>{entry.reason}</p><Gallery images={entry.images} />
+          </div>) : "Chưa bổ sung"}
+        </div>)}
+      </div>}
     </div>
   </section>;
 }
