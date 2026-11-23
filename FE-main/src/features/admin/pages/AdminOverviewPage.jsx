@@ -104,7 +104,7 @@ export default function AdminOverviewPage() {
             Bảng điều khiển Quản trị Hệ thống
           </h1>
           <p className="mt-1 text-sm text-slate-300">
-            Tổng hợp số liệu thời gian thực về Tin đăng, Yêu cầu nhận đồ, Kho văn phòng, Báo cáo vi phạm và Nhật ký bảo mật.
+            Tổng hợp số liệu thời gian thực về Bài đăng, Yêu cầu nhận đồ, Kho văn phòng, Báo cáo vi phạm và Nhật ký bảo mật.
           </p>
         </div>
 
@@ -188,7 +188,7 @@ export default function AdminOverviewPage() {
                   <Package size={18} />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-slate-800">Tin đăng</div>
+                  <div className="text-xs font-bold text-slate-800">Bài đăng</div>
                   <div className="text-[11px] text-slate-400">{posts.total ?? 0} bài đăng</div>
                 </div>
               </div>
@@ -435,7 +435,7 @@ export default function AdminOverviewPage() {
             </div>
             <div className="flex items-center gap-4 text-xs font-semibold">
               <span className="inline-flex items-center gap-1.5 text-teal-700">
-                <span className="h-2.5 w-2.5 rounded-xs bg-teal-600" /> Tin đăng
+                <span className="h-2.5 w-2.5 rounded-xs bg-teal-600" /> Bài đăng
               </span>
               <span className="inline-flex items-center gap-1.5 text-indigo-700">
                 <span className="h-2.5 w-2.5 rounded-xs bg-indigo-500" /> Claims
@@ -456,7 +456,7 @@ export default function AdminOverviewPage() {
                   <div className="flex h-36 w-full items-end justify-center gap-1.5 rounded-xl bg-slate-50/70 px-1.5 pb-2 pt-4">
                     <div
                       style={{ height: `${pHeight}px` }}
-                      title={`Tin đăng: ${day.postsCount}`}
+                      title={`Bài đăng: ${day.postsCount}`}
                       className="w-2.5 rounded-t-md bg-teal-600 transition-all"
                     />
                     <div
@@ -486,7 +486,7 @@ export default function AdminOverviewPage() {
             <div className="flex items-center gap-2.5">
               <BarChart3 size={19} className="text-teal-700" />
               <div>
-                <h2 className="text-base font-bold text-slate-900">Phân bổ Tin đăng theo Danh mục</h2>
+                <h2 className="text-base font-bold text-slate-900">Phân bổ Bài đăng theo Danh mục</h2>
                 <p className="text-xs text-slate-500">Top danh mục có số lượng đồ thất lạc & nhặt được cao nhất</p>
               </div>
             </div>
@@ -642,7 +642,7 @@ export default function AdminOverviewPage() {
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div className="flex items-center gap-2">
               <Layers size={17} className="text-teal-700" />
-              <h2 className="text-sm font-bold text-slate-900">Tin đăng mới nhất</h2>
+              <h2 className="text-sm font-bold text-slate-900">Bài đăng mới nhất</h2>
             </div>
             {isManager && (
               <Link to="/admin/items" className="text-xs font-semibold text-teal-700 hover:underline">

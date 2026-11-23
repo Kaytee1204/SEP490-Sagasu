@@ -26,7 +26,7 @@ export default function AdminLayout() {
   };
 
   const getBreadcrumb = () => {
-    if (location.pathname.startsWith('/admin/items')) return 'Tin đăng đồ thất lạc';
+    if (location.pathname.startsWith('/admin/items')) return 'Bài đăng đồ thất lạc';
     if (location.pathname.startsWith('/admin/reports')) return 'Báo cáo & Vi phạm';
     if (location.pathname.startsWith('/admin/users/')) return 'Chi tiết tài khoản';
     if (location.pathname.startsWith('/admin/users')) return 'Tài khoản thành viên';
@@ -124,7 +124,7 @@ export default function AdminLayout() {
             className={`admin-sidebar-nav-link ${isActive('/admin/items') ? 'active' : ''}`}
           >
             <Package size={16} />
-            <span style={{ flex: 1 }}>Tin đăng</span>
+            <span style={{ flex: 1 }}>Bài đăng</span>
           </Link>
 
           <Link

@@ -21,13 +21,15 @@ export default function MainLayout() {
     return <Outlet />;
   }
 
+  const isHomePage = location.pathname === '/';
+
   return (
     <ChatProvider key={user?.id || 'anonymous'}><div className="min-h-screen flex flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)]">
       <Navbar />
       <main className="flex-1 flex flex-col">
         <Outlet />
       </main>
-      <Footer />
+      {isHomePage && <Footer />}
     </div></ChatProvider>
   );
 }

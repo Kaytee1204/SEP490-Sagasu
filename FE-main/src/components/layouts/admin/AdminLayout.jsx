@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import Navbar from '@/components/layouts/Navbar';
-import Footer from '@/components/layouts/Footer';
 import ChatProvider from '@/features/chat/context/ChatProvider';
 import { useAuth } from '@/context/AuthContext';
 import { reviewApi } from '@/features/report-review/api';
@@ -35,11 +34,12 @@ export default function AdminLayout() {
 
     const load = async () => {
       if (role === 'MANAGER') {
-        const [reportsRes, postsRes, transfersRes, storedRes] = await Promise.allSettled([
+        const [reportsRes, postsRes, transfersRes, storedRes, newsRes] = await Promise.allSettled([
           reviewApi.list({ queue: 'READY' }),
           officeApi.posts({ page: 1, moderation: 'PENDING' }),
           workflowApi.transfers({ page: 1, status: 'PENDING', mine: false }),
           officeApi.stored({ page: 1 }),
+          newsApi.listForApprover({ page: 1, size: 1 }),
         ]);
         if (!active) return;
         setNavBadges({
@@ -48,6 +48,7 @@ export default function AdminLayout() {
           pendingPosts: readTotal(postsRes),
           pendingTransfers: readTotal(transfersRes),
           storedItems: readTotal(storedRes),
+          newsArticles: readTotal(newsRes),
         });
       } else if (role === 'APPROVER') {
         const [claimsRes, transfersRes, receiptsRes, storedRes, newsRes] = await Promise.allSettled([
@@ -97,7 +98,6 @@ export default function AdminLayout() {
             <Outlet />
           </main>
         </div>
-        <Footer />
       </div>
     </ChatProvider>
   );

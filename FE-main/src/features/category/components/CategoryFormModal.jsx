@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import CategoryDialog from './CategoryDialog';
+import CharCountHint from '@/components/common/CharCountHint';
 
 export default function CategoryFormModal({ category, busy, onClose, onSave }) {
   const [name, setName] = useState(category?.name || '');
@@ -22,6 +23,7 @@ export default function CategoryFormModal({ category, busy, onClose, onSave }) {
         <input id="category-name" value={name} onChange={(event) => { setName(event.target.value); setError(''); }}
           disabled={busy} maxLength={100} required aria-invalid={!!error} aria-describedby={error ? 'category-form-error' : undefined}
           className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 focus:outline-teal-600" placeholder="Ví dụ: Điện thoại" />
+        <CharCountHint value={name} max={100} />
         {error && <p id="category-form-error" role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       </div>
       {!category && <p className="text-sm text-zinc-500">Danh mục mới sẽ được kích hoạt.</p>}

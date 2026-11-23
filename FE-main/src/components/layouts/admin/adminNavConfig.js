@@ -84,11 +84,19 @@ export const ADMIN_NAV_SECTIONS = [
         roles: ['MANAGER'],
       },
       {
-        label: 'Tin đăng',
+        label: 'Bài đăng',
         path: '/admin/items',
         icon: Package,
         badgeKey: 'pendingPosts',
         badgeTone: 'warning',
+        roles: ['MANAGER'],
+      },
+      {
+        label: 'Tin tức hệ thống',
+        path: '/admin/news',
+        icon: Newspaper,
+        badgeKey: 'newsArticles',
+        badgeTone: 'neutral',
         roles: ['MANAGER'],
       },
       {

@@ -1,5 +1,6 @@
 import { isQuestionVisible, questionnaireQuestions } from '../utils/questionnaireUtils';
 import { CalendarDays, Fingerprint } from 'lucide-react';
+import CharCountHint from '@/components/common/CharCountHint';
 
 function LostDateField({ question, value, onChange }) {
   const precision = value?.precision === 'UNKNOWN' ? 'UNKNOWN' : 'EXACT';
@@ -41,7 +42,9 @@ function ChoiceField({ question, value, onChange }) {
     </select>}
     {details && <label>{question.inputType === 'CONTENTS' ? 'Liệt kê đồ bên trong' : 'Mô tả thêm'}{selected?.detailsRequired ? ' *' : ' (không bắt buộc)'}
       <textarea rows={2} maxLength={2000} required={Boolean(selected?.detailsRequired)} value={value?.details || ''}
-        onChange={event => onChange({ choice, details: event.target.value })} /></label>}
+        onChange={event => onChange({ choice, details: event.target.value })} />
+      <CharCountHint value={value?.details || ''} max={2000} />
+    </label>}
   </fieldset>;
 }
 
@@ -51,9 +54,12 @@ function QuestionField({ question, value, onChange }) {
   if (question.code === 'C2') return <label className="claim-location-field"><span>Địa điểm mất đồ <span className="claim-required">*</span></span>
     <input type="text" required={question.required} maxLength={2000} value={value || ''}
       placeholder="Nơi bạn có thể đã làm mất hoặc để quên đồ…" onChange={event => onChange(event.target.value)} />
+    <CharCountHint value={value || ''} max={2000} />
   </label>;
   return <label className="claim-text-field"><span>{question.label}{question.required && <span className="claim-required"> *</span>}</span><textarea rows={2} required={question.required} maxLength={2000}
-    value={value || ''} onChange={event => onChange(event.target.value)} /></label>;
+    value={value || ''} onChange={event => onChange(event.target.value)} />
+    <CharCountHint value={value || ''} max={2000} />
+  </label>;
 }
 
 export default function ClaimQuestionnaireFields({ questionnaire, answers, onAnswer, description, onDescription, disabled }) {
@@ -63,7 +69,9 @@ export default function ClaimQuestionnaireFields({ questionnaire, answers, onAns
     if (!isQuestionVisible(question, answers, definitions)) return null;
     if (question.inputType === 'DESCRIPTION') return <label key={question.code} className="claim-description-field"><span>Căn cứ nhận đồ <span className="claim-required">*</span></span>
       <textarea rows={3} required maxLength={5000} value={description} onChange={event => onDescription(event.target.value)}
-        placeholder="Mô tả dấu hiệu riêng hoặc căn cứ cho thấy món đồ này là của bạn…" /></label>;
+        placeholder="Mô tả dấu hiệu riêng hoặc căn cứ cho thấy món đồ này là của bạn…" />
+      <CharCountHint value={description || ''} max={5000} />
+    </label>;
     if (question.inputType === 'EVIDENCE') return null;
     return <QuestionField key={question.code} question={question} value={answers[question.code]}
       onChange={value => onAnswer(question.code, value)} />;

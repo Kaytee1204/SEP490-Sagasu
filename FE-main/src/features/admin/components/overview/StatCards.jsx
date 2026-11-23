@@ -4,7 +4,7 @@ export default function StatCards({ reports, items, pendingReports }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
       {[
-        { label: 'Tổng tin đăng', value: '1,842', change: '+12.5%', isUp: true },
+        { label: 'Tổng bài đăng', value: '1,842', change: '+12.5%', isUp: true },
         { label: 'Đã trao trả thành công', value: '1,420', change: '+18.2%', isUp: true },
         { label: 'Báo cáo vi phạm', value: `${reports.length}`, sub: `${pendingReports.length} chờ xử lý`, isWarning: pendingReports.length > 0 },
         { label: 'Tài khoản tạm khóa', value: '24', change: '+2 tuần này', isUp: false },
