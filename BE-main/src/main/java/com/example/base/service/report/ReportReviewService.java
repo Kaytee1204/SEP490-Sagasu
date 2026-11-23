@@ -10,6 +10,7 @@ import com.example.base.security.CustomUserDetails;
 import com.example.base.service.account.AccountService;
 import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.claim.ClaimService;
+import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.office.*;
 import jakarta.validation.constraints.*;
@@ -40,6 +41,7 @@ public class ReportReviewService {
   private final NotificationService notifications;
   private final ChatConversationService chat;
   private final ClaimService claims;
+  private final P2pClaimAppealService claimAppeals;
   private final ReportReviewCalendar calendar;
 
   public enum AppealFinding { INSUFFICIENT_EVIDENCE, INVALID_CLAIM }
@@ -847,7 +849,10 @@ public class ReportReviewService {
     );
     if (finished) {
       closeInquiries(reportId);
-      if ("P2P".equals(appeal.get("claim_type"))) jdbc.queryForList("select finish_empty_p2p_window(?)", id(appeal, "post_id"));
+      if ("APPEAL_REJECT_CLAIM".equals(recordedAction) && "P2P".equals(appeal.get("claim_type"))
+          && Boolean.TRUE.equals(appeal.get("active"))) {
+        claimAppeals.releaseWindowIfUncontested(id(appeal, "post_id"));
+      }
       chat.notifyAppealChanged(reportId);
       jdbc.update(
         "update report_hold set released_at=now() where report_id=? and released_at is null",

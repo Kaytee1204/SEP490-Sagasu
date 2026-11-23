@@ -27,23 +27,6 @@ BEGIN
     END LOOP;
 END $$;
 
-CREATE OR REPLACE FUNCTION finish_empty_p2p_window(item_id bigint)
-RETURNS void LANGUAGE sql AS $$
-    UPDATE p2p_claim_approval a SET appeal_until=now()
-    FROM claim chosen WHERE a.approved_claim_id=chosen.claim_id AND chosen.post_id=item_id
-      AND a.custody_mode='P2P' AND a.closed_at IS NULL AND a.appeal_until>now()
-      AND NOT EXISTS (SELECT 1 FROM p2p_claim_appeal e JOIN report r USING(report_id)
-                      WHERE e.approval_id=a.approval_id AND r.status IN ('OPEN','IN_REVIEW'))
-      AND NOT EXISTS (SELECT 1 FROM claim c WHERE c.post_id=item_id AND c.claim_type='P2P'
-          AND c.claim_id<>chosen.claim_id AND c.claimant_id IS NOT NULL AND c.status='PENDING'
-          AND NOT EXISTS (SELECT 1 FROM p2p_claim_appeal e
-                          WHERE e.approval_id=a.approval_id AND e.appellant_claim_id=c.claim_id)
-          AND NOT EXISTS (SELECT 1 FROM p2p_claim_appeal e JOIN report_decision d USING(report_id)
-                          WHERE e.appellant_claim_id=c.claim_id AND d.action IN ('APPEAL_KEEP','APPEAL_REJECT_CLAIM')))
-$$;
-
 SELECT withdraw_p2p_appeal(c.claim_id) FROM claim c JOIN p2p_claim_appeal a ON a.appellant_claim_id=c.claim_id
     JOIN report r USING(report_id) WHERE c.claim_type='P2P' AND c.status='CANCELLED' AND r.status IN ('OPEN','IN_REVIEW');
-SELECT finish_empty_p2p_window(c.post_id) FROM p2p_claim_approval a JOIN claim c ON c.claim_id=a.approved_claim_id
-    WHERE a.custody_mode='P2P' AND a.closed_at IS NULL AND a.appeal_until>now();
 COMMIT;

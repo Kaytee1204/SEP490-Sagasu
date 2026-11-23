@@ -924,7 +924,7 @@
 .rr-detail-shell .rr-detail-heading { margin-bottom: 10px; padding: 14px 16px; }
 .rr-detail-sections { scroll-margin-top: 60px; }
 .rr-detail-sections .rr-detail-nav {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
   position: sticky; top: 0; z-index: 2; margin-bottom: 10px;
 }
 .rr-detail-sections > #trao-doi { scroll-margin-top: 104px; }

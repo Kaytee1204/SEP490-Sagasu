@@ -26,7 +26,7 @@ function currentStep(data, canRevoke) {
   const appeal = data.appealWindow;
   if (appeal?.state === 'OPEN') return {
     Icon: Clock3, title: 'Chưa thể bàn giao',
-    description: `Những người gửi yêu cầu khác có thể phản hồi đến ${claimDate(appeal.deadline)}. Hai bên vẫn có thể nhắn tin trong lúc chờ.`,
+    description: `Những người gửi yêu cầu khác có thể phản hồi đến ${claimDate(appeal.deadline)}. Chat chỉ xem và bàn giao tạm dừng trong thời gian này.`,
   };
   if (appeal?.state === 'UNDER_REVIEW') return {
     Icon: ShieldAlert, title: 'Đang xem xét tranh chấp',
