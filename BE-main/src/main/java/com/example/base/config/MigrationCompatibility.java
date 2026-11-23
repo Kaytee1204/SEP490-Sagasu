@@ -5,6 +5,11 @@ final class MigrationCompatibility {
     private MigrationCompatibility() {}
 
     static String prepare(String path, String sql) {
+        if (path.endsWith("15_office_email_invitation.sql")) {
+            // This script is replayed on startup, including after web-only appointments have been saved.
+            sql = sql.replace("(email_sent_at IS NOT NULL AND response_deadline IS NOT NULL AND response_deadline = email_sent_at + interval '12 hours')",
+                    "response_deadline IS NOT NULL");
+        }
         // DaiHV: startup replays old scripts; preserve report-resolution history without editing team SQL.
         if (path.endsWith("15_office_email_invitation.sql") || path.endsWith("16_p2p_handover.sql")
                 || path.endsWith("19_office_transfer_and_return.sql")) {

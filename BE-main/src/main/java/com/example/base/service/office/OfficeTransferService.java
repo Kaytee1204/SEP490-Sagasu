@@ -17,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.time.OffsetDateTime;
 import java.util.*;
 import static com.example.base.entity.AccountRole.*;
@@ -39,8 +41,10 @@ public class OfficeTransferService {
     private final JdbcTemplate jdbc;
     private final EntityManager em;
     private final com.example.base.service.notification.NotificationService notifications;
+    private final PlatformTransactionManager transactions;
 
     private static final String ELIGIBLE = " p.post_type='FOUND' and p.custody_mode='P2P' and p.status in ('OPEN','RESERVED') and p.moderation_status='VISIBLE' and p.deleted_at is null and not exists(select 1 from item_receipt r where r.post_id=p.post_id) and not exists(select 1 from claim c where c.post_id=p.post_id and c.status='COMPLETED') ";
+    private static final String EXPIRED_REASON = "Văn phòng chưa tiếp nhận đồ trong thời hạn.";
 
     @Transactional(readOnly=true)
     public List<CounterPerson> counterPeople(String query,CustomUserDetails user) {
@@ -69,6 +73,7 @@ public class OfficeTransferService {
         if(!post.getAccount().getId().equals(request.accountId()))throw bad("Bài đăng không thuộc người giao đã chọn.");
         if(!request.physicallyReceived())throw bad("Cần xác nhận đã trực tiếp nhận và kiểm tra đồ.");
         if(!Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from post p where p.post_id=? and "+ELIGIBLE+")",Boolean.class,post.getId())))throw bad("Bài đăng không còn đủ điều kiện tiếp nhận. Hãy tải lại danh sách.");
+        expireDueForPost(post);
         TransferDecision decision=new TransferDecision(0L,"RECEIVED",request.locationId(),request.condition(),null,request.reconciliationNote());
         Long receiptId=receive(post,actor,decision,files);
         jdbc.update("update item_receipt set note=? where item_receipt_id=?","Tiếp nhận trực tiếp tại quầy từ bài đăng có sẵn."+(request.reconciliationNote()==null?"":" Đối chiếu: "+request.reconciliationNote()),receiptId);
@@ -85,6 +90,7 @@ public class OfficeTransferService {
         Account actor = access.require(user);
         Post post = lock(postId);
         if (!post.getAccount().getId().equals(actor.getId())) throw bad("Chỉ người đăng được yêu cầu chuyển giao.");
+        expireDueForPost(post);
         if (pending(postId)) return post;
         if (!post.canRequestOfficeHandover() || receipts.existsByPostId(postId)) throw bad("Bài đăng không còn đủ điều kiện chuyển giao.");
         jdbc.update("insert into office_transfer(post_id,requested_by) values(?,?)",postId,actor.getId());
@@ -103,16 +109,16 @@ public class OfficeTransferService {
     @Transactional(readOnly=true)
     public PageData<TransferView> list(int page, String status, String q, boolean mine, CustomUserDetails user) {
         Account actor = mine ? access.require(user) : access.require(user, APPROVER, MANAGER);
-        if (page<1 || !Set.of("ALL","PENDING","RECEIVED","REJECTED","CANCELLED","UNSCHEDULED","AWAITING_REPLY","CONFIRMED").contains(status)) throw bad("Bộ lọc không hợp lệ.");
+        if (Set.of("AWAITING_REPLY", "CONFIRMED").contains(status)) status="SCHEDULED";
+        if (page<1 || !Set.of("ALL","PENDING","RECEIVED","REJECTED","CANCELLED","UNSCHEDULED","SCHEDULED").contains(status)) throw bad("Bộ lọc không hợp lệ.");
         String filter=" from office_transfer t join post p on p.post_id=t.post_id where "
-                +"(?='ALL' or t.status=? or (t.status='PENDING' and ((?='UNSCHEDULED' and not exists(select 1 from office_intake_appointment a where a.transfer_id=t.transfer_id and a.status='SCHEDULED' and (a.response_status<>'PENDING' or a.response_deadline>now())))"
-                +" or (?='AWAITING_REPLY' and exists(select 1 from office_intake_appointment a where a.transfer_id=t.transfer_id and a.status='SCHEDULED' and a.response_status in ('UNSENT','PENDING') and (a.response_deadline is null or a.response_deadline>now())))"
-                +" or (?='CONFIRMED' and exists(select 1 from office_intake_appointment a where a.transfer_id=t.transfer_id and a.status='SCHEDULED' and a.response_status='CONFIRMED')))))"
+                +"(?='ALL' or t.status=? or (t.status='PENDING' and ? in ('UNSCHEDULED','SCHEDULED') and "
+                +"(?='SCHEDULED')=exists(select 1 from office_intake_appointment a where a.transfer_id=t.transfer_id and a.status='SCHEDULED')))"
                 +" and (?=false or t.requested_by=?) and p.title ilike ?";
         String search="%"+Objects.toString(q,"").strip()+"%";
-        Long count=jdbc.queryForObject("select count(*)"+filter,Long.class,status,status,status,status,status,mine,actor.getId(),search);
+        Long count=jdbc.queryForObject("select count(*)"+filter,Long.class,status,status,status,status,mine,actor.getId(),search);
         List<Long> ids=jdbc.query("select t.transfer_id"+filter+" order by t.requested_at desc,t.transfer_id desc limit 12 offset ?",
-                (rs,n)->rs.getLong(1),status,status,status,status,status,mine,actor.getId(),search,(page-1)*12L);
+                (rs,n)->rs.getLong(1),status,status,status,status,mine,actor.getId(),search,(page-1)*12L);
         return new PageData<>(ids.stream().map(this::view).toList(),page,count==null?0:count,Math.max(1,(int)Math.ceil((count==null?0:count)/12.0)));
     }
 
@@ -147,6 +153,9 @@ public class OfficeTransferService {
         Post post=lock(number(initial,"post_id"));
         Map<String,Object> current=jdbc.queryForMap("select * from office_transfer where transfer_id=? for update",id);
         if (!"PENDING".equals(current.get("status")) || number(current,"version")!=request.expectedVersion()) throw bad("Yêu cầu đã thay đổi. Hãy tải lại.");
+        if (Boolean.TRUE.equals(jdbc.queryForObject("""
+            select exists(select 1 from office_intake_appointment where transfer_id=? and status='SCHEDULED' and intake_deadline<=clock_timestamp())
+            """, Boolean.class, id))) throw bad("Yêu cầu đã quá hạn tiếp nhận. Hãy tải lại.");
         if ("CANCELLED".equals(request.decision())) {
             if (number(current,"requested_by")!=actor.getId()) throw bad("Chỉ người gửi được rút yêu cầu.");
         } else if(actor.getRole()!=APPROVER) throw bad("Chỉ nhân viên tiếp nhận được xử lý việc nhận đồ.");
@@ -253,11 +262,42 @@ public class OfficeTransferService {
                         .map(i->images.readUrl(i.getStorageKey(),i.getImageUrl())).toList()).orElse(List.of()));
     }
     private IntakeAppointment intakeAppointment(long id) {
-        return jdbc.query("select * from office_intake_appointment where transfer_id=? order by appointment_id desc limit 1",(rs,n)->{
-            String response=rs.getString("response_status");OffsetDateTime deadline=rs.getObject("response_deadline",OffsetDateTime.class);
-            if("PENDING".equals(response)&&deadline!=null&&!OffsetDateTime.now().isBefore(deadline))response="EXPIRED";
-            return new IntakeAppointment(rs.getLong("appointment_id"),rs.getObject("scheduled_at",OffsetDateTime.class),rs.getString("location"),rs.getString("note"),rs.getString("status"),rs.getString("email_status"),response,deadline,rs.getString("cancellation_reason"));
-        },id).stream().findFirst().orElse(null);
+        return jdbc.query("select * from office_intake_appointment where transfer_id=? order by appointment_id desc limit 1",(rs,n)->
+            new IntakeAppointment(rs.getLong("appointment_id"),rs.getObject("scheduled_at",OffsetDateTime.class),rs.getString("location"),rs.getString("note"),rs.getString("status"),rs.getString("email_status"),rs.getObject("intake_deadline",OffsetDateTime.class),rs.getString("cancellation_reason")),
+            id).stream().findFirst().orElse(null);
+    }
+
+    public void expireDue() {
+        var postIds=jdbc.queryForList("""
+            select t.post_id from office_intake_appointment a join office_transfer t using(transfer_id)
+            where a.status='SCHEDULED' and a.intake_deadline<=now() and t.status='PENDING'
+            order by a.intake_deadline, a.transfer_id limit 100
+            """,Long.class);
+        var tx=new TransactionTemplate(transactions);
+        for (long postId : postIds) {
+            try { tx.executeWithoutResult(ignored -> expireDueForPost(lock(postId))); }
+            catch (RuntimeException failure) {
+                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Could not expire office intake for post {}",postId,failure);
+            }
+        }
+    }
+
+    private void expireDueForPost(Post post) {
+        var expired=jdbc.queryForList("""
+            update office_transfer t set status='CANCELLED', processed_at=now(), reason=?, version=version+1
+            from office_intake_appointment a where t.post_id=? and t.status='PENDING' and a.transfer_id=t.transfer_id
+              and a.status='SCHEDULED' and a.intake_deadline<=clock_timestamp()
+            returning t.transfer_id,t.requested_by
+            """,EXPIRED_REASON,post.getId());
+        if (expired.isEmpty()) return;
+        post.cancelOfficeRequest();
+        for (var transfer : expired) {
+            long id=number(transfer,"transfer_id");
+            jdbc.update("update office_intake_appointment set status='CANCELLED',cancellation_reason=?,response_token_hash=null where transfer_id=? and status='SCHEDULED'",EXPIRED_REASON,id);
+            notifications.notifyUser(number(transfer,"requested_by"),"OFFICE_TRANSFER_EXPIRED",
+                "Yêu cầu tiếp nhận đồ đã hết hạn",EXPIRED_REASON + " Bạn vẫn giữ đồ và có thể gửi yêu cầu mới hoặc mang đồ đến quầy.",
+                "/van-phong/chuyen-giao/"+id,false);
+        }
     }
     private static long number(Map<String,Object> row,String key) { return ((Number)row.get(key)).longValue(); }
     private static OffsetDateTime time(Object value) { return value==null?null:((java.sql.Timestamp)value).toInstant().atOffset(java.time.ZoneOffset.UTC); }

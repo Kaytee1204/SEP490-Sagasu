@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CalendarDays, CheckCircle, Clock, XCircle } from "lucide-react";
-import { invitationApi, intakeInvitationApi } from "../api/invitationApi";
+import { invitationApi } from "../api/invitationApi";
 import { date } from "../officeUtils";
 import Notice from "../components/Notice";
-import IntakeReplyReason from "../components/IntakeReplyReason";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import "../Office.css";
 import "../PersonalOffice.css";
@@ -27,18 +26,11 @@ const statuses = {
     "Vui lòng liên hệ văn phòng nếu cần hỗ trợ.",
   ],
 };
-const intakeStatuses = {
-  CONFIRMED: ["Đã đồng ý lịch mang đồ đến", "Cảm ơn bạn. Vui lòng mang đồ đến văn phòng theo lịch trên; nhân viên sẽ kiểm tra và xác nhận tiếp nhận tại quầy."],
-  DECLINED: ["Đã gửi đề nghị đổi lịch", "Yêu cầu tiếp nhận vẫn được giữ. Văn phòng sẽ liên hệ để hẹn lại lịch phù hợp."],
-  EXPIRED: ["Lịch hẹn cần được sắp xếp lại", "Chưa nhận được phản hồi trong 12 giờ. Yêu cầu tiếp nhận vẫn được giữ để văn phòng hẹn lại."],
-  CANCELLED: ["Lịch hẹn không còn hiệu lực", "Hãy kiểm tra yêu cầu tiếp nhận hoặc mở email lịch hẹn mới nhất."],
-};
-export default function InvitationPage({ intake = false }) {
+export default function InvitationPage() {
   const { hash } = useLocation();
-  return <InvitationContent key={`${intake}:${hash}`} hash={hash} intake={intake} />;
+  return <InvitationContent key={hash} hash={hash} />;
 }
-function InvitationContent({ hash, intake }) {
-  const api = intake ? intakeInvitationApi : invitationApi;
+function InvitationContent({ hash }) {
   const params = new URLSearchParams(hash.slice(1));
   const token = params.get("token") || "";
   const proposed = params.get("decision") === "DECLINE" ? "DECLINE" : "CONFIRM";
@@ -48,7 +40,6 @@ function InvitationContent({ hash, intake }) {
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [decision, setDecision] = useState(proposed);
-  const [reason, setReason] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -59,7 +50,7 @@ function InvitationContent({ hash, intake }) {
           throw new Error(
             "Liên kết không hợp lệ. Hãy mở nút trong email lịch hẹn mới nhất.",
           );
-        return api.preview(token);
+        return invitationApi.preview(token);
       })
       .then((value) => {
         if (active) setData(value);
@@ -73,7 +64,7 @@ function InvitationContent({ hash, intake }) {
     return () => {
       active = false;
     };
-  }, [token, proposed, attempt, api]);
+  }, [token, proposed, attempt]);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -83,13 +74,13 @@ function InvitationContent({ hash, intake }) {
     data.deadline &&
     now >= new Date(data.deadline).getTime();
   const status = expired ? "EXPIRED" : data?.status;
-  const result = (intake ? intakeStatuses : statuses)[status];
+  const result = statuses[status];
   async function submit() {
     if (busy || status !== "PENDING") return;
     setBusy(true);
     setError("");
     try {
-      setData(await api.respond(token, decision, intake ? reason.trim() : null));
+      setData(await invitationApi.respond(token, decision));
       setConfirmOpen(false);
     } catch (failure) {
       setError(failure.message);
@@ -103,7 +94,7 @@ function InvitationContent({ hash, intake }) {
       <section className="of-panel">
         <p className="of-eyebrow">Văn phòng · Sagasu</p>
         <CalendarDays size={32} aria-hidden="true" />
-        <h1>{intake ? "Lịch mang đồ đến văn phòng" : "Xác nhận lịch hẹn nhận đồ"}</h1>
+        <h1>Xác nhận lịch hẹn nhận đồ</h1>
         <p className="of-muted">
           Không cần đăng nhập. Mở liên kết chưa được tính là phản hồi.
         </p>
@@ -129,7 +120,7 @@ function InvitationContent({ hash, intake }) {
                 <dd>{data.title}</dd>
               </div>
               <div>
-                <dt>{intake ? "Thời gian mang đồ đến" : "Thời gian nhận đồ"}</dt>
+                <dt>Thời gian nhận đồ</dt>
                 <dd>{date(data.scheduledAt)}</dd>
               </div>
               <div>
@@ -158,10 +149,6 @@ function InvitationContent({ hash, intake }) {
                 className="of-form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (intake && decision === "DECLINE" && !reason.trim()) {
-                    setError("Vui lòng nhập lý do cần đổi lịch.");
-                    return;
-                  }
                   setError("");
                   setConfirmOpen(true);
                 }}
@@ -184,15 +171,14 @@ function InvitationContent({ hash, intake }) {
                       checked={decision === "DECLINE"}
                       onChange={() => setDecision("DECLINE")}
                     />
-                    {intake ? "Đề nghị đổi lịch" : "Từ chối lịch hẹn"}
+                    Từ chối lịch hẹn
                   </label>
                 </fieldset>
                 {decision === "DECLINE" && (
                   <Notice error>
-                    {intake ? "Nếu lịch chưa phù hợp, văn phòng sẽ giữ yêu cầu tiếp nhận để hẹn lại với bạn." : "Từ chối sẽ hủy lịch và kết thúc yêu cầu nhận đồ này."}
+                    Từ chối sẽ hủy lịch và kết thúc yêu cầu nhận đồ này.
                   </Notice>
                 )}
-                {intake && decision === "DECLINE" && <IntakeReplyReason value={reason} onChange={setReason} disabled={busy} />}
                 <button
                   type="submit"
                   className={`of-button ${decision === "DECLINE" ? "of-danger" : "of-primary"}`}
@@ -202,7 +188,7 @@ function InvitationContent({ hash, intake }) {
                     ? "Đang ghi nhận…"
                     : decision === "CONFIRM"
                       ? "Xác nhận đồng ý"
-                      : intake ? "Gửi đề nghị đổi lịch" : "Xác nhận từ chối"}
+                      : "Xác nhận từ chối"}
                 </button>
               </form>
             ) : (
@@ -213,9 +199,9 @@ function InvitationContent({ hash, intake }) {
             <ConfirmActionPopup
               open={confirmOpen}
               variant={decision === "CONFIRM" ? "success" : "danger"}
-              title={decision === "CONFIRM" ? "Xác nhận đồng ý lịch hẹn?" : intake ? "Gửi đề nghị đổi lịch?" : "Bạn có chắc chắn từ chối?"}
-              description={decision === "CONFIRM" ? `Bạn xác nhận sẽ đến văn phòng vào lúc ${date(data.scheduledAt)} tại ${data.location}.` : intake ? "Văn phòng sẽ nhận được lý do và sắp xếp lại lịch mới." : "Lịch hẹn sẽ bị hủy và yêu cầu nhận đồ này sẽ kết thúc. Hành động này không thể hoàn tác."}
-              confirmLabel={decision === "CONFIRM" ? "Đồng ý lịch hẹn" : intake ? "Gửi đề nghị" : "Xác nhận từ chối"}
+              title={decision === "CONFIRM" ? "Xác nhận đồng ý lịch hẹn?" : "Bạn có chắc chắn từ chối?"}
+              description={decision === "CONFIRM" ? `Bạn xác nhận sẽ đến văn phòng vào lúc ${date(data.scheduledAt)} tại ${data.location}.` : "Lịch hẹn sẽ bị hủy và yêu cầu nhận đồ này sẽ kết thúc. Hành động này không thể hoàn tác."}
+              confirmLabel={decision === "CONFIRM" ? "Đồng ý lịch hẹn" : "Xác nhận từ chối"}
               cancelLabel="Quay lại"
               busy={busy}
               onConfirm={submit}

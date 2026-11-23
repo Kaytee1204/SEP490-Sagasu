@@ -173,7 +173,7 @@ export default function IntakeFormPage() {
   const loaded = useReceipt(id, true, approverApi);
   if (loaded.loading) return <ReceiptLoading />;
   if (loaded.error) return <div className="mx-auto max-w-3xl space-y-4 p-6"><Link to="/approver/receipts" className="text-base text-teal-700">← Hồ sơ tiếp nhận</Link><ReceiptError message={loaded.error} onRetry={loaded.reload} /></div>;
-  if (loaded.receipt && !loaded.receipt.canProcess) return <div className="mx-auto max-w-3xl space-y-4 p-6"><ReceiptError message="Hồ sơ này đã chuyển xử lý và không còn được chỉnh sửa." /><Link to={`/approver/receipts/${id}`} className="text-base font-semibold text-teal-700">Xem chi tiết hồ sơ →</Link></div>;
+  if (loaded.receipt && (!loaded.receipt.canProcess || loaded.receipt.status !== 'DRAFT')) return <div className="mx-auto max-w-3xl space-y-4 p-6"><ReceiptError message="Chỉ có thể chỉnh sửa phiếu ở trạng thái bản nháp." /><Link to={`/approver/receipts/${id}`} className="text-base font-semibold text-teal-700">Xem chi tiết hồ sơ →</Link></div>;
   if (!loaded.categories.length) return <div className="mx-auto max-w-3xl space-y-4 p-6"><Link to="/approver/receipts" className="text-base text-teal-700">← Hồ sơ tiếp nhận</Link><ReceiptError message="Chưa có danh mục đang hoạt động. Vui lòng liên hệ người quản lý để bổ sung danh mục." onRetry={loaded.reload} /></div>;
   return <ReceiptEditor key={`${id || 'new'}:${loaded.receipt?.updatedAt || ''}`} receipt={loaded.receipt} categories={loaded.categories} locations={loaded.locations || []} />;
 }

@@ -49,14 +49,15 @@ public class OfficeReturnService {
             Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
             requireAvailable(c);
             if (activeAppointment(id)!=null) throw bad("Yêu cầu đã có lịch hẹn. Hãy tải lại hồ sơ.");
-            if (!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1)))
+            OffsetDateTime now=OffsetDateTime.now();
+            if (!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
                 throw bad("Giờ hẹn cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
             c.contactEmail(request.email().strip().toLowerCase(Locale.ROOT));
-            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note()));
+            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
             c.touchWorkflow();
             claims.flush();
             if (c.getClaimant()!=null) notifications.notifyUser(c.getClaimant().getId(), "APPOINTMENT_SCHEDULED",
-                "Văn phòng đã lập lịch nhận tài sản", "Xem và phản hồi lịch hẹn của yêu cầu #" + id + ".",
+                "Văn phòng đã lập lịch nhận tài sản", "Hãy phản hồi lịch của yêu cầu #" + id + " trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối.",
                 "/van-phong/claims/" + id, false);
         });
         return sendInvitation(id);
@@ -66,19 +67,21 @@ public class OfficeReturnService {
         new TransactionTemplate(transactions).executeWithoutResult(tx->{
             Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
             requireAvailable(c);
-            if(!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1))) throw bad("Lịch mới cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
+            OffsetDateTime now=OffsetDateTime.now();
+            if(!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1))) throw bad("Lịch mới cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
             Appointment old=scheduled(c);
             requireNotVerified(c,old);
             old.cancelByOffice(request.reason().strip());
             appointments.flush();
-            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note()));
+            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
             c.touchWorkflow();
             activities.save(new ClaimActivity(c,actor,"RESCHEDULE","APPROVED",request.reason().strip()));
             claims.flush();
             if(c.getClaimant()!=null) {
                 notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_RESCHEDULED",
                     "Văn phòng đã đổi lịch hẹn nhận đồ #" + c.getId(),
-                    "Lịch hẹn mới cho \"" + c.getPost().getTitle() + "\" tại " + request.location().strip() + ". Lý do: " + request.reason().strip(),
+                    "Lịch hẹn mới cho \"" + c.getPost().getTitle() + "\" tại " + request.location().strip()
+                        + ". Hãy phản hồi trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối. Lý do đổi lịch: " + request.reason().strip(),
                     "/van-phong/claims/" + c.getId(),false);
             }
         });

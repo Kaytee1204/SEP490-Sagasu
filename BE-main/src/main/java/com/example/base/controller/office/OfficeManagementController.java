@@ -83,7 +83,7 @@ public class OfficeManagementController {
     @PreAuthorize("hasAnyRole('APPROVER','MANAGER')")
     @Operation(
             summary = "[12.5] Danh sách toàn bộ vị trí kệ / tủ lưu trữ kèm số lượng đồ đang chứa (APPROVER & MANAGER)",
-            description = "Trả về danh sách vị trí kho lưu trữ, sức chứa (capacity) và số lượng vật phẩm hiện tại."
+            description = "Trả về danh sách vị trí lưu kho và trạng thái sử dụng."
     )
     public ApiResponse<List<LocationView>> locations(
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
@@ -93,7 +93,7 @@ public class OfficeManagementController {
     @PostMapping("/locations")
     @Operation(
             summary = "[12.6] Tạo mới vị trí kệ / tủ lưu trữ trong Kho Văn phòng (MANAGER)",
-            description = "Thêm mới mã vị trí kho (code), tên vị trí, sức chứa và trạng thái kích hoạt."
+            description = "Thêm vị trí lưu kho với mã, tên, vị trí cha và trạng thái sử dụng."
     )
     public ApiResponse<LocationView> create(
             @Valid @RequestBody LocationInput r,

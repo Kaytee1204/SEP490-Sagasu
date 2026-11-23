@@ -97,13 +97,15 @@ public class OfficeManagementService {
     private PostView postView(Post p, boolean detail) {
         Account author = p.getCreatedBy();
         Account owner = p.getAccount();
+        ItemReceipt receipt = detail ? receipts.findByPostId(p.getId()).orElse(null) : null;
         return new PostView(p.getId(),p.getTitle(),detail?p.getDescription():null,p.getPostType(),p.getStatus(),
             p.getModerationStatus(),p.getCustodyMode(),p.getCategory().getName(),person(author),
             author==null?null:author.getEmail(),p.getLocationText(),p.getCreatedAt(),p.getUpdatedAt(),
             detail?p.getModerationNote():null,person(p.getModeratedBy()),p.getModeratedAt(),
             p.getImages().stream().limit(detail?5:1).map(i->storage.readUrl(i.getStorageKey(),i.getImageUrl())).toList(),
-            detail?receipts.findByPostId(p.getId()).map(this::receiptView).orElse(null):null,
-            author==null?null:author.getId(),person(owner),owner==null?null:owner.getId());
+            receipt==null?null:receiptView(receipt),
+            author==null?null:author.getId(),person(owner),owner==null?null:owner.getId(),
+            detail?clean(p.getPrivateIdentifiers()):null,receipt==null?null:clean(receipt.getPrivateIdentifiers()));
     }
     public ReceiptView receiptView(ItemReceipt r) {
         return new ReceiptView(r.getId(),r.getReceiptCode(),r.getPostId(),r.getTitle(),r.getStatus(),r.getConditionAtReceipt(),

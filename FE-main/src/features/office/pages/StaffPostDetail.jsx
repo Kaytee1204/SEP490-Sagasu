@@ -62,6 +62,15 @@ export default function StaffPostDetail() {
                   <p className="of-prose">{post.description}</p>
                 </section>
                 <ReceiptInfo receipt={post.receipt} />
+                {(post.privateIdentifiers || post.receiptPrivateIdentifiers) && (
+                  <section className="of-panel">
+                    <h2>Đặc điểm nhận dạng riêng tư</h2>
+                    <dl className="of-facts">
+                      {post.receiptPrivateIdentifiers && <div><dt>Ghi trên phiếu tiếp nhận</dt><dd className="of-prose">{post.receiptPrivateIdentifiers}</dd></div>}
+                      {post.privateIdentifiers && post.privateIdentifiers !== post.receiptPrivateIdentifiers && <div><dt>Ghi trên bài đăng</dt><dd className="of-prose">{post.privateIdentifiers}</dd></div>}
+                    </dl>
+                  </section>
+                )}
               </div>
               <aside>
                 <section className="of-panel">

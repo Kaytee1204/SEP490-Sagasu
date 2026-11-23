@@ -3,9 +3,8 @@ const stages = {
   REJECTED: ["Đã từ chối", "closed"],
   CANCELLED: ["Đã hủy yêu cầu", "closed"],
   UNSCHEDULED: ["Cần hẹn lịch", "attention"],
-  UNSENT: ["Chưa gửi được lịch", "attention"],
-  CONFIRMED: ["Đã đồng ý lịch", "complete"],
-  PENDING: ["Chờ phản hồi lịch", "active"],
+  SCHEDULED: ["Đã hẹn mang đồ đến", "active"],
+  PENDING: ["Chờ tiếp nhận", "active"],
 };
 
 export default function TransferStage({ stage }) {

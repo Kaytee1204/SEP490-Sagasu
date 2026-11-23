@@ -23,7 +23,7 @@ public final class OfficeWorkflowDtos {
             String reason, String reconciliationNote, Long receiptId, long version,
             long activeClaims, long previousHandovers, List<String> images, IntakeAppointment appointment, long requestedBy, List<String> receiptEvidence) {}
     public record IntakeAppointment(long id, OffsetDateTime scheduledAt, String location, String note,
-            String status, String emailStatus, String responseStatus, OffsetDateTime responseDeadline,String cancellationReason) {}
+            String status, String emailStatus, OffsetDateTime intakeDeadline, String cancellationReason) {}
     public record IntakeSchedule(@NotNull @PositiveOrZero Long expectedVersion,
             @NotNull OffsetDateTime scheduledAt, @NotBlank @Size(max=1000) String location,
             @Size(max=2000) String note, @Size(max=2000) String reason) {}
