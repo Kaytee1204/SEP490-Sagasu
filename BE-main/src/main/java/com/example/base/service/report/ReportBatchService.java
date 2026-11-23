@@ -17,7 +17,7 @@ public class ReportBatchService {
   public record Entry(@NotNull @Positive Long id, @NotNull @PositiveOrZero Long version) {}
   public record Request(@NotEmpty @Size(max=20) List<@Valid Entry> reports,
       @NotBlank String action, @NotBlank @Size(max=5000) String conclusion,
-      @NotBlank @Size(max=5000) String basis, @AssertTrue boolean sameIncidentConfirmed) {}
+      @Size(max=5000) String basis, @AssertTrue boolean sameIncidentConfirmed) {}
 
   static boolean sameIssue(Map<String,Object> a, Map<String,Object> b) {
     return Objects.equals(a.get("kind"), b.get("kind"))

@@ -110,6 +110,7 @@ final class ReportQueueSql {
           when risk.urgent_reason is not null or facts.new_reply or facts.recovery_overdue then null
           when facts.recovery_pending then 'WAITING_RECOVERY'
           when inquiry.reply_overdue then null
+          when r.kind='HANDOVER_ISSUE' and exists (select 1 from report_decision d where d.report_id=r.report_id and d.action='HANDOVER_VERIFY_HOLDER' and d.created_at=decisions.latest_decision and (inquiry.latest_question is null or d.created_at>=inquiry.latest_question)) then null
           when inquiry.waiting_reply then 'WAITING_REPLY'
           when facts.accepted_appeal and pending.waiting_other_appeals then 'WAITING_OTHER_APPEALS'
           when facts.accepted_appeal and not (%s) then 'WAITING_REOPEN'

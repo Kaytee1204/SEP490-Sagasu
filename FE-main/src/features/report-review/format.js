@@ -75,6 +75,9 @@ export const labels = {
   SETTLED: "Ghi nhận vấn đề đã giải quyết",
   UNSUBSTANTIATED: "Chưa đủ căn cứ xác định vi phạm",
   HANDOVER_COMPLETED: "Xác nhận đã trả đồ",
+  HANDOVER_VERIFY_HOLDER: "Cần xác minh người giữ đồ",
+  HANDOVER_CORRECTION: "Yêu cầu khắc phục bàn giao",
+  HANDOVER_UNVERIFIED: "Đóng sự cố · Chưa xác minh được",
   HANDOVER_CONTINUE: "Tiếp tục trao trả",
   HANDOVER_RETRY: "Hủy lượt giao và hẹn giao lại",
   HANDOVER_REOPEN: "Thu hồi chấp thuận để xét lại",
@@ -133,6 +136,8 @@ export function participantRoles(data, accountId) {
   const isAppeal = caseKind === "CLAIM_APPEAL";
   const roles = [];
   if (accountId === report.reporter_id) roles.push(isAppeal ? "Người gửi tranh chấp" : "Người gửi báo cáo");
+  if (caseKind === "HANDOVER_ISSUE" && accountId === data.current?.post?.account_id) roles.push("Người giao");
+  if (caseKind === "HANDOVER_ISSUE" && accountId === data.current?.claim?.claimant_id) roles.push("Người nhận đã duyệt");
   if (isAppeal && accountId === approvedContext?.claim?.claimant_id) roles.push("Người được chấp thuận");
   if (isAppeal && appeal && accountId === appeal.finder_id) {
     roles.push(appeal.claim_type === "P2P" ? "Người đăng bài (người nhặt được)" : "Người đăng bài");
@@ -147,10 +152,16 @@ export const verificationLabels = {
 };
 
 export function usesVerification(data) {
-  return data.appeal?.claim_type === "P2P" && ["OPEN", "IN_REVIEW"].includes(data.report.status);
+  return (Array.isArray(data.verificationOptions) || data.appeal?.claim_type === "P2P") && ["OPEN", "IN_REVIEW"].includes(data.report.status);
 }
 
 export function verificationOptions(data) {
+  if (data.caseKind === "HANDOVER_ISSUE") return (data.verificationOptions || []).map(option => {
+    const person = data.current.participants.find(p => p.id === option.recipientId);
+    const pending = data.inquiries.find(i => i.recipient_id === option.recipientId && !i.responded_at && !i.closed_at);
+    const reason = !person ? "Chưa xác định người nhận" : pending ? (pending.overdue ? "Quá hạn phản hồi" : "Đang chờ phản hồi") : "";
+    return { ...option, person, reason };
+  });
   if (!data.appeal?.active) return [];
   const pending = new Set(data.inquiries.filter(i => !i.responded_at && !i.closed_at).map(i => i.recipient_id));
   const targets = [
@@ -169,4 +180,21 @@ export function verificationOptions(data) {
 export function availableRecipients(data) {
   const waiting = new Set(data.inquiries.filter(i => !i.responded_at && !i.closed_at).map(i => i.recipient_id));
   return data.current.participants.filter(person => !waiting.has(person.id));
+}
+
+export function handoverActionLabel(action, data) {
+  const reason = data.report.reason_code;
+  if (action === "HANDOVER_CORRECTION") return reason === "HANDOVER_WRONG_ITEM" ? "Yêu cầu đổi đúng món" : "Yêu cầu giao bổ sung phụ kiện";
+  if (action === "REQUEST_ITEM_RECOVERY" && reason === "HANDOVER_WRONG_ITEM") return "Yêu cầu trả lại món nhầm";
+  if (action === "HANDOVER_COMPLETED") return reason === "HANDOVER_MISSING_ITEMS" ? "Xác nhận người nhận đã nhận đủ" : "Xác minh đã giao đúng người, đúng đồ";
+  if (action === "HANDOVER_CONTINUE") return data.issuePhase === "BEFORE" ? "Tiếp tục bàn giao theo lịch hẹn" : "Để người nhận kiểm tra và xác nhận";
+  if (action === "HANDOVER_RETRY") return "Ghi nhận đồ còn ở người giao · Hẹn giao lại";
+  if (action === "HANDOVER_REOPEN") return "Xét lại người nhận sau khi lấy lại đồ";
+  if (action === "RESOLVE") return ({
+    HANDOVER_MISSING_ITEMS: "Xác nhận đã nhận đủ phụ kiện",
+    HANDOVER_WRONG_ITEM: "Xác nhận người nhận đã có đúng món",
+    HANDOVER_CONDITION: "Ghi kết quả đối chiếu tình trạng món đồ",
+  })[reason] || "Đóng sự cố đã khắc phục";
+  if (action === "DISMISS") return "Bác phản ánh theo căn cứ đã xác minh";
+  return labels[action] || action;
 }

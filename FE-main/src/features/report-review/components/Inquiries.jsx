@@ -86,7 +86,7 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
     <section className="rr-card">
       <div className="rr-row">
         <h3>Trao đổi với người liên quan</h3>
-        {(structured ? options : recipients).length > 0 && (data.canAsk ?? data.canProcess) && (
+        {data.caseKind !== "GENERAL" && (structured ? options : recipients).length > 0 && (data.canAsk ?? data.canProcess) && (
           <button
             onClick={() => {
               setError("");
@@ -113,7 +113,7 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
             <span className="rr-badge" data-state={pending ? i.overdue ? "late" : "waiting" : "done"}>{status}</span>
           </div>
           <dl>
-            <dt>{verificationLabels[i.verification_kind] || "Câu hỏi"}</dt><dd>{i.question}</dd>
+            <dt>{data.verificationOptions?.find(o => o.kind === i.verification_kind)?.label || verificationLabels[i.verification_kind] || "Câu hỏi"}</dt><dd>{i.question}</dd>
             {i.responded_at && <><dt>Trả lời</dt><dd>{i.response}<Gallery images={i.evidence} /></dd></>}
             {i.verified_custody && <><dt>Quản lý xác minh</dt><dd>
               {{HELD: "Người nhặt vẫn giữ đồ", DELIVERED: "Đã giao đồ", UNKNOWN: "Chưa rõ ai giữ đồ"}[i.verified_custody]}
@@ -137,10 +137,10 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
             <p className="rr-muted">Người nhận có 12 giờ làm việc để trả lời. Hết hạn, hồ sơ về mục Cần xử lý để bạn kết luận dựa trên căn cứ hiện có.</p>
             {structured ? <>
               <label>Nội dung cần xác minh
-                <select autoFocus required value={kind} onChange={e => { setKind(e.target.value); setQuestion(""); }}>
+                <select autoFocus required value={kind} onChange={e => { setKind(e.target.value); setQuestion(options.find(o => o.kind === e.target.value)?.question || ""); }}>
                   <option value="">Chọn việc cần xác minh</option>
                   {options.map(option => <option key={option.kind} value={option.kind} disabled={Boolean(option.reason)}>
-                    {verificationLabels[option.kind]}{option.reason && ` · ${option.reason}`}
+                    {option.label || verificationLabels[option.kind]}{option.reason && ` · ${option.reason}`}
                   </option>)}
                 </select>
               </label>
@@ -172,19 +172,6 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
                 onChange={(e) => setQuestion(e.target.value)}
               />
             </label>}
-            {data.report.reason_code === "HANDOVER_MISSING_ITEMS" && !question && (
-              <div className="rr-actions" aria-label="Câu hỏi gợi ý">
-                <button type="button" onClick={() => setQuestion("Khi nhận đồ, bạn đã nhận những gì và còn thiếu phụ kiện nào? Nếu có, hãy gửi ảnh để đối chiếu.")}>
-                  Hỏi người nhận còn thiếu gì
-                </button>
-                <button type="button" onClick={() => setQuestion("Khi nhặt được món đồ, bạn thấy những phụ kiện nào đi kèm? Bạn đã giao những gì và hiện còn giữ phụ kiện nào?")}>
-                  Hỏi người nhặt đang giữ gì
-                </button>
-                <button type="button" onClick={() => setQuestion("Bạn đã nhận phần phụ kiện được giao bổ sung chưa? Hãy cho biết đã nhận những gì và còn thiếu gì, nếu có.")}>
-                  Kiểm tra sau khi giao bổ sung
-                </button>
-              </div>
-            )}
             <ErrorBox>{error}</ErrorBox>
             <button className="rr-primary" disabled={busy || !canSend}>
               {busy ? "Đang gửi…" : "Gửi yêu cầu"}

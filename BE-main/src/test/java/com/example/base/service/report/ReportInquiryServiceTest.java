@@ -122,6 +122,16 @@ class ReportInquiryServiceTest {
     }
 
     @Test
+    void missingAccessoriesQuestionsGoToTheCorrectHandoverParty() {
+        report.put("kind", "HANDOVER_ISSUE");
+        report.put("reason_code", "HANDOVER_MISSING_ITEMS");
+        when(reviews.issuePhase(5L)).thenReturn("DURING");
+        when(context.context(report)).thenReturn(row("post", row("account_id", 8L), "claim", row("claimant_id", 7L)));
+        service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Còn thiếu gì?", "ISSUE_RECEIVER"), managerUser);
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "Còn thiếu gì?", "ISSUE_RECEIVER"), managerUser), "phù hợp");
+    }
+
+    @Test
     void p2pVerificationUsesOnlyTheParticipantForTheSelectedPurpose() {
         report.put("reporter_id", 7L);
         when(reviews.participants(any())).thenReturn(Set.of(7L, 8L, 9L));

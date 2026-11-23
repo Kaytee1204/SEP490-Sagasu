@@ -360,6 +360,7 @@ public class ReportReviewService {
       )
     );
     out.put("inquiries", inquiries(reportId));
+    if ("HANDOVER_ISSUE".equals(kind) && issuePhase != null) out.put("verificationOptions", HandoverVerification.options(r, current));
     out.put("hold", hold);
     out.put("p2pDispute", p2pDispute);
     out.put(
@@ -423,7 +424,7 @@ public class ReportReviewService {
         """,reportId);
   }
 
-  private String issuePhase(long reportId) {
+  String issuePhase(long reportId) {
     return (String) context.one("select phase from p2p_handover_issue where report_id=?",reportId).get("phase");
   }
 
@@ -461,13 +462,32 @@ public class ReportReviewService {
       if (!held && canHold(post)) actions.add("HOLD");
       if (!"BEFORE".equals(issuePhase) && (p2pDispute || issuePhase!=null) && !recoveryRequested) actions.add("REQUEST_ITEM_RECOVERY");
       if (!recoveryPending) {
+        if (issuePhase != null && !"BEFORE".equals(issuePhase) && !recoveryRequested
+            && Set.of("HANDOVER_WRONG_ITEM","HANDOVER_MISSING_ITEMS").contains(Objects.toString(report.get("reason_code"), ""))
+            && !hasCorrection(id(report, "report_id"))) actions.add("HANDOVER_CORRECTION");
+        if (issuePhase != null) actions.addAll(List.of("HANDOVER_VERIFY_HOLDER", "HANDOVER_UNVERIFIED"));
         if (p2pDispute) actions.addAll(List.of("HANDOVER_COMPLETED","HANDOVER_CONTINUE","HANDOVER_RETRY","HANDOVER_REOPEN"));
         else if ("BEFORE".equals(issuePhase)) actions.addAll(List.of("HANDOVER_CONTINUE","HANDOVER_REOPEN","DISMISS"));
         else actions.addAll(List.of("RESOLVE","DISMISS"));
       }
     } else actions.addAll(List.of("VIOLATION", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE"));
+    if ("HANDOVER_ISSUE".equals(kind) && issuePhase != null) actions.removeIf(action -> !fitsHandoverReason(report, action));
     if (recoveryPending) actions.add("CONFIRM_ITEM_RECOVERY");
     return actions;
+  }
+
+  private boolean hasCorrection(long reportId) {
+    return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from report_decision where report_id=? and action='HANDOVER_CORRECTION')",Boolean.class,reportId));
+  }
+
+  private static boolean fitsHandoverReason(Map<String,Object> report, String action) {
+    String reason = Objects.toString(report.get("reason_code"), "");
+    return switch (action) {
+      case "HANDOVER_REOPEN" -> Set.of("HANDOVER_WRONG_RECIPIENT", "HANDOVER_NOT_RECEIVED", "HANDOVER_ISSUE_OTHER").contains(reason) || reason.isEmpty();
+      case "REQUEST_ITEM_RECOVERY" -> !Set.of("HANDOVER_MISSING_ITEMS", "HANDOVER_CONDITION", "P2P_HANDOVER_NO_CONTACT", "HANDOVER_CONFIRMATION_ERROR").contains(reason);
+      case "HANDOVER_RETRY" -> !Set.of("HANDOVER_MISSING_ITEMS", "HANDOVER_CONDITION").contains(reason);
+      default -> true;
+    };
   }
 
   @SuppressWarnings("unchecked")
@@ -647,7 +667,7 @@ public class ReportReviewService {
       requireAssignee(r, actor, request.version());
     else processing(r, actor, request.version());
     String conclusion = text(request.conclusion()),
-      basis = text(request.basis());
+      basis = Objects.toString(request.basis(), "").strip();
     String status = (String) r.get("status");
     var current = context.context(r);
     var before = new LinkedHashMap<String, Object>();
@@ -663,8 +683,12 @@ public class ReportReviewService {
     var recovery = recovery(reportId);
     if (!recovery.isEmpty() && recovery.get("confirmed_at")==null && Set.of(
         "APPEAL_KEEP","APPEAL_WRONG_RECIPIENT","RESOLVE","DISMISS","HANDOVER_COMPLETED","HANDOVER_CONTINUE",
-        "HANDOVER_RETRY","HANDOVER_REOPEN","RELEASE").contains(effect))
+        "HANDOVER_RETRY","HANDOVER_REOPEN","HANDOVER_UNVERIFIED","RELEASE").contains(effect))
       throw bad("Cần xác nhận kết quả thu hồi trước khi xử lý bước này.");
+    if ("HANDOVER_ISSUE".equals(kind) && !fitsHandoverReason(r, effect) && issuePhase(reportId) != null)
+      throw bad("Thao tác không phù hợp với lý do sự cố bàn giao.");
+    if ("HANDOVER_ISSUE".equals(kind) && "RESOLVE".equals(effect) && Set.of("HANDOVER_WRONG_ITEM", "HANDOVER_MISSING_ITEMS").contains(Objects.toString(r.get("reason_code"), "")) && !request.custodyVerified())
+      throw bad("Cần xác minh kết quả đổi đồ hoặc giao bổ sung trước khi kết luận.");
     switch (effect) {
       case "VIOLATION", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE" -> requireGeneralConclusion(reportId);
       case "HOLD", "RELEASE" -> {
@@ -704,7 +728,7 @@ public class ReportReviewService {
           throw bad("Chọn đúng tài khoản liên quan bị báo cáo.");
         }
         if ("SUSPEND_ACCOUNT".equals(effect))
-          basis = suspendAccount(target, before) + "\n" + basis;
+          basis = suspendAccount(target, before) + (basis.isEmpty() ? "" : "\n" + basis);
         else requireActiveAccount(target);
         publishToParticipant(reportId, target,
             "WARN_ACCOUNT".equals(effect) ? "REPORT_ACCOUNT_WARNING" : "REPORT_ACCOUNT_SUSPENDED",
@@ -794,6 +818,39 @@ public class ReportReviewService {
           claims.reopenApprovalForReview(id(appeal, "approved_claim_id"), claimNote(reportId, conclusion), user);
           closeOtherAppeals(reportId, id(appeal, "approval_id"), actor.getId());
         }
+        next = "RESOLVED";
+      }
+      case "HANDOVER_CORRECTION" -> {
+        requireKind(kind, "HANDOVER_ISSUE");
+        String reason = Objects.toString(r.get("reason_code"), "");
+        String phase = issuePhase(reportId);
+        boolean exchange = "HANDOVER_WRONG_ITEM".equals(reason);
+        if ((!exchange && !"HANDOVER_MISSING_ITEMS".equals(reason)) || phase == null || "BEFORE".equals(phase)
+            || recoveryRequested(reportId) || hasCorrection(reportId))
+          throw bad("Hồ sơ không còn phù hợp để gửi yêu cầu này.");
+        var parties = HandoverVerification.options(r, current);
+        if (parties.stream().anyMatch(party -> party.recipientId() == null)) throw bad("Chưa xác định đủ hai bên giao nhận.");
+        closeInquiries(reportId);
+        var due = inquiryResponseDue();
+        for (var party : parties) {
+          boolean giver = "ISSUE_GIVER".equals(party.kind());
+          String prompt = exchange
+              ? (giver ? "Hãy hẹn đổi đúng món và xác nhận khi đã nhận lại món nhầm." : "Hãy trả lại món nhầm và xác nhận khi đã nhận đúng món.")
+              : (giver ? "Hãy giao phụ kiện còn thiếu và phản hồi phần đã giao." : "Hãy xác nhận phụ kiện bạn thực tế nhận bổ sung.");
+          jdbc.update("insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at,verification_kind) values(?,?,?,?,?,?)",
+              reportId, party.recipientId(), actor.getId(), prompt + " " + conclusion.substring(0,Math.min(4500,conclusion.length())), due, "HANDOVER_CORRECTION");
+          publishToParticipant(reportId,party.recipientId(),"REPORT_INFORMATION",exchange ? "Cần đổi đúng món" : "Cần giao bổ sung phụ kiện",prompt);
+        }
+      }
+      case "HANDOVER_VERIFY_HOLDER" -> {
+        requireKind(kind, "HANDOVER_ISSUE");
+        if (issuePhase(reportId) == null || !recovery.isEmpty() && recovery.get("confirmed_at") == null) throw bad("Chưa thể tạo việc xác minh cho hồ sơ này.");
+        // Keep the investigation assigned and open across shifts.
+      }
+      case "HANDOVER_UNVERIFIED" -> {
+        requireKind(kind, "HANDOVER_ISSUE");
+        if (issuePhase(reportId) == null) throw bad("Cần hồ sơ sự cố bàn giao P2P.");
+        if (activeP2pDispute(reportId)) resolveHandover(r, "HANDOVER_CONTINUE", actor.getId(), conclusion, before);
         next = "RESOLVED";
       }
       case "RESOLVE", "DISMISS" -> {
@@ -1165,7 +1222,7 @@ public class ReportReviewService {
 
   public static String text(String value) {
     if (value == null || value.isBlank() || value.length() > 5000) throw bad(
-      "Cần ghi kết luận và căn cứ xử lý (tối đa 5.000 ký tự)."
+      "Cần ghi kết luận xử lý (tối đa 5.000 ký tự)."
     );
     return value.strip();
   }

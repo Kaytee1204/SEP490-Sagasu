@@ -214,6 +214,9 @@ class P2pHandoverServiceTest {
                 var detail = service.detail(500L, finderUser);
                 assertEquals("COMPLETED", detail.status());
                 assertTrue(detail.confirmedByManager());
+                assertFalse(detail.issueReasons().stream().anyMatch(r -> "HANDOVER_WRONG_ITEM".equals(r.code())));
+                when(actors.actor(claimantUser)).thenReturn(claimant);
+                assertTrue(service.detail(500L, claimantUser).issueReasons().stream().anyMatch(r -> "HANDOVER_WRONG_ITEM".equals(r.code())));
                 assertTrue(detail.canReportIssue());
                 assertEquals("AFTER", detail.issuePhase());
 
