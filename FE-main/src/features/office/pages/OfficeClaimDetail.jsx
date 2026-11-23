@@ -6,7 +6,6 @@ import { workflowApi } from "../api/workflowApi";
 import { date } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
 import ReviewForm from "../components/ReviewForm";
-import SupplementForm from "../components/SupplementForm";
 import OfficeClaimTimeline from "../components/OfficeClaimTimeline";
 import Badge from "../components/Badge";
 import Header from "../components/Header";
@@ -241,18 +240,6 @@ export default function OfficeClaimDetail({ mine = false }) {
                               : r.emailStatus === "APPEAL_WINDOW"
                                 ? "Đã chấp thuận yêu cầu. Lịch hẹn được lập sau thời hạn gửi tranh chấp và sau khi các tranh chấp đã được xử lý."
                                 : "Đã lưu kết quả xử lý hồ sơ.",
-                      });
-                      state.reload();
-                    }}
-                  />
-                )}
-                {mine && claim.ownRequest && claim.status === "NEEDS_INFO" && (
-                  <SupplementForm
-                    mine={mine}
-                    claim={claim}
-                    onDone={() => {
-                      setNotice({
-                        text: "Đã ghi nhận thông tin bổ sung. Hồ sơ trở lại hàng chờ xét duyệt.",
                       });
                       state.reload();
                     }}

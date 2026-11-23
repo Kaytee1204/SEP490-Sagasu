@@ -849,8 +849,7 @@ public class ReportReviewService {
     );
     if (finished) {
       closeInquiries(reportId);
-      if ("APPEAL_REJECT_CLAIM".equals(recordedAction) && "P2P".equals(appeal.get("claim_type"))
-          && Boolean.TRUE.equals(appeal.get("active"))) {
+      if ("APPEAL_REJECT_CLAIM".equals(recordedAction) && Boolean.TRUE.equals(appeal.get("active"))) {
         claimAppeals.releaseWindowIfUncontested(id(appeal, "post_id"));
       }
       chat.notifyAppealChanged(reportId);
@@ -859,7 +858,7 @@ public class ReportReviewService {
         reportId
       );
       if (officeAppeal && Boolean.TRUE.equals(appeal.get("active"))) {
-        reopenOfficeAfterAppeals(appeal, actor.getId(), user);
+        claims.finishOfficeAppealReview(id(appeal, "post_id"));
       }
       Set<Long> recipients = participantsFor(r);
       Long finderToReview = "APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal ? id(appeal, "finder_id") : null;
@@ -884,31 +883,6 @@ public class ReportReviewService {
         chat.notifyHandoverChanged(id(r, "claim_id"));
     }
     return detail(reportId, user);
-  }
-
-  private void reopenOfficeAfterAppeals(Map<String,Object> appeal, long actorId, CustomUserDetails user) {
-    long approvalId=id(appeal,"approval_id");
-    var result=context.one("""
-        select r.report_id,r.resolution_note from p2p_claim_appeal a join report r using(report_id)
-        join report_decision d using(report_id)
-        where a.approval_id=? and r.status='RESOLVED' and d.action='APPEAL_WRONG_RECIPIENT'
-          and not exists (
-            select 1 from p2p_claim_appeal b join report pending using(report_id)
-            where b.approval_id=a.approval_id and pending.status in ('OPEN','IN_REVIEW')
-          )
-        order by d.decision_id desc limit 1
-        """,approvalId);
-    if (result.isEmpty()) return;
-    long acceptedReport=id(result,"report_id");
-    claims.reopenOfficeApprovalFromAppeal(id(appeal,"approved_claim_id"),approvalId,
-        claimNote(acceptedReport,(String)result.get("resolution_note")),user);
-    jdbc.update("""
-        update report_decision set after_state=after_state||'{"approvalReopened":true}'::jsonb
-        where report_id=? and action='APPEAL_WRONG_RECIPIENT'
-        """,acceptedReport);
-    notifications.notifyRoles(List.of(AccountRole.APPROVER),actorId,"CLAIM_REVIEW_REOPENED",
-        "Yêu cầu nhận tài sản được mở lại để xét duyệt", "Quản lý đã kết luận tranh chấp cho lần duyệt trước.",
-        "/approver/office-claims/post/"+id(appeal,"post_id"),false);
   }
 
   private void closeOtherAppeals(long reportId, long approvalId, long actorId) {

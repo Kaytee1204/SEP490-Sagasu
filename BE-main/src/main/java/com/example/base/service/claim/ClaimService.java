@@ -344,13 +344,8 @@ public class ClaimService {
     }
 
     @Transactional
-    public void reopenOfficeApprovalFromAppeal(long claimId, long approvalId, String reason, CustomUserDetails user) {
-        activeManager(user);
-        Post post = lockPost(claimPostId(claimId));
-        routing.lockReceipt(post);
-        Claim claim = lockClaimForWorkflow(claimId);
-        if (!claim.isOffice()) throw missing();
-        officeReturns.reopenFromAppeal(claim, approvalId, reason, user);
+    public void finishOfficeAppealReview(long postId) {
+        officeReturns.finishAppealReview(postId);
     }
 
     @Transactional
@@ -420,8 +415,8 @@ public class ClaimService {
         Account actor = activeActor(user);
         Post post = lockPost(claimPostId(id));
         routing.lockReceipt(post);
-        Claim claim = lockClaim(id);
-        if (!Objects.equals(claim.getClaimant().getId(), actor.getId())) throw missing();
+        Claim claim = lockClaimForWorkflow(id);
+        if (claim.getClaimant() == null || !Objects.equals(claim.getClaimant().getId(), actor.getId())) throw missing();
         if (request == null || (request.reason() != null && request.reason().length() > 2000)) {
             throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
         }
@@ -429,10 +424,19 @@ public class ClaimService {
         if (!cancellable(claim)) throw stateChanged();
         String previous = claim.getStatus();
         claim.cancel();
-        chatConversations.notifyChanged(claim);
         activities.save(new ClaimActivity(claim, actor, "CANCEL", previous, request.reason()));
         claims.flush();
-        if ("PENDING".equals(previous) && !claim.isOffice()) appeals.onPendingClaimWithdrawn(claim);
+        if (claim.isOffice()) {
+            appeals.onPendingClaimWithdrawn(claim);
+            finishOfficeAppealReview(post.getId());
+            notifications.notifyRoles(List.of(AccountRole.APPROVER), actor.getId(), "CLAIM_CANCELLED",
+                    "Người yêu cầu đã rút hồ sơ nhận đồ #" + claim.getId(),
+                    name(actor) + " đã rút yêu cầu nhận đồ cho bài đăng \"" + post.getTitle() + "\".",
+                    "/approver/office-claims/post/" + post.getId(), false);
+            return result(claim);
+        }
+        chatConversations.notifyChanged(claim);
+        if ("PENDING".equals(previous)) appeals.onPendingClaimWithdrawn(claim);
         if ("APPROVED".equals(previous) && "RESERVED".equals(post.getStatus())
                 && !claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) {
             post.reopenAfterClaimCancellation();
@@ -473,15 +477,22 @@ public class ClaimService {
     }
 
     private boolean cancellable(Claim claim) {
-        // DaiHV integration: office cancellation must also invalidate its appointment/invitation.
+        if (claim.isOffice()) return canWithdrawOfficeRequest(claim);
         if ("APPROVED".equals(claim.getStatus())) {
             if (!revocable(claim)) return false;
             var window = appeals.handoverWindow(claim);
             return window == null || window.state() != P2pClaimAppealService.State.REVIEW_REQUIRED;
         }
-        return !claim.isOffice() && "PENDING".equals(claim.getStatus())
+        return "PENDING".equals(claim.getStatus())
                 && !handovers.existsByClaimId(claim.getId())
                 && routing.matches(claim, Set.of("OPEN", "RESERVED"));
+    }
+
+    static boolean canWithdrawOfficeRequest(Claim claim) {
+        Post post = claim.getPost();
+        return claim.isOffice() && "PENDING".equals(claim.getStatus())
+                && "OFFICE".equals(post.getCustodyMode()) && post.getDeletedAt() == null
+                && Set.of("OPEN", "RESERVED").contains(post.getStatus());
     }
 
     private Account activeActor(CustomUserDetails user) {

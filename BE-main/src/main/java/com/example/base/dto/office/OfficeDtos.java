@@ -33,12 +33,10 @@ public final class OfficeDtos {
             this(postId,claimantId,claimantName,claimantEmail,claimantPhone,description,evidenceNote,null,null);
         }
     }
-    public record Decision(@NotBlank @Pattern(regexp="APPROVED|REJECTED|NEEDS_INFO") String decision,
+    public record Decision(@NotBlank @Pattern(regexp="APPROVED|REJECTED") String decision,
         @NotBlank @Size(max=2000) String reason, @NotNull @PositiveOrZero Long expectedVersion,
         OffsetDateTime scheduledAt, @Size(max=1000) String location,
         @Email @Size(max=255) String email, @Size(max=2000) String appointmentNote) {}
-    public record Supplement(@NotNull @PositiveOrZero Long expectedVersion,
-        @NotBlank @Size(max=2000) String information) {}
     public record AppointmentView(Long id, OffsetDateTime scheduledAt, String location, String note, String status,
         String responseStatus, OffsetDateTime responseDeadline, String cancellationReason) {}
     public record AnswerView(Long id, String question, String answer, String section) {}
@@ -50,6 +48,7 @@ public final class OfficeDtos {
         String description, String evidenceNote, String privateIdentifiers, long version,
         OffsetDateTime createdAt, ReceiptView receipt, List<ClaimDetailDto.EvidenceDto> evidence,
         List<ClaimDetailDto.ActivityDto> activities, AppointmentView appointment, List<AnswerView> answers,
-        String stage, OffsetDateTime collectionAt, boolean canReview, boolean ownRequest) {}
+        String stage, OffsetDateTime collectionAt, boolean canReview, boolean ownRequest,
+        boolean canCancel, String priorWrongRecipientConclusion) {}
     public record ReviewResult(Long id, String status, String emailStatus) {}
 }

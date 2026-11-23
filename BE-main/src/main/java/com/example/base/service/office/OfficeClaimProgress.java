@@ -39,7 +39,9 @@ public class OfficeClaimProgress {
         left join office_handover h on h.claim_id=c.claim_id
         left join lateral (
           select round.appeal_until,bool_or(r.status in ('OPEN','IN_REVIEW')) as pending,
-            bool_or(r.status='RESOLVED') as upheld
+            bool_or(r.status='RESOLVED' and not exists (
+              select 1 from report_decision d where d.report_id=r.report_id and d.action='APPEAL_WITHDRAWN'
+            )) as upheld
           from p2p_claim_approval round left join p2p_claim_appeal appeal using(approval_id)
           left join report r on r.report_id=appeal.report_id
           where round.approved_claim_id=c.claim_id and round.closed_at is null and round.custody_mode='OFFICE'
