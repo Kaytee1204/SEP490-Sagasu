@@ -18,7 +18,7 @@ const merge = (old, incoming) => {
 };
 const receiptTime = value => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 
-export default function ChatThread({ chat, onReportMessage }) {
+export default function ChatThread({ chat, onReportMessage, pauseMessage }) {
   const { user } = useAuth();
   const { revision, refresh, limits } = useChat();
   const [rows, setRows] = useState([]);
@@ -236,6 +236,6 @@ export default function ChatThread({ chat, onReportMessage }) {
       return false;
     }} />}{locationOpen && <LocationPicker chatId={chat.id} onClose={() => setLocationOpen(false)} onSent={message => {
       pinBottom.current = true; setRows(old => merge(old, [message])); setLocationOpen(false); refresh();
-    }} />}</> : <p role="status" className="chat-readonly">{chat.readOnlyReason}</p>}
+    }} />}</> : <p role="status" className="chat-readonly">{pauseMessage || chat.readOnlyReason}</p>}
   </>;
 }

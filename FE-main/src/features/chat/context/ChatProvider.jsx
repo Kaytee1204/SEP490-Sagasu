@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import ChatContext from './ChatContext';
 import { useAuth } from '@/context/AuthContext';
@@ -16,7 +16,7 @@ export default function ChatProvider({ children }) {
     if (user && token) getChatLimits().then(value => { if (!disposed) setLimits(value); }).catch(() => {});
     return () => { disposed = true; };
   }, [user?.id, token]);
-  function refresh() { setRevision(value => value + 1); }
+  const refresh = useCallback(() => setRevision(value => value + 1), []);
   useEffect(() => {
     let disposed = false;
     if (!user || !token) { setUnread(0); return; }

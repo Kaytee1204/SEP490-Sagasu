@@ -291,8 +291,8 @@ public class ClaimService {
                     claim.getClaimant().getId(),
                     "CLAIM_APPROVED",
                     "Yêu cầu nhận đồ #" + claim.getId() + " đã được chấp nhận",
-                    "Chủ bài đăng \"" + post.getTitle() + "\" đã chấp nhận yêu cầu nhận đồ của bạn. Bạn có thể nhắn tin trao đổi trực tiếp."
-                            + (deadline == null ? "" : " Hãy chờ hết thời hạn gửi tranh chấp 24 giờ và chờ xử lý mọi tranh chấp trước khi giao đồ."),
+                    "Chủ bài đăng \"" + post.getTitle() + "\" đã chấp nhận yêu cầu nhận đồ của bạn."
+                            + (deadline == null ? " Bạn có thể nhắn tin trao đổi trực tiếp." : " Chat hiện chỉ xem. Hãy chờ hết thời hạn gửi tranh chấp 24 giờ và chờ xử lý mọi tranh chấp trước khi giao đồ."),
                     "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
                     true
             );

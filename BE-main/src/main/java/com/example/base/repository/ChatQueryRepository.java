@@ -13,11 +13,11 @@ public class ChatQueryRepository {
     private static final String APPEAL_LOCK = """
             EXISTS (
                 SELECT 1 FROM p2p_claim_approval approval
-                JOIN p2p_claim_appeal appeal USING (approval_id)
-                JOIN report r ON r.report_id = appeal.report_id
+                LEFT JOIN p2p_claim_appeal appeal USING (approval_id)
+                LEFT JOIN report r ON r.report_id = appeal.report_id
                 WHERE approval.approved_claim_id = %s AND approval.closed_at IS NULL
-                  AND r.status IN ('OPEN', 'IN_REVIEW', 'RESOLVED')
-                  AND NOT EXISTS (SELECT 1 FROM report_decision d WHERE d.report_id=r.report_id AND d.action='APPEAL_WITHDRAWN')
+                  AND approval.custody_mode='P2P' AND (approval.appeal_until > now() OR (r.status IN ('OPEN', 'IN_REVIEW', 'RESOLVED')
+                  AND NOT EXISTS (SELECT 1 FROM report_decision d WHERE d.report_id=r.report_id AND d.action='APPEAL_WITHDRAWN')))
             )
             """;
 
@@ -26,6 +26,14 @@ public class ChatQueryRepository {
     public boolean isAppealLocked(long claimId) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT " + APPEAL_LOCK.formatted("?"), Boolean.class, claimId));
+    }
+
+    public boolean canOpenForPost(long postId, long viewerId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists(select 1 from claim cl join post p using(post_id)
+                    where p.post_id=? and cl.status='APPROVED' and cl.claim_type='P2P'
+                      and ? in (cl.claimant_id,p.account_id) and not %s)
+                """.formatted(APPEAL_LOCK.formatted("cl.claim_id")), Boolean.class, postId, viewerId));
     }
 
     public List<ChatPageDto.Summary> list(long actorId, OffsetDateTime before, long beforeId, int limit) {

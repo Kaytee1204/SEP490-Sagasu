@@ -111,7 +111,21 @@ public class P2pClaimAppealService {
                     (manager ? "/admin/reports/" : "/bao-cao/") + reportId, false);
             }
         }
-        jdbc.queryForList("select finish_empty_p2p_window(?)", claim.getPost().getId());
+        releaseWindowIfUncontested(claim.getPost().getId());
+    }
+
+    public void releaseWindowIfUncontested(long postId) {
+        var released = jdbc.queryForList("""
+            update p2p_claim_approval a set appeal_until=now()
+            from claim chosen where chosen.claim_id=a.approved_claim_id and chosen.post_id=?
+              and a.custody_mode='P2P' and a.closed_at is null and a.appeal_until>now()
+              and not exists (select 1 from claim other where other.post_id=chosen.post_id
+                  and other.claim_type='P2P' and other.status='PENDING' and other.claimant_id is not null)
+              and not exists (select 1 from p2p_claim_appeal e join report r using(report_id)
+                  where e.approval_id=a.approval_id and r.status in ('OPEN','IN_REVIEW'))
+            returning a.approved_claim_id
+            """, Long.class, postId);
+        released.forEach(chat::notifyHandoverChanged);
     }
 
     public boolean close(Claim selected) {

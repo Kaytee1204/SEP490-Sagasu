@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class PostMapper {
     private final ImageStorage storage;
+    private final com.example.base.repository.ChatQueryRepository chat;
 
     public PostSummaryDto toSummary(Post post) {
         return toSummary(post, null);
@@ -52,6 +53,9 @@ public class PostMapper {
                 post.getLongitude(),
                 post.getEventAt(), post.getStatus(), post.getCustodyMode(), post.getCreatedAt(), images,
                 isOwner && officeReceipt == null, post.getModerationStatus(),
-                post.getCreatedBy().getFullName(), officeReceipt, canRequestOfficeHandover, isOwner, isOwner && post.getHandoverRequestedAt()!=null);
+                post.getCreatedBy().getFullName(), officeReceipt, canRequestOfficeHandover, isOwner, isOwner && post.getHandoverRequestedAt()!=null,
+                viewerId != null && officeReceipt == null && "FOUND".equals(post.getPostType())
+                        && "P2P".equals(post.getCustodyMode()) && "RESERVED".equals(post.getStatus())
+                        && "VISIBLE".equals(post.getModerationStatus()) && chat.canOpenForPost(post.getId(), viewerId));
     }
 }

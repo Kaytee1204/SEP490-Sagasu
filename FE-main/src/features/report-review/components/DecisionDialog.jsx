@@ -190,10 +190,10 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             </label>)}
           </fieldset>
           {appealFinding === "INSUFFICIENT_EVIDENCE" && <p className="rr-callout">
-            Kết thúc tranh chấp và giữ nguyên yêu cầu nhận đồ của người gửi.
+            Kết thúc tranh chấp và giữ nguyên yêu cầu nhận đồ của người gửi. {!officeAppeal && "Hạn 24 giờ vẫn tính từ lúc người nhặt chấp thuận."}
           </p>}
           {appealFinding === "INVALID_CLAIM" && <p className="rr-callout">
-            Bác yêu cầu nhận đồ của người gửi tranh chấp và chặn tài khoản đó gửi lại yêu cầu trên bài đăng này.
+            Bác yêu cầu nhận đồ của người gửi tranh chấp và chặn tài khoản đó gửi lại yêu cầu trên bài đăng này. {!officeAppeal && "Chat và bàn giao mở sớm nếu không còn hồ sơ chờ duyệt hoặc tranh chấp đang xử lý."}
           </p>}
         </>}
         {!isKeepApproval && warning && <p className="rr-callout">{warning}</p>}

@@ -50,6 +50,7 @@ class ReportReviewServiceTest {
     @Mock NotificationService notifications;
     @Mock ChatConversationService chat;
     @Mock ClaimService claims;
+    @Mock com.example.base.service.claim.P2pClaimAppealService claimAppeals;
 
     ReportContextService context;
     ReportReviewService service;
@@ -62,7 +63,7 @@ class ReportReviewServiceTest {
     @BeforeEach
     void setUp() {
         context = spy(new ReportContextService(jdbc, new ObjectMapper(), storage));
-        service = new ReportReviewService(access, jdbc, context, accounts, accountRepository, moderation, posts, notifications, chat, claims,
+        service = new ReportReviewService(access, jdbc, context, accounts, accountRepository, moderation, posts, notifications, chat, claims, claimAppeals,
                 new ReportReviewCalendar("Asia/Ho_Chi_Minh", "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY", "08:00-12:00,13:00-17:00", ""));
         manager = new Account();
         manager.setId(1L);
@@ -556,7 +557,7 @@ class ReportReviewServiceTest {
         report.put("kind", "HANDOVER_ISSUE");
         report.put("claim_id", 41L);
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
-                "active", true, "claim_type", claimType));
+                "active", true, "post_id", 25L, "claim_type", claimType));
         ctx.put("claim", row("claim_id", 41L, "claimant_id", 7L, "claim_type", claimType, "status", "PENDING"));
 
         assertThat((List<?>) service.detail(5L, user).get("actions")).hasSize(1);
@@ -565,6 +566,8 @@ class ReportReviewServiceTest {
         service.act(5L, new ReportReviewService.Action(3L, "APPEAL_KEEP", "Conclusion", "Basis", null,
                 false, null, false, ReportReviewService.AppealFinding.INVALID_CLAIM), user);
 
+        if ("P2P".equals(claimType)) verify(claimAppeals).releaseWindowIfUncontested(25L);
+        else verifyNoInteractions(claimAppeals);
         verify(claims).rejectClaimAfterAppeal(eq(41L), contains("Bạn không thể gửi lại"), eq(user));
         verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
                 eq("APPEAL_REJECT_CLAIM"), eq("Conclusion"), eq("Basis"), anyString(), anyString());
