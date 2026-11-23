@@ -1,6 +1,6 @@
 # Sagasu AI Multimodal Smart Match Service
 
-Dịch vụ AI so khớp bài đăng thất lạc thông minh đa phương thức (Multimodal Smart Match) dành cho hệ thống **Sagasu**.
+AI so khớp bài đăng thất lạc thông minh đa phương thức (Multimodal Smart Match) dành cho hệ thống **Sagasu**.
 
 ---
 
