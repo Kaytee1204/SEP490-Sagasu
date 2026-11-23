@@ -47,6 +47,9 @@ public class ReportService {
 
     public Detail create(Submit request,List<MultipartFile> files,CustomUserDetails user) {
         validate(request); long actor=actors.actor(user).getId();
+        if (request.reasonCode().startsWith("P2P_HANDOVER_")) {
+            throw new AppException(ErrorCode.REPORT_REASON_INVALID);
+        }
         String text=Objects.toString(request.description(),"").strip();
         String payload=request.targetType()+":"+request.targetId()+":"+request.reasonCode()+":"+text;
         var prepared=images.prepare(payload,files);
@@ -148,7 +151,7 @@ public class ReportService {
             validateTarget("CLAIM",targetId);
             long actor=actors.actor(user).getId();
             Claim claim=em.find(Claim.class,targetId);
-            if(claim==null || claim.isOffice() || claim.getClaimant()==null || claim.getClaimant().getId()!=actor)
+            if(claim==null || claim.getClaimant()==null || claim.getClaimant().getId()!=actor)
                 throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);
             return reasons.options("CLAIM_APPEAL");
         }

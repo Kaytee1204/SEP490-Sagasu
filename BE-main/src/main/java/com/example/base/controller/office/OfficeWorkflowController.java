@@ -90,6 +90,14 @@ public class OfficeWorkflowController {
         return ApiResponse.ok(transfers.list(page, status, q, mine, user));
     }
 
+    @GetMapping("/transfers/my-id")
+    @Operation(summary = "Tìm mã yêu cầu giao đồ của người dùng theo bài đăng")
+    public ApiResponse<Long> myTransferId(
+            @RequestParam("postId") long postId,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(transfers.myTransferId(postId, user));
+    }
+
     @GetMapping("/transfers/{id}")
     @Operation(
             summary = "[11.5] Xem chi tiết một yêu cầu chuyển giao đồ cho Văn phòng theo ID",
@@ -169,6 +177,22 @@ public class OfficeWorkflowController {
             @Valid @RequestBody AppointmentResponse request,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(invitations.respondOnSite(id, request, user));
+    }
+
+    @PostMapping("/claims/{id}/schedule")
+    @Operation(summary = "Lập lịch sau khi yêu cầu đủ điều kiện trao trả")
+    public ApiResponse<ReviewResult> schedule(
+            @PathVariable("id") long id, @Valid @RequestBody Schedule r,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(returns.schedule(id,r,user));
+    }
+
+    @PostMapping("/claims/{id}/revoke")
+    @Operation(summary = "Thu hồi chấp thuận để xét duyệt lại yêu cầu tại văn phòng")
+    public ApiResponse<Workflow> revoke(
+            @PathVariable("id") long id, @Valid @RequestBody VersionedReason r,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(returns.revoke(id,r,user));
     }
 
     @PostMapping("/claims/{id}/reschedule")

@@ -1,10 +1,10 @@
 import '@/styles/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
-import { claimDetailPath } from '@/features/claims/utils/claimUtils';
+import { claimDetailPath, postClaimsPath } from '@/features/claims/utils/claimUtils';
 import useReportResource from '../hooks/useReportResource';
 import { getReportWorkspaceDetail } from '../api/reportApi';
 import FinderAppealAction from '../components/FinderAppealAction';
@@ -19,7 +19,12 @@ const outcomeLabels = {
   NO_VIOLATION: 'Không phát hiện vi phạm',
   INSUFFICIENT_EVIDENCE: 'Chưa đủ căn cứ',
   APPEAL_KEEP: 'Giữ kết quả nhận đồ',
+  APPEAL_ROUND_CLOSED: "Đã mở lại xét duyệt người nhận",
+  APPEAL_WITHDRAWN: "Người gửi đã rút tranh chấp",
+  APPEAL_INSUFFICIENT: 'Giữ người đã duyệt vì chưa đủ căn cứ thay đổi',
+  APPEAL_REJECT_CLAIM: 'Yêu cầu bị bác và không thể gửi lại trên bài đăng này',
   APPEAL_REQUIRE_REVIEW: 'Quản lý đã yêu cầu xét lại người nhận',
+  APPEAL_WRONG_RECIPIENT: 'Quản lý xác nhận đã duyệt nhầm người nhận',
   HANDOVER_COMPLETED: 'Xác nhận đã trả đồ',
   HANDOVER_CONTINUE: 'Cho tiếp tục bàn giao',
   HANDOVER_RETRY: 'Hủy lượt giao và hẹn giao lại',
@@ -77,10 +82,17 @@ function ReportDetail({ id }) {
   const awaitingReply = inquiries.filter(item => pending && !item.responded_at && !item.closed_at);
   const previousExchanges = inquiries.filter(item => !pending || item.responded_at || item.closed_at);
   const linkedClaim = report?.finder_approved_claim_id || report?.participant_claim_id;
-  const claimPath = report?.report_subject_id && linkedClaim ? claimDetailPath(report.report_subject_id, linkedClaim) : null;
+  const office = report?.claim_type === 'OFFICE';
+  const claimPath = linkedClaim && (office ? `/van-phong/claims/${linkedClaim}`
+    : report?.report_subject_id ? claimDetailPath(report.report_subject_id, linkedClaim) : null);
   const correction = report?.post_measure === 'REQUEST_POST_CORRECTION' && report.post_owner;
   const recoveryPending = Boolean(report?.recovery_note && !report.recovery_confirmed_at && (!concluded || report.appeal_step));
   const handover = isAppeal || report?.report_type === 'HANDOVER_ISSUE';
+  const overdue = awaitingReply.some(item => item.overdue);
+  const reviewClaims = isAppeal && !office && report.approval_reopened && report.post_owner && report.report_subject_id;
+  const followUpPath = reviewClaims ? postClaimsPath(report.report_subject_id, 'PENDING')
+    : claimPath && !report.needs_reopen && (handover ? `${claimPath}#handover` : claimPath);
+  const followUpLabel = reviewClaims ? 'Xem yêu cầu chờ xét duyệt' : handover ? 'Theo dõi nhận đồ' : 'Xem yêu cầu nhận đồ';
 
   function afterReply() {
     setReplySaved(true);
@@ -109,28 +121,39 @@ function ReportDetail({ id }) {
           <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
 
         </header>
-        <section id="buoc-tiep-theo" tabIndex={-1} className="report-card report-detail-section report-next-step">
-          <h2>{pending ? 'Bạn cần phản hồi' : recoveryPending ? 'Chờ xác nhận thu hồi món đồ' : appealSteps[report.appeal_step] || (concluded ? 'Kết quả xử lý' : 'Bước tiếp theo')}</h2>
-          {pending && <><p>Quản lý đã gửi câu hỏi cho bạn. Mở yêu cầu để xem nội dung và hạn phản hồi.</p>
-            <a className="btn btn-accent" href="#phan-hoi">Trả lời quản lý <ArrowRight size={15} aria-hidden="true" /></a></>}
-          {recoveryPending && !pending && <p>Người giữ đồ phản hồi trong hồ sơ của mình. Quản lý đối chiếu bằng chứng và xác nhận việc thu hồi.</p>}
-          {report.appeal_step && !report.needs_reopen && <p>{appealInstruction(report.appeal_step)}</p>}
-          {report.needs_reopen && claimPath && <FinderAppealAction report={report} claimPath={claimPath} />}
-          {!pending && !recoveryPending && !report.appeal_step && !concluded && <p>{report.status === 'OPEN'
-            ? 'Chờ quản lý nhận hồ sơ. Bạn sẽ nhận thông báo khi cần bổ sung thông tin hoặc khi có kết quả.'
-            : 'Quản lý đang đối chiếu hồ sơ. Bạn sẽ nhận thông báo nếu cần bổ sung thông tin.'}</p>}
-          {concluded && <div id="ket-qua" tabIndex={-1} className="report-note">
-            <strong>{outcomeLabels[report.outcome] || reportStatuses[report.status]}</strong>
-            <p>{report.resolution_note || submission?.resolutionNote || 'Chưa có ghi chú kết luận.'}</p>
-            {report.resolved_at && <time dateTime={report.resolved_at}>Kết luận lúc {formatReportDate(report.resolved_at)}</time>}
+        <section id="buoc-tiep-theo" tabIndex={-1} className={`report-card report-detail-section report-next-step${pending ? ' report-next-step-pending' : ''}`}>
+          <div className="report-next-copy">
+            <h2>{pending ? (overdue ? 'Đã quá hạn phản hồi' : 'Bạn cần phản hồi') : recoveryPending ? 'Chờ xác nhận thu hồi món đồ' : appealSteps[report.appeal_step] || (concluded ? 'Kết quả xử lý' : 'Bước tiếp theo')}</h2>
+            {pending && <p>{overdue
+              ? 'Bạn vẫn có thể gửi thông tin trước khi quản lý kết luận.'
+              : 'Quản lý cần thêm thông tin để xử lý báo cáo này.'}</p>}
+            {recoveryPending && !pending && <p>Người giữ đồ phản hồi trong hồ sơ của mình. Quản lý đối chiếu bằng chứng và xác nhận việc thu hồi.</p>}
+            {report.appeal_step && !report.needs_reopen && <p>{appealInstruction(report.appeal_step, office)}</p>}
+            {report.needs_reopen && claimPath && <FinderAppealAction report={report} claimPath={claimPath} />}
+            {!pending && !recoveryPending && !report.appeal_step && !concluded && <p>{report.status === 'OPEN'
+              ? 'Chờ quản lý nhận hồ sơ. Bạn sẽ nhận thông báo khi cần bổ sung thông tin hoặc khi có kết quả.'
+              : 'Quản lý đang đối chiếu hồ sơ. Bạn sẽ nhận thông báo nếu cần bổ sung thông tin.'}</p>}
+            {concluded && <div id="ket-qua" tabIndex={-1} className="report-note">
+              <strong>{outcomeLabels[report.outcome] || reportStatuses[report.status]}</strong>
+              <p>{report.resolution_note || submission?.resolutionNote || 'Chưa có ghi chú kết luận.'}</p>
+              {report.resolved_at && <time dateTime={report.resolved_at}>Kết luận lúc {formatReportDate(report.resolved_at)}</time>}
+            </div>}
+            {concluded && report.outcome === 'HANDOVER_RETRY' && <p>Người nhặt hẹn giao lại với người đã được chấp thuận, sau đó ghi nhận lượt giao mới trong yêu cầu nhận đồ.</p>}
+            {concluded && report.outcome === 'APPEAL_KEEP' && report.mine && !office && <p>Yêu cầu của bạn đã kết thúc. Bạn không thể gửi lại yêu cầu hoặc tranh chấp trên bài đăng này.</p>}
+            {concluded && report.outcome === 'APPEAL_INSUFFICIENT' && report.mine && <p>Tranh chấp này đã kết thúc. Trạng thái yêu cầu nhận đồ của bạn được giữ nguyên.</p>}
+            {concluded && (report.outcome === 'HANDOVER_REOPEN' || report.approval_reopened) &&
+              <p>{office ? 'Văn phòng xét duyệt lại' : 'Người nhặt xét lại'} các yêu cầu của bài đăng. Theo dõi kết quả trong hồ sơ của bạn.</p>}
+            {correction && <div className="report-appeal-next">
+              <p>Quản lý đã yêu cầu bạn chỉnh sửa bài đăng theo kết luận trên.</p>
+              <Link className="btn btn-ghost" to={`/chi-tiet/${report.report_subject_id}`}>Mở bài đăng <ArrowRight size={15} aria-hidden="true" /></Link>
+            </div>}
+          </div>
+          {(pending || followUpPath) && <div className="report-next-actions">
+            {pending && <a className="btn btn-accent" href="#phan-hoi">Trả lời quản lý <ArrowDown size={15} aria-hidden="true" /></a>}
+            {followUpPath && <Link className={pending ? 'btn btn-ghost' : 'report-back'} to={followUpPath}>
+              {followUpLabel} <ArrowRight size={15} aria-hidden="true" />
+            </Link>}
           </div>}
-          {concluded && report.outcome === 'HANDOVER_RETRY' && <p>Người nhặt hẹn giao lại với người đã được chấp thuận, sau đó ghi nhận lượt giao mới trong yêu cầu nhận đồ.</p>}
-          {concluded && (report.outcome === 'HANDOVER_REOPEN' || report.approval_reopened) && <p>Người nhặt xét lại các yêu cầu của bài đăng. Người yêu cầu theo dõi kết quả trong hồ sơ của mình.</p>}
-          {correction && <div className="report-appeal-next">
-            <p>Quản lý đã yêu cầu bạn chỉnh sửa bài đăng theo kết luận trên.</p>
-            <Link className="btn btn-ghost" to={`/chi-tiet/${report.report_subject_id}`}>Mở bài đăng <ArrowRight size={15} aria-hidden="true" /></Link>
-          </div>}
-          {claimPath && !report.needs_reopen && <Link className="report-back" to={handover ? `${claimPath}#handover` : claimPath}>{handover ? "Theo dõi nhận đồ" : "Xem yêu cầu nhận đồ"} <ArrowRight size={15} aria-hidden="true" /></Link>}
         </section>
         {report.recovery_note && <section className="report-card report-detail-section">
           <h2>{report.recovery_confirmed_at ? 'Đã xác nhận thu hồi món đồ' : 'Yêu cầu thu hồi món đồ'}</h2>
@@ -150,8 +173,8 @@ function ReportDetail({ id }) {
             {previousExchanges.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} canReply={false} onSaved={afterReply} />)}
           </details>}
         </section>}
-        {(submission || report.report_reason) && <details className="report-card report-history">
-          <summary>{isAppeal ? 'Nội dung tranh chấp' : 'Nội dung báo cáo'}{evidence.length > 0 && ` · ${evidence.length} ảnh`}</summary>
+        {(submission || report.report_reason) && <section className="report-card report-detail-section">
+          <h2>{isAppeal ? 'Nội dung tranh chấp' : 'Nội dung báo cáo'}{evidence.length > 0 && ` · ${evidence.length} ảnh`}</h2>
           <dl className="report-detail-fields">
             <div><dt>{isAppeal ? 'Lý do tranh chấp' : 'Lý do báo cáo'}</dt><dd>{report.report_reason || 'Chưa phân loại (báo cáo cũ)'}</dd></div>
             {submission?.description && <div><dt>Mô tả</dt><dd className="report-description">{submission.description}</dd></div>}
@@ -161,7 +184,7 @@ function ReportDetail({ id }) {
               <img src={item.url} alt={item.name} loading="lazy" />
             </button>)}
           </div>}
-        </details>}
+        </section>}
         {submission?.activities?.length > 0 && <details className="report-card report-history">
           <summary>Lịch sử xử lý</summary>
           <ReportProgress status={report.status} appeal={isAppeal} />

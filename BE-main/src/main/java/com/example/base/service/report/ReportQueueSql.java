@@ -5,21 +5,33 @@ final class ReportQueueSql {
 
   // These predicates are shared with the appeal detail to keep the queue and the reopen action in sync.
   static final String ACTIVE_APPROVAL = """
-      approval.closed_at is null and chosen.status='APPROVED' and chosen.claim_type='P2P'
-        and p.status='RESERVED' and p.custody_mode='P2P' and p.deleted_at is null
+      approval.closed_at is null and chosen.status='APPROVED' and chosen.claim_type=p.custody_mode
+        and approval.custody_mode=chosen.claim_type
+        and p.status='RESERVED' and p.deleted_at is null
       """;
   static final String OTHER_APPEALS_PENDING = """
       exists (
         select 1 from p2p_claim_appeal sibling join report q on q.report_id=sibling.report_id
         join p2p_claim_approval sibling_round on sibling_round.approval_id=sibling.approval_id
         join claim sibling_claim on sibling_claim.claim_id=sibling_round.approved_claim_id
-        where approval.approval_id is not null and sibling_claim.post_id=p.post_id and q.status in ('OPEN','IN_REVIEW')
+        where approval.approval_id is not null and sibling_claim.post_id=p.post_id
+          and (approval.custody_mode='P2P' or sibling_round.approval_id=approval.approval_id)
+          and q.status in ('OPEN','IN_REVIEW')
       )
       """;
-  static final String REOPEN_ALLOWED = """
-      not pending.waiting_other_appeals
-        and p.post_type='FOUND' and p.moderation_status='VISIBLE'
-        and not exists (select 1 from item_receipt receipt where receipt.post_id=p.post_id)
+  static final String APPROVAL_CAN_BE_REOPENED = """
+      p.post_type='FOUND' and p.moderation_status='VISIBLE'
+        and ((chosen.claim_type='P2P' and not exists (select 1 from item_receipt receipt where receipt.post_id=p.post_id))
+          or (chosen.claim_type='OFFICE' and exists (
+            select 1 from item_receipt receipt where receipt.post_id=p.post_id and receipt.status='IN_STORAGE'
+          ) and not exists (
+            select 1 from office_handover office_record where office_record.claim_id=chosen.claim_id
+          )))
+        and not exists (
+          select 1 from p2p_claim_appeal custody_appeal join report_inquiry inquiry using (report_id)
+          where custody_appeal.approval_id=approval.approval_id and inquiry.verification_kind='CUSTODY'
+            and (inquiry.verified_custody='DELIVERED' or inquiry.response='Tôi đã giao đồ' or (inquiry.responded_at is null and inquiry.closed_at is null))
+        )
         and not exists (select 1 from p2p_handover handover where handover.claim_id=chosen.claim_id and handover.status<>'CANCELLED')
         and not exists (select 1 from report_hold hold where hold.post_id=p.post_id and hold.released_at is null)
         and not exists (
@@ -30,10 +42,11 @@ final class ReportQueueSql {
           select 1 from p2p_claim_appeal related join report_recovery x using(report_id)
           where related.approval_id=approval.approval_id and x.confirmed_at is null)
       """;
+  static final String REOPEN_ALLOWED = "not pending.waiting_other_appeals and (" + APPROVAL_CAN_BE_REOPENED + ")";
 
   // The report conclusion and the approval round can finish at different times.
   static final String APPEAL_STEP = """
-      case when r.status='RESOLVED' and (%s) then
+      case when r.status='RESOLVED' and not exists(select 1 from report_decision w where w.report_id=r.report_id and w.action='APPEAL_WITHDRAWN') and (%s) then
         case when pending.waiting_other_appeals then 'WAIT_APPEALS'
           when (%s) then 'READY_TO_REOPEN'
           else 'VERIFY_CUSTODY' end
@@ -66,7 +79,7 @@ final class ReportQueueSql {
       ) decisions
       cross join lateral (select %s as waiting_other_appeals offset 0) pending
       cross join lateral (
-        select r.status='RESOLVED' and appeal.report_id is not null and (%s) as accepted_appeal,
+        select r.status='RESOLVED' and not exists(select 1 from report_decision w where w.report_id=r.report_id and w.action='APPEAL_WITHDRAWN') and appeal.report_id is not null and (%s) as accepted_appeal,
           coalesce(inquiry.latest_reply > greatest(inquiry.latest_question, decisions.latest_decision),false) as new_reply,
           coalesce(pickup.next_pickup < ?::timestamptz,false) as pickup_this_shift,
           decisions.recovery_requested and recovery.confirmed_at is null as recovery_pending,
@@ -100,6 +113,7 @@ final class ReportQueueSql {
           when inquiry.waiting_reply then 'WAITING_REPLY'
           when facts.accepted_appeal and pending.waiting_other_appeals then 'WAITING_OTHER_APPEALS'
           when facts.accepted_appeal and not (%s) then 'WAITING_REOPEN'
+          when facts.accepted_appeal then 'WAITING_FINDER_REVIEW'
         end as waiting_reason
         offset 0
       ) step
@@ -118,7 +132,6 @@ final class ReportQueueSql {
             when facts.new_reply then 'REPLIED'
             when facts.recovery_overdue then 'RECOVERY_OVERDUE'
             when inquiry.reply_overdue then 'REPLY_OVERDUE'
-            when facts.accepted_appeal then 'CLAIM_REOPEN'
             when facts.recovery_confirmed then 'RECOVERY_CONFIRMED'
             when appeal.report_id is not null then 'CLAIM_APPEAL'
             when facts.active_p2p_dispute then 'P2P_ACTIVE'

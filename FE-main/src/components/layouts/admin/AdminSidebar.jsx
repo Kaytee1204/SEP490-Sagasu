@@ -127,17 +127,18 @@ export default function AdminSidebar({ pendingReportsCount = 0, navBadges = {} }
                       )}
                     </Link>
                     {active && !collapsed && item.children && (
-                      <ul className="ms-4 mt-1 space-y-1 border-s border-slate-200 ps-2">
+                      <ul className="admin-sidebar-children">
                         {item.children.map(child => {
-                          const detailKind = new URLSearchParams(location.search).get('kind');
-                          const selected = location.pathname === child.path ||
-                            (/^\/admin\/reports\/\d+$/.test(location.pathname) && detailKind === child.kind);
-                          const count = formatBadgeCount(navBadges.reportQueues?.[child.kind] ?? 0);
-                          return <li key={child.path}>
+                          const selected = location.pathname === child.path || (
+                            /^\/admin\/reports\/\d+$/.test(location.pathname) &&
+                            new URLSearchParams(location.search).get('kind') === child.kind
+                          );
+                          const count = formatBadgeCount(navBadges.reportQueues?.[child.kind]);
+                          return <li key={child.kind}>
                             <Link to={child.path} aria-current={selected ? 'page' : undefined}
                               className={`admin-sidebar-link ${selected ? 'is-active' : ''}`}>
-                              <span className="admin-sidebar-label">{child.label}</span>
-                              {count && <span className="admin-sidebar-badge is-danger">{count}</span>}
+                              <span className="admin-sidebar-label is-wrap">{child.label}</span>
+                              {count && <span className="admin-sidebar-badge is-neutral" title={`${count} hồ sơ cần xử lý`}>{count}</span>}
                             </Link>
                           </li>;
                         })}

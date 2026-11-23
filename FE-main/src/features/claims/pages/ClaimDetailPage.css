@@ -129,5 +129,7 @@
 .claim-appeal-disclosure summary { width: fit-content; color: #18665f; cursor: pointer; font-weight: 700; }
 .claim-appeal-disclosure form { margin-top: 14px; }
 .claim-appeal-images, .claim-appeal-file-list { display: grid; gap: 8px; }
-.claim-appeal-file-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
-.claim-appeal-file-list button { flex-shrink: 0; }
+.claim-appeal-file-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 108px), 1fr)); }
+.claim-appeal-file-list li { min-width: 0; overflow: hidden; border: 1px solid #dce7df; border-radius: 10px; }
+.claim-appeal-file-list img { display: block; width: 100%; height: 100px; object-fit: contain; background: #f4f8f6; }
+.claim-appeal-file-list .btn { width: 100%; min-height: 44px; border: 0; border-radius: 0; font-size: .82rem; }

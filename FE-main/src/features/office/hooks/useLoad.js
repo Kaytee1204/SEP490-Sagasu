@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function useLoad(loader, key) {
   const fn = useRef(loader);
@@ -6,6 +6,7 @@ export default function useLoad(loader, key) {
     fn.current = loader;
   });
   const [attempt, setAttempt] = useState(0);
+  const reload = useCallback(() => setAttempt((a) => a + 1), []);
   const [snapshot, setSnapshot] = useState({});
   const requestKey = `${key}:${attempt}`;
   useEffect(() => {
@@ -26,6 +27,6 @@ export default function useLoad(loader, key) {
     data: snapshot.key === requestKey ? snapshot.data : null,
     error: snapshot.key === requestKey ? snapshot.error : "",
     loading: snapshot.key !== requestKey,
-    reload: () => setAttempt((a) => a + 1),
+    reload,
   };
 }

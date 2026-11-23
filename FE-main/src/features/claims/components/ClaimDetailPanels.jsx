@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, BadgeCheck, ChevronDown, CircleCheck, CircleX, Clock3, FileCheck2, History, Images, ListChecks, MapPin, Package, UserRound } from 'lucide-react';
-import { CLAIM_ACTION, CLAIM_STATUS, P2P_CLAIM_STEPS, claimDate, evidenceUrl } from '../utils/claimUtils';
+import { CLAIM_ACTION, CLAIM_STATUS, P2P_CLAIM_STEPS, claimDate, claimDisplayStatus, disputeDismissed, evidenceUrl, rejectedAfterDispute } from '../utils/claimUtils';
 import ClaimAnswerSummary from './ClaimAnswerSummary';
 import OpenChatButton from '@/features/chat/components/OpenChatButton';
 import WorkflowSteps from '@/components/common/WorkflowSteps';
@@ -15,12 +15,13 @@ function PostCover({ url, title }) {
 
 export function ClaimDetailSummary({ claim, post }) {
   const cover = evidenceUrl(post?.images?.[0]?.url);
-  const StatusIcon = claim.status === 'PENDING' ? Clock3 : ['APPROVED', 'COMPLETED'].includes(claim.status) ? BadgeCheck : CircleX;
+  const status = claimDisplayStatus(claim);
+  const StatusIcon = status === 'PENDING' ? Clock3 : ['APPROVED', 'COMPLETED'].includes(status) ? BadgeCheck : CircleX;
   return <section className="claim-detail-hero" aria-label="Món đồ được yêu cầu nhận">
     <div className="claim-detail-cover"><PostCover key={cover || claim.postId} url={cover} title={claim.postTitle} /></div>
     <div className="claim-detail-hero-info">
       <div className="claim-detail-hero-meta"><span>Yêu cầu nhận đồ #{claim.id}</span>
-        <span className={`claim-status claim-status-${claim.status}`}><StatusIcon size={15} aria-hidden="true" />{CLAIM_STATUS[claim.status] || claim.status}</span></div>
+        <span className={`claim-status claim-status-${status}`}><StatusIcon size={15} aria-hidden="true" />{CLAIM_STATUS[status] || status}</span></div>
       <h1>{claim.postTitle}</h1>
       {post?.categoryName && <p className="claim-detail-category">{post.categoryName}</p>}
       {post?.locationText && <p className="claim-detail-location"><MapPin size={15} aria-hidden="true" /><span>{post.locationText}</span></p>}
@@ -101,8 +102,9 @@ function pendingReviewDescription(claim, isClaimant, waitingForAnotherClaim) {
 }
 
 export function ClaimStatusPanel({ claim, isClaimant = false }) {
+  const status = claimDisplayStatus(claim);
   const showProgress = isClaimant && claim.claimType === 'P2P';
-  const waitingForAnotherClaim = claim.status === 'PENDING' && claim.postStatus === 'RESERVED';
+  const waitingForAnotherClaim = status === 'PENDING' && claim.postStatus === 'RESERVED';
   const copy = {
     PENDING: [claim.canReview ? 'Yêu cầu đang chờ bạn xét duyệt' : 'Đang chờ xét duyệt', pendingReviewDescription(claim, isClaimant, waitingForAnotherClaim)],
     APPROVED: ['Yêu cầu đã được chấp thuận', 'Theo dõi hướng dẫn của bên tiếp nhận để nhận lại món đồ.'],
@@ -111,15 +113,19 @@ export function ClaimStatusPanel({ claim, isClaimant = false }) {
     CLOSED: ['Yêu cầu đã kết thúc', claim.closeReason === 'ITEM_RETURNED' ? 'Món đồ đã được trao trả theo một yêu cầu khác.' : 'Hồ sơ đã đóng và được giữ lại để đối chiếu.'],
     COMPLETED: ['Đã hoàn tất nhận đồ', 'Quá trình nhận đồ của yêu cầu này đã hoàn tất.'],
   };
-  const [title, description] = copy[claim.status] || [CLAIM_STATUS[claim.status] || claim.status, 'Theo dõi kết quả xử lý trong hồ sơ này.'];
-  const ended = ['REJECTED', 'CANCELLED', 'CLOSED'].includes(claim.status);
-  const finalActivity = ended ? claim.activities?.findLast(event => event.toStatus === claim.status) : null;
+  const [title, description] = disputeDismissed(claim)
+    ? ['Tranh chấp đã bị bác', 'Quản lý giữ nguyên kết quả chọn người nhận. Hồ sơ này đã kết thúc xét duyệt.']
+    : rejectedAfterDispute(claim)
+      ? ['Yêu cầu bị bác sau tranh chấp', 'Quản lý đã bác yêu cầu nhận đồ. Xem lịch sử xử lý để biết kết quả.']
+      : copy[status] || [CLAIM_STATUS[status] || status, 'Theo dõi kết quả xử lý trong hồ sơ này.'];
+  const ended = ['REJECTED', 'CANCELLED', 'CLOSED'].includes(status);
+  const finalActivity = ended ? claim.activities?.findLast(event => event.toStatus === status) : null;
   const approvedBeforeEnding = finalActivity?.fromStatus === 'APPROVED';
   const recordedBeforeEnding = approvedBeforeEnding && claim.activities.some(event => event.action === 'HANDOVER');
   const completedSteps = recordedBeforeEnding ? 3 : approvedBeforeEnding ? 2 : 1;
   const stepState = ended ? 'stopped' : waitingForAnotherClaim ? 'paused' : 'active';
-  const StatusIcon = claim.status === 'PENDING' ? Clock3 : ['APPROVED', 'COMPLETED'].includes(claim.status) ? CircleCheck : CircleX;
-  return <section className={`claim-panel claim-detail-state claim-detail-state-${claim.status}`} aria-label="Trạng thái xử lý">
+  const StatusIcon = status === 'PENDING' ? Clock3 : ['APPROVED', 'COMPLETED'].includes(status) ? CircleCheck : CircleX;
+  return <section className={`claim-panel claim-detail-state claim-detail-state-${status}`} aria-label="Trạng thái xử lý">
     <StatusIcon size={24} aria-hidden="true" /><div className="claim-detail-state-body">
       <h2>{showProgress ? 'Tiến trình nhận đồ' : title}</h2>
       {showProgress && <>
@@ -127,6 +133,7 @@ export function ClaimStatusPanel({ claim, isClaimant = false }) {
         <strong>{title}</strong>
       </>}
       <p>{description}</p>
+      {claim.resubmissionBlocked && <p>Bạn không thể gửi lại yêu cầu trên bài đăng này theo kết luận xử lý tranh chấp.</p>}
       {claim.canRetry && <Link className="btn btn-primary" to={`/xac-minh/${claim.postId}?retryOf=${claim.id}`}>Gửi yêu cầu mới<ArrowUpRight size={16} aria-hidden="true" /></Link>}
     </div>
   </section>;

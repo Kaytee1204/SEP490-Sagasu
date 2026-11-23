@@ -252,3 +252,15 @@
     padding: 9px 6px;
   }
 }
+.post-claims-dispute-warning {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #8f4e04;
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+.post-claims-dispute-warning svg {
+  flex-shrink: 0;
+}

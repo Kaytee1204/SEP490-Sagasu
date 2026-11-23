@@ -42,14 +42,14 @@ export default function FinderAppealAction({ report, claimPath }) {
       {fallback !== "reopened" && <p>
         {fallback === "unavailable"
           ? "Hồ sơ chưa thể thu hồi ở bước hiện tại. Kiểm tra tiến trình để biết cần chờ hay làm gì tiếp theo."
-          : "Nếu vẫn đang giữ món đồ, hãy thu hồi chấp thuận để xét lại các yêu cầu đang chờ."}
+          : "Nếu vẫn giữ món đồ, hãy mở lại xét duyệt. Hồ sơ đã chấp thuận sẽ về chờ duyệt để bạn đối chiếu cùng các hồ sơ khác."}
       </p>}
       {error && <p className="report-error" role="alert">{error}</p>}
     </div>
     {fallback === "reopened" ? <Link className="btn btn-ghost" to={reviewPath}>Xem yêu cầu chờ duyệt<ArrowUpRight size={15} aria-hidden="true" /></Link>
       : fallback === "unavailable" ? <Link className="btn btn-ghost" to={`${claimPath}#handover`}>Theo dõi bàn giao<ArrowUpRight size={15} aria-hidden="true" /></Link>
         : <button className="btn btn-accent" type="button" onClick={openConfirmation} disabled={busy}>
-          <RotateCcw size={15} aria-hidden="true" />{busy ? "Đang kiểm tra…" : "Thu hồi để xét lại"}
+          <RotateCcw size={15} aria-hidden="true" />{busy ? "Đang kiểm tra…" : "Mở lại xét duyệt"}
         </button>}
     {claim && createPortal(
       <RevokeClaimApprovalDialog claim={claim} initialReason={`Xét duyệt lại theo kết luận tranh chấp #${reportId}.`}

@@ -56,11 +56,21 @@ public class ReportReasonService {
     public record StatusRequest(boolean active) {}
 
     public Options options(String group) {
+        return options(group, false);
+    }
+
+    public Options p2pHandoverOptions() {
+        return options("HANDOVER_ISSUE", true);
+    }
+
+    private Options options(String group, boolean p2p) {
         requireSelectableGroup(group);
         return new Options(group, jdbc.query("""
                 select code, label, description_required from report_reason
-                where target_group = ? and active = true order by sort_order, code
-                """, (rs, row) -> reason(rs.getString(1), rs.getString(2), rs.getBoolean(3)), group));
+                where target_group = ? and active = true
+                  and (? or left(code, 13) <> 'P2P_HANDOVER_')
+                order by sort_order, code
+                """, (rs, row) -> reason(rs.getString(1), rs.getString(2), rs.getBoolean(3)), group, p2p));
     }
 
     public Reason require(String group, String code, String description) {

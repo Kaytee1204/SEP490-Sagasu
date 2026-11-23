@@ -288,7 +288,8 @@ export default function OfficeTransfers({ mine = false }) {
   return (
     <div className="sw-page">
       <header className="sw-heading">
-        <h1>{officer ? "Yêu cầu tiếp nhận đồ thất lạc" : "Theo dõi chuyển giao"}</h1>
+        <h1>{officer ? "Tiếp nhận tài sản từ bài đăng" : "Theo dõi chuyển giao"}</h1>
+        {officer && <p>Xử lý yêu cầu chuyển giao, lập lịch hẹn và tiếp nhận tại quầy đối với tài sản đã có bài đăng.</p>}
       </header>
 
       {/* Card 1: Filter Controls */}

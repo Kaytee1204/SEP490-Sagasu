@@ -48,6 +48,10 @@ export function earliestAppointment() {
 }
 
 export const progressLabels = {
+  APPEAL_WAIT: "Trong thời hạn gửi tranh chấp",
+  APPEAL_REVIEW: "Đang xử lý tranh chấp",
+  APPEAL_REASSESS: "Cần xét duyệt lại",
+  SCHEDULE_REQUIRED: "Chờ lập lịch hẹn",
   APPOINTMENT_REVIEW: "Lịch hẹn đã qua — cần hẹn lại",
   REVIEW: "Chờ xét duyệt", NEEDS_INFO: "Chờ bổ sung thông tin", EMAIL_UNSENT: "Cần gửi lịch hẹn",
   AWAITING_REPLY: "Chờ đồng ý lịch hẹn", REPLY_EXPIRED: "Hết hạn phản hồi lịch", COUNTER_VERIFICATION: "Chờ đến xác minh", VERIFICATION_FAILED: "Không đạt xác minh",

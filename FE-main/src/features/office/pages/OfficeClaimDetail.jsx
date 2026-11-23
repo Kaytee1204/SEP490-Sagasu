@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CalendarDays, Mail } from "lucide-react";
 import { officeApi } from "../api/officeApi";
@@ -30,6 +30,21 @@ export default function OfficeClaimDetail({ mine = false }) {
     () => claim ? workflowApi.detail(claim.id) : null,
     `${mine}:${claim?.id}:${claim?.version}`,
   );
+  const appealDeadline = workflow.data?.appealDeadline;
+  const refreshWorkflow = workflow.reload;
+  useEffect(() => {
+    if (!appealDeadline) return;
+    const refresh = () => { if (document.visibilityState === "visible") refreshWorkflow(); };
+    const remaining = Date.parse(appealDeadline) - Date.now();
+    const timer = remaining > 0 ? window.setTimeout(refresh, remaining + 150) : null;
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [appealDeadline, refreshWorkflow]);
   if (mine) return <main className="office-page office-personal"><Notice error={notice?.error}>{notice?.text}</Notice><LoadState state={state}>{claim && <PersonalClaimDetail claim={claim} workflow={workflow} onChanged={state.reload}/>}</LoadState></main>;
   async function resend() {
     if (busy) return;
@@ -57,7 +72,7 @@ export default function OfficeClaimDetail({ mine = false }) {
     <div className={`office-page ${mine ? "office-personal op-detail" : ""}`}>
       <Link
         className="of-back"
-        to={mine ? "/van-phong/claims" : "/approver/office-claims"}
+        to={claim?.postId ? `/approver/office-claims/post/${claim.postId}` : "/approver/office-claims"}
       >
         ← Danh sách yêu cầu
       </Link>
@@ -204,10 +219,17 @@ export default function OfficeClaimDetail({ mine = false }) {
                       )}
                   </section>
                 )}
-                {!mine && claim.canReview && (
+                {!mine && !claim.ownRequest && !claim.canReview && ["PENDING", "NEEDS_INFO"].includes(claim.status) && (
+                  <section className="of-panel">
+                    <h2>Đã duyệt yêu cầu khác</h2>
+                    <p className="of-muted">Hồ sơ này được giữ để xét tiếp nếu quyết định duyệt được thu hồi.</p>
+                  </section>
+                )}
+                {!mine && claim.canReview && workflow.data && (
                   <ReviewForm
                     key={`${claim.id}:${claim.version}`}
                     claim={claim}
+                    hasCompetitors={workflow.data.approvalHasCompetitors}
                     onDone={(r) => {
                       setNotice({
                         error: r.emailStatus === "FAILED",
@@ -216,7 +238,9 @@ export default function OfficeClaimDetail({ mine = false }) {
                             ? "Đã duyệt và lưu lịch hẹn, nhưng gửi thư chưa thành công. Dùng nút gửi lại thư bên dưới."
                             : r.emailStatus === "SENT"
                               ? "Đã duyệt yêu cầu, lưu lịch hẹn và gửi thư cho người nhận."
-                              : "Đã lưu kết quả xử lý hồ sơ.",
+                              : r.emailStatus === "APPEAL_WINDOW"
+                                ? "Đã chấp thuận yêu cầu. Lịch hẹn được lập sau thời hạn gửi tranh chấp và sau khi các tranh chấp đã được xử lý."
+                                : "Đã lưu kết quả xử lý hồ sơ.",
                       });
                       state.reload();
                     }}

@@ -111,7 +111,8 @@ export default function ReceiptQueuePage() {
   return (
     <div className="sw-page">
       <header className="sw-heading">
-        <h1>Hồ sơ tiếp nhận</h1>
+        <h1>Phiếu tiếp nhận tài sản</h1>
+        <p>Tra cứu phiếu tiếp nhận và lập phiếu tại quầy cho tài sản chưa có bài đăng.</p>
       </header>
 
       {/* Card 1: Filter Controls */}
@@ -131,7 +132,7 @@ export default function ReceiptQueuePage() {
 
           <Link to="/approver/receipts/new" className="sw-primary-btn">
             <Plus size={16} aria-hidden="true" />
-            Tạo hồ sơ tiếp nhận
+            Tạo phiếu tiếp nhận
           </Link>
         </div>
 

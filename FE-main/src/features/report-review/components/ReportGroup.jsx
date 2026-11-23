@@ -17,7 +17,6 @@ const priorityReasons = {
   USER_SAFETY_THREAT: "Có phản ánh đe dọa an toàn",
   HANDOVER: "Cần làm rõ sự cố bàn giao",
   CLAIM_APPEAL: "Chờ xử lý trước bàn giao",
-  CLAIM_REOPEN: "Đủ điều kiện xác minh để mở lại xét duyệt",
   RECOVERY_OVERDUE: "Đã qua hạn phản hồi về thu hồi đồ",
   REPLY_OVERDUE: "Đã qua hạn bổ sung thông tin",
   RECOVERY_CONFIRMED: "Đã thu hồi đồ, cần ghi kết quả",
@@ -27,6 +26,7 @@ const waitingReasons = {
   WAITING_REPLY: "Chờ người liên quan phản hồi",
   WAITING_OTHER_APPEALS: "Chờ xử lý tranh chấp của bài đăng",
   WAITING_REOPEN: "Chờ đủ điều kiện mở lại xét duyệt",
+  WAITING_FINDER_REVIEW: "Chờ người nhặt xét lại",
 };
 const icons = { POST: FileText, CLAIM: ClipboardList, MESSAGE: MessageSquare, USER: UserRound };
 
@@ -58,7 +58,7 @@ function OpenReport({ report, reportPath }) {
   </Link>;
 }
 
-export default function ReportGroup({ report, filters, reportPath, timeZone, revision }) {
+export default function ReportGroup({ report, showReasonColumn, filters, reportPath, timeZone, revision }) {
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
   const { post_id, claim_id, message_id, reported_account_id } = report;
@@ -73,13 +73,14 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
   const Icon = report.kind === "CLAIM_APPEAL" ? Scale : report.kind === "HANDOVER_ISSUE" ? Package : icons[target];
   const type = report.kind === "CLAIM_APPEAL" ? "Tranh chấp" : report.kind === "HANDOVER_ISSUE"
     ? "Sự cố bàn giao" : `Vi phạm · ${reportTargets[target]}`;
+  const officeAppeal = report.kind === "CLAIM_APPEAL" && report.appeal_custody_mode === "OFFICE";
   const thumbnail = report.post_thumbnail?.url;
   const title = target === "MESSAGE" ? report.message_preview?.trim() || "Tin nhắn đính kèm" : report.subject_title || reportTargets[target];
   const person = target === "CLAIM" ? report.claimant_name : target === "POST" || target === "MESSAGE" ? report.subject_name : "";
   const reasons = Object.entries(report.reason_summary ?? {}).sort((a, b) => b[1] - a[1]);
   const primaryReason = reasons[0]?.[0] || report.reason_label_snapshot || labels[report.kind];
   return <tbody role="rowgroup">
-    <tr role="row" className={`rr-case-row${report.priority_rank === 0 ? " is-priority" : ""}`}>
+    <tr role="row" data-kind={report.kind} className={`rr-case-row${report.priority_rank === 0 ? " is-priority" : ""}`}>
       <td role="cell" className="rr-case-subject">
         <div className="rr-case-identity">
           <span className="rr-case-icon rr-case-thumbnail">
@@ -87,7 +88,10 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
             {thumbnail && <img key={thumbnail} src={thumbnail} alt="" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
           </span>
           <div className="rr-case-name">
-            <span className="rr-case-type">{type}</span>
+            <div className="rr-case-tags">
+              <span className="rr-case-type">{type}</span>
+              {officeAppeal && <span className="rr-case-type">Văn Phòng</span>}
+            </div>
             {multiple ? <strong>{title}</strong>
               : <Link to={reportHref(report, reportPath)}>{title}</Link>}
             {!multiple && report.reporter && <small>Người báo cáo · {report.reporter}</small>}
@@ -96,7 +100,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
           </div>
         </div>
       </td>
-      <td role="cell" className="rr-case-reason">
+      {showReasonColumn && <td role="cell" className="rr-case-reason">
         <span className="rr-case-mobile-label">Lý do</span>
         <strong>{primaryReason}</strong>
         {reasons.length > 1 && <small>+{reasons.length - 1} lý do khác</small>}
@@ -105,7 +109,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
         </span>}
         {level && priority && <small>{priority}</small>}
         {appointment && <small>Lịch nhận <time dateTime={report.next_pickup}>{appointment}</time></small>}
-      </td>
+      </td>}
       <td role="cell" className="rr-case-status">
         <span className="rr-case-mobile-label">Trạng thái</span>
         {report.status === "RESOLVED" && report.work_state !== "HISTORY" && report.kind === "CLAIM_APPEAL"
@@ -132,7 +136,7 @@ export default function ReportGroup({ report, filters, reportPath, timeZone, rev
       </td>
     </tr>
     {multiple && <tr role="row" className="rr-case-expansion" hidden={!expanded}>
-      <td role="cell" colSpan={5} id={contentId}>
+      <td role="cell" colSpan={showReasonColumn ? 5 : 4} id={contentId}>
         {expanded && <Reports filters={{ ...filters, kind: report.kind, target, targetId }} revision={revision} reportPath={reportPath} />}
       </td>
     </tr>}

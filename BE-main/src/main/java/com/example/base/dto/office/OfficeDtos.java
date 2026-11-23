@@ -42,6 +42,9 @@ public final class OfficeDtos {
     public record AppointmentView(Long id, OffsetDateTime scheduledAt, String location, String note, String status,
         String responseStatus, OffsetDateTime responseDeadline, String cancellationReason) {}
     public record AnswerView(Long id, String question, String answer, String section) {}
+    public record ClaimGroup(long postId,String title,String thumbnail,long claims,long people,long waiting,
+                             OffsetDateTime latest,String stage) {}
+    public record GroupedClaims(PageData<ClaimGroup> page, java.util.Map<String,Long> counts) {}
     public record ClaimView(Long id, Long postId, String postTitle, String status, String channel,
         Long claimantId, String claimantName, String claimantEmail, String claimantPhone, String createdBy,
         String description, String evidenceNote, String privateIdentifiers, long version,

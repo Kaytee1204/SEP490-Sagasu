@@ -49,7 +49,15 @@ class ReportReviewCalendar {
   }
 
   Instant responseDue(Instant submittedAt, int priority) {
-    Duration remaining = Duration.ofHours(priority == 0 ? 2 : priority == 1 ? 8 : 16);
+    return addWorkingHours(submittedAt, priority == 0 ? 2 : priority == 1 ? 8 : 16);
+  }
+
+  Instant inquiryResponseDue(Instant submittedAt) {
+    return addWorkingHours(submittedAt, 12);
+  }
+
+  private Instant addWorkingHours(Instant submittedAt, int hours) {
+    Duration remaining = Duration.ofHours(hours);
     Instant cursor = submittedAt;
     while (true) {
       Shift shift = currentOrNext(cursor);

@@ -18,11 +18,18 @@ const reportTypes = {
   HANDOVER_ISSUE: 'Sự cố bàn giao',
   CLAIM_APPEAL: 'Tranh chấp',
 };
-const statusFilters = { ALL: 'Tất cả', ACTION: 'Cần tôi xử lý', IN_PROGRESS: 'Đang xử lý', FINISHED: 'Đã kết thúc' };
+const statusFilters = { ACTION: 'Cần tôi xử lý', IN_PROGRESS: 'Đang xử lý', FINISHED: 'Đã kết thúc' };
+const emptyByStatus = {
+  ACTION: 'Hiện chưa có báo cáo cần bạn xử lý',
+  IN_PROGRESS: 'Hiện chưa có báo cáo đang xử lý',
+  FINISHED: 'Hiện chưa có báo cáo đã kết thúc',
+};
 const targetIcons = {
   POST: FileText, USER: UserRound, CLAIM: ClipboardCheck, MESSAGE: MessageSquare,
   HANDOVER_ISSUE: Handshake, CLAIM_APPEAL: Scale,
 };
+const violationTypes = { POST: 'Vi phạm · Bài đăng', CLAIM: 'Vi phạm · Yêu cầu nhận đồ',
+  USER: 'Vi phạm · Tài khoản', MESSAGE: 'Vi phạm · Tin nhắn' };
 const finished = status => status === 'RESOLVED' || status === 'REJECTED';
 
 export default function MyReportsPage() {
@@ -35,7 +42,7 @@ function MyReports() {
   const location = useLocation();
   const { reportActions } = useOutletContext();
   const mine = params.get('tab') !== 'related';
-  const status = Object.hasOwn(statusFilters, params.get('status')) ? params.get('status') : 'ALL';
+  const status = Object.hasOwn(statusFilters, params.get('status')) ? params.get('status') : 'ACTION';
   const type = Object.hasOwn(reportTypes, params.get('type')) ? params.get('type') : 'ALL';
   const requestedPage = Number(params.get('page'));
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 && requestedPage <= 2147483647 ? requestedPage : 1;
@@ -69,9 +76,6 @@ function MyReports() {
   }
 
   const items = data?.content ?? [];
-  const pending = items.filter(report => report.needs_reply || report.needs_reopen);
-  const others = items.filter(report => !report.needs_reply && !report.needs_reopen);
-  const filtered = status !== 'ALL' || type !== 'ALL';
   const returnTo = location.pathname + location.search;
   return (
     <main className="container reports-page reports-dashboard">
@@ -94,8 +98,10 @@ function MyReports() {
           <div className="report-status-filters" role="group" aria-label="Trạng thái báo cáo">
             {Object.entries(statusFilters).map(([value, label]) => (
               <button type="button" key={value} aria-pressed={status === value}
-                onClick={() => setFilters({ status: value === 'ALL' ? null : value })}>
+                onClick={() => setFilters({ status: value === 'ACTION' ? null : value })}>
                 {label}
+                {value !== 'FINISHED' && data?.tabCounts?.[value] > 0 &&
+                  <span className="report-tab-count">{data.tabCounts[value]}</span>}
               </button>
             ))}
           </div>
@@ -113,24 +119,20 @@ function MyReports() {
         <button className="btn btn-ghost" type="button" onClick={reload}>Thử tải lại</button>
       </div>}
       {data && items.length > 0 && <>
-        {pending.length > 0 && <section className="report-list-section" aria-labelledby="reports-action-title">
-          <h2 id="reports-action-title">Cần bạn xử lý</h2>
-          {pending.map(report => <ReportRow key={report.report_id} report={report} returnTo={returnTo} />)}
-        </section>}
-        {others.length > 0 && <section className="report-list-section" aria-labelledby="reports-list-title">
-          <h2 id="reports-list-title">{pending.length ? 'Các báo cáo khác' : 'Danh sách báo cáo'}</h2>
-          {others.map(report => <ReportRow key={report.report_id} report={report} returnTo={returnTo} />)}
-        </section>}
+        <section className="report-list-section" aria-label={statusFilters[status]}>
+          {items.map(report => <ReportRow key={report.report_id} report={report} returnTo={returnTo} />)}
+        </section>
         <p className="reports-count" role="status">{data.totalElements} báo cáo</p>
         <Pagination currentPage={page} totalPages={data.totalPages}
           onPageChange={next => setFilters({ page: next === 1 ? null : String(next) })} />
       </>}
       {data && data.totalElements === 0 && (
         <div className="report-card reports-empty">
-          <h2>{filtered ? 'Chưa có báo cáo phù hợp' : mine ? 'Bạn chưa gửi báo cáo nào' : 'Chưa có báo cáo liên quan đến bạn'}</h2>
-          {filtered && <button type="button" className="btn btn-ghost" onClick={() => setFilters({ status: null, type: null })}>
-            Xóa bộ lọc
-          </button>}
+          <h2>{type === 'ALL' ? emptyByStatus[status] : 'Chưa có báo cáo phù hợp'}</h2>
+          {type !== 'ALL' ? <button type="button" className="btn btn-ghost" onClick={() => setFilters({ type: null })}>
+            Xóa lọc theo loại
+          </button> : status === 'ACTION' && <button type="button" className="btn btn-ghost"
+            onClick={() => setFilters({ status: 'IN_PROGRESS' })}>Xem báo cáo đang xử lý</button>}
         </div>
       )}
     </main>
@@ -141,6 +143,7 @@ function ReportRow({ report, returnTo }) {
   const Icon = targetIcons[report.report_type] || Flag;
   const title = reportTitles[report.report_type] || 'Báo cáo';
   const subject = reportSubject(report);
+  const type = violationTypes[report.report_type] || reportTypes[report.report_type] || title;
   const needsAction = report.needs_reply || report.needs_reopen;
   const isFinished = finished(report.status);
   const state = report.needs_reply ? 'Cần bạn phản hồi'
@@ -150,15 +153,21 @@ function ReportRow({ report, returnTo }) {
   const hash = report.needs_reply ? '#phan-hoi' : report.appeal_step ? '#buoc-tiep-theo' : isFinished ? '#ket-qua' : '';
   return (
     <article className={`report-entry${needsAction ? ' report-entry-action' : ''}`}>
-      <span className="report-entry-icon"><Icon size={19} aria-hidden="true" /></span>
       <div className="report-entry-content">
-        <h3>{title}</h3>
-        {subject.value && <p>{subject.label} <span className="report-meta-dot">·</span> <strong>{subject.value}</strong></p>}
-        <div className="report-entry-meta">
-          <span>Báo cáo #{report.report_id}</span>
-          <time dateTime={report.created_at}><Clock3 size={13} aria-hidden="true" /> Gửi lúc {formatReportDate(report.created_at)}</time>
+        <span className="report-entry-icon">
+          <Icon size={22} aria-hidden="true" />
+          {report.post_thumbnail_url && <img key={report.post_thumbnail_url} src={report.post_thumbnail_url}
+            alt="" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
+        </span>
+        <div>
+          <span className="report-entry-type">{type}</span>
+          <h3><Link to={reportDetailPath(report.report_id) + hash} state={{ returnTo }}>{subject.value || title}</Link></h3>
+          <div className="report-entry-meta">
+            <time dateTime={report.created_at}><Clock3 size={13} aria-hidden="true" /> Gửi lúc {formatReportDate(report.created_at)}</time>
+          </div>
         </div>
       </div>
+      <p className="report-entry-reason">{report.report_reason || 'Chưa phân loại'}</p>
       <div className="report-entry-actions">
         <span className={`report-state report-state-${needsAction ? 'ACTION' : report.appeal_step ? 'IN_REVIEW' : report.status}`}>{state}</span>
         <Link className={`btn ${needsAction ? 'btn-accent' : 'btn-ghost'}`}

@@ -20,6 +20,9 @@ function currentStep(data, canRevoke) {
   if (data.heldForReview && !['COMPLETED', 'CANCELLED'].includes(data.status)) return {
     Icon: ShieldAlert, title: 'Giao nhận đang tạm dừng', description: 'Quản lý đang đối chiếu báo cáo. Theo dõi kết quả trước khi tiếp tục bàn giao.',
   };
+  if (data.issue && data.status === 'NOT_RECORDED') return {
+    Icon: TriangleAlert, title: 'Sự cố đang được xem xét', description: 'Việc ghi nhận giao đồ đang tạm dừng trong lúc quản lý xem xét.',
+  };
   const appeal = data.appealWindow;
   if (appeal?.state === 'OPEN') return {
     Icon: Clock3, title: 'Chưa thể bàn giao',
@@ -32,8 +35,8 @@ function currentStep(data, canRevoke) {
   if (appeal?.state === 'REVIEW_REQUIRED') return {
     Icon: ShieldAlert, title: 'Bàn giao đang tạm dừng',
     description: canRevoke
-      ? 'Quản lý yêu cầu xét lại người nhận. Nếu vẫn giữ đồ, bạn có thể xét lại hồ sơ này hoặc thu hồi chấp thuận để xem các yêu cầu khác.'
-      : 'Quản lý yêu cầu xét lại người nhận. Đang chờ người nhặt xác nhận vẫn giữ món đồ và thu hồi chấp thuận.',
+      ? 'Quản lý yêu cầu xét lại người nhận. Nếu vẫn giữ đồ, bạn có thể mở lại xét duyệt để tự quyết định người nhận.'
+      : 'Quản lý yêu cầu xét lại người nhận. Bàn giao tạm dừng trong lúc chờ người nhặt xử lý.',
   };
   switch (data.status) {
     case 'NOT_RECORDED': return data.canRecord
@@ -52,7 +55,7 @@ function currentStep(data, canRevoke) {
 }
 
 function isPaused(data) {
-  return data.heldForReview || ['DISPUTED', 'CANCELLED'].includes(data.status)
+  return data.heldForReview || (data.status === 'NOT_RECORDED' && Boolean(data.issue)) || ['DISPUTED', 'CANCELLED'].includes(data.status)
     || Boolean(data.appealWindow && data.appealWindow.state !== 'CLEARED');
 }
 
@@ -72,6 +75,7 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,onContin
   const [recordOpen,setRecordOpen]=useState(false);
   const [confirmOpen,setConfirmOpen]=useState(false);
   const [issueOpen,setIssueOpen]=useState(false);
+  const [submittedReportId,setSubmittedReportId]=useState(null);
   useEffect(()=>{const refetch=()=>setRefresh(n=>n+1);window.addEventListener('focus',refetch);return()=>window.removeEventListener('focus',refetch);},[]);
   useEffect(() => {
     let cancelled = false;
@@ -99,10 +103,9 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,onContin
   const issueEvidence=(data?.issue?.evidence||[]).map(item=>({...item,name:item.name||'Ảnh sự cố'}));
   const gallery=[...evidence.map(item=>({...item,id:`h:${item.id}`})),...issueEvidence.map(item=>({...item,id:`r:${item.id}`}))];
   const requiresReReview = appealState === 'REVIEW_REQUIRED';
-  const canReportIssue = data?.canReportIssue && !data.heldForReview
-    && ['WAITING_CONFIRMATION', 'COMPLETED'].includes(data.status);
+  const canReportIssue = data?.canReportIssue;
   const canRevoke = Boolean(onRevokeApproval) && (!data || data.status === 'NOT_RECORDED')
-    && !data?.heldForReview && appealState !== 'UNDER_REVIEW';
+    && !data?.heldForReview && !data?.issue && appealState !== 'UNDER_REVIEW';
   const canContinueReview = canRevoke && requiresReReview && Boolean(onContinueReview);
   const step = data ? currentStep(data, canRevoke) : null;
   const revokeButton = canRevoke && <button type="button" className={requiresReReview && !canContinueReview ? 'btn btn-accent' : 'btn btn-ghost'}
@@ -123,9 +126,9 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,onContin
         {data.canRecord && <p className="handover-verification-hint">{handoverVerificationHint(claim.answers)}</p>}
         {data.canRecord&&<button type="button" className="btn btn-accent" onClick={()=>setRecordOpen(true)}><PackageCheck size={18} aria-hidden="true" />Ghi nhận đã giao đồ</button>}
         {data.canConfirm&&<button type="button" className="btn btn-accent" onClick={()=>setConfirmOpen(true)}><CircleCheck size={18} aria-hidden="true" />Xác nhận đã nhận đúng đồ</button>}
-        {canReportIssue&&<button type="button" className="btn btn-ghost handover-issue-button" onClick={()=>setIssueOpen(true)}><TriangleAlert size={17} aria-hidden="true" />Báo sự cố bàn giao</button>}
+        {canReportIssue&&<button type="button" className="btn btn-ghost handover-issue-button" onClick={()=>setIssueOpen(true)}><TriangleAlert size={17} aria-hidden="true" />Báo sự cố trao trả</button>}
         {canContinueReview && <button type="button" className="btn btn-accent" onClick={onContinueReview}>
-          Tiếp tục yêu cầu nhận đồ này <ArrowRight size={16} aria-hidden="true" />
+          Xét lại hồ sơ này <ArrowRight size={16} aria-hidden="true" />
         </button>}
         {revokeButton}
       </div>}
@@ -139,8 +142,11 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,onContin
       {data.note&&<p className="claim-prose">{data.note}</p>}
       {evidence.length ? <div className="report-evidence">{evidence.map((item,i)=><button key={item.id} type="button" onClick={()=>setImage(i)} aria-label={`Xem ảnh giao đồ ${i+1}`}><img src={item.url} alt={item.name}/></button>)}</div> : <p className="claims-muted">Không đính kèm ảnh bàn giao.</p>}
     </details>}
+    {submittedReportId && <p role="status">Đã gửi báo cáo sự cố #{submittedReportId}.</p>}
     {data.issue&&<section className="handover-issue-summary"><h3><TriangleAlert size={18} aria-hidden="true" />Báo cáo sự cố #{data.issue.id}</h3>{data.issue.reasonLabel&&<p><strong>{data.issue.reasonLabel}</strong></p>}<p className="claim-prose">{data.issue.description}</p><p>{data.status === 'COMPLETED'
       ? 'Quản lý đang xem xét sự cố phát sinh sau khi hoàn tất bàn giao.'
+      : data.status === 'NOT_RECORDED'
+        ? 'Quản lý đang xem xét báo cáo. Việc ghi nhận giao đồ đang tạm dừng.'
       : 'Quản lý đang xem xét báo cáo. Việc hoàn tất bàn giao đang tạm dừng.'}</p>
       <Link className="btn btn-ghost" to={`/bao-cao/${data.issue.id}`}>Theo dõi báo cáo</Link>
       <div className="report-evidence">{issueEvidence.map((item,i)=><button type="button" key={item.id} onClick={()=>setImage(evidence.length+i)} aria-label="Xem ảnh sự cố"><img src={item.url} alt={item.name}/></button>)}</div></section>}
@@ -150,8 +156,10 @@ export default function HandoverPanel({claim,onChanged,onRevokeApproval,onContin
     {confirmOpen&&data?.canConfirm&&<ConfirmReceiptDialog claim={claim} handover={data}
       onClose={()=>setConfirmOpen(false)} onConfirmed={result=>{setData(result);setConfirmOpen(false);setError('');onChanged();}}
       onReportIssue={canReportIssue?()=>{setConfirmOpen(false);setIssueOpen(true);}:undefined}/>}
-    {issueOpen&&canReportIssue&&<ReportHandoverIssueDialog claim={claim} handover={data}
-      onClose={()=>setIssueOpen(false)} onReported={result=>{setData(result);setIssueOpen(false);setError('');onChanged();}}/>}
+    {issueOpen&&data&&<ReportHandoverIssueDialog claim={claim} handover={data}
+      onClose={()=>setIssueOpen(false)} onReported={result=>{
+        setData(result);setSubmittedReportId(result.submittedReportId);setIssueOpen(false);setError('');onChanged();
+      }}/>}
     {image!==null&&<ClaimEvidencePreview images={gallery} initialIndex={image} onClose={()=>setImage(null)}/>}
   </section>;
 }

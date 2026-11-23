@@ -3,6 +3,7 @@ package com.example.base.service.office;
 import com.example.base.dto.office.InvitationDtos.*;
 import com.example.base.entity.*;
 import com.example.base.repository.*;
+import com.example.base.service.claim.P2pClaimAppealService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class OfficeInvitationService {
     private final PlatformTransactionManager transactions;
     private final EntityManager em;
     private final OfficeAccess access;
+    private final P2pClaimAppealService appeals;
 
     private Claim lock(long id) {
         Long postId=claims.findPostId(id).orElseThrow(()->bad("Không tìm thấy hồ sơ."));
@@ -44,6 +46,7 @@ public class OfficeInvitationService {
     public com.example.base.dto.office.OfficeDtos.ReviewResult sendWithResult(long claimId) {
         return new TransactionTemplate(transactions).execute(tx->{
             Claim c=lock(claimId);
+            appeals.requireOfficeClearance(c);
             Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(claimId,"SCHEDULED").orElseThrow(()->bad("Lịch hẹn không còn hiệu lực."));
             em.refresh(a,LockModeType.PESSIMISTIC_WRITE);
             if(!"APPROVED".equals(c.getStatus())) throw bad("Yêu cầu chưa được duyệt.");
@@ -87,6 +90,7 @@ public class OfficeInvitationService {
             if(!java.util.Set.of("CONFIRM","DECLINE").contains(decision)) throw bad("Lựa chọn không hợp lệ.");
             OffsetDateTime now=OffsetDateTime.now();
             if(!"PENDING".equals(found.getResponseStatus()) || !"SCHEDULED".equals(found.getStatus()) || !"APPROVED".equals(c.getStatus())) return view(found);
+            appeals.requireOfficeClearance(c);
             if(found.responseExpired(now)) reject(c,found,"EXPIRED",now);
             else if("CONFIRM".equals(decision)) {
                 found.confirmInvitation(now);
@@ -105,6 +109,7 @@ public class OfficeInvitationService {
         String reason=expired?"Không phản hồi lời mời nhận đồ trong thời hạn 12 giờ.":"Người nhận từ chối lịch hẹn.";
         a.rejectInvitation(response,reason,now); c.review("REJECTED");
         if("RESERVED".equals(c.getPost().getStatus())) c.getPost().reopenAfterClaimCancellation();
+        appeals.reopen(c);
         Account actor=expired||c.getClaimant()==null?a.getCreatedBy():c.getClaimant();
         activities.save(new ClaimActivity(c,actor,expired?"INVITE_EXPIRE":"INVITE_DECLINE","APPROVED",reason));
     }

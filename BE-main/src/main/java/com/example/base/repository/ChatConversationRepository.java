@@ -17,7 +17,7 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
             JOIN claim selected ON selected.claim_id = approval.approved_claim_id
             JOIN chat_conversation c ON c.post_id = selected.post_id
                 AND c.claimant_id = selected.claimant_id AND c.latest_claim_id = selected.claim_id
-            WHERE a.report_id = :reportId AND approval.closed_at IS NULL
+            WHERE a.report_id = :reportId AND approval.closed_at IS NULL AND approval.custody_mode='P2P'
             """, nativeQuery = true)
     Optional<Long> findActiveConversationIdForAppeal(@Param("reportId") long reportId);
 
