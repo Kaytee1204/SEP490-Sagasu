@@ -67,7 +67,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         request.setAttribute("jwt_auth_error", "Tài khoản đang bị khóa, hết hạn hoặc đã ngừng hoạt động");
                     } else if (userDetails instanceof CustomUserDetails customUserDetails
                             && customUserDetails.getPasswordChangedAt() != null
-                            && isTokenIssuedBeforePasswordChange(jwt, customUserDetails.getPasswordChangedAt())) {
+                            && isTokenIssuedBeforePasswordChange(token, customUserDetails.getPasswordChangedAt())) {
                         log.warn("JWT Auth rejected for user [{}]: password changed at {}",
                                 userDetails.getUsername(),
                                 customUserDetails.getPasswordChangedAt());
