@@ -122,6 +122,8 @@ function ReportDetail({ id }) {
           </div>
           {subject.value && <p className="report-detail-subject">{subject.label} <span className="report-meta-dot">·</span> <strong>{subject.value}</strong></p>}
           <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
+          {office && report.mine && report.report_type === 'HANDOVER_ISSUE' && !concluded &&
+            <p className="report-detail-subject">Báo cáo đã gửi vẫn được xem xét sau khi hết hạn gửi sự cố.</p>}
 
         </header>
         <section id="buoc-tiep-theo" tabIndex={-1} className={`report-card report-detail-section report-next-step${pending ? ' report-next-step-pending' : ''}`}>

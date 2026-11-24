@@ -263,11 +263,16 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
     {hold?.reason && <div className="rr-callout">
       <strong>Đang tạm dừng giao nhận</strong><p>{hold.reason}</p>
     </div>}
+    {isAppeal && !isClosed && data.appealOpenCount > 0 && <p className="rr-callout">
+      Vụ việc có {data.appealOpenCount} báo cáo đang mở. Một quản lý phụ trách toàn bộ báo cáo thuộc lần duyệt này.
+    </p>}
     <FollowUp data={data} />
     {conflict && !isClosed ? <p className="rr-callout">Bạn có liên quan đến vụ việc. Cần một quản lý khác đưa ra quyết định.</p>
       : canTake ? <>
-        <p>{caseKind === "GENERAL" ? "Nhận xử lý để xem xét vi phạm và ghi kết luận." : "Nhận xử lý để yêu cầu bổ sung thông tin hoặc ghi kết luận."}</p>
-        <button type="button" disabled={busy} className="rr-primary" onClick={take}>{busy ? "Đang nhận…" : "Nhận xử lý"}</button>
+        <p>{isAppeal
+          ? data.appealRoundTransfer ? "Cần thống nhất người phụ trách trước khi tiếp tục xử lý." : "Nhận phụ trách toàn bộ báo cáo đang mở thuộc lần duyệt này."
+          : caseKind === "GENERAL" ? "Nhận xử lý để xem xét vi phạm và ghi kết luận." : "Nhận xử lý để yêu cầu bổ sung thông tin hoặc ghi kết luận."}</p>
+        <button type="button" disabled={busy} className="rr-primary" onClick={take}>{busy ? "Đang nhận…" : isAppeal ? data.appealRoundTransfer ? "Nhận bàn giao vụ việc" : "Nhận xử lý vụ việc" : "Nhận xử lý"}</button>
       </> : canProcess || canAsk || actions.length > 0 ? <div className={isHandover ? "rr-workflow-actions rr-handover-actions" : "rr-workflow-actions"}>
         {canAsk && <button type="button" onClick={onAsk}><MessageSquare size={16} aria-hidden="true" />
           {usesVerification(data) ? "Yêu cầu xác minh" : report.reason_code === "HANDOVER_MISSING_ITEMS" ? "Hỏi về phụ kiện còn thiếu" : "Hỏi người liên quan"}</button>}
@@ -407,9 +412,9 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
           </div>}
       </div>
       <ConfirmActionPopup open={confirmTake} variant="info"
-        title="Nhận xử lý báo cáo này?"
-        description={isViolation ? "Bạn sẽ phụ trách xem xét vi phạm và ghi kết luận." : "Báo cáo sẽ được phân công cho bạn để yêu cầu bổ sung và ghi kết luận."}
-        confirmLabel="Nhận xử lý" cancelLabel="Hủy bỏ"
+        title={isAppeal ? data.appealRoundTransfer ? "Nhận bàn giao vụ việc?" : "Nhận xử lý vụ việc?" : "Nhận xử lý báo cáo này?"}
+        description={isAppeal ? "Toàn bộ báo cáo đang mở thuộc lần duyệt này sẽ được giao cho bạn. Báo cáo gửi sau cũng sẽ được chuyển đến bạn." : isViolation ? "Bạn sẽ phụ trách xem xét vi phạm và ghi kết luận." : "Báo cáo sẽ được phân công cho bạn để yêu cầu bổ sung và ghi kết luận."}
+        confirmLabel={isAppeal ? "Xác nhận tiếp nhận" : "Nhận xử lý"} cancelLabel="Hủy bỏ"
         busy={busy} onConfirm={take} onClose={() => setConfirmTake(false)} />
       {action && <DecisionDialog key={action.value} action={action.value} data={action.data} onClose={() => setAction(null)} onSaved={setData} />}
     </>}

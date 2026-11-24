@@ -1,4 +1,4 @@
-import { earliestAppointment } from "../officeUtils";
+import { earliestAppointment, pickupScheduleError, pickupScheduleHint, validateRequiredText } from "../officeUtils";
 import { useState } from "react";
 import Dialog from "./Dialog";
 import Notice from "./Notice";
@@ -14,7 +14,7 @@ const titles = {
 };
 
 export default function ReturnActionDialog({ action, claim, workflow, onClose, onDone }) {
-  const [form, setForm] = useState({ result: "PASSED", note: "", reason: "", condition: "", scheduledAt: "",
+  const [form, setForm] = useState({ result: "", note: "", reason: "", condition: "", scheduledAt: "",
     location: claim.appointment?.location || "", email: claim.claimantEmail || "" });
   const [files, setFiles] = useState([]);
   const [checked, setChecked] = useState(false);
@@ -28,8 +28,11 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
   function handleFormSubmit(event) {
     event.preventDefault();
     if (busy) return;
-    if (action === "handover" && !files.length) { setError("Thêm ít nhất một ảnh chứng minh việc giao đồ."); return; }
     setError("");
+    if (!validateRequiredText(event.currentTarget)) return;
+    const scheduleError = ["schedule", "reschedule"].includes(action) && pickupScheduleError(form.scheduledAt);
+    if (scheduleError) { setError(scheduleError); return; }
+    if (action === "handover" && !files.length) { setError("Thêm ít nhất một ảnh chứng minh việc giao đồ."); return; }
     setConfirmOpen(true);
   }
   async function executeSubmit() {
@@ -67,17 +70,17 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
   }[action] || { variant: "warning", title: "Bạn có chắc chắn?", description: "Xác nhận thực hiện thao tác xử lý hồ sơ này.", confirmLabel: "Xác nhận" };
   return <Dialog title={titles[action]} busy={busy} onClose={onClose}>
     {({ guard }) => <>
-    <form className="of-form" onSubmit={handleFormSubmit}>
+    <form className="of-form" inert={confirmOpen} onSubmit={handleFormSubmit}>
       <Notice error>{error}</Notice>
       <p className="of-muted">Hồ sơ #{claim.id} · {claim.postTitle}</p>
       {action === "verify" && <>
         <p>Đối chiếu người đến quầy với <strong>{claim.claimantName}</strong> và căn cứ sở hữu trong hồ sơ. Chỉ ghi kết quả kiểm tra, tránh lưu toàn bộ số giấy tờ cá nhân.</p>
-        <label>Kết quả<select value={form.result} disabled={busy} onChange={(e) => change("result", e.target.value)}><option value="PASSED">Đạt — đủ căn cứ trao trả</option><option value="FAILED">Không đạt — từ chối nhận đồ</option></select></label>
+        <label>Kết quả *<select required value={form.result} disabled={busy} onChange={(e) => change("result", e.target.value)}><option value="" disabled>Chọn kết quả</option><option value="PASSED">Đạt — đủ căn cứ trao trả</option><option value="FAILED">Không đạt — từ chối nhận đồ</option></select></label>
         {form.result === "FAILED" && <Notice error>Yêu cầu sẽ bị từ chối, lịch hẹn bị hủy và đồ được mở cho người khác nhận. Tài khoản này không được yêu cầu lại món đồ này, kể cả tại quầy.</Notice>}
         <label>Nội dung đã đối chiếu *<textarea required maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} placeholder="Danh tính, dấu hiệu riêng và bằng chứng đã đối chiếu…" /></label>
       </>}
       {["schedule", "reschedule"].includes(action) && <>
-        <label>Ngày và giờ hẹn (UTC+7) *<input type="datetime-local" min={earliestAppointment()} required value={form.scheduledAt} disabled={busy} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn thời điểm cách hiện tại hơn 12 giờ.</small></label>
+        <label>Ngày và giờ hẹn (UTC+7) *<input type="datetime-local" min={earliestAppointment()} required value={form.scheduledAt} disabled={busy} onChange={(e) => change("scheduledAt", e.target.value)} /><small>{pickupScheduleHint}<br />Chọn thời điểm cách hiện tại ít nhất 12 giờ và 1 phút.</small></label>
         <label>Địa điểm *<input required maxLength={1000} value={form.location} disabled={busy} onChange={(e) => change("location", e.target.value)} /></label>
         {action === "schedule" && <label>Thư điện tử người nhận *<input type="email" required maxLength={255} value={form.email} disabled={busy} onChange={(e) => change("email", e.target.value)} /></label>}
         <label>Lời nhắn cho người nhận<textarea maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} /></label>
@@ -93,6 +96,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard()}>Để sau</button><button className="of-button of-primary" disabled={busy}>{busy ? "Đang lưu…" : titles[action]}</button></div>
     </form>
     <ConfirmActionPopup
+      inline
       open={confirmOpen}
       variant={confirmMeta.variant}
       title={confirmMeta.title}

@@ -20,6 +20,8 @@ import LoadState from "../components/LoadState";
 import SearchBox from "../components/SearchBox";
 import ClaimQuestionnaireFields from "@/features/claims/components/ClaimQuestionnaireFields";
 import { serializeQuestionnaireAnswers } from "@/features/claims/utils/questionnaireUtils";
+import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
+import { validateRequiredText } from "../officeUtils";
 import "../Office.css";
 
 export default function OfficeClaimForm({ counter = false }) {
@@ -52,8 +54,17 @@ export default function OfficeClaimForm({ counter = false }) {
   });
   const questionnaire = useLoad(() => postId ? officeApi.questionnaire(postId,counter) : Promise.resolve(null), `questionnaire:${postId}:${counter}`);
   const [answers,setAnswers] = useState({});
+  const [pendingPostId, setPendingPostId] = useState(null);
   function selectPost(value) {
-    if(String(value) === String(postId)) return;
+    if (String(value) === String(postId)) return;
+    if (hasEvidence) {
+      setPendingPostId(value);
+      return;
+    }
+    replacePost(value);
+  }
+  function replacePost(value) {
+    setPendingPostId(null);
     setPostId(value); setAnswers({}); setFiles([]);
     setForm(current => ({...current,description:"",evidenceNote:""})); setError("");
   }
@@ -70,16 +81,16 @@ export default function OfficeClaimForm({ counter = false }) {
     }));
   }
   function confirmClaimantChange() {
-    return !(form.description.trim() || form.evidenceNote.trim() || files.length || Object.keys(answers).length)
+    return !hasEvidence
       || window.confirm("Đổi người khai sẽ xóa câu trả lời xác minh và ảnh đang nhập. Tiếp tục?");
   }
   const [saving, setBusy] = useState(false);
   const [imagesProcessing, setImagesProcessing] = useState(false);
   const busy = saving || imagesProcessing;
   const submitted = useRef(false);
-  const dirty = !!(form.description.trim() || form.evidenceNote.trim() || files.length || Object.keys(answers).length);
+  const hasEvidence = !!(form.description.trim() || form.evidenceNote.trim() || files.length || Object.keys(answers).length);
   useEffect(() => {
-    if (counter || !dirty) return;
+    if (counter || !hasEvidence) return;
     const unload = e => { if (!submitted.current) { e.preventDefault(); e.returnValue = ""; } };
     const leave = e => {
       const link = e.target.closest('a[href]');
@@ -91,8 +102,10 @@ export default function OfficeClaimForm({ counter = false }) {
     window.addEventListener('beforeunload', unload);
     document.addEventListener('click', leave, true);
     return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', leave, true); };
-  }, [counter, dirty]);
+  }, [counter, hasEvidence]);
   const [error, setError] = useState("");
+  const phone = form.claimantPhone.trim();
+  const phoneInvalid = Boolean(phone) && !/^(0|\+84)[0-9]{9,10}$/.test(phone);
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const back = counter ? "/approver/office-claims" : "/van-phong/claims";
   const isOwner = Boolean(selected.data?.isOwner || selected.data?.canEditOwnPost);
@@ -104,7 +117,8 @@ export default function OfficeClaimForm({ counter = false }) {
     (counter || !isOwner);
   async function submit(e) {
     e.preventDefault();
-    if (busy || !valid || !questionnaire.data) return;
+    if (busy || !valid || !questionnaire.data || phoneInvalid) return;
+    if (!validateRequiredText(e.currentTarget)) return;
     if (counter && !claimant) {
       setError("Chọn tài khoản người yêu cầu nhận đồ từ kết quả tìm kiếm.");
       return;
@@ -121,7 +135,7 @@ export default function OfficeClaimForm({ counter = false }) {
           claimantId: counter ? claimant?.id : null,
           claimantName: form.claimantName.trim() || null,
           claimantEmail: form.claimantEmail.trim().toLowerCase() || null,
-          claimantPhone: form.claimantPhone.trim() || null,
+          claimantPhone: phone || null,
           description: form.description.trim(),
           evidenceNote: form.evidenceNote.trim() || null,
         },
@@ -259,7 +273,7 @@ export default function OfficeClaimForm({ counter = false }) {
               </label>
 
               <label>
-                Số điện thoại
+                Số điện thoại (không bắt buộc)
                 <input
                   type="tel"
                   maxLength={40}
@@ -267,7 +281,15 @@ export default function OfficeClaimForm({ counter = false }) {
                   value={form.claimantPhone}
                   onChange={(e) => change("claimantPhone", e.target.value)}
                   autoComplete="tel"
+                  placeholder="0912345678 hoặc +84912345678"
+                  aria-invalid={phoneInvalid}
+                  aria-describedby={phoneInvalid ? "office-claim-phone-error" : undefined}
                 />
+                {phoneInvalid && (
+                  <small id="office-claim-phone-error" role="alert">
+                    Nhập số điện thoại hợp lệ, ví dụ 0912345678 hoặc +84912345678.
+                  </small>
+                )}
               </label>
             </div>
           </section>
@@ -298,7 +320,7 @@ export default function OfficeClaimForm({ counter = false }) {
             <div className="of-actions">
               <button
                 className="of-button of-primary"
-                disabled={busy || !valid || !questionnaire.data || !form.description.trim()}
+                disabled={busy || !valid || !questionnaire.data || !form.description.trim() || phoneInvalid}
               >
                 {busy
                   ? "Đang lưu hồ sơ…"
@@ -331,6 +353,15 @@ export default function OfficeClaimForm({ counter = false }) {
           </p>
         </aside>
       </div>
+      <ConfirmActionPopup
+        open={pendingPostId !== null}
+        title="Đổi món đồ cần nhận?"
+        description="Câu trả lời xác minh, mô tả và ảnh đã nhập cho món hiện tại sẽ bị xóa khi đổi món."
+        confirmLabel="Đổi món"
+        cancelLabel="Giữ món hiện tại"
+        onConfirm={() => replacePost(pendingPostId)}
+        onClose={() => setPendingPostId(null)}
+      />
     </div>
   );
 }

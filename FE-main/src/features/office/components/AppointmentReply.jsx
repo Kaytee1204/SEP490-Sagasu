@@ -5,7 +5,7 @@ import { date } from "../officeUtils";
 import Notice from "./Notice";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
-export default function AppointmentReply({ appointment, id, onChanged }) {
+export default function AppointmentReply({ appointment, verificationDeadline, id, onChanged }) {
   const [declining, setDeclining] = useState(false);
   const [confirmDecision, setConfirmDecision] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -34,6 +34,10 @@ export default function AppointmentReply({ appointment, id, onChanged }) {
     <div className="of-appointment-heading"><CalendarDays size={22} /><div><small>LỊCH NHẬN LẠI ĐỒ</small><h3>{date(appointment.scheduledAt)}</h3></div></div>
     <p className="of-appointment-location"><MapPin size={17} aria-hidden="true" /><span><strong>Địa điểm: </strong>{appointment.location}</span></p>
     {appointment.note && <p className="of-prose"><strong>Lời nhắn về lịch hẹn: </strong>{appointment.note}</p>}
+    {(pending || status === "CONFIRMED") && verificationDeadline && <>
+      <p className="of-reply-deadline"><Clock3 size={16} /><span><strong>Hạn đến quầy xác minh</strong> {date(verificationDeadline)}</span></p>
+      <p>Quá hạn nếu bạn chưa đến xác minh, hệ thống sẽ hủy yêu cầu nhận đồ.</p>
+    </>}
     <Notice error>{error}</Notice>
     {status === "COMPLETED" && <p className="of-reply-outcome" role="status">Lịch hẹn đã hoàn tất.</p>}
     {oldAppointment && <p className="of-reply-outcome" role="status">{past ? "Lịch hẹn này đã qua. Vui lòng liên hệ văn phòng để được hẹn lại." : status === "LEGACY" ? "Lịch hẹn cũ chưa áp dụng xác nhận trực tuyến. Vui lòng liên hệ văn phòng để xác nhận lịch." : "Văn phòng đang chuẩn bị lời mời. Bạn chưa cần phản hồi."}</p>}
@@ -46,7 +50,7 @@ export default function AppointmentReply({ appointment, id, onChanged }) {
       open={Boolean(confirmDecision)}
       variant={confirmDecision === "CONFIRM" ? "success" : "danger"}
       title={confirmDecision === "CONFIRM" ? "Xác nhận đồng ý lịch hẹn?" : "Bạn có chắc chắn từ chối lịch hẹn?"}
-      description={confirmDecision === "CONFIRM" ? `Bạn xác nhận sẽ đến văn phòng vào lúc ${date(appointment.scheduledAt)} tại ${appointment.location}.` : "Yêu cầu nhận đồ sẽ bị từ chối và món đồ được mở lại cho yêu cầu khác. Hành động này không thể hoàn tác."}
+      description={confirmDecision === "CONFIRM" ? `Bạn xác nhận sẽ đến văn phòng vào lúc ${date(appointment.scheduledAt)} tại ${appointment.location}.${verificationDeadline ? ` Hạn đến quầy là ${date(verificationDeadline)}.` : ""}` : "Yêu cầu nhận đồ sẽ bị từ chối và món đồ được mở lại cho yêu cầu khác. Hành động này không thể hoàn tác."}
       confirmLabel={confirmDecision === "CONFIRM" ? "Đồng ý lịch hẹn" : "Xác nhận từ chối"}
       cancelLabel="Quay lại"
       busy={busy}

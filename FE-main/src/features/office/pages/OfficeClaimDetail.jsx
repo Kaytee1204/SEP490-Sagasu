@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { CalendarDays, Mail } from "lucide-react";
 import { officeApi } from "../api/officeApi";
 import { workflowApi } from "../api/workflowApi";
-import { date } from "../officeUtils";
+import { closedAfterReturn, date } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
 import ReviewForm from "../components/ReviewForm";
 import OfficeClaimTimeline from "../components/OfficeClaimTimeline";
@@ -86,7 +86,8 @@ export default function OfficeClaimDetail({ mine = false }) {
             >
               <Badge value={claim.status} />
               <Badge value={claim.channel} />
-              <ReportButton type="CLAIM" id={claim.id} label="Phản ánh về yêu cầu nhận đồ" />
+              {!(claim.ownRequest && closedAfterReturn(claim)) &&
+                <ReportButton type="CLAIM" id={claim.id} label="Phản ánh về yêu cầu nhận đồ" />}
             </Header>
             {!mine && claim.ownRequest && ["PENDING", "NEEDS_INFO"].includes(claim.status) && <Notice>Đây là yêu cầu nhận đồ của bạn. Nhờ một nhân viên khác xét duyệt nhé.</Notice>}
             <div className="of-detail-grid of-claim-grid">

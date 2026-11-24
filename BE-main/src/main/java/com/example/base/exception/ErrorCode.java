@@ -9,6 +9,7 @@ public enum ErrorCode {
     WORKFLOW_DUPLICATE_PAYLOAD(HttpStatus.CONFLICT,"WORKFLOW_409_RETRY","Yêu cầu đã gửi có nội dung khác. Vui lòng tải lại"),
     REPORT_DUPLICATE(HttpStatus.CONFLICT,"REPORT_409_OPEN","Bạn đã có báo cáo đang chờ xử lý cho đối tượng này"),
     REPORT_REASON_INVALID(HttpStatus.BAD_REQUEST,"REPORT_400_REASON","Vui lòng chọn lý do phù hợp với loại báo cáo"),
+    REPORT_HANDOVER_EXPIRED(HttpStatus.BAD_REQUEST,"REPORT_400_HANDOVER_EXPIRED","Đã hết hạn gửi báo cáo sự cố cho lượt trao trả này."),
     REPORT_DESCRIPTION_REQUIRED(HttpStatus.BAD_REQUEST,"REPORT_400_DESCRIPTION","Vui lòng mô tả chi tiết lý do báo cáo"),
     REPORT_SELF_POST_NOT_ALLOWED(HttpStatus.BAD_REQUEST,"REPORT_400_SELF","Bạn không thể tự báo cáo bài đăng của mình"),
     REPORT_NOT_FOUND(HttpStatus.NOT_FOUND,"REPORT_404","Không tìm thấy báo cáo của bạn"),

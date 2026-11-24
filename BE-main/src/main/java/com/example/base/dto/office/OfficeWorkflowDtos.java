@@ -52,5 +52,6 @@ public final class OfficeWorkflowDtos {
     public record Workflow(List<Verification> verifications, Handover handover,
             boolean canVerify, boolean canRecord, boolean canReschedule, boolean canCancel,
             boolean canComplete, String nextStep, boolean canSchedule, boolean canRevoke,
-            boolean approvalHasCompetitors, OffsetDateTime appealDeadline, FiledAppeal filedAppeal) {}
+            boolean approvalHasCompetitors, OffsetDateTime appealDeadline, FiledAppeal filedAppeal,
+            OffsetDateTime verificationDeadline, OffsetDateTime reportDeadline) {}
 }

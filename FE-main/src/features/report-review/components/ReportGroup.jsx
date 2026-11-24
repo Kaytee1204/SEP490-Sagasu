@@ -73,8 +73,12 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
   const Icon = report.kind === "CLAIM_APPEAL" ? Scale : report.kind === "HANDOVER_ISSUE" ? Package : icons[target];
   const type = report.kind === "CLAIM_APPEAL" ? "Tranh chấp" : report.kind === "HANDOVER_ISSUE"
     ? "Sự cố bàn giao" : `Vi phạm · ${reportTargets[target]}`;
-  const officeAppeal = report.kind === "CLAIM_APPEAL" && report.appeal_custody_mode === "OFFICE";
-  const groupScope = officeAppeal ? { approvalId: report.approval_id } : { target, targetId };
+  const isAppeal = report.kind === "CLAIM_APPEAL";
+  const officeAppeal = isAppeal && report.appeal_custody_mode === "OFFICE";
+  const groupScope = isAppeal ? { approvalId: report.approval_id } : { target, targetId };
+  const assignee = isAppeal
+    ? report.appeal_assignee || (report.open_count > 0 ? "Chưa phân công" : report.assignee || "—")
+    : multiple ? "Theo từng báo cáo" : report.assignee || "Chưa phân công";
   const thumbnail = report.post_thumbnail?.url;
   const title = target === "MESSAGE" ? report.message_preview?.trim() || "Tin nhắn đính kèm" : report.subject_title || reportTargets[target];
   const person = target === "CLAIM" ? report.claimant_name : target === "POST" || target === "MESSAGE" ? report.subject_name : "";
@@ -126,7 +130,7 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
       </td>
       <td role="cell" className="rr-case-assignee">
         <span className="rr-case-mobile-label">Phụ trách</span>
-        <span>{multiple ? "Theo từng báo cáo" : report.assignee || "Chưa phân công"}</span>
+        <span>{assignee}</span>
       </td>
       <td role="cell" className="rr-case-open">
         {multiple ? <button type="button" aria-expanded={expanded} aria-controls={contentId}

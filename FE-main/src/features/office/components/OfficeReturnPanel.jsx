@@ -13,7 +13,7 @@ const FILED_APPEAL_MESSAGES = {
   REJECTED: "Quản lý đã bác bỏ tranh chấp.",
 };
 
-export default function OfficeReturnPanel({ claim, state, mine, onChanged }) {
+export default function OfficeReturnPanel({ claim, state, mine, reportExpired, onChanged }) {
   const [action, setAction] = useState(null);
   const [message, setMessage] = useState(null);
   const workflow = state.data;
@@ -35,7 +35,7 @@ export default function OfficeReturnPanel({ claim, state, mine, onChanged }) {
     <h2>{mine && ended ? "Kết quả yêu cầu" : "Tiến trình trao trả"}</h2>
     <Notice error={message?.error}>{message?.text}</Notice>
     <LoadState state={state}>{workflow && <>
-      {mine && claim.status === "APPROVED" && claim.appointment && !h && <AppointmentReply key={claim.appointment.id} appointment={claim.appointment} id={claim.id} onChanged={() => onChanged({})} />}
+      {mine && claim.status === "APPROVED" && claim.appointment && !h && <AppointmentReply key={claim.appointment.id} appointment={claim.appointment} verificationDeadline={workflow.verificationDeadline} id={claim.id} onChanged={() => onChanged({})} />}
       {!(mine && (ended || needsNewSchedule)) && <ol className="of-return-steps">{steps.map(([Icon, label, complete], i) => <li key={label} className={complete ? "is-complete" : ""}><span><Icon size={18} /></span><div><small>Bước {i + 1}</small><strong>{label}</strong></div>{complete && <CheckCircle2 size={16} aria-label="Hoàn tất" />}</li>)}</ol>}
       {mine && ended && <p className="op-result-title">{{COMPLETED:"Đã nhận lại đồ",REJECTED:"Yêu cầu đã bị từ chối",CANCELLED:"Yêu cầu đã hủy",CLOSED:"Yêu cầu đã đóng"}[claim.status]}</p>}
       {mine && ended && lastReason && <p className="of-prose"><strong>Lý do: </strong>{claimActivityReason(lastReason, true)}</p>}
@@ -48,6 +48,12 @@ export default function OfficeReturnPanel({ claim, state, mine, onChanged }) {
           <p>{FILED_APPEAL_MESSAGES[filedAppeal.status]}</p>
         </>}
         {(!appealOpen || claim.status !== "PENDING") && <p>{workflow.nextStep}</p>}
+        {!mine && workflow.verificationDeadline && <p>Hạn đến quầy xác minh <strong>{date(workflow.verificationDeadline)}</strong>.</p>}
+        {mine && workflow.reportDeadline && (
+          reportExpired
+            ? <p>Thời hạn tiếp nhận phản ánh về kết quả trao trả đã kết thúc.</p>
+            : <p className="of-report-deadline">Nếu có khiếu nại về kết quả trao trả, vui lòng gửi phản ánh trước <strong>{date(workflow.reportDeadline)}</strong>.</p>
+        )}
         {workflow.appealDeadline && new Date(workflow.appealDeadline)>new Date() &&
           <p>Hạn gửi tranh chấp <strong>{date(workflow.appealDeadline)}</strong>.</p>}
       </div>

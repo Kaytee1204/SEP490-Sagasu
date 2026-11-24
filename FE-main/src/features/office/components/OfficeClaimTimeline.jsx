@@ -161,10 +161,13 @@ export default function OfficeClaimTimeline({ claim, workflow, mine = false }) {
             );
           }
           const { action, actorName, createdAt } = activity;
-          const [title, role, noteLabel = "Nội dung cập nhật"] = events[action] || ["Cập nhật yêu cầu", "Người thực hiện"];
+          const missedPickup = action === "CANCEL" && activity.reason === "Không đến xác minh trong thời hạn.";
+          const [title, role, noteLabel = "Nội dung cập nhật"] = missedPickup
+            ? ["Hết hạn đến quầy xác minh", null, "Lý do hủy"]
+            : events[action] || ["Cập nhật yêu cầu", "Người thực hiện"];
           const created = action === "SUBMIT";
           const creator = actorName || claim.createdBy || (claim.channel === "ONLINE" ? claim.claimantName : null);
-          const automatic = action === "AUTO_CLOSE" || action === "INVITE_EXPIRE";
+          const automatic = action === "AUTO_CLOSE" || action === "INVITE_EXPIRE" || missedPickup;
           // Email responses for requests without accounts can be recorded under the creator's account.
           const actor = action.startsWith("INVITE_") && claim.claimantId == null ? claim.claimantName : actorName;
           const note = claimActivityReason(activity, mine || hasFailedVerification);
