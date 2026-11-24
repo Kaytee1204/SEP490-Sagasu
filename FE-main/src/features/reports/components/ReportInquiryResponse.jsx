@@ -3,10 +3,13 @@ import { reviewApi } from "@/features/report-review/api";
 import { formatReportDate } from "../utils/reportUtils";
 import useImageUploads from '@/hooks/useImageUploads';
 import ImageUploadButton from "@/components/common/ImageUploadButton";
+import LocalImagePreview from "@/components/common/LocalImagePreview";
+import { verificationLabels } from "@/features/report-review/format";
 import { Send, ShieldCheck } from "lucide-react";
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved }) {
+  const custody = i.verification_kind === "CUSTODY";
   const replyOpen = canReply && !i.responded_at && !i.closed_at;
   const [sent, setSent] = useState(false);
   const [response, setResponse] = useState(""),
@@ -47,10 +50,12 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
   return (
     <article className="report-inquiry" tabIndex={-1} data-pending={replyOpen && !sent}>
       <div className="report-note">
-        <h3>Yêu cầu từ quản lý</h3>
+        <h3>{verificationLabels[i.verification_kind] || "Yêu cầu từ quản lý"}</h3>
         <time dateTime={i.created_at}>{formatReportDate(i.created_at)}</time>
         <p>{i.question}</p>
-        {i.response_due_at && !i.responded_at && replyOpen && <p>Hạn phản hồi · {formatReportDate(i.response_due_at)}</p>}
+        {i.response_due_at && replyOpen && <p>
+          {i.overdue ? "Đã quá hạn phản hồi" : "Hạn phản hồi"} · {formatReportDate(i.response_due_at)}
+        </p>}
       </div>
       {i.responded_at ? (
         <>
@@ -65,6 +70,13 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
         </>
       ) : sent ? <p role="status">Đã gửi phản hồi.</p> : replyOpen ? (
         <form className="report-reply-form" onSubmit={submit}>
+          {custody ? <fieldset className="report-custody-choices">
+            <legend>Tình trạng món đồ</legend>
+            {["Tôi vẫn giữ đồ", "Tôi đã giao đồ"].map(value => <label key={value}>
+              <input type="radio" required name={"custody-" + i.inquiry_id} value={value} checked={response === value}
+                disabled={busy} onChange={() => setResponse(value)} /> {value}
+            </label>)}
+          </fieldset> : <>
           <label>
             Phản hồi của bạn *
             <textarea
@@ -84,9 +96,11 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
           <ImageProcessingStatus active={processing} />
           {files.map((f, index) => (
             <div className="report-reply-file" key={index}>
+              <LocalImagePreview file={f} />
               <span>{f.name}</span>
               <button
                 type="button"
+                aria-label={`Bỏ ảnh ${f.name}`}
                 disabled={busy}
                 onClick={() =>
                   setFiles((old) => old.filter((_, n) => n !== index))
@@ -96,6 +110,7 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
               </button>
             </div>
           ))}
+          </>}
           {error && <p className="report-error" role="alert">{error}</p>}
           <footer className="report-reply-submit">
             <p><ShieldCheck size={16} aria-hidden="true" /> Phản hồi chỉ được gửi một lần.</p>
@@ -105,7 +120,9 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
           </footer>
         </form>
       ) : (
-        <p>Yêu cầu bổ sung này đã đóng.</p>
+        <p>{i.verified_custody === "HELD" ? "Quản lý đã xác minh người nhặt vẫn giữ món đồ."
+          : i.verified_custody === "DELIVERED" ? "Quản lý đã xác minh món đồ đã được giao."
+          : "Yêu cầu bổ sung này đã đóng."}</p>
       )}
     </article>
   );

@@ -11,6 +11,19 @@ export const P2P_CLAIM_STEPS = ['Gửi yêu cầu', 'Xét duyệt', 'Ghi nhận 
 
 export const HISTORY_STATUSES = ['COMPLETED', 'REJECTED', 'CANCELLED', 'CLOSED'];
 
+export const rejectedAfterDispute = claim => claim.disputeOutcome === 'APPEAL_REJECT_CLAIM';
+export const disputeDismissed = claim =>
+  ['PENDING', 'REJECTED'].includes(claim.status) && claim.disputeOutcome === 'APPEAL_KEEP';
+export const claimDisplayStatus = claim =>
+  rejectedAfterDispute(claim) ? 'REJECTED' : disputeDismissed(claim) ? 'CLOSED' : claim.status;
+
+export function matchesClaimStatus(claim, status, incoming = false) {
+  const displayStatus = claimDisplayStatus(claim);
+  if (status === 'ALL') return !rejectedAfterDispute(claim) && !(incoming && disputeDismissed(claim));
+  if (status === 'HISTORY') return HISTORY_STATUSES.includes(displayStatus);
+  return displayStatus === status;
+}
+
 export const CLAIM_ACTION = {
   SUBMIT: 'Gửi claim',
   APPROVE: 'Chấp thuận',

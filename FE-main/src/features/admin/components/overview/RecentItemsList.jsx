@@ -20,7 +20,7 @@ export default function RecentItemsList({ recentItems }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Package size={15} style={{ color: 'var(--teal-600)' }} />
           <h2 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-            Tin đăng gần đây
+            Bài đăng gần đây
           </h2>
         </div>
         <button

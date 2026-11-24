@@ -8,15 +8,16 @@ export const ADMIN_NAV_SECTIONS = [
     // DaiHV integration: physical receipt of items transferred from existing posts.
     items: [
       {
-        label: 'Yêu cầu nhận đồ',
+        label: 'Xét duyệt và trao trả tài sản',
         path: '/approver/office-claims',
         icon: FileCheck,
         badgeKey: 'pendingOfficeClaims',
         badgeTone: 'danger',
         roles: ['APPROVER'],
+        wrapLabel: true,
       },
       {
-        label: 'Yêu cầu tiếp nhận đồ thất lạc',
+        label: 'Tiếp nhận tài sản từ bài đăng',
         path: '/approver/transfers',
         icon: Package,
         badgeKey: 'pendingTransfers',
@@ -25,15 +26,16 @@ export const ADMIN_NAV_SECTIONS = [
         wrapLabel: true,
       },
       {
-        label: 'Hồ sơ tiếp nhận',
+        label: 'Phiếu tiếp nhận tài sản',
         path: '/approver/receipts',
         icon: ClipboardList,
         badgeKey: 'draftReceipts',
         badgeTone: 'warning',
         roles: ['APPROVER'],
+        wrapLabel: true,
       },
       {
-        label: 'Đồ đang lưu kho',
+        label: 'Tài sản lưu kho',
         path: '/approver/storage',
         icon: Warehouse,
         badgeKey: 'storedItems',
@@ -84,11 +86,19 @@ export const ADMIN_NAV_SECTIONS = [
         roles: ['MANAGER'],
       },
       {
-        label: 'Tin đăng',
+        label: 'Quản lý bài đăng',
         path: '/admin/items',
         icon: Package,
         badgeKey: 'pendingPosts',
         badgeTone: 'warning',
+        roles: ['MANAGER'],
+      },
+      {
+        label: 'Tin tức hệ thống',
+        path: '/admin/news',
+        icon: Newspaper,
+        badgeKey: 'newsArticles',
+        badgeTone: 'neutral',
         roles: ['MANAGER'],
       },
       {

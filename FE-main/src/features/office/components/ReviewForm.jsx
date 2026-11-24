@@ -6,7 +6,7 @@ import Notice from "./Notice";
 import RequestedInformation from "./RequestedInformation";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
-export default function ReviewForm({ claim, onDone }) {
+export default function ReviewForm({ claim, hasCompetitors, onDone }) {
   const [ending, setEnding] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [form, setForm] = useState({
@@ -44,7 +44,7 @@ export default function ReviewForm({ claim, onDone }) {
         expectedVersion: claim.version,
         email: form.email.trim() || null,
         scheduledAt:
-          form.decision === "APPROVED" && form.scheduledAt
+          form.decision === "APPROVED" && !hasCompetitors && form.scheduledAt
             ? `${form.scheduledAt}:00+07:00`
             : null,
       });
@@ -61,8 +61,10 @@ export default function ReviewForm({ claim, onDone }) {
     form.decision === "APPROVED"
       ? {
           variant: "success",
-          title: "Xác nhận duyệt & hẹn nhận đồ?",
-          description: `Bạn sắp duyệt yêu cầu #${claim.id} của ${claim.claimantName} và gửi email lịch hẹn nhận đồ. Hãy chắc chắn đã đối chiếu kỹ căn cứ sở hữu.`,
+          title: hasCompetitors ? "Xác nhận chấp thuận yêu cầu?" : "Xác nhận duyệt và gửi lịch hẹn?",
+          description: hasCompetitors
+            ? `Chấp thuận yêu cầu #${claim.id} của ${claim.claimantName}. Các hồ sơ đang chờ có 24 giờ để gửi tranh chấp trước khi lập lịch hẹn.`
+            : `Chấp thuận yêu cầu #${claim.id} của ${claim.claimantName} và gửi thư mời xác nhận lịch hẹn.`,
           confirmLabel: "Đồng ý duyệt",
         }
       : form.decision === "REJECTED"
@@ -92,7 +94,7 @@ export default function ReviewForm({ claim, onDone }) {
           >
             {claim.status === "PENDING" && (
               <>
-                <option value="APPROVED">Duyệt & hẹn nhận đồ</option>
+                <option value="APPROVED">{hasCompetitors ? "Chấp thuận yêu cầu" : "Chấp thuận và lập lịch"}</option>
                 <option value="NEEDS_INFO">Yêu cầu bổ sung thông tin</option>
               </>
             )}
@@ -112,7 +114,9 @@ export default function ReviewForm({ claim, onDone }) {
             placeholder="Nêu rõ kết quả đối chiếu hoặc thông tin cần bổ sung…"
           />
         </label>
-        {form.decision === "APPROVED" && (
+        {form.decision === "APPROVED" && hasCompetitors &&
+          <Notice>Lập lịch sau khi hết hạn gửi tranh chấp và các tranh chấp đã được xử lý.</Notice>}
+        {form.decision === "APPROVED" && !hasCompetitors && (
           <>
             <div className="of-callout">
               <CalendarDays size={20} />
@@ -179,7 +183,7 @@ export default function ReviewForm({ claim, onDone }) {
           {busy
             ? "Đang lưu & xử lý…"
             : form.decision === "APPROVED"
-              ? "Duyệt & gửi lịch hẹn"
+              ? hasCompetitors ? "Chấp thuận yêu cầu" : "Duyệt và gửi lịch hẹn"
               : form.decision === "REJECTED"
                 ? "Xác nhận từ chối"
                 : "Gửi yêu cầu bổ sung"}

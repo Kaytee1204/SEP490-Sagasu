@@ -7,6 +7,9 @@
 .handover-record-dialog header button { display:grid; place-items:center; min-width:44px; min-height:44px; }
 .handover-record-dialog form { display:flex; flex-direction:column; gap:16px; padding:20px; overflow-wrap:anywhere; }
 .handover-record-context { padding:12px; background:#f2f8f7; border-radius:10px; }
+.handover-issue-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px 16px; margin:10px 0 0; }
+.handover-issue-fields dt { font-size:.85rem; color:#50696a; }
+.handover-issue-fields dd { margin:2px 0 0; overflow-wrap:anywhere; }
 .handover-record-field { display:grid; gap:8px; }
 .handover-record-dialog textarea { min-height:100px; padding:12px; border:1px solid #b9cfd2; border-radius:10px; resize:vertical; }
 .handover-record-confirm { display:flex; align-items:flex-start; gap:10px; padding:12px; border:1px solid #b9cfd2; border-radius:10px; }

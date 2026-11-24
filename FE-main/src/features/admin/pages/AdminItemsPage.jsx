@@ -54,7 +54,7 @@ export default function AdminItemsPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                Quản lý tin đăng
+                Quản lý bài đăng
               </h2>
               <span style={{ fontSize: '0.75rem', fontWeight: 600, background: 'rgba(30,107,107,0.08)', color: 'var(--teal-700)', padding: '2px 8px', borderRadius: '12px' }}>
                 {filteredItems.length} tin hiển thị

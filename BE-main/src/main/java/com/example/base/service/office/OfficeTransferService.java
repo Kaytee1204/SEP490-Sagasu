@@ -117,6 +117,18 @@ public class OfficeTransferService {
     }
 
     @Transactional(readOnly=true)
+    public Long myTransferId(long postId, CustomUserDetails user) {
+        Account actor = access.require(user);
+        return jdbc.queryForList("""
+                select transfer_id from office_transfer
+                where post_id = ? and requested_by = ?
+                order by (status = 'PENDING') desc, requested_at desc, transfer_id desc
+                limit 1
+                """, Long.class, postId, actor.getId()).stream().findFirst()
+                .orElseThrow(() -> bad("Không tìm thấy yêu cầu giao đồ của bài đăng này."));
+    }
+
+    @Transactional(readOnly = true)
     public TransferView detail(long id,CustomUserDetails user) {
         Account actor=access.require(user);
         Map<String,Object> row=row(id);
@@ -184,6 +196,11 @@ public class OfficeTransferService {
             Long receiptId=receipt.getId();
             jdbc.update("update item_receipt set finder_name=?,finder_contact=? where item_receipt_id=?",
                     post.getAccount().getFullName(),post.getAccount().getEmail(),receiptId);
+            jdbc.update("""
+                update p2p_claim_approval a set closed_at=now()
+                from claim c where c.claim_id=a.approved_claim_id and c.post_id=?
+                  and a.custody_mode='P2P' and a.closed_at is null
+                """,post.getId());
             for(Claim claim:dossiers) {
                 String previous=claim.getStatus();
                 claim.transferToOffice(receipt);

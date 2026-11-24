@@ -1,16 +1,18 @@
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronDown, ClipboardCheck, History, MessageSquare, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ClipboardCheck, History, MessageSquare, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { reviewApi } from "../api";
 import { Badge, ErrorBox, Empty, Gallery } from "./Shared";
-import { appealActionHelp, availableRecipients, date, labels, reviewKinds } from "../format";
+import { appealActionHelp, usesVerification, verificationOptions, verificationLabels, availableRecipients, date, labels, officeAppealActionHelp, participantRoles, reviewKinds } from "../format";
 import ContextPanel from "./ContextPanel";
 import DecisionDialog from "./DecisionDialog";
 import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
+import { ItemPostSummary } from "@/features/chat/components/ChatItemPanel";
 import AppealEvidenceComparison from "./AppealEvidenceComparison";
 import useReportResource from "@/features/reports/hooks/useReportResource";
 import { appealInstruction, appealSteps } from "@/features/reports/utils/reportUtils";
+import { handoverStatusLabels, incidentPhaseLabels } from "@/features/handover/utils/issueForm";
 
 const findings = ["VIOLATION", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE"];
 const itemMeasures = ["HOLD", "RELEASE", "REQUEST_ITEM_RECOVERY"];
@@ -23,8 +25,15 @@ function Submission({ data }) {
     ? description.slice(reason.length).trim() : description;
   return <section className="rr-card rr-report-content">
       <h2>{data.caseKind === "CLAIM_APPEAL" ? "Nội dung tranh chấp" : "Nội dung báo cáo"}</h2>
+      {data.incident?.phase && <p><strong>Giai đoạn trao trả</strong> · {incidentPhaseLabels[data.incident.phase]}</p>}
+      {data.incident?.submission_status && <p><strong>Trạng thái lúc gửi</strong> · {handoverStatusLabels[data.incident.submission_status]}</p>}
       {reason && <p className="rr-report-reason">{reason}</p>}
       {explanation ? <p className="rr-submission-text">{explanation}</p> : !reason && <p>Chưa có mô tả từ người gửi.</p>}
+      {data.incident?.message_body && <div>
+        <h3>Tin nhắn kèm báo cáo</h3>
+        <p>{data.incident.message_sender} · {date(data.incident.message_created_at)}</p>
+        <blockquote className="rr-submission-text">{data.incident.message_body}</blockquote>
+      </div>}
       {data.evidence.length > 0 && <>
         <h3>Ảnh kèm báo cáo ({data.evidence.length})</h3><Gallery images={data.evidence} />
       </>}
@@ -32,23 +41,28 @@ function Submission({ data }) {
 }
 
 function RelatedInformation({ data, onRelated }) {
-  const { current, report, related } = data;
+  const { current, related } = data;
+  const isAppeal = data.caseKind === "CLAIM_APPEAL";
+  const relatedReports = isAppeal ? related.filter(item => item.same_approval) : related;
   return <div className="rr-stack">
     {current.participants.length > 0 && <section className="rr-card rr-participants">
       <h2>Người liên quan</h2>
       <div className="rr-people">
-        {current.participants.map(person => <div key={person.id}>
-          <strong>{person.full_name}</strong>
-          <small>{person.email}</small>
-          <span>{person.id === report.reporter_id ? "Người gửi báo cáo · " : ""}{labels[person.role]}</span>
-          <Badge value={person.status} />
-        </div>)}
+        {current.participants.map(person => {
+          const roles = participantRoles(data, person.id);
+          return <div key={person.id}>
+            <strong>{person.full_name}</strong>
+            {roles.length > 0 && <span className="rr-person-case-role">{roles.join(" · ")}</span>}
+            <small>{person.email}</small>
+            <div className="rr-person-account"><small>{labels[person.role]}</small>{person.status && person.status !== "ACTIVE" && <Badge value={person.status} />}</div>
+          </div>;
+        })}
       </div>
     </section>}
-    {related.length > 0 && <section className="rr-card">
-      <h2>Báo cáo liên quan</h2>
+    {relatedReports.length > 0 && <section className="rr-card">
+      <h2>{isAppeal ? "Tranh chấp cùng lần duyệt" : "Báo cáo liên quan"}</h2>
       <div className="rr-related-list">
-        {related.map(item => <button type="button" className="rr-related" key={item.report_id} onClick={() => onRelated(item.report_id)}>
+        {relatedReports.map(item => <button type="button" className="rr-related" key={item.report_id} onClick={() => onRelated(item.report_id)}>
           <span><strong>#{item.report_id} · {item.reason_label_snapshot || labels[item.kind]}</strong><small>{date(item.created_at)}</small></span>
           <Badge value={item.status} /><ArrowRight size={16} aria-hidden="true" />
         </button>)}
@@ -67,11 +81,11 @@ function ContextDisclosure({ title, children }) {
 function Evidence({ data }) {
   const { current, approvedContext } = data;
   return <div className="rr-stack">
-    {approvedContext ? <>
-      <AppealEvidenceComparison current={current} approved={approvedContext} />
-      <ContextDisclosure title="Hồ sơ đầy đủ của người gửi tranh chấp"><ContextPanel data={current} /></ContextDisclosure>
-      <ContextDisclosure title="Hồ sơ đầy đủ của người được chấp thuận"><ContextPanel data={approvedContext} /></ContextDisclosure>
-    </> : <ContextPanel data={current} />}
+    {approvedContext ? <AppealEvidenceComparison current={current} approved={approvedContext} /> : <ContextPanel data={current} />}
+    {data.caseKind === "CLAIM_APPEAL" && current.post?.post_id && <section className="rr-card rr-post-summary">
+      <h2>Bài đăng liên quan</h2>
+      <ItemPostSummary postId={current.post.post_id} post={{ ...current.post, images: current.postImages, locationText: current.post.location_text, eventAt: current.post.event_at, postType: current.post.post_type }} />
+    </section>}
   </div>;
 }
 
@@ -121,14 +135,18 @@ function FollowUp({ data }) {
       text = "Người giữ đồ cần phản hồi yêu cầu thu hồi. Quản lý xác nhận sau khi đối chiếu bằng chứng.";
     }
   } else if (appeal?.follow_up) {
-    text = appealInstruction(appeal.follow_up);
+    text = appealInstruction(appeal.follow_up, appeal.claim_type === "OFFICE");
+    if (appeal.follow_up === "READY_TO_REOPEN" && appeal.claim_type !== "OFFICE") owner = "Người nhặt";
   } else if (questions.length && ["OPEN","IN_REVIEW"].includes(report.status)) {
-    const overdue = questions.some(i => i.overdue);
-    text = overdue ? "Đã qua hạn bổ sung. Xem trao đổi và đánh giá các căn cứ hiện có." : "Chờ bổ sung thông tin. Mở Trao đổi để xem câu hỏi và hạn phản hồi của từng người.";
-    if (!overdue) owner = [...new Set(questions.map(i => i.recipient))].join(", ");
+    const overdue = questions.filter(i => i.overdue);
+    const outstanding = overdue.map(i => [i.recipient, verificationLabels[i.verification_kind]].filter(Boolean).join(" · ")).join(", ");
+    text = overdue.length ? `Quá hạn phản hồi của ${outstanding}. Xem trao đổi và kết luận theo căn cứ hiện có.` : "Chờ bổ sung thông tin. Mở Trao đổi để xem câu hỏi và hạn phản hồi của từng người.";
+    if (!overdue.length) owner = [...new Set(questions.map(i => i.recipient))].join(", ");
+  } else if (usesVerification(data) && data.inquiries.some(i => i.verification_kind === "CUSTODY" && (i.response === "Tôi đã giao đồ" || i.verified_custody === "DELIVERED"))) {
+    text = "Đã xác minh món đồ được giao. Kiểm tra bằng chứng bàn giao và xử lý việc giao nhầm qua hồ sơ sự cố bàn giao.";
   } else if (["APPEAL_REOPEN", "HANDOVER_REOPEN"].includes(lastDecision)) {
     text = "Đã mở lại xét duyệt người nhận.";
-    owner = "Người nhặt";
+    owner = appeal?.claim_type === "OFFICE" ? "Văn phòng" : "Người nhặt";
   } else if (caseKind === "HANDOVER_ISSUE" && lastDecision === "HANDOVER_CONTINUE") {
     text = data.issuePhase === "BEFORE" ? "Người nhặt có thể tiến hành giao đồ khi đủ điều kiện." : "Chờ người nhận xác nhận đã nhận đúng đồ.";
     owner = data.issuePhase === "BEFORE" ? "Người nhặt" : "Người nhận";
@@ -158,20 +176,28 @@ function FollowUp({ data }) {
   </div>;
 }
 
-function AppealActions({ actions, isClosed, onAction }) {
+const appealActionIcons = { APPEAL_KEEP: ShieldCheck, APPEAL_WRONG_RECIPIENT: RotateCcw };
+
+function AppealActions({ actions, onAction, office }) {
+  const decisions = ["APPEAL_KEEP", "APPEAL_WRONG_RECIPIENT"];
   const groups = [
-    { title: isClosed ? "Xét duyệt lại" : "Chọn kết quả xử lý tranh chấp", values: actions.filter(value => value.startsWith("APPEAL_")) },
+    { title: "Kết luận tranh chấp", values: decisions.filter(value => actions.includes(value)) },
     { title: "Theo dõi yêu cầu thu hồi đã gửi", values: actions.filter(value => value === "CONFIRM_ITEM_RECOVERY") },
   ];
   return groups.filter(group => group.values.length).map(({ title, values }) => (
     <section className="rr-appeal-actions" key={title}>
       <h3>{title}</h3>
-      {values.map(value => <div className="rr-appeal-action" key={value}>
-        <button type="button" className={value === "APPEAL_REOPEN" ? "rr-primary" : undefined}
-          aria-describedby={appealActionHelp[value] ? `rr-help-${value}` : undefined}
-          onClick={() => onAction(value)}>{labels[value]}</button>
-        {appealActionHelp[value] && <p id={`rr-help-${value}`}>{appealActionHelp[value]}</p>}
-      </div>)}
+      {values.map(value => {
+        const Icon = appealActionIcons[value];
+        const help = (office ? officeAppealActionHelp : appealActionHelp)[value];
+        return <div className="rr-appeal-action" key={value}>
+          <button type="button"
+            aria-describedby={help ? `rr-help-${value}` : undefined} onClick={() => onAction(value)}>
+            {Icon && <Icon size={16} aria-hidden="true" />}<span>{labels[value]}</span>
+          </button>
+          {help && <p id={`rr-help-${value}`} className="rr-appeal-tooltip" role="tooltip">{help}</p>}
+        </div>;
+      })}
     </section>
   ));
 }
@@ -179,10 +205,10 @@ function AppealActions({ actions, isClosed, onAction }) {
 function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
   const { report, caseKind, hold, actions, canProcess, canTake, conflict, assigneeName } = data;
   const isClosed = ["RESOLVED", "REJECTED"].includes(report.status);
-  const canAsk = (data.canAsk ?? canProcess) && availableRecipients(data).length > 0;
+  const canAsk = (data.canAsk ?? canProcess) && (usesVerification(data) ? verificationOptions(data) : availableRecipients(data)).length > 0;
   const isAppeal = caseKind === "CLAIM_APPEAL";
   const conclusion = data.decisions?.findLast(item => findings.includes(item.action)
-    || ["APPEAL_KEEP", "APPEAL_REQUIRE_REVIEW"].includes(item.action));
+    || ["APPEAL_WITHDRAWN", "APPEAL_KEEP", "APPEAL_INSUFFICIENT", "APPEAL_REJECT_CLAIM", "APPEAL_REQUIRE_REVIEW", "APPEAL_WRONG_RECIPIENT"].includes(item.action));
   const title = isClosed ? "Tiếp tục xử lý" : caseKind === "HANDOVER_ISSUE" ? "Kết quả bàn giao" : "Kết luận báo cáo";
   const structured = actions.some(value => findings.includes(value));
   const otherActions = actions.filter(value => !itemMeasures.includes(value));
@@ -210,8 +236,13 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
         <button type="button" disabled={busy} className="rr-primary" onClick={take}>{busy ? "Đang nhận…" : "Nhận xử lý"}</button>
       </> : canProcess || canAsk || actions.length > 0 ? <div className="rr-workflow-actions">
         {canAsk && <button type="button" onClick={onAsk}><MessageSquare size={16} aria-hidden="true" />
-          {report.reason_code === "HANDOVER_MISSING_ITEMS" ? "Hỏi về phụ kiện còn thiếu" : "Hỏi người liên quan"}</button>}
-        {isAppeal ? <AppealActions actions={actions} isClosed={isClosed} onAction={onAction} />
+          {usesVerification(data) ? "Yêu cầu xác minh" : report.reason_code === "HANDOVER_MISSING_ITEMS" ? "Hỏi về phụ kiện còn thiếu" : "Hỏi người liên quan"}</button>}
+        {isAppeal ? <>
+          <AppealActions actions={actions} onAction={onAction} office={data.appeal?.claim_type === "OFFICE"} />
+          {canProcess && !actions.includes("APPEAL_WRONG_RECIPIENT") && <p className="rr-callout">
+            Hiện chưa đủ điều kiện mở lại xét duyệt. Nếu đồ đã giao, xử lý trong Sự cố bàn giao.
+          </p>}
+        </>
         : structured ? <button type="button" className="rr-primary" onClick={() => onAction("CONCLUDE_VIOLATION")}>
           Ghi kết luận báo cáo
         </button> : <>
@@ -228,7 +259,7 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
           {!isHandover && otherActions.length > 0 && <div className="rr-process-actions">
             <h3>{title}</h3>
             {otherActions.map(value => <button type="button" key={value}
-              className={["RESOLVE", "HANDOVER_CONTINUE", "CONFIRM_ITEM_RECOVERY", "APPEAL_REOPEN"].includes(value) ? "rr-primary" : ""}
+              className={["RESOLVE", "HANDOVER_CONTINUE", "CONFIRM_ITEM_RECOVERY"].includes(value) ? "rr-primary" : ""}
               onClick={() => onAction(value)}>
               {value === "RESOLVE" && caseKind === "HANDOVER_ISSUE" ? "Ghi kết quả bàn giao" : labels[value]}
             </button>)}

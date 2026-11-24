@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Scale } from 'lucide-react';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
+import LocalImagePreview from '@/components/common/LocalImagePreview';
 import useImageUploads from '@/hooks/useImageUploads';
 import { getClaimAppeal, submitClaimAppeal } from '../api/claimApi';
 import ReportProgress from '@/features/reports/components/ReportProgress';
@@ -134,9 +135,9 @@ function AppealForm({ claimId, approvalId, onSubmitted }) {
         <small>{files.length}/5 ảnh · Tối đa 5 MB mỗi ảnh</small>
       </div>
       <ImageProcessingStatus active={processing} />
-      {files.length > 0 && <ul className="claim-appeal-file-list">{files.map((file, index) =>
+      {files.length > 0 && <ul className="claim-appeal-file-list" aria-label="Ảnh bằng chứng đã chọn">{files.map((file, index) =>
         <li key={`${file.name}:${index}`}>
-          <span>{file.name}</span>
+          <LocalImagePreview file={file} />
           <button type="button" className="btn btn-ghost" disabled={disabled} aria-label={`Bỏ ảnh ${file.name}`}
             onClick={() => { setFiles(current => current.filter((_, item) => item !== index)); requestId.current = null; }}>Bỏ ảnh</button>
         </li>,

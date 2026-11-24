@@ -1,10 +1,14 @@
-/* Unified Forest-Emerald Workspace Design (pixel-compacted & clean filters) */
+/* Unified Forest-Emerald Workspace Design (đồng bộ kiểu chữ, cỡ chữ & khung 1180px) */
 .sw-page {
   width: 100%;
+  min-width: 0;
   max-width: 1180px;
   margin: 0 auto;
   padding: 24px 28px 48px;
   color: #173f37;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.55;
   box-sizing: border-box;
 }
 
@@ -14,7 +18,8 @@
 
 .sw-heading h1 {
   margin: 0;
-  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  font-family: var(--font-body);
+  font-size: clamp(1.5rem, 2.4vw, 1.85rem);
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.022em;

@@ -6,10 +6,19 @@ import Notice from "./Notice";
 import ReturnActionDialog from "./ReturnActionDialog";
 import AppointmentReply from "./AppointmentReply";
 
+const FILED_APPEAL_MESSAGES = {
+  OPEN: "Đang chờ quản lý xem xét.",
+  IN_REVIEW: "Quản lý đang xem xét tranh chấp.",
+  RESOLVED: "Quản lý đã có kết luận.",
+  REJECTED: "Quản lý đã bác bỏ tranh chấp.",
+};
+
 export default function OfficeReturnPanel({ claim, state, mine, onChanged }) {
   const [action, setAction] = useState(null);
   const [message, setMessage] = useState(null);
   const workflow = state.data;
+  const filedAppeal = !mine ? workflow?.filedAppeal : null;
+  const appealOpen = ["OPEN", "IN_REVIEW"].includes(filedAppeal?.status);
   const h = workflow?.handover;
   const latest = workflow?.verifications[0];
   const currentVerification = latest?.appointmentId === claim.appointment?.id ? latest : null;
@@ -33,12 +42,21 @@ export default function OfficeReturnPanel({ claim, state, mine, onChanged }) {
       {currentVerification && (
         <p><strong>Kết quả xác minh tại quầy: </strong>{verified ? "Đạt" : "Không đạt"}</p>
       )}
-      <p className="of-callout" role="status">{workflow.nextStep}</p>
+      <div className="of-callout" role="status">
+        {filedAppeal && <>
+          <strong>Đã ghi nhận tranh chấp #{filedAppeal.reportId}</strong>
+          <p>{FILED_APPEAL_MESSAGES[filedAppeal.status]}</p>
+        </>}
+        {(!appealOpen || claim.status !== "PENDING") && <p>{workflow.nextStep}</p>}
+        {workflow.appealDeadline && new Date(workflow.appealDeadline)>new Date() &&
+          <p>Hạn gửi tranh chấp <strong>{date(workflow.appealDeadline)}</strong>.</p>}
+      </div>
       <div className="of-actions of-actions-wrap">
+        {!mine && workflow.canSchedule && <button className="of-button of-primary" onClick={() => setAction("schedule")}>Lập lịch nhận tài sản</button>}
+        {!mine && workflow.canRevoke && <button className="of-button" onClick={() => setAction("revoke")}>Thu hồi chấp thuận</button>}
         {!mine && workflow.canVerify && <button className={`of-button ${workflow.canRecord ? "" : "of-primary"}`} onClick={() => setAction("verify")}>{latest ? "Xác minh lại" : "Xác minh tại quầy"}</button>}
         {!mine && workflow.canRecord && <button className="of-button of-primary" onClick={() => setAction("handover")}>Hoàn tất trao trả</button>}
         {!mine && !verified && workflow.canReschedule && <button className="of-button" onClick={() => setAction("reschedule")}>Đổi lịch</button>}
-        {!mine && !verified && workflow.canCancel && <button className="of-button of-danger" onClick={() => setAction("cancel")}>Hủy lịch và thu hồi duyệt</button>}
         {!mine && workflow.canComplete && <button className="of-button of-primary" onClick={() => setAction("complete")}>Xác nhận hoàn tất trao trả</button>}
       </div>
       {h && <div className="of-return-record">
@@ -56,7 +74,7 @@ export default function OfficeReturnPanel({ claim, state, mine, onChanged }) {
         </>}
         {h.issueNote && <Notice error><strong>Nội dung phản ánh: </strong>{h.issueNote}</Notice>}
       </div>}
-      {action && <ReturnActionDialog action={action} claim={claim} workflow={workflow} onClose={() => setAction(null)} onDone={(result) => {setAction(null);setMessage({error: result.emailStatus === "FAILED",text: result.emailStatus === "FAILED" ? "Đã đổi lịch nhưng chưa gửi được email. Hãy dùng nút gửi lại thư lịch hẹn." : "Đã cập nhật tiến trình trao trả."});onChanged(result);}} />}
+      {action && <ReturnActionDialog action={action} claim={claim} workflow={workflow} onClose={() => setAction(null)} onDone={(result) => {setAction(null);setMessage({error: result.emailStatus === "FAILED",text: result.emailStatus === "FAILED" ? "Đã lưu lịch hẹn. Cần gửi lại email mời xác nhận." : "Đã cập nhật tiến trình trao trả."});onChanged(result);}} />}
     </>}</LoadState>
   </section>;
 }

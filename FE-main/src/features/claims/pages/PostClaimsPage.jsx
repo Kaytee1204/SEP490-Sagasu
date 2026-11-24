@@ -1,7 +1,7 @@
 import '@/styles/Workspace.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, ArrowUpRight, Clock3, Inbox, LayoutList, MapPin, Tag, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Clock3, Inbox, LayoutList, MapPin, Tag, TriangleAlert, UsersRound } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getPostDetail } from '@/features/items/api/postApi';
 import { getGroupedClaims } from '../api/claimApi';
@@ -11,9 +11,12 @@ import {
   TIME_RANGE_OPTIONS,
   claimDate,
   claimDetailPath,
+  claimDisplayStatus,
   claimShortDate,
   claimShortTime,
+  matchesClaimStatus,
   matchesTimeFilter,
+  rejectedAfterDispute,
   validClaimId,
 } from '../utils/claimUtils';
 import { ClaimPostThumbnail } from '../components/ClaimListShared';
@@ -146,15 +149,9 @@ function PostClaimsContent({ postId }) {
     const byTimeAll = timeRange === 'ALL'
       ? raw
       : raw.filter(c => matchesTimeFilter(c.createdAt, timeRange, fromDate, toDate));
-    const counts = {
-      ALL: byTimeAll.length,
-      PENDING: byTimeAll.filter(c => c.status === 'PENDING').length,
-      APPROVED: byTimeAll.filter(c => c.status === 'APPROVED').length,
-      HISTORY: byTimeAll.filter(c => HISTORY_STATUSES.includes(c.status)).length,
-    };
-    const byStatus = status === 'ALL'
-      ? byTimeAll
-      : byTimeAll.filter(c => (status === 'HISTORY' ? HISTORY_STATUSES.includes(c.status) : c.status === status));
+    const counts = Object.fromEntries(['ALL', 'PENDING', 'APPROVED', 'HISTORY']
+      .map(value => [value, byTimeAll.filter(c => matchesClaimStatus(c, value, true)).length]));
+    const byStatus = byTimeAll.filter(c => matchesClaimStatus(c, status, true));
     const sorted = [...byStatus].sort((a, b) => {
       const diff = (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || (b.id - a.id);
       return sortOrder === 'OLDEST' ? -diff : diff;
@@ -162,7 +159,7 @@ function PostClaimsContent({ postId }) {
     return {
       allClaims: raw,
       visibleClaims: sorted,
-      pendingCount: raw.filter(c => c.status === 'PENDING').length,
+      pendingCount: raw.filter(c => matchesClaimStatus(c, 'PENDING', true)).length,
       approvedCount: raw.filter(c => c.status === 'APPROVED').length,
       latestClaim: raw[0] || null,
       statusCounts: counts,
@@ -172,6 +169,7 @@ function PostClaimsContent({ postId }) {
   const historySelected = status === 'HISTORY' || HISTORY_STATUSES.includes(status);
   const activeFilter = historySelected ? 'HISTORY' : status;
   const hasAnyFilter = status !== 'ALL' || timeRange !== 'ALL' || sortOrder !== 'NEWEST';
+  const onlyArchived = status === 'ALL' && statusCounts.ALL === 0 && statusCounts.HISTORY > 0;
 
   const displayTitle = group?.postTitle || post?.title || `Bài đăng #${postId}`;
   const displayThumb = group?.postThumbnailUrl || post?.images?.[0]?.url || post?.images?.[0]?.imageUrl || null;
@@ -256,7 +254,7 @@ function PostClaimsContent({ postId }) {
             <div className="claim-list-status-filters" role="group" aria-label="Lọc trạng thái yêu cầu">
               {[
                 { value: 'ALL', label: `Tất cả (${statusCounts.ALL})`, warning: false },
-                { value: 'PENDING', label: `Cần bạn duyệt (${statusCounts.PENDING})`, warning: statusCounts.PENDING > 0 },
+                { value: 'PENDING', label: `Chờ xét duyệt (${statusCounts.PENDING})`, warning: statusCounts.PENDING > 0 },
                 { value: 'APPROVED', label: `Đang nhận đồ (${statusCounts.APPROVED})`, warning: false },
                 { value: 'HISTORY', label: `Lịch sử (${statusCounts.HISTORY})`, warning: false },
               ].map(btn => (
@@ -316,19 +314,23 @@ function PostClaimsContent({ postId }) {
       ) : !visibleClaims.length ? (
         <div className="claim-list-empty">
           <Inbox size={32} aria-hidden="true" />
-          <h3>{hasAnyFilter ? 'Không có hồ sơ phù hợp với bộ lọc' : 'Chưa có yêu cầu nhận đồ nào cho bài đăng này'}</h3>
-          <p>{hasAnyFilter ? 'Thử thay đổi khoảng thời gian hoặc trạng thái để xem các hồ sơ còn lại.' : 'Khi có người gửi yêu cầu nhận lại món đồ này, hồ sơ sẽ hiển thị tại đây.'}</p>
-          {hasAnyFilter ? (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => syncParams({ status: 'ALL', timeRange: 'ALL', fromDate: '', toDate: '', sortOrder: 'NEWEST' })}
-            >
-              Xóa tất cả bộ lọc
-            </button>
-          ) : (
-            <Link className="btn btn-ghost" to={backPath}>Quay lại danh sách yêu cầu</Link>
-          )}
+          <h3>{onlyArchived ? 'Các yêu cầu đã được chuyển vào lịch sử' : hasAnyFilter ? 'Không có hồ sơ phù hợp với bộ lọc' : 'Chưa có yêu cầu nhận đồ nào cho bài đăng này'}</h3>
+          {onlyArchived ? (
+            <button type="button" className="btn btn-ghost" onClick={() => syncParams({ status: 'HISTORY' })}>Xem lịch sử</button>
+          ) : <>
+            <p>{hasAnyFilter ? 'Thử thay đổi khoảng thời gian hoặc trạng thái để xem các hồ sơ còn lại.' : 'Khi có người gửi yêu cầu nhận lại món đồ này, hồ sơ sẽ hiển thị tại đây.'}</p>
+            {hasAnyFilter ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => syncParams({ status: 'ALL', timeRange: 'ALL', fromDate: '', toDate: '', sortOrder: 'NEWEST' })}
+              >
+                Xóa tất cả bộ lọc
+              </button>
+            ) : (
+              <Link className="btn btn-ghost" to={backPath}>Quay lại danh sách yêu cầu</Link>
+            )}
+          </>}
         </div>
       ) : (
         <div className="claim-modern-table-card">
@@ -353,6 +355,10 @@ function PostClaimsContent({ postId }) {
                   </span>
                   <div className="claim-modern-item-info">
                     <strong>{claim.claimantName || 'Thành viên'}</strong>
+                    {claim.disputeOutcome === 'APPEAL_KEEP' &&
+                      <small className="post-claims-dispute-warning">
+                        <TriangleAlert size={14} aria-hidden="true" /> Tranh chấp đã bị bác
+                      </small>}
                   </div>
                 </div>
 
@@ -362,15 +368,15 @@ function PostClaimsContent({ postId }) {
                 </div>
 
                 <div className="claim-modern-status-cell col-center" data-label="Trạng thái">
-                  <span className={`claim-status-pill status-${claim.status}`}>
+                  <span className={`claim-status-pill status-${claimDisplayStatus(claim)}`}>
                     <span className="claim-status-dot" aria-hidden="true" />
-                    {claim.status === 'PENDING' ? 'Cần bạn duyệt' : (CLAIM_STATUS[claim.status] || claim.status)}
+                    {rejectedAfterDispute(claim) ? 'Bị bác sau tranh chấp' : (CLAIM_STATUS[claimDisplayStatus(claim)] || claim.status)}
                   </span>
                 </div>
 
                 <div className="claim-modern-action-cell col-center">
                   <span className="claim-modern-action-pill">
-                    {claim.status === 'PENDING' ? 'Xem & duyệt' : 'Xem hồ sơ'}
+                    {matchesClaimStatus(claim, 'PENDING', true) && post?.status === 'OPEN' ? 'Xem & duyệt' : 'Xem hồ sơ'}
                     <ArrowRight size={15} aria-hidden="true" />
                   </span>
                 </div>

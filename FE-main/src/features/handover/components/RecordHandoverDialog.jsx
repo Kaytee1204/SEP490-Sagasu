@@ -6,18 +6,7 @@ import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
 import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
-
-function HandoverPhotoPreview({ file }) {
-  const image = useRef(null);
-
-  useEffect(() => {
-    const url = URL.createObjectURL(file);
-    image.current.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  return <img ref={image} alt={`Xem trước ảnh ${file.name}`} />;
-}
+import LocalImagePreview from '@/components/common/LocalImagePreview';
 
 export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const dialog = useRef(null);
@@ -110,7 +99,7 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
         <ImageUploadButton label="Thêm ảnh bàn giao" disabled={busy||files.length>=5} onChange={pickImages} /></div>
       <ImageProcessingStatus active={processing} />
       {files.length > 0 && <ul className="handover-photo-previews" aria-label="Ảnh bàn giao đã chọn">{files.map((file, index) => <li key={`${file.name}:${index}`}>
-        <HandoverPhotoPreview file={file} />
+        <LocalImagePreview file={file} />
         <button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {
           setFiles(current => current.filter((_, position) => position !== index)); request.current = null;
         }}>Bỏ ảnh</button></li>)}</ul>}

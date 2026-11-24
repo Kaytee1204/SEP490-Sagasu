@@ -335,7 +335,9 @@ export default function NotificationProvider({ children }) {
                   </span>
                   <span className="text-[11px] text-slate-400">Vừa xong</span>
                 </div>
-                <p className="text-[13px] font-bold text-slate-900 line-clamp-1">{toast.title}</p>
+                <p className="text-[13px] font-bold text-slate-900 whitespace-normal break-words leading-snug">
+                  {toast.title}
+                </p>
                 <p className="text-[12px] text-slate-600 line-clamp-2 mt-0.5 leading-relaxed">
                   {toast.content}
                 </p>

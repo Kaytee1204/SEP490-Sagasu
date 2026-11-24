@@ -11,6 +11,7 @@ import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
+import CharCountHint from '@/components/common/CharCountHint';
 
 export default function ReportButton({ type, id, label = 'Báo cáo', targetLabel }) {
   const [open, setOpen] = useState(false);
@@ -117,7 +118,9 @@ function ReportForm({ type, id, targetLabel, close, done }) {
         <small>{reportDescriptionHint(reasonCode)}</small>
         <textarea required={!!selected?.requiresDescription} maxLength={4800} value={description} disabled={busy}
           placeholder="Bổ sung thông tin giúp làm rõ báo cáo…"
-          onChange={event => { setDescription(event.target.value); changed(); }} /></label>
+          onChange={event => { setDescription(event.target.value); changed(); }} />
+        <CharCountHint value={description} max={4800} />
+      </label>
       <div className="image-upload-field"><span>Ảnh bằng chứng (tùy chọn)</span>
         <span className="claims-muted">{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
         <ImageUploadButton label="Thêm ảnh bằng chứng" disabled={busy||files.length>=5} onChange={pickImages} /></div>

@@ -4,6 +4,7 @@ import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.office.OfficeAccess;
+import com.example.base.storage.ImageStorage;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,14 +36,17 @@ public class ReportWorkspaceService {
                                 where d.report_id=r.report_id and d.action='REQUEST_ITEM_RECOVERY')
                         )
                     ) as needs_reply,
-                    case when p.account_id = :actor then chosen.claim_id end as finder_approved_claim_id,
-                    case when c.claim_type='P2P' and (c.claimant_id=:actor or p.account_id=:actor) then c.claim_id
+                    case when p.account_id = :actor and chosen.claim_type='P2P' then chosen.claim_id end as finder_approved_claim_id,
+                    case when c.claimant_id=:actor or (c.claim_type='P2P' and p.account_id=:actor) then c.claim_id
                          when chosen.claimant_id=:actor then chosen.claim_id end as participant_claim_id,
+                    c.claim_type,
                     p.account_id=:actor as post_owner,
                     follow_up.step as appeal_step, approval.appeal_until,
-                    coalesce(follow_up.step='READY_TO_REOPEN' and p.account_id=:actor
+                    coalesce(follow_up.step='READY_TO_REOPEN' and chosen.claim_type='P2P' and p.account_id=:actor
                         and chosen.claimant_id<>:actor, false) as needs_reopen,
                     r.resolution_note, r.reason_label_snapshot as report_reason,
+                    case when p.deleted_at is null and (p.moderation_status='VISIBLE' or p.account_id=:actor)
+                         then p.post_id end as thumbnail_post_id,
                     holder.full_name as recovery_holder_name, recovery.due_at as recovery_due_at,
                     recovery.confirmed_at as recovery_confirmed_at,
                     case when r.status in ('OPEN','IN_REVIEW')
@@ -62,38 +66,43 @@ public class ReportWorkspaceService {
             )
             """.formatted(ReportInquiryService.REPORT_SUBJECT_COLUMNS, ReportInquiryService.PARTICIPANT_REPORT_JOINS,
                     ReportQueueSql.OTHER_APPEALS_PENDING, ReportQueueSql.APPEAL_STEP);
-    private static final String FILTERS = """
-            from workspace
-            where mine = :mine
-                and (:status = 'ALL'
-                    or (:status = 'ACTION' and (needs_reply or needs_reopen))
-                    or (:status = 'IN_PROGRESS' and (status in ('OPEN', 'IN_REVIEW') or appeal_step is not null or needs_reply))
-                    or (:status = 'FINISHED' and status in ('RESOLVED', 'REJECTED') and appeal_step is null and not needs_reply))
-                and (:type = 'ALL' or report_type = :type
+    private static final String SCOPED_REPORTS = WORKSPACE + """
+            , scoped_reports as (
+                select workspace.*, case
+                    when needs_reply or needs_reopen then 'ACTION'
+                    when status in ('OPEN', 'IN_REVIEW') or appeal_step is not null then 'IN_PROGRESS'
+                    when status in ('RESOLVED', 'REJECTED') then 'FINISHED'
+                end as tab
+                from workspace
+                where mine = :mine and (:type = 'ALL' or report_type = :type
                     or (:type = 'VIOLATION' and report_type in ('POST', 'USER', 'CLAIM', 'MESSAGE')))
+            )
             """;
     private static final String LIST_FIELDS = """
             select report_id, status, created_at, updated_at, mine, report_type, report_subject,
-                report_subject_id, needs_reply, needs_reopen, appeal_step, appeal_until
+                report_subject_id, report_reason, thumbnail_post_id, needs_reply, needs_reopen, appeal_step, appeal_until
             """;
 
     private final OfficeAccess access;
     private final ReportService reports;
     private final ReportInquiryService inquiries;
     private final NamedParameterJdbcTemplate sql;
+    private final ImageStorage storage;
 
     public ReportWorkspaceService(OfficeAccess access, ReportService reports, ReportInquiryService inquiries,
-                                  JdbcTemplate jdbc) {
+                                  JdbcTemplate jdbc, ImageStorage storage) {
         this.access = access;
         this.reports = reports;
         this.inquiries = inquiries;
         this.sql = new NamedParameterJdbcTemplate(jdbc);
+        this.storage = storage;
     }
 
     public enum Status { ALL, ACTION, IN_PROGRESS, FINISHED }
     public enum Type { ALL, VIOLATION, HANDOVER_ISSUE, CLAIM_APPEAL }
 
-    public record Page(List<Map<String, Object>> content, long totalElements, long totalPages) {}
+    public record Page(List<Map<String, Object>> content, long totalElements, long totalPages,
+                       Map<Status, Long> tabCounts) {}
     public record Detail(Map<String, Object> report, ReportService.Detail submission,
                          List<Map<String, Object>> inquiries) {}
 
@@ -102,14 +111,37 @@ public class ReportWorkspaceService {
         long actor = access.require(user).getId();
         var params = Map.of("actor", actor, "mine", mine, "status", status.name(), "type", type.name(),
                 "offset", (page - 1L) * PAGE_SIZE, "size", PAGE_SIZE);
-        long count = sql.queryForObject(WORKSPACE + "select count(*) " + FILTERS, params, Long.class);
+        var counts = sql.queryForMap(SCOPED_REPORTS + """
+                select count(*) filter (where :status = 'ALL' or tab = :status) as total,
+                       count(*) filter (where tab = 'ACTION') as action_count,
+                       count(*) filter (where tab = 'IN_PROGRESS') as in_progress_count
+                from scoped_reports
+                """, params);
+        long count = ((Number) counts.get("total")).longValue();
         long totalPages = (count + PAGE_SIZE - 1) / PAGE_SIZE;
         var rows = page > totalPages ? List.<Map<String, Object>>of() : sql.queryForList(
-                WORKSPACE + LIST_FIELDS + FILTERS + """
+                SCOPED_REPORTS + ", page_rows as (" + LIST_FIELDS + """
+                    from scoped_reports where :status = 'ALL' or tab = :status
+                    order by (needs_reply or needs_reopen) desc, updated_at desc, report_id desc
+                    limit :size offset :offset
+                )
+                select page_rows.*, image.storage_key, image.image_url
+                from page_rows left join lateral (
+                    select storage_key, image_url from post_image
+                    where post_id = page_rows.thumbnail_post_id
+                    order by sort_order limit 1
+                ) image on true
                 order by (needs_reply or needs_reopen) desc, updated_at desc, report_id desc
-                limit :size offset :offset
                 """, params);
-        return new Page(rows, count, totalPages);
+        rows.forEach(row -> {
+            row.remove("thumbnail_post_id");
+            String key = (String) row.remove("storage_key");
+            String fallback = (String) row.remove("image_url");
+            if (key != null || fallback != null) row.put("post_thumbnail_url", storage.readUrl(key, fallback));
+        });
+        return new Page(rows, count, totalPages, Map.of(
+                Status.ACTION, ((Number) counts.get("action_count")).longValue(),
+                Status.IN_PROGRESS, ((Number) counts.get("in_progress_count")).longValue()));
     }
 
     public Map<String, Object> actionCounts(CustomUserDetails user) {
@@ -122,15 +154,20 @@ public class ReportWorkspaceService {
     public Detail detail(long reportId, CustomUserDetails user) {
         long actor = access.require(user).getId();
         var report = sql.queryForList(WORKSPACE + """
-                select w.*, d.action as outcome,
+                select w.*, coalesce(d.action, (select 'APPEAL_ROUND_CLOSED' from report_activity a
+                           where a.report_id=w.report_id and a.action='APPEAL_ROUND_CLOSED' limit 1)) as outcome,
                        exists (select 1 from report_decision reopened
-                           where reopened.report_id=w.report_id and reopened.action='APPEAL_REOPEN') as approval_reopened,
+                           where reopened.report_id=w.report_id
+                             and (reopened.action='APPEAL_REOPEN'
+                               or (reopened.action='APPEAL_WRONG_RECIPIENT'
+                                 and reopened.after_state->>'approvalReopened'='true'))) as approval_reopened,
                        case when w.post_owner then d.after_state->>'appliedMeasure' end as post_measure
                 from workspace w left join lateral (
                     select d.action, d.after_state from report_decision d
                     where d.report_id = w.report_id
                       and d.action in ('VIOLATION', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE',
-                                       'APPEAL_KEEP', 'APPEAL_REQUIRE_REVIEW', 'HANDOVER_COMPLETED',
+                                       'APPEAL_WITHDRAWN', 'APPEAL_KEEP', 'APPEAL_INSUFFICIENT', 'APPEAL_REJECT_CLAIM', 'APPEAL_REQUIRE_REVIEW',
+                                       'APPEAL_WRONG_RECIPIENT', 'HANDOVER_COMPLETED',
                                        'HANDOVER_CONTINUE', 'HANDOVER_RETRY', 'HANDOVER_REOPEN', 'CLAIM_REJECTED')
                     order by d.decision_id desc limit 1
                 ) d on true

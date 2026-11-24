@@ -20,6 +20,12 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
     @Query("SELECT n FROM NewsArticle n LEFT JOIN FETCH n.author WHERE n.id = :id AND n.published = true")
     Optional<NewsArticle> findPublishedById(@Param("id") Long id);
 
+    @Query("SELECT COUNT(n) > 0 FROM NewsArticle n WHERE LOWER(TRIM(n.title)) = LOWER(TRIM(:title))")
+    boolean existsDuplicateTitle(@Param("title") String title);
+
+    @Query("SELECT COUNT(n) > 0 FROM NewsArticle n WHERE LOWER(TRIM(n.title)) = LOWER(TRIM(:title)) AND n.id <> :excludeId")
+    boolean existsDuplicateTitleExcludingId(@Param("title") String title, @Param("excludeId") Long excludeId);
+
     @Query(
             value = """
                     SELECT n FROM NewsArticle n LEFT JOIN FETCH n.author

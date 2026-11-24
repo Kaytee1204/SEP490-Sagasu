@@ -26,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -70,11 +71,16 @@ public class P2pClaimAppealService {
 
     // Approval, appeals and handovers acquire the same post lock before changing their state.
     public OffsetDateTime open(Claim selected) {
-        var waiting = waitingP2p(selected.getPost().getId());
+        var waiting = competingClaims(selected);
         if (waiting.isEmpty()) return null;
         OffsetDateTime deadline = OffsetDateTime.now().plusHours(24);
-        jdbc.update("insert into p2p_claim_approval(approved_claim_id, appeal_until) values (?, ?)",
-                selected.getId(), deadline);
+        if (selected.isOffice()) {
+            jdbc.update("insert into p2p_claim_approval(approved_claim_id, appeal_until, custody_mode) values (?, ?, 'OFFICE')",
+                    selected.getId(), deadline);
+        } else {
+            jdbc.update("insert into p2p_claim_approval(approved_claim_id, appeal_until) values (?, ?)",
+                    selected.getId(), deadline);
+        }
         for (Claim claimant : waiting) {
             notifications.notifyUser(claimant.getClaimant().getId(), "CLAIM_APPEAL_WINDOW",
                     "Một yêu cầu nhận đồ khác đã được chấp thuận",
@@ -86,6 +92,28 @@ public class P2pClaimAppealService {
         return deadline;
     }
 
+    public void onPendingClaimWithdrawn(Claim claim) {
+        var reportIds = jdbc.queryForList("select * from withdraw_p2p_appeal(?)", Long.class, claim.getId());
+        for (long reportId : reportIds) {
+            chat.notifyAppealChanged(reportId);
+            var recipients = jdbc.queryForList("""
+                select r.assigned_to from report r where r.report_id=? and r.assigned_to is not null
+                union select chosen.claimant_id from p2p_claim_appeal e join p2p_claim_approval a using(approval_id)
+                join claim chosen on chosen.claim_id=a.approved_claim_id where e.report_id=? and chosen.claimant_id is not null
+                union select account_id from post where post_id=?
+                """, Long.class, reportId, reportId, claim.getPost().getId());
+            for (long recipient : recipients) {
+                boolean manager = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "select assigned_to is not distinct from ? from report where report_id=?", Boolean.class, recipient, reportId));
+                if (!manager) jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing", reportId, recipient);
+                notifications.notifyUser(recipient, "REPORT_RESOLVED", "Người gửi đã rút tranh chấp",
+                    "Yêu cầu nhận đồ đã được rút. Các tranh chấp khác vẫn được xử lý riêng.",
+                    (manager ? "/admin/reports/" : "/bao-cao/") + reportId, false);
+            }
+        }
+        jdbc.queryForList("select finish_empty_p2p_window(?)", claim.getPost().getId());
+    }
+
     public boolean close(Claim selected) {
         return jdbc.update("update p2p_claim_approval set closed_at=now() where approved_claim_id=? and closed_at is null",
                 selected.getId()) > 0;
@@ -93,8 +121,7 @@ public class P2pClaimAppealService {
 
     public void reopen(Claim selected) {
         if (!close(selected)) return;
-        for (Claim pending : waitingP2p(selected.getPost().getId())) {
-            if (Objects.equals(pending.getId(), selected.getId())) continue;
+        for (Claim pending : competingClaims(selected)) {
             notifications.notifyUser(pending.getClaimant().getId(), "CLAIM_REVIEW_REOPENED",
                     "Yêu cầu nhận đồ được xét duyệt lại",
                     "Bài «" + selected.getPost().getTitle() + "» đã mở lại. Hồ sơ đang chờ của bạn tiếp tục được xét duyệt.",
@@ -107,7 +134,7 @@ public class P2pClaimAppealService {
                 select exists (
                   select 1 from claim c join p2p_claim_approval a on a.approved_claim_id=c.claim_id
                   join p2p_claim_appeal p on p.approval_id=a.approval_id join report r on r.report_id=p.report_id
-                  where c.post_id=? and r.status in ('OPEN','IN_REVIEW')
+                  where c.post_id=? and a.closed_at is null and c.claim_type=a.custody_mode and r.status in ('OPEN','IN_REVIEW')
                 )
                 """, Boolean.class, postId));
     }
@@ -124,28 +151,54 @@ public class P2pClaimAppealService {
                 && approval.stateAt(OffsetDateTime.now()) == State.REVIEW_REQUIRED;
     }
 
+    public boolean hasCompetitors(Claim selected) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+            select exists(select 1 from claim
+              where post_id=? and claim_id<>? and claim_type=? and status='PENDING' and claimant_id is not null)
+            """,Boolean.class,selected.getPost().getId(),selected.getId(),selected.getClaimType()));
+    }
+
+    public void requireOfficeClearance(Claim claim) {
+        var window = handoverWindow(claim);
+        if (window != null && window.blocksHandover()) {
+            throw new AppException(ErrorCode.CLAIM_STATE_INVALID,
+                "Chưa thể lập lịch hoặc trao trả khi còn trong thời hạn gửi tranh chấp hoặc đang chờ xử lý tranh chấp.");
+        }
+    }
+
     @Transactional(readOnly = true)
     public Status status(long claimId, CustomUserDetails user) {
         long actor = actors.actor(user).getId();
         Claim claim = claims.findById(claimId).orElseThrow(this::missing);
-        if (claim.isOffice() || claim.getClaimant() == null) throw missing();
+        if (claim.getClaimant() == null) throw missing();
         boolean ownClaim = claim.getClaimant().getId() == actor;
-        if (!ownClaim && claim.getPost().getAccount().getId() != actor) throw missing();
-        if (!routing.matches(claim, RESERVED)) return null;
+        if (!ownClaim && (claim.isOffice() || claim.getPost().getAccount().getId() != actor)) throw missing();
+        if (!routing.matches(claim, RESERVED)) return claim.isOffice() ? latestOfficeAppeal(claimId) : null;
         Approval approval = activeApproval(claim.getPost().getId());
-        if (approval == null) return null;
+        if (approval == null) return claim.isOffice() ? latestOfficeAppeal(claimId) : null;
         OffsetDateTime now = OffsetDateTime.now();
         State state = approval.stateAt(now);
         if (approval.selectedClaimId() == claimId) {
+            if (claim.isOffice()) return latestOfficeAppeal(claimId);
             return new Status(approval.id(), approval.deadline(), state, false, null, null);
         }
         if (!ownClaim) return null;
         ExistingAppeal existing = existingAppeal(approval.id(), claimId);
-        if (!"PENDING".equals(claim.getStatus()) && existing == null) return null;
-        boolean canAppeal = existing == null && "PENDING".equals(claim.getStatus())
-                && now.isBefore(approval.deadline());
+        if (existing == null && (!"PENDING".equals(claim.getStatus())
+                || (!claim.isOffice() && ClaimRepository.disputeEndsReview(claims.findLatestDisputeOutcome(claimId))))) return null;
+        boolean canAppeal = existing == null && now.isBefore(approval.deadline());
         return new Status(approval.id(), approval.deadline(), state, canAppeal,
                 existing == null ? null : existing.id(), existing == null ? null : existing.status());
+    }
+
+    public Status latestOfficeAppeal(long claimId) {
+        return jdbc.query("""
+            select p.approval_id,a.appeal_until,r.report_id,r.status
+            from p2p_claim_appeal p join p2p_claim_approval a using (approval_id)
+            join report r using (report_id) where p.appellant_claim_id=? and a.custody_mode='OFFICE'
+            order by p.approval_id desc limit 1
+            """, (rs, n) -> new Status(rs.getLong(1), rs.getObject(2, OffsetDateTime.class), State.CLEARED,
+                false, rs.getLong(3), rs.getString(4)), claimId).stream().findFirst().orElse(null);
     }
 
     public Submitted submit(long claimId, Submit request, List<MultipartFile> files, CustomUserDetails user) {
@@ -189,7 +242,7 @@ public class P2pClaimAppealService {
                 jdbc.update("insert into p2p_claim_appeal(approval_id, appellant_claim_id, report_id) values (?, ?, ?)",
                         request.approvalId(), claimId, report.getId());
                 used[0] = true;
-                chat.notifyAppealChanged(report.getId());
+                if (!claim.isOffice()) chat.notifyAppealChanged(report.getId());
                 notifyAppeal(post, actor, report.getId());
                 return new Submitted(report.getId());
             });
@@ -202,7 +255,7 @@ public class P2pClaimAppealService {
     }
 
     private Submitted checkSubmission(Claim claim, long actor, Submit request, String hash) {
-        if (claim.isOffice() || claim.getClaimant() == null || claim.getClaimant().getId() != actor) throw missing();
+        if (claim.getClaimant() == null || claim.getClaimant().getId() != actor) throw missing();
         ExistingAppeal existing = existingAppeal(request.approvalId(), claim.getId());
         if (existing != null) {
             if (existing.requestId().equals(request.clientRequestId())) {
@@ -214,6 +267,7 @@ public class P2pClaimAppealService {
         Approval approval = activeApproval(claim.getPost().getId());
         if (approval == null || approval.id() != request.approvalId() || approval.selectedClaimId() == claim.getId()
                 || !routing.matches(claim, RESERVED) || !"PENDING".equals(claim.getStatus())
+                || (!claim.isOffice() && ClaimRepository.disputeEndsReview(claims.findLatestDisputeOutcome(claim.getId())))
                 || !OffsetDateTime.now().isBefore(approval.deadline())) {
             throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Hồ sơ đã thay đổi hoặc hết thời hạn gửi tranh chấp.");
         }
@@ -224,11 +278,12 @@ public class P2pClaimAppealService {
         return jdbc.query("""
                 select a.approval_id, a.approved_claim_id, a.appeal_until,
                   coalesce(bool_or(r.status in ('OPEN','IN_REVIEW')), false) as pending,
-                  coalesce(bool_or(r.status='RESOLVED'), false) as upheld
+                  coalesce(bool_or(r.status='RESOLVED' and not exists(select 1 from report_decision d where d.report_id=r.report_id and d.action='APPEAL_WITHDRAWN')), false) as upheld
                 from p2p_claim_approval a join claim c on c.claim_id=a.approved_claim_id
+                join post item on item.post_id=c.post_id and item.custody_mode=c.claim_type
                 left join p2p_claim_appeal p on p.approval_id=a.approval_id
                 left join report r on r.report_id=p.report_id
-                where c.post_id=? and c.status='APPROVED' and c.claim_type='P2P' and a.closed_at is null
+                where c.post_id=? and c.status='APPROVED' and a.closed_at is null and a.custody_mode=c.claim_type
                 group by a.approval_id
                 """, (rs, row) -> new Approval(rs.getLong("approval_id"), rs.getLong("approved_claim_id"),
                 rs.getObject("appeal_until", OffsetDateTime.class), rs.getBoolean("pending"), rs.getBoolean("upheld")),
@@ -252,17 +307,33 @@ public class P2pClaimAppealService {
         claims.findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(post.getId(), "APPROVED").ifPresent(selected -> {
             String title = "Bàn giao được tạm dừng để xử lý tranh chấp";
             String message = "Có tranh chấp cho bài «" + post.getTitle() + "». Hãy chờ kết quả trước khi giao đồ.";
-            notifications.notifyUser(post.getAccount().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), false);
+            if (selected.isOffice()) {
+                notifications.notifyRoles(List.of(AccountRole.APPROVER), actor, "CLAIM_APPEAL_FILED", title, message,
+                    "/approver/office-claims/" + selected.getId(), false);
+            } else {
+                notifications.notifyUser(post.getAccount().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), false);
+            }
             notifications.notifyUser(selected.getClaimant().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), false);
         });
     }
 
-    private List<Claim> waitingP2p(long postId) {
-        return claims.findWaitingForReturn(postId).stream().filter(claim -> !claim.isOffice()).toList();
+    private List<Claim> competingClaims(Claim selected) {
+        var waiting = claims.findWaitingForReturn(selected.getPost().getId()).stream()
+            .filter(claim -> claim.isOffice() == selected.isOffice() && claim.getClaimant() != null
+                && !Objects.equals(claim.getId(), selected.getId())).toList();
+        if (selected.isOffice() || waiting.isEmpty()) return waiting;
+        var closed = new HashSet<Long>();
+        for (Object[] outcome : claims.findLatestDisputeOutcomes(waiting.stream().map(Claim::getId).toList())) {
+            if (ClaimRepository.disputeEndsReview((String) outcome[1])) {
+                closed.add(((Number) outcome[0]).longValue());
+            }
+        }
+        return waiting.stream().filter(claim -> !closed.contains(claim.getId())).toList();
     }
 
     private String claimPath(Claim claim) {
-        return "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId();
+        return claim.isOffice() ? "/van-phong/claims/" + claim.getId()
+            : "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId();
     }
 
     private AppException missing() {

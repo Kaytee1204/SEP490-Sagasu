@@ -17,6 +17,7 @@ public class ChatQueryRepository {
                 JOIN report r ON r.report_id = appeal.report_id
                 WHERE approval.approved_claim_id = %s AND approval.closed_at IS NULL
                   AND r.status IN ('OPEN', 'IN_REVIEW', 'RESOLVED')
+                  AND NOT EXISTS (SELECT 1 FROM report_decision d WHERE d.report_id=r.report_id AND d.action='APPEAL_WITHDRAWN')
             )
             """;
 

@@ -148,8 +148,8 @@ public class ClaimController {
 
     @PostMapping("/claims/{id}/review")
     @Operation(
-            summary = "[6.11] UC44: Chủ bài đăng xét duyệt yêu cầu nhận đồ (APPROVE / REJECT / NEEDS_INFO)",
-            description = "Khi APPROVE: bài đăng chuyển sang RESERVED và tự động mở phòng Chat P2P giữa 2 bên."
+            summary = "[6.11] UC44: Chủ bài đăng chấp thuận hoặc từ chối yêu cầu nhận đồ P2P",
+            description = "Chấp thuận cần xác nhận đã đối chiếu thông tin (evidenceVerified), ghi chú tùy chọn. Từ chối cần lý do."
     )
     public ResponseEntity<ApiResponse<ClaimResultDto>> review(
             @PathVariable long id,

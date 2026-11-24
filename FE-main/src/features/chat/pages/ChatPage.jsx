@@ -1,13 +1,15 @@
 import '@/styles/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ClipboardCheck, Package, UserRound } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Flag, Package, UserRound } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getChat } from '../api/chatApi';
 import { useChat } from '@/features/chat/hooks/useChat';
 import ChatList from '../components/ChatList';
 import ChatThread from '../components/ChatThread';
 import ChatItemPanel from '../components/ChatItemPanel';
+import { getHandover } from '@/features/handover/api/handoverApi';
+import ReportHandoverIssueDialog from '@/features/handover/components/ReportHandoverIssueDialog';
 import '../styles/Chat.css';
 
 export default function ChatPage() {
@@ -51,8 +53,39 @@ function ChatPanel({ id }) {
         <Link className="chat-header-action" to={`/bai-dang/${chat.postId}/claims/${chat.claimId}#handover`}><ClipboardCheck size={17} aria-hidden="true" />Theo dõi nhận đồ</Link>
       </div>
     </header><div className={`chat-conversation-body ${itemOpen ? 'with-item' : ''}`}>
-      <div className="chat-thread-area"><ChatThread chat={chat} /></div>
+      <ChatHandoverReporting key={chat.claimId} chat={chat} revision={revision} />
       {itemOpen && <ChatItemPanel key={`${chat.id}:${chat.claimId}`} chat={chat} onClose={closeItem} />}
     </div></>}
   </section>;
+}
+
+function ChatHandoverReporting({ chat, revision }) {
+  const [handover, setHandover] = useState(null);
+  const [selection, setSelection] = useState(null);
+  const [submittedReportId, setSubmittedReportId] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getHandover(chat.claimId).then(data => { if (!cancelled) setHandover(data); })
+      .catch(() => { if (!cancelled) setHandover(null); });
+    return () => { cancelled = true; };
+  }, [chat.claimId, revision]);
+  const openReport = message => setSelection({ handover, message });
+  return <div className="chat-thread-area">
+    {handover?.canReportIssue && <div className="chat-issue-actions">
+      <button className="chat-header-action" type="button" onClick={() => openReport(null)}>
+        <Flag size={16} aria-hidden="true" />Báo sự cố trao trả
+      </button>
+    </div>}
+    {submittedReportId && <p role="status" className="chat-issue-actions">
+      Đã gửi báo cáo <Link to={`/bao-cao/${submittedReportId}`}>#{submittedReportId}</Link>
+    </p>}
+    <ChatThread chat={chat} onReportMessage={handover?.canReportIssue ? openReport : undefined} />
+    {selection && <ReportHandoverIssueDialog claim={{ id: chat.claimId, postTitle: chat.postTitle }}
+      handover={selection.handover} initialMessage={selection.message} onClose={() => setSelection(null)}
+      onReported={data => {
+        setHandover(data);
+        setSubmittedReportId(data.submittedReportId);
+        setSelection(null);
+      }} />}
+  </div>;
 }

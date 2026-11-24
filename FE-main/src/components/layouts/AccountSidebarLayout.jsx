@@ -105,6 +105,8 @@ export default function AccountSidebarLayout() {
   const [counts, setCounts] = useState({
     postsTotal: 0,
     postsPending: 0,
+    claimsReceivedPending: 0,
+    claimsSentPending: 0,
     claimsPending: 0,
     reportActions: NO_REPORT_ACTIONS,
     unreadMessages: 0,
@@ -129,10 +131,14 @@ export default function AccountSidebarLayout() {
       if (!active || request !== lastRequest) return;
 
       const reportActions = results[4];
+      const receivedPending = readTotal(results[2]);
+      const sentPending = readTotal(results[3]);
       setCounts({
         postsTotal: readTotal(results[0]),
         postsPending: readTotal(results[1]),
-        claimsPending: readTotal(results[2]) + readTotal(results[3]),
+        claimsReceivedPending: receivedPending,
+        claimsSentPending: sentPending,
+        claimsPending: receivedPending + sentPending,
         reportActions: reportActions.status === 'fulfilled' ? reportActions.value ?? NO_REPORT_ACTIONS : NO_REPORT_ACTIONS,
         unreadMessages: readTotal(results[5]),
       });
@@ -285,7 +291,16 @@ export default function AccountSidebarLayout() {
       </aside>
 
       <div className="account-shell-content">
-        <Outlet context={{ accountBadges, reportActions: counts.reportActions }} />
+        <Outlet
+          context={{
+            accountBadges,
+            reportActions: counts.reportActions,
+            claimCounts: {
+              receivedPending: counts.claimsReceivedPending,
+              sentPending: counts.claimsSentPending,
+            },
+          }}
+        />
       </div>
     </div>
   );

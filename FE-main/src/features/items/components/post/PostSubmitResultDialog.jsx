@@ -29,8 +29,11 @@ export default function PostSubmitResultDialog({ post, error, onClose }) {
 
   return <dialog ref={dialog} className={`post-submit-dialog ${success ? 'post-submit-success' : 'post-submit-failure'}`}
     role="alertdialog" aria-labelledby={titleId} aria-describedby={descriptionId}
-    onCancel={event => { event.preventDefault(); onClose(); }}>
-    <button type="button" className="post-submit-close" aria-label="Đóng thông báo" onClick={onClose}><X size={20} /></button>
+    onCancel={event => {
+      event.preventDefault();
+      if (!success) onClose();
+    }}>
+    {!success && <button type="button" className="post-submit-close" aria-label="Đóng thông báo" onClick={onClose}><X size={20} /></button>}
     <div className="post-submit-icon" aria-hidden="true">{success ? <Check size={30} /> : <AlertCircle size={30} />}</div>
     <h2 id={titleId}>{success ? 'Đăng bài thành công' : 'Đăng bài thất bại'}</h2>
     <p id={descriptionId}>{message}</p>

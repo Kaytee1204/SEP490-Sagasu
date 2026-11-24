@@ -43,6 +43,7 @@ public class ClaimService {
     private final ClaimQuestionnaireService questionnaires;
     private final com.example.base.service.chat.ChatConversationService chatConversations;
     private final com.example.base.service.notification.NotificationService notifications;
+    private final com.example.base.service.office.OfficeReturnService officeReturns;
 
     public ClaimResultDto submit(long postId, SubmitClaimRequest request, List<MultipartFile> files, CustomUserDetails user) {
         return create(postId, null, request, files, user);
@@ -220,17 +221,25 @@ public class ClaimService {
                 .map(event -> new ClaimDetailDto.ActivityDto(event.getId(), event.getAction(), name(event.getActor()),
                         event.getFromStatus(), event.getToStatus(), event.getReason(), event.getCreatedAt())).toList();
         boolean open = routing.matches(claim, Set.of("OPEN"));
+        String disputeOutcome = claim.isOffice() ? null : claims.findLatestDisputeOutcome(id);
+        boolean resubmissionBlocked = claimant && RETRYABLE_STATUSES.contains(claim.getStatus())
+                && claims.hasDisputeRejection(post.getId(), actor.getId());
         boolean retry = claimant && RETRYABLE_STATUSES.contains(claim.getStatus()) && open
+                && !resubmissionBlocked
                 && !claims.existsByPost_IdAndClaimant_IdAndStatusIn(post.getId(), actor.getId(), ACTIVE_STATUSES);
         return new ClaimDetailDto(claim.getId(), post.getId(), post.getTitle(), post.getStatus(),
                 claim.getClaimant().getId(), name(claim.getClaimant()), name(post.getAccount()), claim.getStatus(),
                 claim.getDescription(), claim.getEvidenceNote(), claim.getCreatedAt(), claim.getUpdatedAt(), claim.getVersion(),
-                reviewer && open && "PENDING".equals(claim.getStatus()), claimant && cancellable(claim), retry, evidence, timeline,
+                reviewer && open && "PENDING".equals(claim.getStatus()) && !ClaimRepository.disputeEndsReview(disputeOutcome),
+                claimant && cancellable(claim), retry,
+                resubmissionBlocked, evidence, timeline,
                 claim.getAnswers().stream().map(answer -> new ClaimDetailDto.AnswerDto(answer.getQuestionCode(),
                         answer.getQuestionLabel(), answer.getAnswerText(), answer.getSectionTitle(),
                         answer.getTemplateCode(), answer.getTemplateVersion())).toList(), chatConversations.canOpen(claim),
                 claim.getClaimType(), claim.getReceipt() == null || claim.getReceipt().getStorageLocation() == null
-                        ? null : claim.getReceipt().getStorageLocation().getName(),claim.getCloseReason(),claim.getClosedAt(), reviewer && revocable(claim));
+                        ? null : claim.getReceipt().getStorageLocation().getName(), claim.getCloseReason(), claim.getClosedAt(),
+                reviewer && revocable(claim), disputeOutcome, reviewer && !claim.isOffice() && "PENDING".equals(claim.getStatus())
+                        ? claims.lastWrongRecipientConclusion(id) : null);
     }
 
     @Transactional
@@ -243,12 +252,24 @@ public class ClaimService {
         if (claim.isOffice()) throw new AppException(ErrorCode.BAD_REQUEST, "Duyệt hồ sơ tại mục Yêu cầu nhận đồ của văn phòng.");
         if (!routing.reviewer(claim, actor)) throw missing();
         if (request == null || !Set.of("APPROVED", "REJECTED").contains(Objects.toString(request.decision(), ""))
-                || request.reason() == null || request.reason().isBlank() || request.reason().length() > 2000) {
+                || (request.reason() != null && request.reason().length() > 2000)) {
             throw new AppException(ErrorCode.CLAIM_INPUT_INVALID);
         }
+        boolean approved = "APPROVED".equals(request.decision());
+        if (approved && !request.evidenceVerified()) {
+            throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Vui lòng xác nhận đã đối chiếu thông tin với món đồ.");
+        }
+        if (!approved && (request.reason() == null || request.reason().isBlank())) {
+            throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Vui lòng nhập lý do từ chối.");
+        }
         requireVersion(claim, request.expectedVersion());
+        if (ClaimRepository.disputeEndsReview(claims.findLatestDisputeOutcome(id))) {
+            throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Tranh chấp đã bị bác. Hồ sơ này không còn được xét duyệt.");
+        }
         if (!routing.matches(claim, Set.of("OPEN")) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
-        if ("APPROVED".equals(request.decision())) {
+        if (approved) {
+            if ((request.reason() == null || request.reason().isBlank()) && claims.lastWrongRecipientConclusion(id) != null)
+                throw new AppException(ErrorCode.CLAIM_INPUT_INVALID, "Hãy ghi căn cứ mới để chấp thuận lại người từng được xác minh là duyệt nhầm.");
             if (claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) throw stateChanged();
             if (appeals.hasUnresolvedAppeal(post.getId())) {
                 throw new AppException(ErrorCode.CLAIM_STATE_INVALID, "Vui lòng chờ kết quả tranh chấp trước khi chấp thuận người nhận.");
@@ -256,11 +277,15 @@ public class ClaimService {
             post.reserveForClaim();
         }
         claim.review(request.decision());
-        if ("APPROVED".equals(request.decision()) && !claim.isOffice()) chatConversations.forApprovedClaim(claim);
+        if (approved) chatConversations.forApprovedClaim(claim);
+        String reviewNote = request.reason();
+        if (approved && (reviewNote == null || reviewNote.isBlank())) {
+            reviewNote = "Người nhặt xác nhận đã đối chiếu hồ sơ với món đồ.";
+        }
         activities.save(new ClaimActivity(claim, actor,
-                "APPROVED".equals(request.decision()) ? "APPROVE" : "REJECT", "PENDING", request.reason()));
+                approved ? "APPROVE" : "REJECT", "PENDING", reviewNote));
         claims.flush();
-        if ("APPROVED".equals(request.decision())) {
+        if (approved) {
             var deadline = appeals.open(claim);
             notifications.notifyUser(
                     claim.getClaimant().getId(),
@@ -306,13 +331,26 @@ public class ClaimService {
     }
 
     @Transactional
-    public void reopenApprovalFromAppeal(long claimId, long approvalId, String reason, CustomUserDetails user) {
+    public void reopenApprovalForReview(long claimId, String reason, CustomUserDetails user) {
         Account manager = activeManager(user);
         Post post = lockPost(claimPostId(claimId));
         routing.lockReceipt(post);
         Claim claim = lockClaim(claimId);
-        if (!revocable(claim) || !appeals.canReopenFromDecision(claim, approvalId)) throw stateChanged();
+        if (claim.isOffice() || !"APPROVED".equals(claim.getStatus())
+                || !routing.matches(claim, Set.of("RESERVED")) || handovers.existsByClaimId(claimId)) {
+            throw stateChanged();
+        }
         reopenApproval(claim, post, manager, reason);
+    }
+
+    @Transactional
+    public void reopenOfficeApprovalFromAppeal(long claimId, long approvalId, String reason, CustomUserDetails user) {
+        activeManager(user);
+        Post post = lockPost(claimPostId(claimId));
+        routing.lockReceipt(post);
+        Claim claim = lockClaimForWorkflow(claimId);
+        if (!claim.isOffice()) throw missing();
+        officeReturns.reopenFromAppeal(claim, approvalId, reason, user);
     }
 
     @Transactional
@@ -322,12 +360,27 @@ public class ClaimService {
         routing.lockReceipt(post);
         Claim claim = lockClaim(claimId);
         if (!routing.matches(claim, Set.of("OPEN")) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
+        rejectClaim(claim, manager, reason);
+    }
+
+    @Transactional
+    public void rejectClaimAfterAppeal(long claimId, String reason, CustomUserDetails user) {
+        Account manager = activeManager(user);
+        lockPost(claimPostId(claimId));
+        Claim claim = lockClaimForWorkflow(claimId);
+        if (claim.getClaimant() == null) throw missing();
+        if (!"PENDING".equals(claim.getStatus())) throw stateChanged();
+        rejectClaim(claim, manager, reason);
+    }
+
+    private void rejectClaim(Claim claim, Account manager, String reason) {
         claim.review("REJECTED");
         activities.save(new ClaimActivity(claim, manager, "REJECT", "PENDING", reason));
         claims.flush();
         notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_REJECTED",
-                "Yêu cầu nhận đồ #" + claimId + " bị từ chối", reason,
-                "/bai-dang/" + post.getId() + "/claims/" + claimId, true);
+                "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối", reason,
+                claim.isOffice() ? "/van-phong/claims/" + claim.getId()
+                        : "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId(), true);
     }
 
     private void reopenApproval(Claim claim, Post post, Account actor, String reason) {
@@ -379,6 +432,7 @@ public class ClaimService {
         chatConversations.notifyChanged(claim);
         activities.save(new ClaimActivity(claim, actor, "CANCEL", previous, request.reason()));
         claims.flush();
+        if ("PENDING".equals(previous) && !claim.isOffice()) appeals.onPendingClaimWithdrawn(claim);
         if ("APPROVED".equals(previous) && "RESERVED".equals(post.getStatus())
                 && !claims.existsByPost_IdAndStatusIn(post.getId(), Set.of("APPROVED"))) {
             post.reopenAfterClaimCancellation();
@@ -399,6 +453,8 @@ public class ClaimService {
         if (Objects.equals(post.getAccount().getId(), actorId) || (post.getCreatedBy() != null && Objects.equals(post.getCreatedBy().getId(), actorId))) {
             throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
         }
+        if (claims.hasDisputeRejection(post.getId(), actorId))
+            throw new AppException(ErrorCode.CLAIM_RESUBMISSION_BLOCKED);
         if (!routing.canSubmit(post)) throw new AppException(ErrorCode.CLAIM_POST_UNAVAILABLE);
         if (previousId != null) {
             Claim old = claim(previousId);
@@ -460,9 +516,13 @@ public class ClaimService {
         return post;
     }
     private Claim lockClaim(long id) {
+        Claim claim = lockClaimForWorkflow(id);
+        if (!"P2P".equals(claim.getClaimType()) || claim.getClaimant() == null) throw missing();
+        return claim;
+    }
+    private Claim lockClaimForWorkflow(long id) {
         Claim claim = claims.findForUpdate(id).orElseThrow(this::missing);
         entityManager.refresh(claim, LockModeType.PESSIMISTIC_WRITE);
-        if (!"P2P".equals(claim.getClaimType()) || claim.getClaimant() == null) throw missing();
         return claim;
     }
     private void requireVersion(Claim claim, Long version) {
@@ -485,6 +545,14 @@ public class ClaimService {
     }
     private ClaimPageDto page(Page<Claim> result, int page, int size) {
         Map<Long, String> thumbnails = new HashMap<>();
+        Map<Long, String> disputeOutcomes = new HashMap<>();
+        var p2pClaimIds = result.getContent().stream()
+                .filter(c -> "P2P".equals(c.getClaimType())).map(Claim::getId).toList();
+        if (!p2pClaimIds.isEmpty()) {
+            for (Object[] outcome : claims.findLatestDisputeOutcomes(p2pClaimIds)) {
+                disputeOutcomes.put(((Number) outcome[0]).longValue(), (String) outcome[1]);
+            }
+        }
         var postIds = result.getContent().stream().map(c -> c.getPost().getId()).distinct().toList();
         if (!postIds.isEmpty()) {
             // Load cover images together instead of querying each card separately.
@@ -499,7 +567,10 @@ public class ClaimService {
         }
         return new ClaimPageDto(result.getContent().stream().map(c -> new ClaimSummaryDto(c.getId(), c.getPost().getId(),
                 c.getPost().getTitle(), name(c.getClaimant()), name(c.getPost().getAccount()), c.getStatus(),
-                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType(),c.getCloseReason(), c.getDescription().substring(0, Math.min(c.getDescription().length(), 180)), thumbnails.get(c.getPost().getId()))).toList(), page, size, result.getTotalElements(), result.getTotalPages());
+                c.getCreatedAt(), c.getUpdatedAt(), c.getClaimType(), c.getCloseReason(),
+                c.getDescription().substring(0, Math.min(c.getDescription().length(), 180)),
+                thumbnails.get(c.getPost().getId()), disputeOutcomes.get(c.getId()))).toList(),
+                page, size, result.getTotalElements(), result.getTotalPages());
     }
     private String name(Account account) { return account.getFullName() == null || account.getFullName().isBlank() ? "Thành viên" : account.getFullName(); }
     private ClaimResultDto result(Claim claim) { return new ClaimResultDto(claim.getId(), claim.getPost().getId(), claim.getStatus(), claim.getVersion()); }

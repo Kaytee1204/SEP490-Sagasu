@@ -82,9 +82,15 @@ export const labels = {
   CLAIM_VIOLATION_REJECT: "Bác yêu cầu nhận đồ vi phạm",
   REQUEST_ITEM_RECOVERY: "Yêu cầu thu hồi món đồ",
   CONFIRM_ITEM_RECOVERY: "Xác nhận đã thu hồi món đồ",
-  APPEAL_KEEP: "Giữ kết quả xét duyệt",
+  APPEAL_KEEP: "Giữ người đã duyệt",
+  CUSTODY_CHECK: "Xác minh tình trạng món đồ",
+  APPEAL_WITHDRAWN: "Người gửi đã rút tranh chấp",
+  APPEAL_INSUFFICIENT: "Giữ người đã duyệt · Chưa đủ căn cứ",
+  APPEAL_REJECT_CLAIM: "Yêu cầu nhận đồ sai · Chặn gửi lại",
   APPEAL_REQUIRE_REVIEW: "Yêu cầu xét lại người nhận",
-  APPEAL_REOPEN: "Mở lại xét duyệt",
+  APPEAL_WRONG_RECIPIENT: "Xác nhận duyệt nhầm người",
+  APPEAL_ROUND_CLOSED: "Đã kết thúc tranh chấp của lượt duyệt cũ",
+  APPEAL_REOPEN: "Thu hồi chấp thuận",
   ASK_INFORMATION: "Yêu cầu bổ sung",
   REPLY: "Nhận phản hồi",
   VIEW_CHAT: "Đọc hội thoại",
@@ -106,10 +112,14 @@ export const labels = {
   RESCHEDULE: "Hẹn lại",
 };
 
+export const officeAppealActionHelp = {
+  APPEAL_KEEP: "Giữ người đã duyệt. Chỉ chặn gửi lại khi đã xác minh yêu cầu nhận đồ sai.",
+  APPEAL_WRONG_RECIPIENT: "Tài sản tiếp tục lưu kho. Văn phòng xét duyệt lại sau khi mọi tranh chấp của lần duyệt này đã được xử lý.",
+};
+
 export const appealActionHelp = {
-  APPEAL_KEEP: "Dùng khi căn cứ ủng hộ kết quả xét duyệt hiện tại. Tranh chấp này sẽ kết thúc.",
-  APPEAL_REQUIRE_REVIEW: "Bàn giao tiếp tục tạm dừng để người nhặt kiểm tra lại các hồ sơ trước khi chọn người nhận.",
-  APPEAL_REOPEN: "Thu hồi chấp thuận hiện tại và đưa hồ sơ đã được duyệt về danh sách chờ xét lại.",
+  APPEAL_KEEP: "Giữ người đã duyệt. Chỉ chặn gửi lại khi đã xác minh yêu cầu nhận đồ sai.",
+  APPEAL_WRONG_RECIPIENT: "Đưa hồ sơ đã được chấp thuận về chờ xét duyệt và báo cho người nhặt xét lại các hồ sơ còn hợp lệ.",
   REQUEST_ITEM_RECOVERY: "Dùng khi món đồ đã được giao và cần lấy lại. Hệ thống gửi hướng dẫn cho người đang giữ đồ.",
   CONFIRM_ITEM_RECOVERY: "Dùng sau khi đã xác minh món đồ được lấy lại.",
 };
@@ -117,6 +127,46 @@ export const date = (value) =>
   value
     ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
     : "Chưa ghi nhận";
+
+export function participantRoles(data, accountId) {
+  const { report, caseKind, approvedContext, appeal } = data;
+  const isAppeal = caseKind === "CLAIM_APPEAL";
+  const roles = [];
+  if (accountId === report.reporter_id) roles.push(isAppeal ? "Người gửi tranh chấp" : "Người gửi báo cáo");
+  if (isAppeal && accountId === approvedContext?.claim?.claimant_id) roles.push("Người được chấp thuận");
+  if (isAppeal && appeal && accountId === appeal.finder_id) {
+    roles.push(appeal.claim_type === "P2P" ? "Người đăng bài (người nhặt được)" : "Người đăng bài");
+  }
+  return roles;
+}
+
+export const verificationLabels = {
+  OWNERSHIP: "Bổ sung bằng chứng sở hữu",
+  DISCREPANCY: "Làm rõ chi tiết chưa khớp",
+  CUSTODY: "Xác nhận đang giữ đồ",
+};
+
+export function usesVerification(data) {
+  return data.appeal?.claim_type === "P2P" && ["OPEN", "IN_REVIEW"].includes(data.report.status);
+}
+
+export function verificationOptions(data) {
+  if (!data.appeal?.active) return [];
+  const pending = new Set(data.inquiries.filter(i => !i.responded_at && !i.closed_at).map(i => i.recipient_id));
+  const targets = [
+    ["OWNERSHIP", data.report.reporter_id, "Người gửi tranh chấp"],
+    ["DISCREPANCY", data.appeal.approved_recipient_id, "Người được chấp thuận"],
+    ["CUSTODY", data.appeal.finder_id, "Người nhặt"],
+  ];
+  return targets.map(([kind, id, role]) => {
+    const person = data.current.participants.find(p => p.id === id);
+    let reason = "";
+    if (!person) reason = "Chưa xác định người nhận";
+    else if (pending.has(id)) reason = "Đang chờ phản hồi";
+    else if (kind === "CUSTODY" && !data.appeal.can_reopen_approval) reason = "Chưa đủ điều kiện xác minh";
+    return { kind, person, role, reason };
+  });
+}
 
 export function availableRecipients(data) {
   const waiting = new Set(data.inquiries.filter(i => !i.responded_at && !i.closed_at).map(i => i.recipient_id));

@@ -1,13 +1,22 @@
 .office-page {
   width: 100%;
   min-width: 0;
-  max-width: 1240px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 32px;
-  color: #183b3b;
-  font-size: 15px;
+  padding: 24px 28px 48px;
+  color: #173f37;
+  font-size: 0.9375rem;
   line-height: 1.55;
-  font-family: var(--font-body, sans-serif);
+  font-family: var(--font-body);
+  box-sizing: border-box;
+}
+.office-page h1 {
+  font-family: var(--font-body);
+  font-size: clamp(1.5rem, 2.4vw, 1.85rem);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.022em;
+  color: #173f37;
 }
 .of-counter-search { display:flex;align-items:center;gap:10px;border:1px solid #cbd5e1;border-radius:10px;padding-left:12px; }
 .of-counter-search input { border:0!important;background:transparent;min-width:0; }

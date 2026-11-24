@@ -275,3 +275,11 @@
     display: none;
   }
 }
+.admin-sidebar-children {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0.25rem 1rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid currentColor;
+  list-style: none;
+}

@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
@@ -36,6 +37,48 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     boolean existsByPost_Id(Long postId);
     boolean existsByPost_IdAndStatusIn(Long postId, Collection<String> statuses);
     boolean existsByPost_IdAndClaimant_IdAndStatusIn(Long postId, Long claimantId, Collection<String> statuses);
+
+    @Query(value = """
+        select exists (
+            select 1 from claim c
+            join p2p_claim_appeal appeal on appeal.appellant_claim_id = c.claim_id
+            join p2p_claim_approval approval on approval.approval_id = appeal.approval_id
+            join report_decision d on d.report_id = appeal.report_id
+            where c.post_id = :postId and c.claimant_id = :claimantId
+              and (d.action = 'APPEAL_REJECT_CLAIM' or (approval.custody_mode='P2P' and d.action='APPEAL_KEEP'))
+        )
+        """, nativeQuery = true)
+    boolean hasDisputeRejection(@Param("postId") long postId, @Param("claimantId") long claimantId);
+
+    @Query(value = """
+        select distinct on (appeal.appellant_claim_id) appeal.appellant_claim_id, d.action
+        from p2p_claim_appeal appeal
+        join report_decision d on d.report_id = appeal.report_id
+        where appeal.appellant_claim_id in (:claimIds)
+          and d.action in ('APPEAL_KEEP', 'APPEAL_REJECT_CLAIM', 'APPEAL_REQUIRE_REVIEW', 'APPEAL_WRONG_RECIPIENT')
+        order by appeal.appellant_claim_id, d.decision_id desc
+        """, nativeQuery = true)
+    List<Object[]> findLatestDisputeOutcomes(@Param("claimIds") Collection<Long> claimIds);
+
+    default String findLatestDisputeOutcome(Long claimId) {
+        return findLatestDisputeOutcomes(List.of(claimId)).stream()
+                .map(row -> (String) row[1]).findFirst().orElse(null);
+    }
+
+    @Query(value = """
+        select d.conclusion from p2p_claim_approval a join p2p_claim_appeal e using(approval_id)
+        join report_decision d using(report_id)
+        join claim previous on previous.claim_id=a.approved_claim_id
+        join claim candidate on candidate.post_id=previous.post_id and candidate.claimant_id=previous.claimant_id
+        where candidate.claim_id=:claimId and a.custody_mode='P2P' and d.action='APPEAL_WRONG_RECIPIENT'
+        order by d.decision_id desc limit 1
+        """, nativeQuery = true)
+    String lastWrongRecipientConclusion(@Param("claimId") long claimId);
+
+    static boolean disputeEndsReview(String outcome) {
+        return "APPEAL_KEEP".equals(outcome) || "APPEAL_REJECT_CLAIM".equals(outcome);
+    }
+
     Optional<Claim> findFirstByPost_IdAndClaimant_IdOrderByCreatedAtDescIdDesc(Long postId, Long claimantId);
     Optional<Claim> findFirstByPost_IdAndClaimant_IdAndClaimTypeOrderByCreatedAtDescIdDesc(Long postId, Long claimantId, String claimType);
 

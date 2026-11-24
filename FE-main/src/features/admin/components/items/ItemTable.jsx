@@ -165,7 +165,7 @@ export default function ItemTable({ filteredItems, setSelectedItemDetail, setAct
         {filteredItems.length === 0 && (
           <tr>
             <td colSpan={6} style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
-              Không tìm thấy tin đăng nào phù hợp với bộ lọc hiện tại.
+              Không tìm thấy bài đăng nào phù hợp với bộ lọc hiện tại.
             </td>
           </tr>
         )}

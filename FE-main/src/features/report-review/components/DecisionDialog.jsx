@@ -2,7 +2,7 @@ import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
-import { appealActionHelp, labels } from "../format";
+import { appealActionHelp, labels, officeAppealActionHelp } from "../format";
 const warnings = {
   REQUEST_POST_CORRECTION: "Người đăng sẽ nhận yêu cầu chỉnh sửa và có thể xem hướng dẫn trong hồ sơ.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
@@ -30,6 +30,10 @@ const findings = {
   VIOLATION: "Có vi phạm",
   NO_VIOLATION: labels.NO_VIOLATION,
   INSUFFICIENT_EVIDENCE: labels.INSUFFICIENT_EVIDENCE,
+};
+const appealFindings = {
+  INSUFFICIENT_EVIDENCE: "Chưa đủ căn cứ để thay đổi người nhận",
+  INVALID_CLAIM: "Đã xác minh yêu cầu nhận đồ của người gửi tranh chấp là sai",
 };
 const batchActions = ["RESOLVE", "DISMISS", ...Object.keys(findings)];
 
@@ -66,29 +70,40 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const [conclusion, setConclusion] = useState(""),
     [basis, setBasis] = useState(""),
     [holder, setHolder] = useState(""),
+    [appealFinding, setAppealFinding] = useState(""),
     [custodyVerified, setCustody] = useState(false),
+    [wrongRecipientVerified, setWrongRecipientVerified] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const accountAction = ["WARN_ACCOUNT", "SUSPEND_ACCOUNT"].includes(effect);
   const isRecoveryRequest = action === "REQUEST_ITEM_RECOVERY";
+  const isKeepApproval = action === "APPEAL_KEEP";
+  const isWrongRecipientDecision = action === "APPEAL_WRONG_RECIPIENT";
   const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
-  const requiresCustody = requiresRecoveryCheck || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "APPEAL_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
-    || (action === "APPEAL_KEEP" && data.recoveryRequested);
-  const warning = (data.caseKind === "CLAIM_APPEAL" && appealActionHelp[effect]) || warnings[effect];
-  const unresolvedInquiries = data.inquiries.some(item => !item.responded_at && !item.closed_at);
+  const requiresCustody = isWrongRecipientDecision || requiresRecoveryCheck
+    || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
+    || (isKeepApproval && data.recoveryRequested);
+  const officeAppeal = data.appeal?.claim_type === "OFFICE";
+  const warning = (data.caseKind === "CLAIM_APPEAL" && (officeAppeal ? officeAppealActionHelp : appealActionHelp)[effect]) || warnings[effect];
+  const unresolvedInquiries = data.inquiries.filter(item => !item.responded_at && !item.closed_at);
+  const overdue = unresolvedInquiries.some(item => item.overdue);
   function changeDecision(setValue, value) {
     setValue(value);
     setSelected([]);
     setSameIncident(false);
   }
 
-  const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim() || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified) || (selected.length>0 && !sameIncident);
+  const cannotSubmit = busy || !decision || !conclusion.trim() || !basis.trim()
+    || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified)
+    || (isKeepApproval && !appealFinding)
+    || (isWrongRecipientDecision && !wrongRecipientVerified) || (selected.length > 0 && !sameIncident);
 
   function submit(event) {
     event.preventDefault();
     if (!cannotSubmit) {
       setError("");
-      setConfirmOpen(true);
+      if (isWrongRecipientDecision || isKeepApproval) void executeSubmit();
+      else setConfirmOpen(true);
     }
   }
 
@@ -112,17 +127,27 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           basis: basis.trim(),
           targetId: isRecoveryRequest ? Number(holder) : accountAction ? data.report.reported_account_id : null,
           custodyVerified,
+          ...(isKeepApproval && { appealFinding }),
+          ...(isWrongRecipientDecision && { wrongRecipientVerified }),
         }),
       );
       onClose();
     } catch (e) {
+      if (data.caseKind === "CLAIM_APPEAL") {
+        const latest = await reviewApi.detail(data.report.report_id).catch(() => null);
+        if (latest && ["RESOLVED","REJECTED"].includes(latest.report.status)) {
+          onSaved(latest);
+          onClose();
+          return;
+        }
+      }
       setError(e.message);
       setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
   }
-  return (
+  return (<>
     <Dialog title={outcome ? "Ghi kết luận sự cố bàn giao" : interim ? "Xử lý trong lúc xác minh" : structured ? "Ghi kết luận vi phạm" : labels[action]} busy={busy} onClose={onClose}>
       <form onSubmit={submit} className="rr-stack rr-decision-form">
         {(outcome || interim) && <label>
@@ -155,7 +180,23 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             </select>
           </label>}
         </>}
-        {warning && <p className="rr-callout">{warning}</p>}
+        {isKeepApproval && <>
+          <fieldset className="rr-decision-choice" disabled={busy}>
+            <legend>Căn cứ giữ người đã duyệt *</legend>
+            {Object.entries(appealFindings).map(([value, label]) => <label key={value}>
+              <input type="radio" name="appealFinding" value={value} required checked={appealFinding === value}
+                onChange={() => setAppealFinding(value)} />
+              {label}
+            </label>)}
+          </fieldset>
+          {appealFinding === "INSUFFICIENT_EVIDENCE" && <p className="rr-callout">
+            Kết thúc tranh chấp và giữ nguyên yêu cầu nhận đồ của người gửi.
+          </p>}
+          {appealFinding === "INVALID_CLAIM" && <p className="rr-callout">
+            Bác yêu cầu nhận đồ của người gửi tranh chấp và chặn tài khoản đó gửi lại yêu cầu trên bài đăng này.
+          </p>}
+        </>}
+        {!isKeepApproval && warning && <p className="rr-callout">{warning}</p>}
         {candidates.length > 0 && <fieldset className="rr-batch-selection">
           <legend>Áp dụng cho báo cáo cùng sự việc</legend>
           <p>Mặc định chỉ kết luận báo cáo #{data.report.report_id}. Chỉ chọn thêm sau khi đã đối chiếu từng nội dung và bằng chứng. Các báo cáo mới gửi sau này không tự nhận kết luận này.</p>
@@ -179,7 +220,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           Nội dung gửi cho người liên quan{" "}
           *
           <textarea
-            autoFocus={!structured && !interim && !outcome}
+            autoFocus={!structured && !interim && !outcome && !isKeepApproval}
             required
             maxLength={5000}
             rows={3}
@@ -196,9 +237,21 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             rows={3}
             value={basis}
             onChange={(e) => setBasis(e.target.value)}
-            placeholder="Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."
+            placeholder={isWrongRecipientDecision
+              ? "Ghi rõ căn cứ nào cho thấy người được duyệt không phải chủ món đồ."
+              : appealFinding === "INVALID_CLAIM" ? "Ghi rõ bằng chứng cho thấy yêu cầu nhận đồ của người gửi là sai."
+                : "Dẫn ảnh, thời điểm, nội dung trao đổi hoặc biên bản đã kiểm tra."}
           />
         </label>
+        {isWrongRecipientDecision && <label className="rr-check">
+          <input
+            type="checkbox"
+            required
+            checked={wrongRecipientVerified}
+            onChange={(event) => setWrongRecipientVerified(event.target.checked)}
+          />
+          Tôi đã đối chiếu căn cứ và xác nhận người được duyệt không phải chủ món đồ.
+        </label>}
         {requiresCustody && (
           <label className="rr-check">
             <input
@@ -207,7 +260,8 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
               checked={custodyVerified}
               onChange={(e) => setCustody(e.target.checked)}
             />
-            {action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
+            {isWrongRecipientDecision ? (officeAppeal ? "Tôi đã xác minh tài sản còn lưu kho tại văn phòng." : "Tôi đã xác minh người nhặt vẫn đang giữ món đồ.")
+              : action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
               : requiresRecoveryCheck
               ? "Đã xác minh tình trạng món đồ và có đủ căn cứ áp dụng kết quả bàn giao này."
               : "Đã xác minh đồ đang ở người giữ và có thể tiến hành theo quyết định này."}
@@ -219,11 +273,11 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           "HANDOVER_RETRY",
           "HANDOVER_REOPEN",
           "APPEAL_KEEP",
-          "APPEAL_REQUIRE_REVIEW",
-        ].includes(decision)) && unresolvedInquiries && (
+          "APPEAL_WRONG_RECIPIENT",
+        ].includes(decision)) && unresolvedInquiries.length > 0 && (
             <p className="rr-callout">
-              Vẫn còn yêu cầu bổ sung chưa được trả lời. Nếu đã đủ căn cứ, ghi
-              rõ lý do kết luận ở trên.
+              {overdue ? "Đã quá hạn bổ sung thông tin. Hãy kết luận dựa trên căn cứ hiện có."
+                : "Vẫn còn yêu cầu bổ sung chưa được trả lời. Nếu đã đủ căn cứ, ghi rõ lý do kết luận ở trên."}
             </p>
           )}
         <ErrorBox>{error}</ErrorBox>
@@ -235,15 +289,18 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             className="rr-primary"
             disabled={cannotSubmit}
           >
-            {busy ? "Đang lưu…" : structured || outcome ? "Xác nhận kết luận" : "Xác nhận xử lý"}
+            {busy ? "Đang lưu…" : isWrongRecipientDecision ? "Xác nhận mở lại xét duyệt"
+              : isKeepApproval ? labels.APPEAL_KEEP
+              : structured || outcome ? "Xác nhận kết luận" : "Xác nhận xử lý"}
           </button>
         </footer>
       </form>
-      <ConfirmActionPopup open={confirmOpen} variant="warning"
-        title="Xác nhận thực hiện quyết định?"
-        description={warning || conclusion.trim()}
-        confirmLabel="Xác nhận thực hiện" cancelLabel="Quay lại"
-        busy={busy} onConfirm={executeSubmit} onClose={() => setConfirmOpen(false)} />
     </Dialog>
-  );
+    <ConfirmActionPopup open={confirmOpen}
+      variant={["HIDE_POST", "SUSPEND_ACCOUNT", "CLAIM_VIOLATION_REJECT"].includes(effect) ? "danger" : ["HANDOVER_COMPLETED", "RESOLVE"].includes(effect) ? "success" : "warning"}
+      title="Xác nhận thực hiện quyết định?"
+      description={warning || conclusion.trim()}
+      confirmLabel="Xác nhận thực hiện" cancelLabel="Quay lại"
+      busy={busy} onConfirm={executeSubmit} onClose={() => setConfirmOpen(false)} />
+  </>);
 }

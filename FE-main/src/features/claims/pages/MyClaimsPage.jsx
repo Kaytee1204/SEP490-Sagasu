@@ -1,6 +1,6 @@
 import '@/styles/Workspace.css';
-import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import { ArrowUpRight, Building2, Filter, Inbox, Send, UsersRound, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Pagination from '@/components/common/Pagination';
@@ -10,9 +10,13 @@ import {
   HISTORY_STATUSES,
   TIME_RANGE_OPTIONS,
   claimDetailPath,
+  claimDisplayStatus,
   claimShortDate,
+  disputeDismissed,
+  matchesClaimStatus,
   matchesTimeFilter,
   postClaimsPath,
+  rejectedAfterDispute,
   validClaimId,
 } from '../utils/claimUtils';
 import { ClaimPostThumbnail } from '../components/ClaimListShared';
@@ -36,12 +40,12 @@ export default function MyClaimsPage({ embedded = false }) {
 }
 
 function resolveGroupStatus(visibleClaims, incoming) {
-  const pendingCount = visibleClaims.filter(c => c.status === 'PENDING').length;
+  const pendingCount = visibleClaims.filter(c => matchesClaimStatus(c, 'PENDING', incoming)).length;
   const approvedCount = visibleClaims.filter(c => c.status === 'APPROVED').length;
   if (pendingCount > 0) {
     return {
       code: 'PENDING',
-      label: incoming ? 'Cần bạn duyệt' : 'Chờ phản hồi',
+      label: incoming ? 'Chờ xét duyệt' : 'Chờ phản hồi',
       pendingCount,
       approvedCount,
     };
@@ -56,9 +60,12 @@ function resolveGroupStatus(visibleClaims, incoming) {
   }
   const latest = visibleClaims[0];
   if (!latest) return { code: 'CLOSED', label: 'Đã đóng', pendingCount: 0, approvedCount: 0 };
+  if (disputeDismissed(latest)) {
+    return { code: 'CLOSED', label: 'Tranh chấp đã bị bác', pendingCount, approvedCount };
+  }
   return {
-    code: latest.status,
-    label: CLAIM_STATUS[latest.status] || latest.status,
+    code: claimDisplayStatus(latest),
+    label: rejectedAfterDispute(latest) ? 'Bị bác sau tranh chấp' : (CLAIM_STATUS[latest.status] || latest.status),
     pendingCount,
     approvedCount,
   };
@@ -66,8 +73,11 @@ function resolveGroupStatus(visibleClaims, incoming) {
 
 function ClaimList({ embedded = false, initialView = 'received' }) {
   const location = useLocation();
+  const outletCtx = useOutletContext() || {};
+  const claimCounts = outletCtx.claimCounts || { receivedPending: 0, sentPending: 0 };
   const [searchParams, setSearchParams] = useSearchParams();
   const postId = validClaimId(searchParams.get('postId')) ? searchParams.get('postId') : null;
+  const autoSwitchedRef = useRef(false);
 
   const [view, setView] = useState(() => {
     const urlView = searchParams.get('view');
@@ -157,6 +167,19 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
 
   const loading = snapshot.key !== key;
 
+  // Đồng bộ với badge sidebar: nếu người dùng mở mặc định tab "Người khác yêu cầu" nhưng tab này trống
+  // trong khi tab "Tôi yêu cầu" đang có yêu cầu chờ duyệt -> tự động chuyển sang "Tôi yêu cầu"
+  useEffect(() => {
+    if (autoSwitchedRef.current || embedded || postId) return;
+    if (searchParams.get('view')) return;
+    if (loading || view !== 'received') return;
+    const rawCount = snapshot.result?.content?.length ?? 0;
+    if (rawCount === 0 && claimCounts.sentPending > 0 && claimCounts.receivedPending === 0) {
+      autoSwitchedRef.current = true;
+      setView('sent');
+    }
+  }, [loading, view, snapshot.result, claimCounts.sentPending, claimCounts.receivedPending, embedded, postId, searchParams]);
+
   const { processed, statusCounts } = useMemo(() => {
     const rawGroups = snapshot.result?.content || [];
 
@@ -170,18 +193,13 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
       })
       .filter(group => group.claimsInTime.length > 0);
 
-    const counts = {
-      ALL: timeScopedGroups.length,
-      PENDING: timeScopedGroups.filter(g => g.claimsInTime.some(c => c.status === 'PENDING')).length,
-      APPROVED: timeScopedGroups.filter(g => g.claimsInTime.some(c => c.status === 'APPROVED')).length,
-      HISTORY: timeScopedGroups.filter(g => g.claimsInTime.some(c => HISTORY_STATUSES.includes(c.status))).length,
-    };
+    const counts = Object.fromEntries(['ALL', 'PENDING', 'APPROVED', 'HISTORY'].map(value => [
+      value, timeScopedGroups.filter(g => g.claimsInTime.some(c => matchesClaimStatus(c, value, incoming))).length,
+    ]));
 
     const enriched = timeScopedGroups
       .map(group => {
-        const visibleClaims = status === 'ALL'
-          ? group.claimsInTime
-          : group.claimsInTime.filter(c => (status === 'HISTORY' ? HISTORY_STATUSES.includes(c.status) : c.status === status));
+        const visibleClaims = group.claimsInTime.filter(c => matchesClaimStatus(c, status, incoming));
         const sortedClaims = [...visibleClaims].sort((a, b) => {
           const diff = Date.parse(b.createdAt) - Date.parse(a.createdAt);
           return sortOrder === 'OLDEST' ? -diff : diff;
@@ -192,7 +210,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
           visibleClaims: sortedClaims,
           latestDate,
           latestMs: latestDate ? Date.parse(latestDate) : 0,
-          hasPending: sortedClaims.some(c => c.status === 'PENDING'),
+          hasPending: sortedClaims.some(c => matchesClaimStatus(c, 'PENDING', incoming)),
         };
       })
       .filter(group => group.visibleClaims.length > 0);
@@ -216,7 +234,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
         currentPage: safePage,
       },
     };
-  }, [snapshot.result, status, timeRange, fromDate, toDate, sortOrder, page]);
+  }, [snapshot.result, status, timeRange, fromDate, toDate, sortOrder, page, incoming]);
 
   const historySelected = status === 'HISTORY' || HISTORY_STATUSES.includes(status);
   const activeFilter = historySelected ? 'HISTORY' : status;
@@ -230,12 +248,13 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     ['sent', 'Tôi yêu cầu', Send],
   ];
   const hasAnyFilter = status !== 'ALL' || timeRange !== 'ALL' || sortOrder !== 'NEWEST';
+  const onlyArchived = status === 'ALL' && statusCounts.ALL === 0 && statusCounts.HISTORY > 0;
 
   const statusButtons = [
     { value: 'ALL', label: `Tất cả (${statusCounts.ALL})`, tone: 'default' },
     {
       value: 'PENDING',
-      label: `${incoming ? 'Cần bạn duyệt' : 'Chờ phản hồi'} (${statusCounts.PENDING})`,
+      label: `${incoming ? 'Chờ xét duyệt' : 'Chờ phản hồi'} (${statusCounts.PENDING})`,
       tone: statusCounts.PENDING > 0 ? 'warning' : 'default',
     },
     { value: 'APPROVED', label: `Đang nhận đồ (${statusCounts.APPROVED})`, tone: 'default' },
@@ -262,18 +281,26 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
       <section className="claim-list-controls" aria-label="Bộ lọc danh sách yêu cầu nhận đồ">
         <div className="claim-list-navigation">
           <div className="claim-list-tabs" role="group" aria-label="Loại yêu cầu nhận đồ">
-            {views.map(([value, label, Icon]) => (
-              <button
-                type="button"
-                key={value}
-                aria-pressed={view === value}
-                className={view === value ? 'active' : ''}
-                onClick={() => syncParams({ view: value, page: 1, status: 'ALL' })}
-              >
-                <Icon size={18} aria-hidden="true" />
-                {label}
-              </button>
-            ))}
+            {views.map(([value, label, Icon]) => {
+              const tabPending = value === 'received' ? claimCounts.receivedPending : claimCounts.sentPending;
+              return (
+                <button
+                  type="button"
+                  key={value}
+                  aria-pressed={view === value}
+                  className={view === value ? 'active' : ''}
+                  onClick={() => syncParams({ view: value, page: 1, status: 'ALL' })}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  <span>{label}</span>
+                  {tabPending > 0 && (
+                    <span className="ml-1 inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
+                      {tabPending > 99 ? '99+' : tabPending}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
           <Link
             className="claim-list-office-link"
@@ -418,20 +445,24 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
             <div className="claim-list-empty">
               <Inbox size={32} aria-hidden="true" />
               <h3>
-                {hasAnyFilter
+                {onlyArchived ? 'Các yêu cầu đã được chuyển vào lịch sử' : hasAnyFilter
                   ? 'Không có yêu cầu phù hợp với bộ lọc'
                   : incoming
                     ? 'Chưa có yêu cầu nhận đồ'
                     : 'Bạn chưa gửi yêu cầu nhận đồ'}
               </h3>
-              <p>
+              {!onlyArchived && <p>
                 {hasAnyFilter
                   ? 'Thử thay đổi khoảng thời gian hoặc trạng thái để xem các hồ sơ khác.'
                   : incoming
                     ? 'Khi có người gửi yêu cầu nhận lại món đồ bạn đăng, món đồ đó sẽ hiển thị tại đây.'
                     : 'Các yêu cầu bạn gửi sẽ được theo dõi tại đây.'}
-              </p>
-              {page > 1 ? (
+              </p>}
+              {onlyArchived ? (
+                <button type="button" className="btn btn-ghost" onClick={() => syncParams({ page: 1, status: 'HISTORY' })}>
+                  Xem lịch sử
+                </button>
+              ) : page > 1 ? (
                 <button type="button" className="btn btn-ghost" onClick={() => syncParams({ page: 1 })}>
                   Về trang đầu
                 </button>

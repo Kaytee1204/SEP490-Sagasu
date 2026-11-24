@@ -343,7 +343,7 @@ export default function NotificationBell({ variant = 'navbar' }) {
                           </span>
                         </div>
                         <p
-                          className={`text-[13px] line-clamp-1 ${
+                          className={`text-[13px] whitespace-normal break-words leading-snug ${
                             !notif.read ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'
                           }`}
                         >

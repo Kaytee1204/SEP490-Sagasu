@@ -1,5 +1,6 @@
 import React from 'react';
 import { Calendar, Clock, MapPin } from 'lucide-react';
+import CharCountHint from '@/components/common/CharCountHint';
 
 export default function StepDetailsForm({ formData, postType, onChange, categories = [] }) {
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
@@ -17,6 +18,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
           value={formData.itemName}
           onChange={e => onChange({ ...formData, itemName: e.target.value })}
         />
+        <CharCountHint value={formData.itemName} max={200} />
       </div>
 
       <div className="input-group">
@@ -75,6 +77,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
             onChange={e => onChange({ ...formData, location: e.target.value })}
           />
         </div>
+        <CharCountHint value={formData.location} max={1000} />
       </div>
 
       <div className="input-group">
@@ -90,6 +93,7 @@ export default function StepDetailsForm({ formData, postType, onChange, categori
           onChange={e => onChange({ ...formData, description: e.target.value })}
           style={{ resize: 'vertical' }}
         />
+        <CharCountHint value={formData.description} max={10000} />
       </div>
     </div>
   );

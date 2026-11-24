@@ -21,14 +21,14 @@ public class P2pClaimAppealController {
     private final P2pClaimAppealService appeals;
 
     @GetMapping
-    @Operation(summary = "Xem thời hạn và trạng thái tranh chấp của yêu cầu nhận đồ P2P")
+    @Operation(summary = "Xem thời hạn và trạng thái tranh chấp của yêu cầu nhận tài sản P2P hoặc tại văn phòng")
     public ResponseEntity<ApiResponse<P2pClaimAppealService.Status>> status(@PathVariable long claimId,
             @AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(appeals.status(claimId, user)));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Gửi tranh chấp kết quả xét duyệt yêu cầu nhận đồ P2P")
+    @Operation(summary = "Gửi tranh chấp kết quả xét duyệt yêu cầu nhận tài sản P2P hoặc tại văn phòng")
     public ResponseEntity<ApiResponse<P2pClaimAppealService.Submitted>> submit(@PathVariable long claimId,
             @RequestPart("data") P2pClaimAppealService.Submit request,
             @RequestPart(value = "images", required = false) List<MultipartFile> images,

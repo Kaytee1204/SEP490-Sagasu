@@ -7,9 +7,10 @@ import java.util.List;
 public record ClaimDetailDto(Long id, Long postId, String postTitle, String postStatus,
         Long claimantId, String claimantName, String finderName, String status,
         String description, String evidenceNote, OffsetDateTime createdAt, OffsetDateTime updatedAt,
-        long version, boolean canReview, boolean canCancel, boolean canRetry,
+        long version, boolean canReview, boolean canCancel, boolean canRetry, boolean resubmissionBlocked,
         List<EvidenceDto> evidence, List<ActivityDto> activities, List<AnswerDto> answers, boolean canOpenChat,
-        String claimType, String storageLocationName, String closeReason, OffsetDateTime closedAt, boolean canRevokeApproval) {
+        String claimType, String storageLocationName, String closeReason, OffsetDateTime closedAt, boolean canRevokeApproval,
+        String disputeOutcome, String priorWrongRecipientConclusion) {
     public record EvidenceDto(Long id, String url, String originalName, String mimeType, long sizeBytes) {}
     public record ActivityDto(Long id, String action, String actorName, String fromStatus,
             String toStatus, String reason, OffsetDateTime createdAt) {}

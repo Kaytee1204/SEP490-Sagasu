@@ -19,6 +19,12 @@ class ReportReviewCalendarTest {
   }
 
   @Test
+  void inquiryDeadlineCountsTwelveWorkingHoursAcrossLunchAndDaysOff() {
+    Instant submitted = Instant.parse("2026-11-20T04:00:00Z"); // Friday at 11:00
+    assertThat(calendar.inquiryResponseDue(submitted)).isEqualTo(Instant.parse("2026-11-24T09:00:00Z")); // Tuesday at 16:00
+  }
+
+  @Test
   void FridayAfterHoursStartsTuesdayWhenMondayIsAHoliday() {
     Instant submitted = Instant.parse("2026-11-20T11:00:00Z");
     assertThat(calendar.currentOrNext(submitted).start()).isEqualTo(Instant.parse("2026-11-24T01:00:00Z"));

@@ -32,6 +32,10 @@ public final class OfficeWorkflowDtos {
     public record Reschedule(@NotNull @PositiveOrZero Long expectedVersion,
             @NotNull OffsetDateTime scheduledAt, @NotBlank @Size(max=1000) String location,
             @NotBlank @Size(max=2000) String reason, @Size(max=2000) String note) {}
+    public record Schedule(@NotNull @PositiveOrZero Long expectedVersion,
+            @NotNull OffsetDateTime scheduledAt, @NotBlank @Size(max=1000) String location,
+            @jakarta.validation.constraints.Email @NotBlank @Size(max=255) String email,
+            @Size(max=2000) String note) {}
     public record Verify(@NotNull @PositiveOrZero Long expectedVersion,
             @NotBlank @Pattern(regexp="PASSED|FAILED") String result,
             @NotBlank @Size(max=2000) String note) {}
@@ -44,7 +48,9 @@ public final class OfficeWorkflowDtos {
     public record Handover(long id, String status, String condition, String officer, String recipient,
             OffsetDateTime recordedAt, OffsetDateTime confirmedAt, String issueNote, long version,
             List<Evidence> evidence) {}
+    public record FiledAppeal(long reportId, String status) {}
     public record Workflow(List<Verification> verifications, Handover handover,
             boolean canVerify, boolean canRecord, boolean canReschedule, boolean canCancel,
-            boolean canComplete, String nextStep) {}
+            boolean canComplete, String nextStep, boolean canSchedule, boolean canRevoke,
+            boolean approvalHasCompetitors, OffsetDateTime appealDeadline, FiledAppeal filedAppeal) {}
 }
