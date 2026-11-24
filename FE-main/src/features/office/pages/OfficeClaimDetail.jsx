@@ -6,7 +6,6 @@ import { workflowApi } from "../api/workflowApi";
 import { date } from "../officeUtils";
 import useLoad from "../hooks/useLoad";
 import ReviewForm from "../components/ReviewForm";
-import SupplementForm from "../components/SupplementForm";
 import OfficeClaimTimeline from "../components/OfficeClaimTimeline";
 import Badge from "../components/Badge";
 import Header from "../components/Header";
@@ -58,7 +57,7 @@ export default function OfficeClaimDetail({ mine = false }) {
             ? "Đã hết hạn phản hồi. Yêu cầu bị từ chối và lịch hẹn đã hủy."
             : r.emailStatus === "SENT"
             ? "Đã gửi lại thư lịch hẹn."
-            : "Chưa gửi được thư. Lịch hẹn vẫn được lưu; hãy thử lại sau.",
+            : "Chưa gửi được thư. Người nhận vẫn có thể phản hồi trên hệ thống.",
       });
       state.reload();
     } catch (err) {
@@ -154,7 +153,7 @@ export default function OfficeClaimDetail({ mine = false }) {
               </div>
               <aside className="of-sticky">
                 <OfficeReturnPanel claim={claim} state={workflow} onChanged={(result) => {
-                  setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã đổi lịch, nhưng chưa gửi được email. Hãy gửi lại thư lịch hẹn." : "Đã cập nhật tiến trình trao trả." });
+                  setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã lưu lịch. Email chưa gửi được, người nhận vẫn có thể phản hồi trên hệ thống." : "Đã cập nhật tiến trình trao trả." });
                   state.reload();
                 }} />
                 {claim.appointment && !(mine && claim.status === "APPROVED") && (
@@ -173,7 +172,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                       {claim.appointment.status === "COMPLETED" ? "Lịch hẹn đã hoàn tất." : claim.appointment.status === "CANCELLED" ? "Lịch hẹn đã hủy." :
                         {
                           UNSENT:
-                            "Chưa gửi được lời mời; thời hạn 12 giờ chưa bắt đầu.",
+                            "Lịch cũ chưa mở để phản hồi. Hãy gửi lại lời mời hoặc đổi lịch.",
                           LEGACY: "Lịch cũ chưa áp dụng phản hồi qua email.",
                           PENDING:
                             "Đang chờ người nhận phản hồi trên hệ thống hoặc qua email.",
@@ -191,6 +190,9 @@ export default function OfficeClaimDetail({ mine = false }) {
                           {date(claim.appointment.responseDeadline)}
                         </strong>
                       </p>
+                    )}
+                    {claim.appointment.status === "SCHEDULED" && claim.appointment.responseStatus === "PENDING" && !claim.appointment.emailSentAt && (
+                      <p className="of-muted">Email chưa được gửi thành công. Lịch đã mở để phản hồi trên hệ thống.</p>
                     )}
                     {claim.appointment.cancellationReason && (
                       <p className="of-prose">
@@ -235,24 +237,12 @@ export default function OfficeClaimDetail({ mine = false }) {
                         error: r.emailStatus === "FAILED",
                         text:
                           r.emailStatus === "FAILED"
-                            ? "Đã duyệt và lưu lịch hẹn, nhưng gửi thư chưa thành công. Dùng nút gửi lại thư bên dưới."
+                            ? "Đã duyệt và lưu lịch. Email chưa gửi được, người nhận vẫn có thể phản hồi trên hệ thống."
                             : r.emailStatus === "SENT"
                               ? "Đã duyệt yêu cầu, lưu lịch hẹn và gửi thư cho người nhận."
                               : r.emailStatus === "APPEAL_WINDOW"
                                 ? "Đã chấp thuận yêu cầu. Lịch hẹn được lập sau thời hạn gửi tranh chấp và sau khi các tranh chấp đã được xử lý."
                                 : "Đã lưu kết quả xử lý hồ sơ.",
-                      });
-                      state.reload();
-                    }}
-                  />
-                )}
-                {mine && claim.ownRequest && claim.status === "NEEDS_INFO" && (
-                  <SupplementForm
-                    mine={mine}
-                    claim={claim}
-                    onDone={() => {
-                      setNotice({
-                        text: "Đã ghi nhận thông tin bổ sung. Hồ sơ trở lại hàng chờ xét duyệt.",
                       });
                       state.reload();
                     }}

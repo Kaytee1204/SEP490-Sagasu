@@ -119,12 +119,12 @@ function ClaimEvidence({ data }) {
     <Facts data={facts} />
   </section>;
 }
-export default function ContextPanel({ data, snapshot = false }) {
+export default function ContextPanel({ data, snapshot = false, violation = false }) {
   if (!data) return <Empty>Chưa có dữ liệu đối chiếu.</Empty>;
   return (
     <div className="rr-stack rr-evidence-sections">
       {data.claim && <ClaimEvidence data={data} />}
-      {data.post && (
+      {!violation && data.post && (
         <section className="rr-card">
           <div className="rr-row">
             <h3>Bài đăng #{data.post.post_id}</h3>
@@ -192,9 +192,9 @@ export default function ContextPanel({ data, snapshot = false }) {
             </section>
           ),
       )}
-      <Records title="Chuyển trách nhiệm tiếp nhận" rows={data.transfers} />
-      <Records title="Các yêu cầu nhận cùng món đồ" rows={data.relatedClaims} />
-      {!!data.claimHistory?.length && (
+      {!violation && <Records title="Chuyển trách nhiệm tiếp nhận" rows={data.transfers} />}
+      {!violation && <Records title="Các yêu cầu nhận cùng món đồ" rows={data.relatedClaims} />}
+      {!violation && !!data.claimHistory?.length && (
         <section className="rr-card">
           <h3>Diễn biến yêu cầu nhận đồ</h3>
           <ol className="rr-timeline">

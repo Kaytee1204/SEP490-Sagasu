@@ -151,12 +151,6 @@ public class ReportInquiryService {
       Long expected = switch (Objects.toString(kind, "")) {
         case "OWNERSHIP" -> id(r, "reporter_id");
         case "DISCREPANCY" -> id(appeal, "approved_recipient_id");
-        case "CUSTODY" -> {
-          if (!Boolean.TRUE.equals(appeal.get("can_reopen_approval")))
-            throw bad("Món đồ không còn ở bước xác minh trước bàn giao.");
-          question = "Bạn hiện còn giữ món đồ hay đã giao cho người nhận?";
-          yield id(appeal, "finder_id");
-        }
         default -> throw bad("Hãy chọn nội dung cần xác minh.");
       };
       if (!request.recipientId().equals(expected)) throw bad("Người nhận không đúng vai trò cần xác minh.");

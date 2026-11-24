@@ -62,8 +62,8 @@ export default function ApproveClaimDialog({ claim, onClose, onApproved }) {
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
     <form onSubmit={submit}>
       <p>Chấp thuận <strong>{claim.claimantName}</strong> nhận <strong>{claim.postTitle}</strong>.</p>
-      <p>Sau khi chấp thuận, hai bên có thể nhắn tin để trao đổi việc nhận đồ.</p>
-      <p className="claim-notice">Nếu còn hồ sơ đang chờ, hệ thống sẽ thông báo cho những người đó và mở hạn gửi tranh chấp 24 giờ. Có thể bàn giao sớm khi không còn ai có quyền tranh chấp và việc bàn giao đủ điều kiện.</p>
+      <p>Nếu đây là hồ sơ hợp lệ duy nhất, hai bên có thể nhắn tin và hẹn giao đồ ngay.</p>
+      <p className="claim-notice">Nếu còn hồ sơ đang chờ, hệ thống sẽ thông báo cho những người đó và mở hạn gửi tranh chấp 24 giờ. Chat chỉ xem và bàn giao tạm dừng trong thời gian này. Có thể mở sớm khi hồ sơ cạnh tranh cuối cùng được rút hoặc được quản lý xác minh là sai, và mọi tranh chấp đã kết thúc.</p>
       <label className="claim-reject-option">
         <input type="checkbox" required checked={evidenceVerified} disabled={busy}
           onChange={event => { setEvidenceVerified(event.target.checked); setDiscard(false); }} />

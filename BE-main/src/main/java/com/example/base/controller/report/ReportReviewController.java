@@ -52,9 +52,10 @@ public class ReportReviewController {
             @RequestParam(name = "queue", defaultValue = "ALL") String queue,
             @RequestParam(name = "assignee", defaultValue = "ALL") String assignee,
             @RequestParam(name = "targetId", required = false) Long targetId,
+            @RequestParam(name = "approvalId", required = false) Long approvalId,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user
     ) {
-        return ApiResponse.ok(reviews.list(page, status, kind, target, q, queue, targetId, assignee, user));
+        return ApiResponse.ok(reviews.list(page, status, kind, target, q, queue, targetId, assignee, approvalId, user));
     }
 
     @GetMapping("/{id}")

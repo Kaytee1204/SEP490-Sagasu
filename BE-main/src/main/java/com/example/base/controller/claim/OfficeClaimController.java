@@ -40,20 +40,6 @@ public class OfficeClaimController {
         return ApiResponse.ok(supplements.history(id, user));
     }
 
-    @PostMapping(value="/{id}/supplement", consumes="multipart/form-data")
-    @Operation(
-            summary = "[10.11] Người nhận gửi bổ sung thông tin kèm ảnh bằng chứng cho Claim Văn phòng",
-            description = "Cập nhật thông tin bổ sung kèm tối đa 5 ảnh minh chứng theo yêu cầu của cán bộ văn phòng (NEEDS_INFO -> PENDING)."
-    )
-    public ApiResponse<Void> supplementImages(
-            @PathVariable("id") long id,
-            @Valid @RequestPart("data") Supplement request,
-            @RequestPart(value="images",required=false) List<MultipartFile> images,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        supplements.submit(id, request, images, user);
-        return ApiResponse.ok(null);
-    }
-
     @GetMapping("/questionnaire")
     @Operation(
             summary = "[10.10] Lấy bảng câu hỏi xác minh (Questionnaire) khi lập Claim Văn phòng",
@@ -189,7 +175,7 @@ public class OfficeClaimController {
     @PreAuthorize("hasRole('APPROVER')")
     @Operation(
             summary = "[10.7] Cán bộ văn phòng xét duyệt Claim (APPROVE kèm đặt lịch hẹn nhận đồ / REJECT / NEEDS_INFO)",
-            description = "Khi APPROVE sẽ tạo lịch hẹn (appointment) và gửi Email kèm link xác nhận trong 12 giờ cho người nhận."
+            description = "Khi lịch nhận đồ được lưu, người nhận có 12 giờ để phản hồi trên web hoặc qua liên kết email."
     )
     public ApiResponse<ReviewResult> review(
             @PathVariable("id") long id,
@@ -202,7 +188,7 @@ public class OfficeClaimController {
     @PreAuthorize("hasRole('APPROVER')")
     @Operation(
             summary = "[10.8] Gửi lại Email mời xác nhận lịch hẹn nhận đồ tại Văn phòng",
-            description = "Tạo token mới (hiệu lực 12 giờ) và gửi lại email lịch hẹn đến nhận đồ cho Claimant."
+            description = "Gửi lại email kèm liên kết mới, giữ nguyên hạn phản hồi của lịch đã mở."
     )
     public ApiResponse<ReviewResult> resend(
             @PathVariable("id") long id,
@@ -210,16 +196,4 @@ public class OfficeClaimController {
         return ApiResponse.ok(service.resend(id, user));
     }
 
-    @PostMapping(value="/{id}/supplement", consumes="application/json")
-    @Operation(
-            summary = "[10.9] Người nhận gửi bổ sung thông tin cho Claim Văn phòng (khi ở trạng thái NEEDS_INFO)",
-            description = "Cập nhật thông tin bổ sung theo yêu cầu của cán bộ văn phòng và chuyển lại trạng thái sang PENDING."
-    )
-    public ApiResponse<Void> supplement(
-            @PathVariable("id") long id,
-            @Valid @RequestBody Supplement r,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        service.supplement(id, r, user);
-        return ApiResponse.ok(null);
-    }
 }

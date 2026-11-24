@@ -3,14 +3,12 @@ import { useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { officeApi } from "../api/officeApi";
 import Notice from "./Notice";
-import RequestedInformation from "./RequestedInformation";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
 export default function ReviewForm({ claim, hasCompetitors, onDone }) {
-  const [ending, setEnding] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [form, setForm] = useState({
-    decision: claim.status === "NEEDS_INFO" ? "REJECTED" : "APPROVED",
+    decision: "APPROVED",
     reason: "",
     scheduledAt: "",
     location: "",
@@ -20,14 +18,7 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
-  if (claim.status === "NEEDS_INFO" && !ending) return <section className="of-panel of-form">
-    <h2>Đang chờ bổ sung thông tin</h2>
-    <RequestedInformation claim={claim} />
-    <p className="of-muted">Người yêu cầu cần phản hồi trước khi tiếp tục xét duyệt. Nội dung bổ sung sẽ được ghi trong lịch sử xử lý.</p>
-    <details><summary>Cần kết thúc yêu cầu?</summary><p>Chỉ từ chối khi có căn cứ; việc chưa phản hồi không tự xác định người yêu cầu không phải chủ đồ.</p>
-      <button type="button" className="of-button of-danger" onClick={() => setEnding(true)}>Từ chối yêu cầu…</button>
-    </details>
-  </section>;
+  const reapproving = form.decision === "APPROVED" && claim.priorWrongRecipientConclusion;
   function handleFormSubmit(e) {
     e.preventDefault();
     if (busy || !form.reason.trim()) return;
@@ -67,19 +58,12 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
             : `Chấp thuận yêu cầu #${claim.id} của ${claim.claimantName} và gửi thư mời xác nhận lịch hẹn.`,
           confirmLabel: "Đồng ý duyệt",
         }
-      : form.decision === "REJECTED"
-        ? {
+      : {
             variant: "danger",
             title: "Bạn có chắc chắn từ chối?",
             description: `Yêu cầu nhận đồ #${claim.id} của ${claim.claimantName} sẽ bị từ chối. Hành động này không thể hoàn tác.`,
             confirmLabel: "Xác nhận từ chối",
-          }
-        : {
-            variant: "info",
-            title: "Gửi yêu cầu bổ sung thông tin?",
-            description: `Hồ sơ #${claim.id} sẽ chuyển sang trạng thái chờ ${claim.claimantName} phản hồi bổ sung căn cứ.`,
-            confirmLabel: "Gửi yêu cầu",
-          };
+        };
   return (
     <section className="of-panel">
       <h2>Xét duyệt yêu cầu</h2>
@@ -92,26 +76,23 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
             disabled={busy}
             onChange={(e) => change("decision", e.target.value)}
           >
-            {claim.status === "PENDING" && (
-              <>
-                <option value="APPROVED">{hasCompetitors ? "Chấp thuận yêu cầu" : "Chấp thuận và lập lịch"}</option>
-                <option value="NEEDS_INFO">Yêu cầu bổ sung thông tin</option>
-              </>
-            )}
+            <option value="APPROVED">{hasCompetitors ? "Chấp thuận yêu cầu" : "Chấp thuận và lập lịch"}</option>
             <option value="REJECTED">Từ chối yêu cầu</option>
           </select>
         </label>
+        {reapproving && <div className="of-callout">
+          <strong>Kết luận tranh chấp trước đó</strong>
+          <p className="of-prose">{claim.priorWrongRecipientConclusion}</p>
+        </div>}
         <label>
-          {form.decision === "NEEDS_INFO"
-            ? "Thông tin cần bổ sung *"
-            : "Căn cứ quyết định *"}
+          {reapproving ? "Căn cứ mới để chấp thuận lại *" : "Căn cứ quyết định *"}
           <textarea
             required
             maxLength={2000}
             disabled={busy}
             value={form.reason}
             onChange={(e) => change("reason", e.target.value)}
-            placeholder="Nêu rõ kết quả đối chiếu hoặc thông tin cần bổ sung…"
+            placeholder={reapproving ? "Nêu căn cứ mới đã được đối chiếu…" : "Nêu kết quả đối chiếu căn cứ sở hữu…"}
           />
         </label>
         {form.decision === "APPROVED" && hasCompetitors &&
@@ -123,8 +104,8 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
               <strong>Hẹn người nhận đến văn phòng</strong>
               <p className="of-muted">
                 Email có nút đồng ý hoặc từ chối lịch hẹn, không cần đăng nhập.
-                Không phản hồi trong 12 giờ từ khi gửi thành công sẽ tự động bị
-                từ chối.
+                Người nhận có thể phản hồi trên hệ thống ngay khi lưu lịch. Sau
+                12 giờ không phản hồi, yêu cầu sẽ tự động bị từ chối.
               </p>
             </div>
             <label>
@@ -184,11 +165,8 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
             ? "Đang lưu & xử lý…"
             : form.decision === "APPROVED"
               ? hasCompetitors ? "Chấp thuận yêu cầu" : "Duyệt và gửi lịch hẹn"
-              : form.decision === "REJECTED"
-                ? "Xác nhận từ chối"
-                : "Gửi yêu cầu bổ sung"}
+              : "Xác nhận từ chối"}
         </button>
-        {ending && <button type="button" className="of-button" disabled={busy} onClick={() => setEnding(false)}>Tiếp tục chờ bổ sung</button>}
       </form>
       <ConfirmActionPopup
         open={confirmOpen}

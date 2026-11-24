@@ -74,6 +74,7 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
   const type = report.kind === "CLAIM_APPEAL" ? "Tranh chấp" : report.kind === "HANDOVER_ISSUE"
     ? "Sự cố bàn giao" : `Vi phạm · ${reportTargets[target]}`;
   const officeAppeal = report.kind === "CLAIM_APPEAL" && report.appeal_custody_mode === "OFFICE";
+  const groupScope = officeAppeal ? { approvalId: report.approval_id } : { target, targetId };
   const thumbnail = report.post_thumbnail?.url;
   const title = target === "MESSAGE" ? report.message_preview?.trim() || "Tin nhắn đính kèm" : report.subject_title || reportTargets[target];
   const person = target === "CLAIM" ? report.claimant_name : target === "POST" || target === "MESSAGE" ? report.subject_name : "";
@@ -137,7 +138,9 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
     </tr>
     {multiple && <tr role="row" className="rr-case-expansion" hidden={!expanded}>
       <td role="cell" colSpan={showReasonColumn ? 5 : 4} id={contentId}>
-        {expanded && <Reports filters={{ ...filters, kind: report.kind, target, targetId }} revision={revision} reportPath={reportPath} />}
+        {expanded && (officeAppeal && !report.approval_id
+          ? <ErrorBox>Chưa tải được mã lần duyệt. Hãy khởi động lại backend với bản mới rồi tải lại trang.</ErrorBox>
+          : <Reports filters={{ ...filters, kind: report.kind, ...groupScope }} revision={revision} reportPath={reportPath} />)}
       </td>
     </tr>}
   </tbody>;
@@ -147,6 +150,9 @@ function Reports({ filters, reportPath, revision }) {
   const [page, setPage] = useState(1);
   const [retry, setRetry] = useState(0);
   const { data, error } = useReviewResource("queue", { ...filters, page }, [revision, retry]);
+  if (filters.approvalId && data?.content.some(report => report.approval_id !== filters.approvalId)) {
+    return <ErrorBox>Danh sách trả về không khớp lần duyệt. Hãy khởi động lại backend với bản mới rồi tải lại trang.</ErrorBox>;
+  }
   return <div className="rr-case-children">
     <ErrorBox>{error}</ErrorBox>
     {error && <button type="button" onClick={() => setRetry(value => value + 1)}>Thử lại</button>}

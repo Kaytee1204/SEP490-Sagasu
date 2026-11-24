@@ -117,9 +117,7 @@ function PostDetail({ id, onRetry }) {
   const isFinished = ['RETURNED', 'CLOSED'].includes(post.status);
   // Office integration: personal UI exposes only the owner's P2P review actions.
   const canViewClaims = post.postType === 'FOUND' && isOwnPost && post.custodyMode === 'P2P' && !post.officeReceipt;
-  const canChat = post.postType === 'FOUND' && post.custodyMode === 'P2P' && !post.officeReceipt
-    && post.moderationStatus === 'VISIBLE' && post.status === 'RESERVED'
-    && (post.canEditOwnPost || current.myClaim?.status === 'APPROVED');
+  const canChat = post.canOpenChat;
   const openStatusLabel = post.postType === 'LOST' ? 'Đang tìm đồ' : 'Đang chờ chủ sở hữu';
   const statusLabel = post.status === 'OPEN'
     ? openStatusLabel

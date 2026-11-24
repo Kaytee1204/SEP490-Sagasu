@@ -70,7 +70,8 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
         join report_decision d using(report_id)
         join claim previous on previous.claim_id=a.approved_claim_id
         join claim candidate on candidate.post_id=previous.post_id and candidate.claimant_id=previous.claimant_id
-        where candidate.claim_id=:claimId and a.custody_mode='P2P' and d.action='APPEAL_WRONG_RECIPIENT'
+        where candidate.claim_id=:claimId and a.custody_mode=candidate.claim_type
+          and d.action='APPEAL_WRONG_RECIPIENT'
         order by d.decision_id desc limit 1
         """, nativeQuery = true)
     String lastWrongRecipientConclusion(@Param("claimId") long claimId);

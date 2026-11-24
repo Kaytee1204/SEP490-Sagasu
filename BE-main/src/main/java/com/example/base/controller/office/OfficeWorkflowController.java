@@ -112,7 +112,7 @@ public class OfficeWorkflowController {
     @PostMapping("/transfers/{id}/schedule")
     @Operation(
             summary = "[11.6] Đặt lịch hẹn mời người nhặt mang đồ đến nộp tại Văn phòng (kèm gửi Email)",
-            description = "Tạo lịch hẹn nộp đồ (office_intake_appointment) và gửi email xác nhận có hiệu lực 12 giờ."
+            description = "Thông báo giờ hẹn và hạn tiếp nhận sau giờ hẹn 72 giờ. Hệ thống tự hủy yêu cầu chưa được tiếp nhận khi quá hạn."
     )
     public ApiResponse<String> schedule(
             @PathVariable("id") long id,
@@ -124,24 +124,12 @@ public class OfficeWorkflowController {
     @PostMapping("/transfers/{id}/appointment-email")
     @Operation(
             summary = "[11.7] Gửi lại Email lịch hẹn nộp đồ vào Văn phòng",
-            description = "Làm mới token phản hồi 12 giờ và gửi lại email mời người nhặt mang đồ đến văn phòng."
+            description = "Gửi lại thông tin lịch hẹn mang đồ đến văn phòng. Hạn tiếp nhận được giữ nguyên."
     )
     public ApiResponse<String> resendIntake(
             @PathVariable("id") long id,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(intakeSchedules.send(id, user));
-    }
-
-    @PostMapping("/transfers/{id}/appointment-response")
-    @Operation(
-            summary = "[11.8] Phản hồi lịch hẹn nộp đồ trực tiếp trên hệ thống (CONFIRMED / DECLINED)",
-            description = "Người nhặt đồ xác nhận hoặc từ chối lịch hẹn nộp đồ ngay trên giao diện web."
-    )
-    public ApiResponse<com.example.base.dto.office.InvitationDtos.View> respondIntake(
-            @PathVariable("id") long id,
-            @Valid @RequestBody AppointmentResponse request,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(intakeSchedules.respondOnSite(id, request, user));
     }
 
     @PostMapping("/transfers/{id}")
@@ -198,7 +186,7 @@ public class OfficeWorkflowController {
     @PostMapping("/claims/{id}/reschedule")
     @Operation(
             summary = "[11.12] Đặt lại lịch hẹn mới (Reschedule) cho người nhận đồ tại Văn phòng",
-            description = "Cập nhật thời gian/địa điểm hẹn mới và gửi lại email xác nhận cho Claimant."
+            description = "Hủy lịch cũ và mở hạn phản hồi 12 giờ khi lưu lịch nhận đồ mới. Người nhận có thể phản hồi trên web hoặc qua email."
     )
     public ApiResponse<ReviewResult> reschedule(
             @PathVariable("id") long id,

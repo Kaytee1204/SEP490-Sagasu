@@ -1134,8 +1134,6 @@
   .of-claim-table td:first-child::before,.of-claim-table td:last-child::before { display:none; }
 }
 
-.of-requested-information { padding:16px; border:1px solid #99d4ca; border-left:4px solid #0f766e; border-radius:10px; background:#f0fdfa; color:#134e4a; margin-block:12px; }
-.of-requested-information p { margin:8px 0 0; }
 .of-notice:focus { outline:2px solid #0f766e; outline-offset:3px; }
 .of-form details > summary { cursor:pointer; padding-block:12px; }
 

@@ -130,13 +130,9 @@ class ReportInquiryServiceTest {
         when(reviews.appeal(5L)).thenReturn(appeal);
         service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Ảnh nào cho thấy dấu riêng?", "OWNERSHIP"), managerUser);
         service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "Vết xước nằm ở đâu?", "DISCREPANCY"), managerUser);
-        service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser);
-        verify(jdbc).update(contains("verification_kind"), eq(5L), eq(9L), eq(1L),
-                eq("Bạn hiện còn giữ món đồ hay đã giao cho người nhận?"), any(), eq("CUSTODY"));
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser), "chọn");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "?", "OWNERSHIP"), managerUser), "vai trò");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "?", null), managerUser), "chọn");
-        appeal.put("can_reopen_approval", false);
-        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser), "trước bàn giao");
     }
 
     @Test

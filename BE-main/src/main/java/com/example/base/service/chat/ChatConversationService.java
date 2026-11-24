@@ -15,12 +15,12 @@ public class ChatConversationService {
     private final ChatEvents events;
     private final ChatAccessPolicy policy;
 
-    public boolean canOpen(Claim claim) { return policy.eligible(claim); }
+    public boolean canOpen(Claim claim) { return policy.canOpen(claim); }
 
     /** Caller already holds the post/claim locks in the approval/open transaction. */
     @Transactional(propagation = Propagation.MANDATORY)
     public ChatConversation forApprovedClaim(Claim claim) {
-        if (!canOpen(claim)) throw new AppException(ErrorCode.CHAT_UNAVAILABLE);
+        if (!policy.eligible(claim)) throw new AppException(ErrorCode.CHAT_UNAVAILABLE);
         ChatConversation conversation = conversations.findByPost_IdAndClaimant_Id(
                 claim.getPost().getId(), claim.getClaimant().getId()).orElse(null);
         if (conversation == null) {

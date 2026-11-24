@@ -4,6 +4,7 @@ import com.example.base.dto.office.InvitationDtos.*;
 import com.example.base.entity.*;
 import com.example.base.repository.*;
 import com.example.base.service.claim.P2pClaimAppealService;
+import com.example.base.service.notification.NotificationService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class OfficeInvitationService {
     private final EntityManager em;
     private final OfficeAccess access;
     private final P2pClaimAppealService appeals;
+    private final NotificationService notifications;
 
     private Claim lock(long id) {
         Long postId=claims.findPostId(id).orElseThrow(()->bad("Không tìm thấy hồ sơ."));
@@ -53,8 +55,15 @@ public class OfficeInvitationService {
             if("CONFIRMED".equals(a.getResponseStatus())) throw bad("Người nhận đã đồng ý lịch hẹn, không cần gửi lại lời mời.");
             OffsetDateTime now=OffsetDateTime.now();
             if(a.responseExpired(now)) { reject(c,a,"EXPIRED",now); return new com.example.base.dto.office.OfficeDtos.ReviewResult(claimId,c.getStatus(),"EXPIRED"); }
-            if(a.getEmailSentAt()==null && !a.getScheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
-                throw bad("Giờ hẹn quá gần để dành đủ 12 giờ phản hồi. Cần bố trí lại lịch trước khi gửi lời mời.");
+            if(a.getResponseDeadline()==null) {
+                if(!a.getScheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
+                    throw bad("Giờ hẹn quá gần để dành đủ 12 giờ phản hồi. Cần bố trí lại lịch.");
+                // Staff explicitly republishes a legacy appointment that never opened for response.
+                a.openResponseWindow(now);
+                if(c.getClaimant()!=null) notifications.notifyUser(c.getClaimant().getId(), "APPOINTMENT_SCHEDULED",
+                    "Lịch hẹn nhận đồ đã mở để phản hồi", "Hãy phản hồi lịch của yêu cầu #" + claimId + " trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối.",
+                    "/van-phong/claims/" + claimId, false);
+            }
             String token=InvitationTokens.create();
             String recipient=c.getClaimantEmail()!=null?c.getClaimantEmail():c.getClaimant().getEmail();
             var mail=new AppointmentEmailService.Mail(c.getId(),recipient,c.getClaimantName(),c.getPost().getTitle(),a.getScheduledAt(),a.getLocation(),a.getNote());
