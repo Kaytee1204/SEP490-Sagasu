@@ -40,7 +40,7 @@ export default function AccountFilterBar({
           />
           <input
             type="text"
-            placeholder="Tìm theo Tên hoặc Email / Gmail..."
+            placeholder="Tìm theo Tên, Email hoặc Số điện thoại..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             style={{

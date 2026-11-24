@@ -50,7 +50,9 @@ public class AccountService {
     private static final String SPECIAL_CHARS = "@#$%!&*";
     private static final String PASSWORD_REGEX = "^(?=.*[^a-zA-Z0-9\\s])\\S{8,16}$";
     private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
-    private static final String PHONE_REGEX = "^(0|\\+84)[0-9]{9,10}$";
+    private static final String PHONE_REGEX = "^(0|\\+84)(3[2-9]|5[2689]|7[06-9]|8[1-9]|9[0-9])\\d{7}$";
+    private static final String PHONE_ERROR_MESSAGE =
+            "Số điện thoại không đúng định dạng Việt Nam (VD: 0912345678 hoặc +84912345678)";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final Set<AccountRole> MANAGER_ALLOWED_ROLES = EnumSet.of(
             AccountRole.USER,
@@ -91,8 +93,12 @@ public class AccountService {
         Pageable pageable = PageRequest.of(safePage - 1, safeSize, Sort.by(Sort.Direction.ASC, "id"));
 
         String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        String phoneKeyword = normalizedKeyword != null ? normalizedKeyword.replaceAll("\\s+", "") : null;
+        String altPhoneKeyword = buildAlternatePhoneKeyword(phoneKeyword);
         Page<Account> accountPage = accountRepository.searchAccounts(
                 normalizedKeyword,
+                phoneKeyword,
+                altPhoneKeyword,
                 role,
                 status,
                 pageable
@@ -172,14 +178,12 @@ public class AccountService {
 
         // Đổi số điện thoại
         if (request.getPhone() != null) {
-            String trimmedPhone = request.getPhone().trim();
-            if (StringUtils.hasText(trimmedPhone) && !trimmedPhone.matches(PHONE_REGEX)) {
-                throw new AppException(ErrorCode.BAD_REQUEST, "Số điện thoại không hợp lệ (phải gồm 10-11 chữ số, bắt đầu bằng 0 hoặc +84)");
-            }
+            String trimmedPhone = normalizeAndValidatePhone(request.getPhone());
             actor.setPhone(trimmedPhone);
         }
 
         // Đổi mật khẩu (nếu người dùng nhập mật khẩu mới)
+        boolean passwordChanged = false;
         if (StringUtils.hasText(request.getNewPassword())) {
             String trimmedPass = request.getNewPassword().trim();
             validatePasswordFormat(trimmedPass);
@@ -195,9 +199,14 @@ public class AccountService {
             }
             actor.setPasswordHash(passwordEncoder.encode(trimmedPass));
             actor.setMustChangePassword(false);
+            actor.setPasswordChangedAt(OffsetDateTime.now());
+            passwordChanged = true;
         }
 
         Account saved = accountRepository.save(actor);
+        if (passwordChanged) {
+            revokeAllRefreshTokens(saved.getId());
+        }
 
         LoginAuditLog auditLog = new LoginAuditLog();
         auditLog.setAccount(saved);
@@ -249,7 +258,8 @@ public class AccountService {
         account.setFullName(request.getFullName().trim());
         account.setEmail(normalizedEmail);
         if (request.getPhone() != null) {
-            account.setPhone(request.getPhone().trim());
+            String trimmedPhone = normalizeAndValidatePhone(request.getPhone());
+            account.setPhone(trimmedPhone);
         }
         account.setPasswordHash(passwordEncoder.encode(rawPassword));
         account.setRole(targetRole);
@@ -303,10 +313,7 @@ public class AccountService {
         }
 
         if (request.getPhone() != null) {
-            String trimmedPhone = request.getPhone().trim();
-            if (StringUtils.hasText(trimmedPhone) && !trimmedPhone.matches(PHONE_REGEX)) {
-                throw new AppException(ErrorCode.BAD_REQUEST, "Số điện thoại không hợp lệ (phải gồm 10-11 chữ số, bắt đầu bằng 0 hoặc +84)");
-            }
+            String trimmedPhone = normalizeAndValidatePhone(request.getPhone());
             account.setPhone(trimmedPhone);
         }
 
@@ -314,6 +321,8 @@ public class AccountService {
             String trimmedPass = request.getPassword().trim();
             validatePasswordFormat(trimmedPass);
             account.setPasswordHash(passwordEncoder.encode(trimmedPass));
+            account.setPasswordChangedAt(OffsetDateTime.now());
+            revokeAllRefreshTokens(account.getId());
         }
 
         if (request.getStatus() != null) {
@@ -527,6 +536,30 @@ public class AccountService {
         } catch (IOException ex) {
             throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không thể tạo file Excel mẫu");
         }
+    }
+
+    private String normalizeAndValidatePhone(String rawPhone) {
+        String trimmedPhone = rawPhone == null ? "" : rawPhone.trim().replaceAll("\\s+", "");
+        if (StringUtils.hasText(trimmedPhone) && !trimmedPhone.matches(PHONE_REGEX)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, PHONE_ERROR_MESSAGE);
+        }
+        return trimmedPhone;
+    }
+
+    private String buildAlternatePhoneKeyword(String compactKeyword) {
+        if (!StringUtils.hasText(compactKeyword)) {
+            return null;
+        }
+        if (compactKeyword.startsWith("+84") && compactKeyword.length() > 3) {
+            return "0" + compactKeyword.substring(3);
+        }
+        if (compactKeyword.startsWith("0") && compactKeyword.length() > 1) {
+            return "+84" + compactKeyword.substring(1);
+        }
+        if (compactKeyword.startsWith("84") && compactKeyword.length() > 3) {
+            return "0" + compactKeyword.substring(2);
+        }
+        return null;
     }
 
     private void validatePasswordFormat(String password) {

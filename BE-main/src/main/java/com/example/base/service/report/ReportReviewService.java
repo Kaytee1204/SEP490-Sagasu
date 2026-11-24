@@ -424,6 +424,12 @@ public class ReportReviewService {
             ReportQueueSql.APPEAL_STEP, ReportQueueSql.OTHER_APPEALS_PENDING), reportId);
   }
 
+  static boolean isP2pReport(Map<String, Object> report, Map<String, Object> appeal, Map<String, Object> current) {
+    if (!appeal.isEmpty()) return "P2P".equals(appeal.get("claim_type"));
+    return "HANDOVER_ISSUE".equals(report.get("kind")) && current.get("claim") instanceof Map<?, ?> claim
+        && "P2P".equals(claim.get("claim_type"));
+  }
+
   private static String caseKind(Map<String, Object> report, Map<String, Object> appeal) {
     return appeal.isEmpty() ? (String) report.get("kind") : "CLAIM_APPEAL";
   }
@@ -720,6 +726,8 @@ public class ReportReviewService {
       basis = Objects.toString(request.basis(), "").strip();
     String status = (String) r.get("status");
     var current = context.context(r);
+    boolean emailP2pOutcome = isP2pReport(r, appeal, current);
+    Long recipientWithClaimEmail = null;
     var before = new LinkedHashMap<String, Object>();
     before.put("reportStatus", status);
     String measure = request.measure();
@@ -818,9 +826,13 @@ public class ReportReviewService {
                 + conclusion.substring(0, Math.min(4800, conclusion.length())),due,reportId,holder,due);
         if (!afterHandover) holdItem(reportId, id(post, "post_id"), actor.getId(), conclusion);
         for (Long recipient : participantsFor(r)) {
-          if (holder.equals(recipient)) notifications.notifyUser(recipient,"REPORT_INFORMATION","Cần phản hồi về việc thu hồi món đồ",
-              conclusion,"/bao-cao/" + reportId + "#phan-hoi",false);
-          else publishToParticipant(reportId, recipient, "REPORT_RECOVERY_REQUESTED", "Yêu cầu thu hồi món đồ", conclusion);
+          if (holder.equals(recipient)) {
+            notifications.notifyUserWithEmail(recipient, "REPORT_INFORMATION", "Cần phản hồi về việc thu hồi món đồ",
+                conclusion, "/bao-cao/" + reportId + "#phan-hoi",
+                "Mở hồ sơ để xem hướng dẫn thu hồi và phản hồi trước " + NotificationService.formatVietnamDeadline(due) + ".");
+          } else {
+            publishToParticipant(reportId, recipient, "REPORT_RECOVERY_REQUESTED", "Yêu cầu thu hồi món đồ", conclusion);
+          }
         }
       }
       case "CONFIRM_ITEM_RECOVERY" -> {
@@ -852,6 +864,7 @@ public class ReportReviewService {
         if (request.appealFinding() == AppealFinding.INVALID_CLAIM && pendingAppealingClaim(r, current)) {
           claims.rejectClaimAfterAppeal(id(r, "claim_id"),
               claimNote(reportId, conclusion) + " Bạn không thể gửi lại yêu cầu trên bài đăng này.", user);
+          recipientWithClaimEmail = id(r, "reporter_id");
         }
         if (approvalId != null && request.appealFinding() == AppealFinding.INSUFFICIENT_EVIDENCE
             && Boolean.TRUE.equals(appeal.get("active"))) {
@@ -875,6 +888,7 @@ public class ReportReviewService {
           throw bad("Cần xác nhận đã đối chiếu căn cứ cho thấy người được chấp thuận không phải chủ món đồ.");
         if (!"OFFICE".equals(appeal.get("claim_type"))) {
           claims.reopenApprovalForReview(id(appeal, "approved_claim_id"), claimNote(reportId, conclusion), user);
+          recipientWithClaimEmail = id(appeal, "approved_recipient_id");
         }
         closeOtherAppeals(reportId, id(appeal, "approval_id"), actor.getId(), true);
         next = "RESOLVED";
@@ -898,7 +912,12 @@ public class ReportReviewService {
               : (giver ? "Hãy giao phụ kiện còn thiếu và phản hồi phần đã giao." : "Hãy xác nhận phụ kiện bạn thực tế nhận bổ sung.");
           jdbc.update("insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at,verification_kind) values(?,?,?,?,?,?)",
               reportId, party.recipientId(), actor.getId(), prompt + " " + conclusion.substring(0,Math.min(4500,conclusion.length())), due, "HANDOVER_CORRECTION");
-          publishToParticipant(reportId,party.recipientId(),"REPORT_INFORMATION",exchange ? "Cần đổi đúng món" : "Cần giao bổ sung phụ kiện",prompt);
+          long recipient = party.recipientId();
+          addReportRecipient(reportId, recipient);
+          notifications.notifyUserWithEmail(recipient, "REPORT_INFORMATION",
+              exchange ? "Cần đổi đúng món" : "Cần giao bổ sung phụ kiện", prompt,
+              "/bao-cao/" + reportId + "#phan-hoi",
+              "Mở hồ sơ để xem việc bạn cần làm và phản hồi trước " + NotificationService.formatVietnamDeadline(due) + ".");
         }
       }
       case "HANDOVER_VERIFY_HOLDER" -> {
@@ -981,19 +1000,18 @@ public class ReportReviewService {
       if (finderToReview != null) recipients.add(finderToReview);
       for (Long recipient : recipients) {
         boolean needsReview = Objects.equals(recipient, finderToReview);
-        jdbc.update(
-          "insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing",
-          reportId,
-          recipient
-        );
-        notifications.notifyUser(
-          recipient,
-          "REPORT_RESOLVED",
-          needsReview ? "Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt" : "Báo cáo #" + reportId + " đã có kết quả",
-          needsReview ? "Hồ sơ đã chấp thuận đã về chờ duyệt. Hãy đối chiếu các hồ sơ và chọn người nhận." : conclusion,
-          needsReview ? "/bai-dang/" + id(appeal, "post_id") + "/claims?claimStatus=PENDING" : "/bao-cao/" + reportId + "#ket-qua",
-          false
-        );
+        addReportRecipient(reportId, recipient);
+        String title = needsReview ? "Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt" : "Báo cáo #" + reportId + " đã có kết quả";
+        String reviewMessage = "Hồ sơ đã chấp thuận đã về chờ duyệt. Hãy đối chiếu các hồ sơ và chọn người nhận.";
+        String message = needsReview ? reviewMessage : conclusion;
+        String path = needsReview ? "/bai-dang/" + id(appeal, "post_id") + "/claims?claimStatus=PENDING"
+            : "/bao-cao/" + reportId + "#ket-qua";
+        if (emailP2pOutcome && !Objects.equals(recipient, recipientWithClaimEmail)) {
+          notifications.notifyUserWithEmail(recipient, "REPORT_RESOLVED", title, message, path,
+              needsReview ? reviewMessage : p2pOutcomeEmail(action));
+        } else {
+          notifications.notifyUser(recipient, "REPORT_RESOLVED", title, message, path, false);
+        }
       }
       if ("HANDOVER_ISSUE".equals(kind) && id(r, "claim_id") != null)
         chat.notifyHandoverChanged(id(r, "claim_id"));
@@ -1023,8 +1041,15 @@ public class ReportReviewService {
           "Kết luận vụ việc được lưu tại báo cáo #" + reportId + ".");
       closeInquiries(siblingId);
       jdbc.update("update report_hold set released_at=now() where report_id=? and released_at is null", siblingId);
-      publishToParticipant(siblingId, id(sibling, "reporter_id"), "REPORT_RESOLVED",
-          "Báo cáo #" + siblingId + " đã có kết quả", conclusion);
+      long recipient = id(sibling, "reporter_id");
+      addReportRecipient(siblingId, recipient);
+      notifications.notifyUser(
+          recipient,
+          "REPORT_RESOLVED",
+          reopen ? "Lượt xét duyệt đã được mở lại" : "Báo cáo #" + siblingId + " đã có kết quả",
+          conclusion,
+          "/bao-cao/" + siblingId + "#ket-qua",
+          reopen);
     }
   }
 
@@ -1042,8 +1067,23 @@ public class ReportReviewService {
   }
 
   private void publishToParticipant(long reportId, long recipient, String type, String title, String conclusion) {
-    jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing", reportId, recipient);
+    addReportRecipient(reportId, recipient);
     notifications.notifyUser(recipient, type, title, conclusion, "/bao-cao/" + reportId, false);
+  }
+
+  private void addReportRecipient(long reportId, long recipient) {
+    jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing", reportId, recipient);
+  }
+
+  private static String p2pOutcomeEmail(String action) {
+    return switch (action) {
+      case "APPEAL_KEEP" -> "Quản lý giữ kết quả xét duyệt hiện tại. Mở hồ sơ để xem kết luận và trạng thái bàn giao.";
+      case "APPEAL_WRONG_RECIPIENT", "HANDOVER_REOPEN" -> "Việc xét duyệt người nhận đã được mở lại. Mở hồ sơ để xem bước tiếp theo.";
+      case "HANDOVER_RETRY" -> "Hai bên cần hẹn giao lại. Mở hồ sơ để xem hướng dẫn.";
+      case "HANDOVER_CONTINUE" -> "Hai bên có thể tiếp tục xử lý việc trao trả. Mở hồ sơ để xem bước tiếp theo.";
+      case "HANDOVER_COMPLETED" -> "Quản lý đã ghi nhận hoàn tất bàn giao. Mở hồ sơ để xem kết quả.";
+      default -> "Quản lý đã ghi kết luận. Mở hồ sơ để xem kết quả và việc cần làm tiếp theo, nếu có.";
+    };
   }
 
   private static void requireKind(String actual, String expected) {

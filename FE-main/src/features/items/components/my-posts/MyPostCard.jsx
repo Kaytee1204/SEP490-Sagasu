@@ -40,7 +40,8 @@ export default function MyPostCard({ post, onDelete }) {
         </div>
       </div>
       <div className="my-post-state" aria-label="Trạng thái bài đăng">
-        <span className="my-post-moderation" data-status={post.moderationStatus}><StatusIcon size={14} aria-hidden="true" />{moderation.label}</span>
+        {(post.moderationStatus !== 'VISIBLE' || !['RETURNED', 'CLOSED'].includes(post.status)) &&
+          <span className="my-post-moderation" data-status={post.moderationStatus}><StatusIcon size={14} aria-hidden="true" />{moderation.label}</span>}
         {post.moderationStatus === 'VISIBLE' && <span className="my-post-handling" data-status={post.status}>
           {post.status === 'RETURNED' && <Check size={14} aria-hidden="true" />}{handling}
         </span>}
@@ -48,7 +49,7 @@ export default function MyPostCard({ post, onDelete }) {
     </div>
     <footer className="my-post-card-footer">
       {!isLost && <Link className={`my-post-claims-link${hasPendingClaims ? ' needs-review' : ''}`}
-        to={postClaimsPath(post.id, hasPendingClaims ? 'PENDING' : 'ALL')} state={fromState}>
+        to={postClaimsPath(post.id)} state={fromState}>
         <ClipboardList size={16} aria-hidden="true" />
         {hasPendingClaims ? 'Yêu cầu chờ bạn duyệt' : 'Xem yêu cầu nhận đồ'}
         {hasPendingClaims && <span>{post.pendingClaimCount}</span>}

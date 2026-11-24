@@ -14,7 +14,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { SavedPostsContext } from '@/features/items/context/SavedPostsContext';
 import { getMyPosts } from '@/features/items/api/postApi';
-import { getMyClaims, getReceivedClaims } from '@/features/claims/api/claimApi';
+import { getMyClaims, getPendingClaimReviewCount } from '@/features/claims/api/claimApi';
 import { getReportActionCounts } from '@/features/reports/api/reportApi';
 import { getUnreadCount } from '@/features/chat/api/chatApi';
 import './AccountSidebarLayout.css';
@@ -107,7 +107,6 @@ export default function AccountSidebarLayout() {
     postsPending: 0,
     claimsReceivedPending: 0,
     claimsSentPending: 0,
-    claimsPending: 0,
     reportActions: NO_REPORT_ACTIONS,
     unreadMessages: 0,
   });
@@ -122,7 +121,7 @@ export default function AccountSidebarLayout() {
       const results = await Promise.allSettled([
         getMyPosts(1, 'ALL', 'ALL'),
         getMyPosts(1, 'PENDING', 'ALL'),
-        getReceivedClaims(1, 'PENDING'),
+        getPendingClaimReviewCount(),
         getMyClaims(1, 'PENDING'),
         getReportActionCounts(),
         getUnreadCount(),
@@ -138,7 +137,6 @@ export default function AccountSidebarLayout() {
         postsPending: readTotal(results[1]),
         claimsReceivedPending: receivedPending,
         claimsSentPending: sentPending,
-        claimsPending: receivedPending + sentPending,
         reportActions: reportActions.status === 'fulfilled' ? reportActions.value ?? NO_REPORT_ACTIONS : NO_REPORT_ACTIONS,
         unreadMessages: readTotal(results[5]),
       });
@@ -179,11 +177,11 @@ export default function AccountSidebarLayout() {
           }
         : null,
     claims:
-      counts.claimsPending > 0
+      counts.claimsReceivedPending > 0
         ? {
-            count: counts.claimsPending,
+            count: counts.claimsReceivedPending,
             tone: 'warning',
-            title: `${counts.claimsPending} yêu cầu đang chờ duyệt`,
+            title: `${counts.claimsReceivedPending} yêu cầu đang chờ bạn xét duyệt`,
           }
         : null,
     reports:

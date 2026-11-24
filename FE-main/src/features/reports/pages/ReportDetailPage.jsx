@@ -112,6 +112,7 @@ function ReportDetail({ id }) {
         <button type="button" className="btn btn-ghost" onClick={reload}>Thử tải lại</button>
       </div>}
       {report && <>
+        <ReportProgress status={report.status} appeal={isAppeal} />
         <header className="report-card report-detail-overview">
           <div className="report-detail-heading">
             <div>
@@ -124,7 +125,18 @@ function ReportDetail({ id }) {
           <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
           {office && report.mine && report.report_type === 'HANDOVER_ISSUE' && !concluded &&
             <p className="report-detail-subject">Báo cáo đã gửi vẫn được xem xét sau khi hết hạn gửi sự cố.</p>}
-
+          {(submission || report.report_reason) && <section className="report-submission">
+            <h2>{isAppeal ? 'Nội dung tranh chấp' : 'Nội dung báo cáo'}{evidence.length > 0 && ` · ${evidence.length} ảnh`}</h2>
+            <dl className="report-detail-fields">
+              <div><dt>{isAppeal ? 'Lý do tranh chấp' : 'Lý do báo cáo'}</dt><dd>{report.report_reason || 'Chưa phân loại (báo cáo cũ)'}</dd></div>
+              {submission?.description && <div><dt>Mô tả</dt><dd className="report-description">{submission.description}</dd></div>}
+            </dl>
+            {evidence.length > 0 && <div className="report-evidence">
+              {evidence.map((item, index) => <button type="button" key={item.id} onClick={() => setImage(index)} aria-label={`Xem ${item.name}`}>
+                <img src={item.url} alt={item.name} loading="lazy" />
+              </button>)}
+            </div>}
+          </section>}
         </header>
         <section id="buoc-tiep-theo" tabIndex={-1} className={`report-card report-detail-section report-next-step${pending ? ' report-next-step-pending' : ''}`}>
           <div className="report-next-copy">
@@ -178,25 +190,6 @@ function ReportDetail({ id }) {
             {previousExchanges.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} canReply={false} onSaved={afterReply} />)}
           </details>}
         </section>}
-        {(submission || report.report_reason) && <section className="report-card report-detail-section">
-          <h2>{isAppeal ? 'Nội dung tranh chấp' : 'Nội dung báo cáo'}{evidence.length > 0 && ` · ${evidence.length} ảnh`}</h2>
-          <dl className="report-detail-fields">
-            <div><dt>{isAppeal ? 'Lý do tranh chấp' : 'Lý do báo cáo'}</dt><dd>{report.report_reason || 'Chưa phân loại (báo cáo cũ)'}</dd></div>
-            {submission?.description && <div><dt>Mô tả</dt><dd className="report-description">{submission.description}</dd></div>}
-          </dl>
-          {evidence.length > 0 && <div className="report-evidence">
-            {evidence.map((item, index) => <button type="button" key={item.id} onClick={() => setImage(index)} aria-label={`Xem ${item.name}`}>
-              <img src={item.url} alt={item.name} loading="lazy" />
-            </button>)}
-          </div>}
-        </section>}
-        {submission?.activities?.length > 0 && <details className="report-card report-history">
-          <summary>Lịch sử xử lý</summary>
-          <ReportProgress status={report.status} appeal={isAppeal} />
-          {submission.activities.map((activity, index) => <p key={index}>
-            {formatReportDate(activity.at)} · {reportStatuses[activity.status]}{activity.note && ` · ${activity.note}`}
-          </p>)}
-        </details>}
         {image !== null && <ClaimEvidencePreview images={evidence} initialIndex={image} onClose={() => setImage(null)} />}
       </>}
     </main>

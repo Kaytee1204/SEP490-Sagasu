@@ -81,6 +81,11 @@ public class JwtTokenProvider {
         return null;
     }
 
+    public Date extractIssuedAt(String token) {
+        Claims claims = extractAllClaims(token);
+        return claims.getIssuedAt();
+    }
+
     public Claims extractAllClaims(String token) {
         String cleaned = cleanToken(token);
         return Jwts.parser()

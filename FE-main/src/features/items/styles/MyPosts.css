@@ -6,26 +6,16 @@
 .my-posts-page.my-posts-embedded { padding-block: 0; }
 .my-posts-dashboard .my-posts-heading { margin-bottom: 20px; }
 .my-posts-dashboard .my-posts-heading h1 { margin: 0; color: #193f37; font-size: clamp(1.5rem, 2.6vw, 2rem); line-height: 1.3; }
-.my-posts-filter-panel { padding: 12px 14px; margin-bottom: 20px; border: 1px solid #d9e6df; border-radius: 14px; background: #fff; }
-.my-posts-filter-row { display: flex; align-items: center; gap: 14px; }
-.my-posts-type-row { padding-bottom: 11px; margin-bottom: 11px; border-bottom: 1px solid #e8eee9; }
-.my-posts-filter-label { flex: 0 0 70px; color: #647c6f; font-size: .74rem; font-weight: 550; }
-.my-post-type-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 11px; background: #eff4f0; }
-.my-post-type-tabs > button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 17px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #567263; font: inherit; font-size: .8rem; font-weight: 600; line-height: 1.4; cursor: pointer; }
-.my-post-type-tabs > button > svg { flex-shrink: 0; }
-.my-post-type-tabs > button:hover:not(.active) { background: #e4eee6; }
-.my-post-type-tabs > button.active { background: #fff; border-color: #d4e3d8; color: #216f56; box-shadow: 0 2px 5px #173c3508; }
-.my-post-type-tabs > button.active[data-type=LOST] { background: #fff2f2; border-color: #f0cfd0; color: #ad4e58; }
-.my-post-type-tabs > button.active[data-type=FOUND] { background: #e7f5ec; border-color: #b9dbc9; color: #247855; }
-.my-posts-filters { display: flex; flex-wrap: wrap; gap: 4px; }
-.my-posts-filters > button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 9px 15px; border: 1px solid transparent; border-radius: 9px; color: #5c786c; background: transparent; font: inherit; font-size: .8rem; font-weight: 550; line-height: 1.4; cursor: pointer; }
-.my-posts-filters > button > svg { flex-shrink: 0; }
-.my-posts-filters > button:hover { color: #286957; background: #f0f7f3; }
-.my-posts-filters > button.active { background: #216f61; border-color: #216f61; color: #fff; box-shadow: 0 2px 5px #173c350d; }
-.my-posts-tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 19px; padding: 0 6px; border-radius: 999px; background: rgba(33, 111, 97, 0.1); color: #2b5c4f; font-size: .71rem; font-weight: 700; line-height: 1; }
-.my-posts-tab-count.is-pending { background: #fef3c7; color: #b45309; }
-.my-posts-filters > button.active .my-posts-tab-count { background: rgba(255, 255, 255, 0.22); color: #fff; }
-.my-post-type-tabs > button.active .my-posts-tab-count { background: rgba(33, 111, 86, 0.12); color: inherit; }
+.my-posts-filter-panel { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; padding: 14px; margin-bottom: 20px; border: 1px solid #d9e6df; border-radius: 14px; background: #fff; }
+.my-posts-filter-row, .my-posts-type-filter { display: grid; gap: 7px; }
+.my-posts-filter-label { color: #506a5d; font-size: .75rem; font-weight: 600; }
+.my-posts-filters { display: flex; flex-wrap: wrap; gap: 7px; }
+.my-posts-filters > button { min-height: 40px; padding: 7px 13px; border: 1px solid #d9e6df; border-radius: 999px; color: #21453e; background: #fff; font: inherit; font-size: .8rem; font-weight: 650; cursor: pointer; }
+.my-posts-filters > button:hover { background: #f0f7f3; }
+.my-posts-filters > button[data-attention] { border-color: #f0c788; background: #fff7e7; color: #815014; }
+.my-posts-filters > button[aria-pressed="true"] { border-color: #216f61; background: #216f61; color: #fff; }
+.my-posts-filters > button[data-attention][aria-pressed="true"] { border-color: #a65c14; background: #a65c14; }
+.my-posts-type-filter select { min-width: 148px; min-height: 40px; padding: 6px 10px; border: 1px solid #d9e6df; border-radius: 8px; color: #21453e; background: #fff; font: inherit; font-size: .8rem; cursor: pointer; }
 .my-posts-results-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .my-posts-results-heading h2 { margin: 0; color: #476759; font-size: .88rem; font-weight: 650; }
 .my-posts-results-heading > span { display: inline-flex; align-items: center; gap: 6px; color: #6c8176; font-size: .73rem; }
@@ -135,9 +125,7 @@
   .my-posts-heading h1 { font-size: 1.5rem; }
 }
 @media(max-width:600px) {
-  .my-posts-filter-row { flex-direction: column; align-items: stretch; gap: 8px; }
-  .my-posts-filter-label { flex-basis: auto; }
-  .my-post-type-tabs > button { flex: 1; min-width: 0; padding-inline: 9px; }
+  .my-posts-filter-row, .my-posts-type-filter { width: 100%; }
 }
 @media(max-width:500px) {
   .my-posts-page.my-posts-dashboard { padding-inline: 16px; }

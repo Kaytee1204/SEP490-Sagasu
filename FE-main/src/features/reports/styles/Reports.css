@@ -73,16 +73,17 @@
 .report-detail-page { max-width:1000px; }
 .report-back { display:inline-flex; align-items:center; gap:7px; min-height:34px; color:#216a57; font-size:.85rem; font-weight:650; }
 .report-back:hover { text-decoration:underline; }
-.report-detail-overview, .report-detail-section, .report-history { margin:14px 0; border-color:#d8e5de; }
+.report-detail-overview, .report-detail-section { margin:14px 0; border-color:#d8e5de; }
 .report-detail-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:8px 14px; flex-wrap:wrap; }
 .report-card .report-detail-reference { margin:0 0 4px; color:#536c72; font-size:.78rem; }
 .report-card .report-detail-subject { margin:9px 0 3px; color:#536c72; font-size:.88rem; }
 .report-detail-page time { color:#536c72; font-size:.78rem; }
 .report-detail-section { scroll-margin-top:90px; }
-.report-detail-section h2, .report-progress h2, .report-history summary { color:#214a3f; font-size:.98rem; font-weight:700; }
-.report-history summary { cursor:pointer; }
-.report-progress { margin-top:18px; padding:14px; border:1px solid #e1ece8; border-radius:12px; background:#f8fbf9; }
+.report-detail-section h2, .report-progress h2, .report-submission h2 { color:#214a3f; font-size:.98rem; font-weight:700; }
+.report-progress { margin:14px 0; padding:14px; border:1px solid #e1ece8; border-radius:12px; background:#f8fbf9; }
 .report-progress p { margin:0; font-size:.84rem; color:#3f6252; }
+.report-submission { margin-top:14px; padding-top:14px; border-top:1px solid #e1ece8; }
+.report-submission .report-evidence { margin-bottom:0; }
 .report-detail-fields { display:grid; gap:13px; margin-top:12px; }
 .report-detail-fields dt { color:#536c72; font-size:.8rem; }
 .report-detail-fields dd { margin:4px 0 0; overflow-wrap:anywhere; }
@@ -155,6 +156,3 @@
 .report-inquiry, #ket-qua { scroll-margin-top: 86px; }
 .report-exchange-archive { margin-top: 10px; }
 .report-exchange-archive summary { color: #216a57; font-size: .88rem; font-weight: 650; cursor: pointer; }
-.report-detail-page details.report-history { padding-block: 0; }
-.report-detail-page .report-history > summary { padding-block: 12px; }
-.report-detail-page .report-history[open] { padding-bottom: 14px; }

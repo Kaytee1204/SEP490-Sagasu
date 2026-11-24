@@ -87,7 +87,7 @@ public class P2pHandoverService {
             notifications.notifyUser(c.getClaimant().getId(),"HANDOVER_RECORDED",
                 "Người nhặt đã lập biên bản bàn giao đồ (#" + c.getId() + ")",
                 "Người đăng bài \"" + c.getPost().getTitle() + "\" đã ghi nhận bàn giao đồ. Vui lòng kiểm tra và bấm Xác nhận đã nhận đồ (hoặc Báo cáo sự cố).",
-                "/bai-dang/" + c.getPost().getId() + "/claims/" + c.getId(),true);
+                "/bai-dang/" + c.getPost().getId() + "/claims/" + c.getId() + "#handover",true);
             return dto(c,handover,actor);
         });if(!inserted[0])images.cleanup(uploaded);return result;}catch(RuntimeException ex){images.cleanup(uploaded);throw ex;}
     }
@@ -178,10 +178,11 @@ public class P2pHandoverService {
             long other=c.getClaimant().getId()==actor?c.getPost().getAccount().getId():c.getClaimant().getId();
             jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing",
                     report.getId(),other);
-            notifications.notifyUser(other,"HANDOVER_DISPUTED",
+            notifications.notifyUserWithEmail(other,"HANDOVER_DISPUTED",
                 "Có báo cáo sự cố bàn giao đồ (#" + report.getId() + ")",
                 "Có báo cáo sự cố liên quan đến bài đăng \"" + c.getPost().getTitle() + "\". Lý do: " + reason,
-                "/bao-cao/" + report.getId(),true);
+                "/bao-cao/" + report.getId(),
+                "Có sự cố liên quan đến lượt trao trả. Mở hồ sơ để kiểm tra trạng thái và hướng dẫn tiếp theo.");
             notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",
                 "Báo cáo sự cố bàn giao P2P mới (#" + report.getId() + ")",
                 "Có báo cáo sự cố bàn giao cho hồ sơ #" + claimId + ". Lý do: " + reason,

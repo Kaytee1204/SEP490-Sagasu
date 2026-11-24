@@ -10,6 +10,12 @@ export const CLAIM_STATUS = {
 export const P2P_CLAIM_STEPS = ['Gửi yêu cầu', 'Xét duyệt', 'Ghi nhận giao đồ', 'Xác nhận nhận đồ'];
 
 export const HISTORY_STATUSES = ['COMPLETED', 'REJECTED', 'CANCELLED', 'CLOSED'];
+export const CLAIM_LIST_STATUSES = ['PENDING', 'APPROVED', 'HISTORY'];
+
+export function claimListStatus(value) {
+  if (HISTORY_STATUSES.includes(value)) return 'HISTORY';
+  return CLAIM_LIST_STATUSES.includes(value) ? value : 'PENDING';
+}
 
 export const rejectedAfterDispute = claim => claim.disputeOutcome === 'APPEAL_REJECT_CLAIM';
 export const disputeDismissed = claim =>
@@ -17,9 +23,8 @@ export const disputeDismissed = claim =>
 export const claimDisplayStatus = claim =>
   rejectedAfterDispute(claim) ? 'REJECTED' : disputeDismissed(claim) ? 'CLOSED' : claim.status;
 
-export function matchesClaimStatus(claim, status, incoming = false) {
+export function matchesClaimStatus(claim, status) {
   const displayStatus = claimDisplayStatus(claim);
-  if (status === 'ALL') return !rejectedAfterDispute(claim) && !(incoming && disputeDismissed(claim));
   if (status === 'HISTORY') return HISTORY_STATUSES.includes(displayStatus);
   return displayStatus === status;
 }
@@ -125,15 +130,14 @@ export function evidenceUrl(value) {
   }
 }
 
-export function postClaimsPath(postId, status = 'ALL', view = 'received') {
+export function postClaimsPath(postId, status, view = 'received') {
+  const listStatus = claimListStatus(status);
+  const params = new URLSearchParams();
   if (view === 'sent') {
-    const params = new URLSearchParams({ view: 'sent', postId: String(postId) });
-    if (status && status !== 'ALL') params.set('claimStatus', status);
-    return `/claim-cua-toi?${params}`;
+    params.set('view', 'sent');
+    params.set('postId', String(postId));
   }
-  const base = `/bai-dang/${encodeURIComponent(postId)}/claims`;
-  if (status && status !== 'ALL') {
-    return `${base}?${new URLSearchParams({ claimStatus: status })}`;
-  }
-  return base;
+  if (listStatus !== 'PENDING' || status === 'PENDING') params.set('claimStatus', listStatus);
+  const base = view === 'sent' ? '/claim-cua-toi' : `/bai-dang/${encodeURIComponent(postId)}/claims`;
+  return params.size ? `${base}?${params}` : base;
 }
