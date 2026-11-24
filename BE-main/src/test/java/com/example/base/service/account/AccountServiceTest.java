@@ -106,7 +106,7 @@ class AccountServiceTest {
         when(accountRepository.findById(999L)).thenReturn(Optional.empty());
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
         when(passwordEncoder.encode(anyString())).thenAnswer(inv -> "enc:" + inv.getArgument(0));
-        when(accountRepository.searchAccounts(any(), any(), any(), any()))
+        when(accountRepository.searchAccounts(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 1), 0));
     }
 
@@ -532,7 +532,7 @@ class AccountServiceTest {
 
     private Pageable capturedPageable() {
         ArgumentCaptor<Pageable> cap = ArgumentCaptor.forClass(Pageable.class);
-        verify(accountRepository).searchAccounts(any(), any(), any(), cap.capture());
+        verify(accountRepository).searchAccounts(any(), any(), any(), any(), any(), cap.capture());
         return cap.getValue();
     }
 
