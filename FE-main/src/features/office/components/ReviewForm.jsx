@@ -104,8 +104,8 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
               <strong>Hẹn người nhận đến văn phòng</strong>
               <p className="of-muted">
                 Email có nút đồng ý hoặc từ chối lịch hẹn, không cần đăng nhập.
-                Không phản hồi trong 12 giờ từ khi gửi thành công sẽ tự động bị
-                từ chối.
+                Người nhận có thể phản hồi trên hệ thống ngay khi lưu lịch. Sau
+                12 giờ không phản hồi, yêu cầu sẽ tự động bị từ chối.
               </p>
             </div>
             <label>

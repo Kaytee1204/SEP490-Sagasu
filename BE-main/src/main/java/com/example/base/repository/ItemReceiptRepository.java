@@ -16,12 +16,12 @@ public interface ItemReceiptRepository extends JpaRepository<ItemReceipt, Long>,
     boolean existsByStorageLocation_IdInAndStatusIn(java.util.Collection<Long> locations, java.util.Collection<String> statuses);
     @Query("""
         select r.id from ItemReceipt r
-        where (:filter = 'ALL' or r.status = :filter)
+        where r.recordedBy.id = :owner and (:filter = 'ALL' or r.status = :filter)
         and (locate(lower(:keyword), lower(r.title)) > 0 or locate(lower(:keyword), lower(r.receiptCode)) > 0
              or locate(lower(:keyword), lower(r.foundLocation)) > 0)
         order by r.recordedAt desc, r.id desc
         """)
-    Page<Long> findIntakeIds(@Param("keyword") String keyword, @Param("filter") String filter, Pageable pageable);
+    Page<Long> findIntakeIds(@Param("owner") long owner, @Param("keyword") String keyword, @Param("filter") String filter, Pageable pageable);
 
     @Query("select r from ItemReceipt r where r.id = :id")
     Optional<ItemReceipt> findIntake(@Param("id") Long id);

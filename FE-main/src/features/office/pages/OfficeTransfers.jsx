@@ -33,8 +33,7 @@ import "../StaffWorkspace.css";
 const statuses = [
   ["PENDING", "Đang chờ tiếp nhận"],
   ["UNSCHEDULED", "Cần hẹn lịch"],
-  ["AWAITING_REPLY", "Chờ phản hồi lịch"],
-  ["CONFIRMED", "Đã đồng ý lịch"],
+  ["SCHEDULED", "Đã hẹn mang đồ đến"],
   ["RECEIVED", "Đã nhận đồ"],
   ["REJECTED", "Đã từ chối"],
   ["CANCELLED", "Đã hủy yêu cầu"],
@@ -45,22 +44,14 @@ const STAFF_TRANSFER_TABS = [
   { value: "ALL", label: "Tất cả" },
   { value: "PENDING", label: "Đang chờ", tone: "warning" },
   { value: "UNSCHEDULED", label: "Cần hẹn lịch", tone: "warning" },
-  { value: "AWAITING_REPLY", label: "Chờ phản hồi" },
-  { value: "CONFIRMED", label: "Đã đồng ý lịch" },
+  { value: "SCHEDULED", label: "Đã hẹn mang đồ đến" },
   { value: "RECEIVED", label: "Đã nhận đồ" },
   { value: "REJECTED", label: "Đã từ chối" },
+  { value: "CANCELLED", label: "Đã hủy" },
 ];
 
 function progress(t) {
-  if (t.status !== "PENDING") return statuses.find(([s]) => s === t.status)?.[1];
-  if (!t.appointment || ["DECLINED", "EXPIRED"].includes(t.appointment.responseStatus)) {
-    return "Cần hẹn lịch";
-  }
-  return t.appointment.responseStatus === "CONFIRMED"
-    ? "Đã đồng ý lịch"
-    : t.appointment.responseStatus === "UNSENT"
-      ? "Chưa gửi được lịch"
-      : "Chờ phản hồi lịch";
+  return statuses.find(([s]) => s === transferStage(t))?.[1];
 }
 
 export default function OfficeTransfers({ mine = false }) {
@@ -73,7 +64,7 @@ export default function OfficeTransfers({ mine = false }) {
   const defaultStatus = mine ? "ALL" : "PENDING";
   const [filters, setFilters] = useState({
     page: Math.max(1, Number(params.get("page")) || 1),
-    status: params.get("status") || defaultStatus,
+    status: ["AWAITING_REPLY", "CONFIRMED"].includes(params.get("status")) ? "SCHEDULED" : params.get("status") || defaultStatus,
     q: params.get("q") || "",
     claimFilter: "ALL",
     timeRange: "ALL",
@@ -241,12 +232,12 @@ export default function OfficeTransfers({ mine = false }) {
                             {t.finder} · {date(t.requestedAt)}
                           </p>
                           {t.status === "PENDING" &&
-                            t.appointment &&
-                            !["DECLINED", "EXPIRED"].includes(t.appointment.responseStatus) && (
+                            t.appointment?.status === "SCHEDULED" && (
                               <p>
                                 <strong>{date(t.appointment.scheduledAt)}</strong>
                                 <br />
                                 {t.appointment.location}
+                                {t.appointment.intakeDeadline && <><br />Hạn tiếp nhận {date(t.appointment.intakeDeadline)}</>}
                               </p>
                             )}
                           {t.activeClaims > 0 && <p>{t.activeClaims} yêu cầu nhận lại đồ</p>}
@@ -259,16 +250,10 @@ export default function OfficeTransfers({ mine = false }) {
                         <div className="of-transfer-row-action">
                           <button
                             type="button"
-                            className={`of-button ${
-                              t.status === "PENDING" && t.appointment?.responseStatus === "PENDING"
-                                ? "of-primary"
-                                : ""
-                            }`}
+                            className="of-button"
                             onClick={() => setSelected(t.id)}
                           >
-                            {t.status === "PENDING" && t.appointment?.responseStatus === "PENDING"
-                              ? "Phản hồi lịch hẹn"
-                              : "Xem yêu cầu"}{" "}
+                            Xem yêu cầu{" "}
                             <ArrowRight size={16} />
                           </button>
                         </div>

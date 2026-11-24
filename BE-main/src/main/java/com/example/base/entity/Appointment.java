@@ -24,9 +24,13 @@ public class Appointment {
     @Column(name = "response_deadline") private OffsetDateTime responseDeadline;
     @Column(name = "responded_at") private OffsetDateTime respondedAt;
     @Column(name = "response_token_hash", length = 64) private String responseTokenHash;
+    public void openResponseWindow(OffsetDateTime now) {
+        responseStatus = "PENDING";
+        responseDeadline = now.plusHours(12);
+    }
     public void invitationSent(String hash, OffsetDateTime now) {
-        if (emailSentAt == null) { emailSentAt = now; responseDeadline = now.plusHours(12); }
-        responseTokenHash = hash; responseStatus = "PENDING";
+        if (emailSentAt == null) emailSentAt = now;
+        responseTokenHash = hash;
     }
     public boolean responseExpired(OffsetDateTime now) {
         return "PENDING".equals(responseStatus) && responseDeadline != null && !now.isBefore(responseDeadline);
@@ -36,9 +40,11 @@ public class Appointment {
         responseStatus = response; respondedAt = now; status = "CANCELLED";
         cancellationReason = reason; cancelledAt = now;
     }
-    public static Appointment schedule(Claim claim, Account actor, OffsetDateTime time, String location, String note) {
+    public static Appointment schedule(Claim claim, Account actor, OffsetDateTime time, String location, String note, OffsetDateTime now) {
         Appointment a = new Appointment(); a.claim = claim; a.createdBy = actor;
-        a.scheduledAt = time; a.location = location; a.note = note; return a;
+        a.scheduledAt = time; a.location = location; a.note = note;
+        a.openResponseWindow(now);
+        return a;
     }
     public void cancelByOffice(String reason) {
         status = "CANCELLED"; cancellationReason = reason; cancelledAt = OffsetDateTime.now();

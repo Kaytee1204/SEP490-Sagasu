@@ -232,7 +232,8 @@ public class OfficeClaimService {
                 c.getPost().reserveForClaim();
                 deadline=appeals.open(c);
                 if (deadline==null && request.scheduledAt()!=null) {
-                    if (!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1)))
+                    OffsetDateTime now=OffsetDateTime.now();
+                    if (!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
                         throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
                     if (clean(request.location())==null) throw bad("Nhập địa điểm nhận đồ.");
                     String recipient=clean(request.email());
@@ -241,7 +242,7 @@ public class OfficeClaimService {
                         throw bad("Cần email hợp lệ của người nhận để gửi lịch hẹn.");
                     c.contactEmail(recipient.toLowerCase(Locale.ROOT));
                     a=appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),
-                        request.location().strip(),clean(request.appointmentNote())));
+                        request.location().strip(),clean(request.appointmentNote()),now));
                 }
             }
             c.review(request.decision());
@@ -257,7 +258,7 @@ public class OfficeClaimService {
                 } else if("APPROVED".equals(request.decision())) {
                     notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_SCHEDULED",
                         "Yêu cầu nhận đồ #" + c.getId() + " được duyệt & có lịch hẹn mới",
-                        "Văn phòng đã lập lịch tại " + a.getLocation() + ". Hạn phản hồi là 12 giờ từ khi gửi thư mời.",
+                        "Văn phòng đã lập lịch tại " + a.getLocation() + ". Hãy phản hồi trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối.",
                         "/van-phong/claims/" + c.getId(),false);
                 } else if("REJECTED".equals(request.decision())) {
                     notifications.notifyUser(c.getClaimant().getId(),"CLAIM_REJECTED",
@@ -326,14 +327,18 @@ public class OfficeClaimService {
     private void participant(Claim c,Account actor) { if(actor.getRole()!=APPROVER&&(c.getClaimant()==null||!c.getClaimant().getId().equals(actor.getId()))) throw new AppException(ErrorCode.FORBIDDEN); }
     private void version(Claim c,Long v) { if(v==null||v!=c.getVersion()) throw new AppException(ErrorCode.CLAIM_STALE); }
     private ClaimView view(Claim c,boolean detail,boolean reviewer,long actorId,OfficeClaimProgress.Progress phase) {
-        var appointment=detail?appointments.findFirstByClaim_IdOrderByIdDesc(c.getId()).map(a->new AppointmentView(a.getId(),a.getScheduledAt(),a.getLocation(),a.getNote(),a.getStatus(),a.getResponseStatus(),a.getResponseDeadline(),a.getCancellationReason())).orElse(null):null;
+        var appointment=detail?appointments.findFirstByClaim_IdOrderByIdDesc(c.getId()).map(a->new AppointmentView(a.getId(),a.getScheduledAt(),a.getLocation(),a.getNote(),a.getStatus(),a.getResponseStatus(),a.getResponseDeadline(),a.getCancellationReason(),a.getEmailSentAt())).orElse(null):null;
         boolean ownRequest = c.getClaimant() != null && c.getClaimant().getId() == actorId;
         boolean canReview = reviewer && !ownRequest && "PENDING".equals(c.getStatus())
             && !"RESERVED".equals(c.getPost().getStatus());
+        boolean canInspect = detail && reviewer && !ownRequest;
+        ItemReceipt receipt = canInspect ? receipts.findByPostId(c.getPost().getId()).orElse(null) : null;
+        String receiptIdentifiers = receipt == null ? null : clean(receipt.getPrivateIdentifiers());
+        String identifiers = canInspect && receiptIdentifiers == null ? clean(c.getPost().getPrivateIdentifiers()) : receiptIdentifiers;
         return new ClaimView(c.getId(),c.getPost().getId(),c.getPost().getTitle(),c.getStatus(),c.getSubmissionChannel(),
             c.getClaimant()==null?null:c.getClaimant().getId(),c.getClaimantName(),detail?recipient(c):null,detail?c.getClaimantPhone():null,
-            person(c.getCreatedBy()),detail?c.getDescription():null,detail?c.getEvidenceNote():null,detail&&reviewer?c.getPost().getPrivateIdentifiers():null,c.getVersion(),c.getCreatedAt(),
-            detail&&reviewer?receipts.findByPostId(c.getPost().getId()).map(management::receiptView).orElse(null):null,
+            person(c.getCreatedBy()),detail?c.getDescription():null,detail?c.getEvidenceNote():null,identifiers,c.getVersion(),c.getCreatedAt(),
+            receipt==null?null:management.receiptView(receipt),
             detail?c.getEvidence().stream().map(e->new ClaimDetailDto.EvidenceDto(e.getId(),storage.readUrl(e.getStorageKey(),null),e.getOriginalName(),e.getMimeType(),e.getSizeBytes())).toList():List.of(),
             detail?activities.findByClaim_IdOrderByCreatedAtAscIdAsc(c.getId()).stream().map(e->new ClaimDetailDto.ActivityDto(e.getId(),e.getAction(),person(e.getActor()),e.getFromStatus(),e.getToStatus(),e.getReason(),e.getCreatedAt())).toList():List.of(),appointment,detail?c.getAnswers().stream().map(a->new AnswerView(a.getId(),a.getQuestionLabel(),a.getAnswerText(),a.getSectionTitle())).toList():List.of(),phase.stage(),phase.scheduledAt(),canReview,ownRequest,
             detail && ownRequest && ClaimService.canWithdrawOfficeRequest(c),

@@ -175,7 +175,7 @@ public class OfficeClaimController {
     @PreAuthorize("hasRole('APPROVER')")
     @Operation(
             summary = "[10.7] Cán bộ văn phòng xét duyệt Claim (APPROVE kèm đặt lịch hẹn nhận đồ / REJECT / NEEDS_INFO)",
-            description = "Khi APPROVE sẽ tạo lịch hẹn (appointment) và gửi Email kèm link xác nhận trong 12 giờ cho người nhận."
+            description = "Khi lịch nhận đồ được lưu, người nhận có 12 giờ để phản hồi trên web hoặc qua liên kết email."
     )
     public ApiResponse<ReviewResult> review(
             @PathVariable("id") long id,
@@ -188,7 +188,7 @@ public class OfficeClaimController {
     @PreAuthorize("hasRole('APPROVER')")
     @Operation(
             summary = "[10.8] Gửi lại Email mời xác nhận lịch hẹn nhận đồ tại Văn phòng",
-            description = "Tạo token mới (hiệu lực 12 giờ) và gửi lại email lịch hẹn đến nhận đồ cho Claimant."
+            description = "Gửi lại email kèm liên kết mới, giữ nguyên hạn phản hồi của lịch đã mở."
     )
     public ApiResponse<ReviewResult> resend(
             @PathVariable("id") long id,
