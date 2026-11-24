@@ -24,8 +24,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -35,8 +33,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class P2pClaimAppealService {
-    private static final DateTimeFormatter LOCAL_DEADLINE = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")
-            .withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
     private static final Set<String> RESERVED = Set.of("RESERVED");
     private final JdbcTemplate jdbc;
     private final ClaimRepository claims;
@@ -86,8 +82,8 @@ public class P2pClaimAppealService {
                     "Một yêu cầu nhận đồ khác đã được chấp thuận",
                     "Một yêu cầu khác cho bài «" + selected.getPost().getTitle()
                             + "» đã được chấp thuận. Nếu bạn có căn cứ sở hữu, hãy gửi tranh chấp trước "
-                            + LOCAL_DEADLINE.format(deadline) + ".",
-                    claimPath(claimant), false);
+                            + NotificationService.formatVietnamDeadline(deadline) + ".",
+                    claimPath(claimant), !selected.isOffice());
         }
         return deadline;
     }
@@ -258,7 +254,7 @@ public class P2pClaimAppealService {
                         request.approvalId(), claimId, report.getId());
                 used[0] = true;
                 if (!claim.isOffice()) chat.notifyAppealChanged(report.getId());
-                notifyAppeal(post, actor, report.getId());
+                notifyAppeal(post, actor, report.getId(), request.approvalId());
                 return new Submitted(report.getId());
             });
             if (!used[0]) images.cleanup(uploaded);
@@ -314,7 +310,7 @@ public class P2pClaimAppealService {
                 rs.getObject(3, UUID.class), rs.getString(4)), approvalId, appellantClaimId).stream().findFirst().orElse(null);
     }
 
-    private void notifyAppeal(Post post, long actor, long reportId) {
+    private void notifyAppeal(Post post, long actor, long reportId, long approvalId) {
         notifications.notifyRoles(List.of(AccountRole.MANAGER), actor, "REPORT_CREATED",
                 "Có tranh chấp kết quả nhận đồ (#" + reportId + ")",
                 "Đối chiếu hồ sơ rồi chọn giữ kết quả hoặc ghi kết luận cần xét lại người nhận.",
@@ -322,13 +318,16 @@ public class P2pClaimAppealService {
         claims.findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(post.getId(), "APPROVED").ifPresent(selected -> {
             String title = "Bàn giao được tạm dừng để xử lý tranh chấp";
             String message = "Có tranh chấp cho bài «" + post.getTitle() + "». Hãy chờ kết quả trước khi giao đồ.";
+            boolean emailFirstDispute = !selected.isOffice() && !Boolean.TRUE.equals(jdbc.queryForObject("""
+                    select exists(select 1 from p2p_claim_appeal where approval_id=? and report_id<>?)
+                    """, Boolean.class, approvalId, reportId));
             if (selected.isOffice()) {
                 notifications.notifyRoles(List.of(AccountRole.APPROVER), actor, "CLAIM_APPEAL_FILED", title, message,
                     "/approver/office-claims/" + selected.getId(), false);
             } else {
-                notifications.notifyUser(post.getAccount().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), false);
+                notifications.notifyUser(post.getAccount().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), emailFirstDispute);
             }
-            notifications.notifyUser(selected.getClaimant().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), false);
+            notifications.notifyUser(selected.getClaimant().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), emailFirstDispute);
         });
     }
 

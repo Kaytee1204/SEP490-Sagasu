@@ -72,6 +72,11 @@ public class ClaimController {
         return response(200, service.grouped(page, size, status, sent, postId, user));
     }
 
+    @GetMapping("/claims/pending-review-count")
+    public ResponseEntity<ApiResponse<Long>> pendingReviewCount(@AuthenticationPrincipal CustomUserDetails user) {
+        return response(200, service.pendingReviewCount(user));
+    }
+
     @GetMapping("/claims/mine")
     @Operation(
             summary = "[6.5] UC42: Danh sách yêu cầu nhận đồ do tôi đã gửi (phân trang)",

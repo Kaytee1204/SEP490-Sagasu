@@ -8,6 +8,7 @@ import com.example.base.security.CustomUserDetails;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.office.OfficeAccess;
 import jakarta.validation.constraints.*;
+import java.time.OffsetDateTime;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -108,7 +109,12 @@ public class ReportInquiryService {
   public void remindBeforeDeadline() {
     var due = jdbc.queryForList("""
         with pending as (
-          select i.inquiry_id from report_inquiry i join report r using (report_id)
+          select i.inquiry_id, r.kind = 'HANDOVER_ISSUE'
+                   and coalesce(approval.custody_mode, c.claim_type) = 'P2P' as email_enabled
+          from report_inquiry i join report r using (report_id)
+          left join claim c on c.claim_id = r.claim_id
+          left join p2p_claim_appeal appeal on appeal.report_id = r.report_id
+          left join p2p_claim_approval approval on approval.approval_id = appeal.approval_id
           where i.responded_at is null and i.closed_at is null and i.reminded_at is null
             and i.response_due_at > now() and i.response_due_at <= now() + interval '1 hour'
             and r.status in ('OPEN', 'IN_REVIEW')
@@ -118,7 +124,8 @@ public class ReportInquiryService {
         )
         update report_inquiry i set reminded_at = now()
         from pending where i.inquiry_id = pending.inquiry_id
-        returning i.report_id, i.recipient_id
+        returning i.report_id, i.recipient_id, pending.email_enabled,
+          to_char(i.response_due_at at time zone 'Asia/Ho_Chi_Minh', 'HH24:MI DD/MM/YYYY') as local_deadline
         """);
     for (var inquiry : due) {
       long reportId = id(inquiry, "report_id");
@@ -126,9 +133,12 @@ public class ReportInquiryService {
           id(inquiry, "recipient_id"),
           "REPORT_INFORMATION",
           "Sắp đến hạn bổ sung báo cáo #" + reportId,
-          "Mở báo cáo để xem yêu cầu và gửi thông tin trước hạn.",
+          Boolean.TRUE.equals(inquiry.get("email_enabled"))
+            ? "Bạn có một yêu cầu chưa phản hồi. Vui lòng mở hồ sơ và phản hồi trước "
+                + inquiry.get("local_deadline") + " (giờ Việt Nam)."
+            : "Mở báo cáo để xem yêu cầu và gửi thông tin trước hạn.",
           "/bao-cao/" + reportId + "#phan-hoi",
-          false
+          Boolean.TRUE.equals(inquiry.get("email_enabled"))
       );
     }
   }
@@ -144,6 +154,7 @@ public class ReportInquiryService {
     if (reviews.canFollowUpRecovery(r)) reviews.requireAssignee(r, actor, request.version());
     else reviews.processing(r, actor, request.version());
     var appeal = reviews.appeal(report);
+    var current = context.context(r);
     String question = Objects.toString(request.question(), "").strip();
     String kind = request.verificationKind();
     if ("P2P".equals(appeal.get("claim_type")) && reviews.open(r)) {
@@ -155,13 +166,13 @@ public class ReportInquiryService {
       };
       if (!request.recipientId().equals(expected)) throw bad("Người nhận không đúng vai trò cần xác minh.");
     } else if ("HANDOVER_ISSUE".equals(r.get("kind")) && appeal.isEmpty() && reviews.open(r) && reviews.issuePhase(report) != null) {
-      if (HandoverVerification.options(r, context.context(r)).stream().noneMatch(option ->
+      if (HandoverVerification.options(r, current).stream().noneMatch(option ->
           option.kind().equals(kind) && request.recipientId().equals(option.recipientId())))
         throw bad("Hãy chọn việc xác minh phù hợp với người giao hoặc người nhận.");
     } else if (kind != null) throw bad("Yêu cầu xác minh này chỉ dành cho tranh chấp P2P đang xử lý.");
     if (question.isBlank()) throw bad("Hãy ghi rõ chi tiết cần xác minh.");
     if (
-      !reviews.participants(context.context(r)).contains(request.recipientId())
+      !reviews.participants(current).contains(request.recipientId())
     ) throw bad("Người được hỏi phải liên quan đến vụ việc.");
     if (
       Boolean.TRUE.equals(
@@ -173,13 +184,14 @@ public class ReportInquiryService {
         )
       )
     ) throw bad("Người này đang có câu hỏi chưa phản hồi.");
+    OffsetDateTime deadline = reviews.inquiryResponseDue();
     jdbc.update(
       "insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at,verification_kind) values(?,?,?,?,?,?)",
       report,
       request.recipientId(),
       actor.getId(),
       question,
-      reviews.inquiryResponseDue(),
+      deadline,
       kind
     );
     jdbc.update(
@@ -195,14 +207,15 @@ public class ReportInquiryService {
       "Đang đối chiếu thêm thông tin với người liên quan.",
       question
     );
-    notifications.notifyUser(
-      request.recipientId(),
-      "REPORT_INFORMATION",
-      "Cần bổ sung thông tin cho báo cáo #" + report,
-      question,
-      "/bao-cao/" + report + "#phan-hoi",
-      false
-    );
+    String title = "Cần bổ sung thông tin cho báo cáo #" + report;
+    String replyPath = "/bao-cao/" + report + "#phan-hoi";
+    if (ReportReviewService.isP2pReport(r, appeal, current)) {
+      notifications.notifyUserWithEmail(request.recipientId(), "REPORT_INFORMATION", title, question, replyPath,
+          "Quản lý cần bạn xác minh thông tin. Vui lòng mở hồ sơ và phản hồi trước "
+              + NotificationService.formatVietnamDeadline(deadline) + ".");
+    } else {
+      notifications.notifyUser(request.recipientId(), "REPORT_INFORMATION", title, question, replyPath, false);
+    }
     return reviews.detail(report, user);
   }
 

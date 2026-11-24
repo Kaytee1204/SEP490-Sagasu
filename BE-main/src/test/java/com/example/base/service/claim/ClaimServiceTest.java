@@ -663,7 +663,8 @@ class ClaimServiceTest {
         verify(activities).save(any(ClaimActivity.class));
         verify(chatConversations, never()).forApprovedClaim(any());
         ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
-        verify(notifications).notifyUser(eq(20L), eq("CLAIM_REJECTED"), anyString(), msg.capture(), anyString(), eq(true));
+        verify(notifications).notifyUserWithEmail(eq(20L), eq("CLAIM_REJECTED"), anyString(), msg.capture(), anyString(),
+                eq("Yêu cầu nhận đồ của bạn đã bị từ chối. Mở hồ sơ để xem kết quả và lý do."));
         assertTrue(msg.getValue().contains("Wrong colour"));
     }
 

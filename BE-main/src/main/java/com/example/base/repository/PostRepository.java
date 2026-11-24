@@ -35,16 +35,17 @@ public interface PostRepository extends JpaRepository<Post, Long>, org.springfra
             @Param("fromTime") OffsetDateTime fromTime, @Param("untilTime") OffsetDateTime untilTime,
             Pageable pageable);
 
-    @Query(value = """
-            select p.id from Post p where p.createdBy.id=:authorId and p.deletedAt is null
-              and (:filter='ALL' or p.moderationStatus=:filter)
+    String MY_POST_FILTER = """
+            from Post p where p.createdBy.id=:authorId and p.deletedAt is null
+              and (:filter='ALL' or p.moderationStatus=:filter
+                   or (:filter='ACTIVE' and p.moderationStatus='VISIBLE' and p.status not in ('RETURNED','CLOSED'))
+                   or (:filter='HISTORY' and (p.moderationStatus in ('REJECTED','HIDDEN')
+                       or (p.moderationStatus='VISIBLE' and p.status in ('RETURNED','CLOSED')))))
               and (:postType='ALL' or p.postType=:postType)
-            order by p.createdAt desc, p.id desc
-            """, countQuery = """
-            select count(p) from Post p where p.createdBy.id=:authorId and p.deletedAt is null
-              and (:filter='ALL' or p.moderationStatus=:filter)
-              and (:postType='ALL' or p.postType=:postType)
-            """)
+            """;
+
+    @Query(value = "select p.id " + MY_POST_FILTER + " order by p.createdAt desc, p.id desc",
+            countQuery = "select count(p) " + MY_POST_FILTER)
     Page<Long> findMyIds(@Param("authorId") long authorId, @Param("filter") String filter,
                          @Param("postType") String postType, Pageable pageable);
 

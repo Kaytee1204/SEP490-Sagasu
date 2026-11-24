@@ -546,8 +546,8 @@ class ReportReviewServiceTest {
         verifyStatusUpdate("IN_REVIEW");
         verify(jdbc).update(contains("insert into report_hold"), eq(5L), eq(10L), eq(1L), eq("Conclusion"));
         verify(notifications).notifyUser(7L, "REPORT_RECOVERY_REQUESTED", "Yêu cầu thu hồi món đồ", "Conclusion", "/bao-cao/5", false);
-        verify(notifications).notifyUser(8L, "REPORT_INFORMATION", "Cần phản hồi về việc thu hồi món đồ",
-                "Conclusion", "/bao-cao/5#phan-hoi", false);
+        verify(notifications).notifyUserWithEmail(eq(8L), eq("REPORT_INFORMATION"), eq("Cần phản hồi về việc thu hồi món đồ"),
+                eq("Conclusion"), eq("/bao-cao/5#phan-hoi"), contains("phản hồi trước"));
         verifyNoInteractions(claims);
     }
 
@@ -566,8 +566,9 @@ class ReportReviewServiceTest {
         service.act(5L, new ReportReviewService.Action(3L, "APPEAL_KEEP", "Conclusion", "Basis", null,
                 false, null, false, ReportReviewService.AppealFinding.INVALID_CLAIM), user);
 
-        if ("P2P".equals(claimType)) verify(claimAppeals).releaseWindowIfUncontested(25L);
-        else verifyNoInteractions(claimAppeals);
+        verify(claimAppeals).releaseWindowIfUncontested(25L);
+        verify(notifications).notifyUser(eq(7L), eq("REPORT_RESOLVED"), anyString(), eq("Conclusion"), anyString(), eq(false));
+        verify(notifications, never()).notifyUserWithEmail(eq(7L), eq("REPORT_RESOLVED"), anyString(), anyString(), anyString(), anyString());
         verify(claims).rejectClaimAfterAppeal(eq(41L), contains("Bạn không thể gửi lại"), eq(user));
         verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
                 eq("APPEAL_REJECT_CLAIM"), eq("Conclusion"), eq("Basis"), anyString(), anyString());
@@ -595,7 +596,8 @@ class ReportReviewServiceTest {
     void confirmingWrongRecipientReopensTheApprovalRoundAndNotifiesTheFinder() {
         report.put("kind", "HANDOVER_ISSUE");
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
-                "active", true, "can_reopen_approval", true, "post_id", 10L, "finder_id", 8L, "waiting_other_appeals", true));
+                "active", true, "can_reopen_approval", true, "post_id", 10L, "finder_id", 8L,
+                "claim_type", "P2P", "waiting_other_appeals", true));
         rows(jdbc, "where appeal.approval_id=? and r.report_id<>?", row("report_id", 6L, "reporter_id", 9L, "status", "OPEN"));
         when(jdbc.update(startsWith("update report set status='RESOLVED'"), anyString(), eq(1L), eq(6L))).thenReturn(1);
         assertThat(service.detail(5L, user).get("actions")).isEqualTo(List.of("APPEAL_KEEP", "APPEAL_WRONG_RECIPIENT"));
@@ -612,9 +614,9 @@ class ReportReviewServiceTest {
         verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L));
         verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(6L));
         verify(jdbc).update(startsWith("update report set status='RESOLVED'"), contains("đã được mở lại"), eq(1L), eq(6L));
-        verify(notifications).notifyUser(eq(8L), eq("REPORT_RESOLVED"), eq("Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt"),
-                anyString(), eq("/bai-dang/10/claims?claimStatus=PENDING"), eq(false));
-        verify(notifications).notifyUser(eq(9L), eq("REPORT_RESOLVED"), anyString(), anyString(), eq("/bao-cao/6"), eq(false));
+        verify(notifications).notifyUserWithEmail(eq(8L), eq("REPORT_RESOLVED"), eq("Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt"),
+                anyString(), eq("/bai-dang/10/claims?claimStatus=PENDING"), contains("chọn người nhận"));
+        verify(notifications).notifyUser(eq(9L), eq("REPORT_RESOLVED"), anyString(), anyString(), eq("/bao-cao/6#ket-qua"), eq(true));
         verify(chat).notifyAppealChanged(5L);
         verifyStatusUpdate("RESOLVED");
         verify(claims).reopenApprovalForReview(40L, "Báo cáo #5: Conclusion", user);

@@ -24,6 +24,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.util.HtmlUtils;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -33,6 +35,9 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 @Slf4j
 public class NotificationService {
+
+    private static final DateTimeFormatter VIETNAM_DEADLINE = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")
+            .withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
 
     private final NotificationRepository notifications;
     private final NotificationPreferenceRepository preferences;
@@ -140,6 +145,21 @@ public class NotificationService {
             String targetUrl,
             boolean sendEmail
     ) {
+        dispatch(recipientId, type, title, content, targetUrl, sendEmail, content);
+    }
+
+    @Transactional
+    public void notifyUserWithEmail(Long recipientId, String type, String title, String content,
+                                    String targetUrl, String emailContent) {
+        dispatch(recipientId, type, title, content, targetUrl, true, emailContent);
+    }
+
+    public static String formatVietnamDeadline(OffsetDateTime deadline) {
+        return VIETNAM_DEADLINE.format(deadline) + " (giờ Việt Nam)";
+    }
+
+    private void dispatch(Long recipientId, String type, String title, String content,
+                          String targetUrl, boolean sendEmail, String emailContent) {
         if (recipientId == null) {
             return;
         }
@@ -186,7 +206,7 @@ public class NotificationService {
                 }
                 if (shouldEmail && isDeliverableEmail(recipientEmail)) {
                     CompletableFuture.runAsync(() ->
-                            sendNotificationEmail(recipientEmail, recipientName, title, content, targetUrl)
+                            sendNotificationEmail(recipientEmail, recipientName, title, emailContent, targetUrl)
                     );
                 }
             };

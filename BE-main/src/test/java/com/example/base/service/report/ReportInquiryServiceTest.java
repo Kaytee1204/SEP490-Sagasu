@@ -135,11 +135,16 @@ class ReportInquiryServiceTest {
     void p2pVerificationUsesOnlyTheParticipantForTheSelectedPurpose() {
         report.put("reporter_id", 7L);
         when(reviews.participants(any())).thenReturn(Set.of(7L, 8L, 9L));
+        var deadline = OffsetDateTime.parse("2026-11-24T09:00:00Z");
+        when(reviews.inquiryResponseDue()).thenReturn(deadline);
         var appeal = row("claim_type", "P2P", "active", true, "can_reopen_approval", true,
                 "finder_id", 9L, "approved_recipient_id", 8L);
         when(reviews.appeal(5L)).thenReturn(appeal);
         service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Ảnh nào cho thấy dấu riêng?", "OWNERSHIP"), managerUser);
         service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "Vết xước nằm ở đâu?", "DISCREPANCY"), managerUser);
+        verify(notifications).notifyUserWithEmail(eq(7L), eq("REPORT_INFORMATION"), anyString(),
+                eq("Ảnh nào cho thấy dấu riêng?"), eq("/bao-cao/5#phan-hoi"),
+                eq("Quản lý cần bạn xác minh thông tin. Vui lòng mở hồ sơ và phản hồi trước 16:00 24/11/2026 (giờ Việt Nam)."));
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser), "chọn");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "?", "OWNERSHIP"), managerUser), "vai trò");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "?", null), managerUser), "chọn");
@@ -176,6 +181,19 @@ class ReportInquiryServiceTest {
         verify(notifications).notifyUser(7L, "REPORT_INFORMATION", "Sắp đến hạn bổ sung báo cáo #5",
                 "Mở báo cáo để xem yêu cầu và gửi thông tin trước hạn.", "/bao-cao/5#phan-hoi", false);
         verifyNoMoreInteractions(notifications);
+    }
+
+    @Test
+    void emailsP2pReminderWithExactDeadline() {
+        when(jdbc.queryForList(contains("set reminded_at = now()")))
+                .thenReturn(List.of(row("report_id", 5L, "recipient_id", 7L,
+                        "email_enabled", true, "local_deadline", "16:00 24/11/2026")));
+
+        service.remindBeforeDeadline();
+
+        verify(notifications).notifyUser(7L, "REPORT_INFORMATION", "Sắp đến hạn bổ sung báo cáo #5",
+                "Bạn có một yêu cầu chưa phản hồi. Vui lòng mở hồ sơ và phản hồi trước 16:00 24/11/2026 (giờ Việt Nam).",
+                "/bao-cao/5#phan-hoi", true);
     }
 
     // ---------- mine / results ----------

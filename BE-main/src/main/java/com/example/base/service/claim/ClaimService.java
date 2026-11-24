@@ -178,6 +178,16 @@ public class ClaimService {
         return page(claims.findReceived(actor.getId(), filter(status), pageable(page, size)), page, size);
     }
 
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public long pendingReviewCount(CustomUserDetails user) {
+        var pendingIds = claims.findPendingReviewIds(activeActor(user).getId());
+        if (pendingIds.isEmpty()) return 0;
+        long endedByDispute = claims.findLatestDisputeOutcomes(pendingIds).stream()
+                .filter(outcome -> ClaimRepository.disputeEndsReview((String) outcome[1]))
+                .count();
+        return pendingIds.size() - endedByDispute;
+    }
+
     @Transactional(readOnly = true)
     public ClaimPageDto office(int page, int size, String status, CustomUserDetails user) {
         Account actor = activeActor(user);
@@ -297,13 +307,13 @@ public class ClaimService {
                     true
             );
         } else {
-            notifications.notifyUser(
+            notifications.notifyUserWithEmail(
                     claim.getClaimant().getId(),
                     "CLAIM_REJECTED",
                     "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối",
                     "Chủ bài đăng \"" + post.getTitle() + "\" đã từ chối yêu cầu nhận đồ của bạn. Lý do: " + request.reason(),
                     "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
-                    true
+                    "Yêu cầu nhận đồ của bạn đã bị từ chối. Mở hồ sơ để xem kết quả và lý do."
             );
         }
         return result(claim);
@@ -372,10 +382,15 @@ public class ClaimService {
         claim.review("REJECTED");
         activities.save(new ClaimActivity(claim, manager, "REJECT", "PENDING", reason));
         claims.flush();
-        notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_REJECTED",
-                "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối", reason,
-                claim.isOffice() ? "/van-phong/claims/" + claim.getId()
-                        : "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId(), true);
+        String title = "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối";
+        if (claim.isOffice()) {
+            notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_REJECTED", title, reason,
+                    "/van-phong/claims/" + claim.getId(), true);
+        } else {
+            notifications.notifyUserWithEmail(claim.getClaimant().getId(), "CLAIM_REJECTED", title, reason,
+                    "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId(),
+                    "Yêu cầu nhận đồ của bạn đã bị từ chối. Mở hồ sơ để xem kết quả và lý do.");
+        }
     }
 
     private void reopenApproval(Claim claim, Post post, Account actor, String reason) {
@@ -385,11 +400,12 @@ public class ClaimService {
         claims.flush();
         appeals.reopen(claim);
         chatConversations.notifyChanged(claim);
-        notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_APPROVAL_REVOKED",
+        notifications.notifyUserWithEmail(claim.getClaimant().getId(), "CLAIM_APPROVAL_REVOKED",
                 "Đã thu hồi chấp thuận yêu cầu nhận đồ #" + claim.getId(),
                 "Yêu cầu cho bài đăng " + post.getTitle() + " được đưa về chờ xét duyệt. Lý do: "
                         + reason.strip() + ". Cuộc trò chuyện được giữ để xem lịch sử.",
-                "/bai-dang/" + post.getId() + "/claims/" + claim.getId(), true);
+                "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
+                "Chấp thuận đã được thu hồi và hồ sơ của bạn đã quay về chờ xét duyệt. Mở hồ sơ để xem lý do.");
     }
 
     private boolean revocable(Claim claim) {

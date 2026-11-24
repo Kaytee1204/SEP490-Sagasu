@@ -7,11 +7,12 @@ import { getPostDetail } from '@/features/items/api/postApi';
 import { getGroupedClaims } from '../api/claimApi';
 import {
   CLAIM_STATUS,
-  HISTORY_STATUSES,
+  CLAIM_LIST_STATUSES,
   TIME_RANGE_OPTIONS,
   claimDate,
   claimDetailPath,
   claimDisplayStatus,
+  claimListStatus,
   claimShortDate,
   claimShortTime,
   matchesClaimStatus,
@@ -57,11 +58,7 @@ function PostClaimsContent({ postId }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [status, setStatus] = useState(() => {
-    const urlStatus = searchParams.get('claimStatus');
-    if (urlStatus && (urlStatus === 'ALL' || urlStatus === 'HISTORY' || CLAIM_STATUS[urlStatus])) return urlStatus;
-    return 'ALL';
-  });
+  const status = claimListStatus(searchParams.get('claimStatus'));
   const [timeRange, setTimeRange] = useState(() => {
     const urlRange = searchParams.get('timeRange');
     return urlRange && VALID_TIME_RANGES.has(urlRange) ? urlRange : 'ALL';
@@ -110,7 +107,6 @@ function PostClaimsContent({ postId }) {
     const nextTo = next.toDate !== undefined ? next.toDate : toDate;
     const nextSort = next.sortOrder ?? sortOrder;
 
-    setStatus(nextStatus);
     setTimeRange(nextRange);
     setFromDate(nextFrom);
     setToDate(nextTo);
@@ -118,7 +114,7 @@ function PostClaimsContent({ postId }) {
 
     const updated = new URLSearchParams(searchParams);
     if (nextStatus !== status) updated.delete(`reviewPage_${postId}`);
-    if (nextStatus === 'ALL') updated.delete('claimStatus');
+    if (nextStatus === 'PENDING') updated.delete('claimStatus');
     else updated.set('claimStatus', nextStatus);
 
     if (nextRange === 'ALL') {
@@ -149,9 +145,9 @@ function PostClaimsContent({ postId }) {
     const byTimeAll = timeRange === 'ALL'
       ? raw
       : raw.filter(c => matchesTimeFilter(c.createdAt, timeRange, fromDate, toDate));
-    const counts = Object.fromEntries(['ALL', 'PENDING', 'APPROVED', 'HISTORY']
-      .map(value => [value, byTimeAll.filter(c => matchesClaimStatus(c, value, true)).length]));
-    const byStatus = byTimeAll.filter(c => matchesClaimStatus(c, status, true));
+    const counts = Object.fromEntries(CLAIM_LIST_STATUSES
+      .map(value => [value, byTimeAll.filter(c => matchesClaimStatus(c, value)).length]));
+    const byStatus = byTimeAll.filter(c => matchesClaimStatus(c, status));
     const sorted = [...byStatus].sort((a, b) => {
       const diff = (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || (b.id - a.id);
       return sortOrder === 'OLDEST' ? -diff : diff;
@@ -159,17 +155,16 @@ function PostClaimsContent({ postId }) {
     return {
       allClaims: raw,
       visibleClaims: sorted,
-      pendingCount: raw.filter(c => matchesClaimStatus(c, 'PENDING', true)).length,
+      pendingCount: raw.filter(c => matchesClaimStatus(c, 'PENDING')).length,
       approvedCount: raw.filter(c => c.status === 'APPROVED').length,
       latestClaim: raw[0] || null,
       statusCounts: counts,
     };
   }, [group, status, timeRange, fromDate, toDate, sortOrder]);
 
-  const historySelected = status === 'HISTORY' || HISTORY_STATUSES.includes(status);
-  const activeFilter = historySelected ? 'HISTORY' : status;
-  const hasAnyFilter = status !== 'ALL' || timeRange !== 'ALL' || sortOrder !== 'NEWEST';
-  const onlyArchived = status === 'ALL' && statusCounts.ALL === 0 && statusCounts.HISTORY > 0;
+  const hasAnyFilter = timeRange !== 'ALL' || sortOrder !== 'NEWEST';
+  const onlyArchived = status === 'PENDING' && statusCounts.PENDING === 0
+    && statusCounts.APPROVED === 0 && statusCounts.HISTORY > 0;
 
   const displayTitle = group?.postTitle || post?.title || `Bài đăng #${postId}`;
   const displayThumb = group?.postThumbnailUrl || post?.images?.[0]?.url || post?.images?.[0]?.imageUrl || null;
@@ -253,7 +248,6 @@ function PostClaimsContent({ postId }) {
             <span className="claim-list-filter-label">Trạng thái</span>
             <div className="claim-list-status-filters" role="group" aria-label="Lọc trạng thái yêu cầu">
               {[
-                { value: 'ALL', label: `Tất cả (${statusCounts.ALL})`, warning: false },
                 { value: 'PENDING', label: `Chờ xét duyệt (${statusCounts.PENDING})`, warning: statusCounts.PENDING > 0 },
                 { value: 'APPROVED', label: `Đang nhận đồ (${statusCounts.APPROVED})`, warning: false },
                 { value: 'HISTORY', label: `Lịch sử (${statusCounts.HISTORY})`, warning: false },
@@ -261,8 +255,8 @@ function PostClaimsContent({ postId }) {
                 <button
                   key={btn.value}
                   type="button"
-                  className={`${activeFilter === btn.value ? 'active' : ''} ${btn.warning ? 'is-warning' : ''}`.trim()}
-                  aria-pressed={activeFilter === btn.value}
+                  className={`${status === btn.value ? 'active' : ''} ${btn.warning ? 'is-warning' : ''}`.trim()}
+                  aria-pressed={status === btn.value}
                   onClick={() => syncParams({ status: btn.value })}
                 >
                   {btn.label}
@@ -270,22 +264,6 @@ function PostClaimsContent({ postId }) {
               ))}
             </div>
           </div>
-
-          {historySelected && (
-            <div className="claim-list-history-filter">
-              <label htmlFor="post-claim-history-status">Trạng thái trong lịch sử</label>
-              <select
-                id="post-claim-history-status"
-                value={status}
-                onChange={event => syncParams({ status: event.target.value })}
-              >
-                <option value="HISTORY">Tất cả lịch sử</option>
-                {HISTORY_STATUSES.map(value => (
-                  <option key={value} value={value}>{CLAIM_STATUS[value]}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <ClaimTimeFilter
             timeRange={timeRange}
@@ -314,18 +292,22 @@ function PostClaimsContent({ postId }) {
       ) : !visibleClaims.length ? (
         <div className="claim-list-empty">
           <Inbox size={32} aria-hidden="true" />
-          <h3>{onlyArchived ? 'Các yêu cầu đã được chuyển vào lịch sử' : hasAnyFilter ? 'Không có hồ sơ phù hợp với bộ lọc' : 'Chưa có yêu cầu nhận đồ nào cho bài đăng này'}</h3>
+          <h3>{onlyArchived ? 'Các yêu cầu đã được chuyển vào lịch sử'
+            : hasAnyFilter ? 'Không có hồ sơ phù hợp với bộ lọc'
+            : allClaims.length > 0 ? 'Chưa có hồ sơ trong mục này' : 'Chưa có yêu cầu nhận đồ nào cho bài đăng này'}</h3>
           {onlyArchived ? (
             <button type="button" className="btn btn-ghost" onClick={() => syncParams({ status: 'HISTORY' })}>Xem lịch sử</button>
           ) : <>
-            <p>{hasAnyFilter ? 'Thử thay đổi khoảng thời gian hoặc trạng thái để xem các hồ sơ còn lại.' : 'Khi có người gửi yêu cầu nhận lại món đồ này, hồ sơ sẽ hiển thị tại đây.'}</p>
+            <p>{hasAnyFilter ? 'Thử thay đổi khoảng thời gian hoặc trạng thái để xem các hồ sơ còn lại.'
+              : allClaims.length > 0 ? 'Chọn mục trạng thái khác để xem các hồ sơ còn lại.'
+              : 'Khi có người gửi yêu cầu nhận lại món đồ này, hồ sơ sẽ hiển thị tại đây.'}</p>
             {hasAnyFilter ? (
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => syncParams({ status: 'ALL', timeRange: 'ALL', fromDate: '', toDate: '', sortOrder: 'NEWEST' })}
+                onClick={() => syncParams({ timeRange: 'ALL', fromDate: '', toDate: '', sortOrder: 'NEWEST' })}
               >
-                Xóa tất cả bộ lọc
+                Đặt lại thời gian và sắp xếp
               </button>
             ) : (
               <Link className="btn btn-ghost" to={backPath}>Quay lại danh sách yêu cầu</Link>
@@ -376,7 +358,7 @@ function PostClaimsContent({ postId }) {
 
                 <div className="claim-modern-action-cell col-center">
                   <span className="claim-modern-action-pill">
-                    {matchesClaimStatus(claim, 'PENDING', true) && post?.status === 'OPEN' ? 'Xem & duyệt' : 'Xem hồ sơ'}
+                    {matchesClaimStatus(claim, 'PENDING') && post?.status === 'OPEN' ? 'Xem & duyệt' : 'Xem hồ sơ'}
                     <ArrowRight size={15} aria-hidden="true" />
                   </span>
                 </div>

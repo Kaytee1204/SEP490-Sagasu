@@ -91,6 +91,16 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     @Query("select c from Claim c where c.claimType='P2P' and c.post.account.id=:finderId and (:status='ALL' or c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED'))) order by case when c.status='PENDING' then 0 else 1 end, c.createdAt desc, c.id desc")
     Page<Claim> findReceived(@Param("finderId") long finderId, @Param("status") String status, Pageable pageable);
 
+    @Query("""
+        select c.id from Claim c
+        where c.claimType = 'P2P' and c.post.account.id = :finderId and c.status = 'PENDING'
+          and not exists (
+              select approved.id from Claim approved
+              where approved.post.id = c.post.id and approved.claimType = 'P2P' and approved.status = 'APPROVED'
+          )
+        """)
+    List<Long> findPendingReviewIds(@Param("finderId") long finderId);
+
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})
     @Query("select c from Claim c where c.post.id=:postId and ((c.claimType='P2P' and c.post.account.id=:actorId) or (c.claimType='OFFICE' and :approver=true)) and (:status='ALL' or c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED'))) order by c.createdAt desc, c.id desc")
     Page<Claim> findOnPost(@Param("postId") long postId, @Param("actorId") long actorId, @Param("approver") boolean approver, @Param("status") String status, Pageable pageable);

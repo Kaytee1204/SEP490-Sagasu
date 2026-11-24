@@ -1,0 +1,1 @@
+ALTER TABLE p2p_handover ADD COLUMN IF NOT EXISTS receipt_reminded_at TIMESTAMPTZ;
