@@ -32,10 +32,12 @@ export function useAccountDashboard() {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    phone: '',
     password: '',
     role: 'USER',
     status: 'ACTIVE',
   });
+  const [modalError, setModalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Import Excel Modal state
@@ -82,10 +84,12 @@ export function useAccountDashboard() {
   }, [fetchAccounts]);
 
   const openCrudModal = (mode, account = null) => {
+    setModalError('');
     if (mode === 'edit' && account) {
       setFormData({
         fullName: account.fullName || '',
         email: account.email || '',
+        phone: account.phone || '',
         password: '',
         role: account.role || 'USER',
         status: account.status || 'ACTIVE',
@@ -95,6 +99,7 @@ export function useAccountDashboard() {
       setFormData({
         fullName: '',
         email: '',
+        phone: '',
         password: '',
         role: 'USER',
         status: 'ACTIVE',
@@ -105,29 +110,46 @@ export function useAccountDashboard() {
 
   const submitCrud = async (e) => {
     e.preventDefault();
+    setModalError('');
 
     const trimmedName = (formData.fullName || '').trim();
     const trimmedEmail = (formData.email || '').trim();
+    const trimmedPhone = (formData.phone || '').trim().replace(/\s+/g, '');
     const trimmedPass = (formData.password || '').trim();
 
     if (trimmedName.length < 2 || trimmedName.length > 150) {
-      showToast('Tên người dùng phải từ 2 đến 150 ký tự', 'error');
+      const msg = 'Tên người dùng phải từ 2 đến 150 ký tự';
+      setModalError(msg);
+      showToast(msg, 'error');
       return;
     }
 
     if (!trimmedEmail || /\s/.test(trimmedEmail)) {
-      showToast('Email không được để trống hoặc chứa khoảng trắng', 'error');
+      const msg = 'Email không được để trống hoặc chứa khoảng trắng';
+      setModalError(msg);
+      showToast(msg, 'error');
       return;
     }
 
     if (trimmedEmail.toLowerCase() !== 'admin' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      showToast('Vui lòng nhập địa chỉ Email hợp lệ (VD: user01@gmail.com)', 'error');
+      const msg = 'Vui lòng nhập địa chỉ Email hợp lệ (VD: user01@gmail.com)';
+      setModalError(msg);
+      showToast(msg, 'error');
+      return;
+    }
+
+    if (trimmedPhone && !/^(0|\+84)(3[2-9]|5[2689]|7[06-9]|8[1-9]|9[0-9])\d{7}$/.test(trimmedPhone)) {
+      const msg = 'Số điện thoại không đúng định dạng Việt Nam (VD: 0912345678 hoặc +84912345678)';
+      setModalError(msg);
+      showToast(msg, 'error');
       return;
     }
 
     if (trimmedPass) {
       if (trimmedPass.length < 8 || trimmedPass.length > 16 || /\s/.test(trimmedPass) || !/[^a-zA-Z0-9\s]/.test(trimmedPass)) {
-        showToast('Mật khẩu phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không có khoảng trắng', 'error');
+        const msg = 'Mật khẩu phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không có khoảng trắng';
+        setModalError(msg);
+        showToast(msg, 'error');
         return;
       }
     }
@@ -138,6 +160,7 @@ export function useAccountDashboard() {
         const payload = {
           fullName: trimmedName,
           email: trimmedEmail,
+          phone: trimmedPhone || undefined,
           role: formData.role,
           status: formData.status,
         };
@@ -154,6 +177,7 @@ export function useAccountDashboard() {
         const payload = {
           fullName: trimmedName,
           email: trimmedEmail,
+          phone: trimmedPhone,
           role: formData.role,
           status: formData.status,
         };
@@ -163,10 +187,13 @@ export function useAccountDashboard() {
         const updated = await accountApi.updateAccount(crudModal.data.id, payload);
         showToast(`Đã cập nhật tài khoản #${updated.id} (${updated.email})`);
       }
+      setModalError('');
       setCrudModal({ isOpen: false, mode: 'create', data: null });
       fetchAccounts();
     } catch (err) {
-      showToast(err?.message || 'Thao tác lưu tài khoản thất bại', 'error');
+      const msg = err?.message || 'Thao tác lưu tài khoản thất bại';
+      setModalError(msg);
+      showToast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -247,6 +274,8 @@ export function useAccountDashboard() {
     setCrudModal,
     formData,
     setFormData,
+    modalError,
+    setModalError,
     submitting,
     openCrudModal,
     submitCrud,

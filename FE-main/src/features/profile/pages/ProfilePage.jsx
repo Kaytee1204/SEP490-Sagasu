@@ -1,5 +1,5 @@
 import { useState, useEffect, useEffectEvent } from 'react';
-import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   MapPin,
   ChevronRight,
@@ -91,7 +91,8 @@ const COMMUNITY_RULES = [
 ];
 
 export default function ProfilePage() {
-  const { user, isPureAdmin, refreshProfile, updateUser } = useAuth();
+  const { user, isPureAdmin, refreshProfile, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
   const outletCtx = useOutletContext() || {};
   const accountBadges = outletCtx.accountBadges || {};
   const [searchParams, setSearchParams] = useSearchParams();
@@ -179,11 +180,11 @@ export default function ProfilePage() {
     event.preventDefault();
     setInfoFeedback(null);
 
-    const trimmedPhone = (phoneInput || '').trim();
-    if (trimmedPhone && !/^(0|\+84)[0-9]{9,10}$/.test(trimmedPhone)) {
+    const trimmedPhone = (phoneInput || '').trim().replace(/\s+/g, '');
+    if (trimmedPhone && !/^(0|\+84)(3[2-9]|5[2689]|7[06-9]|8[1-9]|9[0-9])\d{7}$/.test(trimmedPhone)) {
       setInfoFeedback({
         type: 'error',
-        message: 'Số điện thoại không hợp lệ (10–11 chữ số, bắt đầu bằng 0 hoặc +84).',
+        message: 'Số điện thoại không đúng định dạng Việt Nam (VD: 0912345678 hoặc +84912345678).',
       });
       return;
     }
@@ -258,12 +259,16 @@ export default function ProfilePage() {
         currentPassword,
         newPassword: trimmedNew,
       });
-      await refreshProfile();
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      if (wantsPassword) setSearchParams({}, { replace: true });
-      setPasswordFeedback({ type: 'success', message: 'Đổi mật khẩu thành công!' });
+      await logout();
+      navigate('/dang-nhap', {
+        replace: true,
+        state: {
+          notice: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
+        },
+      });
     } catch (err) {
       setPasswordFeedback({ type: 'error', message: err?.message || 'Đổi mật khẩu thất bại.' });
     } finally {

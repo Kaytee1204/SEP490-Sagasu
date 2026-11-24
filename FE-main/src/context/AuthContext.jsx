@@ -2,60 +2,43 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '@/features/auth/api/authApi';
 import { accountApi } from '@/features/account/api/accountApi';
+import { apiClient } from '@/services/apiClient';
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY_USER = 'timdo_auth_user';
-const STORAGE_KEY_TOKEN = 'timdo_auth_token';
+const LEGACY_STORAGE_KEYS = ['timdo_auth_user', 'timdo_auth_token'];
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const savedUser = localStorage.getItem(STORAGE_KEY_USER);
-      if (!savedUser) return null;
-      const parsed = JSON.parse(savedUser);
-      if (parsed && parsed.fullName) {
-        parsed.fullName = String(parsed.fullName).replace(/\s*\((Manager|Admin)\)/gi, '');
-      }
-      return parsed;
-    } catch {
-      return null;
-    }
-  });
-
-  const [token, setToken] = useState(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY_TOKEN) || null;
-    } catch {
-      return null;
-    }
-  });
-
+  // Không lưu phiên đăng nhập vào localStorage — mỗi lần vào/tải lại web đều yêu cầu đăng nhập lại cho mọi role
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Xóa sạch dữ liệu đăng nhập cũ nếu trước đó từng được lưu trong localStorage
   useEffect(() => {
-    if (user) {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(STORAGE_KEY_USER);
+    try {
+      LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    } catch {
+      // ignore storage errors
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (token) {
-      localStorage.setItem(STORAGE_KEY_TOKEN, token);
-    } else {
-      localStorage.removeItem(STORAGE_KEY_TOKEN);
-    }
+    apiClient.setToken(token);
   }, [token]);
+
+  const applySession = (nextToken, nextAccount) => {
+    apiClient.setToken(nextToken || null);
+    setToken(nextToken || null);
+    setUser(nextAccount || null);
+  };
 
   const login = async (email, password) => {
     setLoading(true);
     try {
       const data = await authApi.login(email, password);
       if (data && !data.requiresOtp && data.accessToken && data.account) {
-        setToken(data.accessToken);
-        setUser(data.account);
+        applySession(data.accessToken, data.account);
       }
       return data;
     } finally {
@@ -68,8 +51,7 @@ export function AuthProvider({ children }) {
     try {
       const data = await authApi.loginWithGoogle(payload);
       if (data && !data.requiresOtp && data.accessToken && data.account) {
-        setToken(data.accessToken);
-        setUser(data.account);
+        applySession(data.accessToken, data.account);
       }
       return data;
     } finally {
@@ -82,8 +64,7 @@ export function AuthProvider({ children }) {
     try {
       const data = await authApi.verifyOtp(email, otp, purpose);
       if (data && data.accessToken && data.account) {
-        setToken(data.accessToken);
-        setUser(data.account);
+        applySession(data.accessToken, data.account);
       }
       return data;
     } finally {
@@ -96,7 +77,9 @@ export function AuthProvider({ children }) {
   };
 
   const confirmChangePassword = async (email, otp, newPassword) => {
-    return await authApi.confirmChangePassword(email, otp, newPassword);
+    const result = await authApi.confirmChangePassword(email, otp, newPassword);
+    await logout();
+    return result;
   };
 
   const forgotPassword = async (email) => {
@@ -108,10 +91,14 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    apiClient.setToken(null);
     setUser(null);
     setToken(null);
-    localStorage.removeItem(STORAGE_KEY_USER);
-    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    try {
+      LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    } catch {
+      // ignore storage errors
+    }
   };
 
   const refreshProfile = async () => {

@@ -265,14 +265,15 @@ public class AuthService {
             throw new AppException(ErrorCode.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
         }
 
+        OffsetDateTime now = OffsetDateTime.now();
         account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         account.setMustChangePassword(false);
         account.setFailedLoginCount(0);
         account.setLockedUntil(null);
+        account.setPasswordChangedAt(now);
         accountRepository.save(account);
 
         List<RefreshToken> activeTokens = refreshTokenRepository.findByAccount_IdAndRevokedAtIsNull(account.getId());
-        OffsetDateTime now = OffsetDateTime.now();
         for (RefreshToken token : activeTokens) {
             token.setRevokedAt(now);
         }
@@ -439,18 +440,19 @@ public class AuthService {
 
         // DaiHV integration: reset credentials only unlocks automatic password-failure locks,
         // not an administrative suspension imposed while resolving a report.
+        OffsetDateTime now = OffsetDateTime.now();
         boolean passwordFailureLock=account.getFailedLoginCount()>=5 && account.getLockedUntil()!=null;
         account.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         account.setMustChangePassword(false);
         account.setFailedLoginCount(0);
         account.setLockedUntil(null);
+        account.setPasswordChangedAt(now);
         if (account.getStatus() == AccountStatus.SUSPENDED && passwordFailureLock) {
             account.setStatus(AccountStatus.ACTIVE);
         }
         accountRepository.save(account);
 
         List<RefreshToken> activeTokens = refreshTokenRepository.findByAccount_IdAndRevokedAtIsNull(account.getId());
-        OffsetDateTime now = OffsetDateTime.now();
         for (RefreshToken token : activeTokens) {
             token.setRevokedAt(now);
         }

@@ -65,6 +65,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 userDetails.isAccountNonLocked(),
                                 userDetails.isAccountNonExpired());
                         request.setAttribute("jwt_auth_error", "Tài khoản đang bị khóa, hết hạn hoặc đã ngừng hoạt động");
+                    } else if (userDetails instanceof CustomUserDetails customUserDetails
+                            && customUserDetails.getPasswordChangedAt() != null
+                            && isTokenIssuedBeforePasswordChange(jwt, customUserDetails.getPasswordChangedAt())) {
+                        log.warn("JWT Auth rejected for user [{}]: password changed at {}",
+                                userDetails.getUsername(),
+                                customUserDetails.getPasswordChangedAt());
+                        request.setAttribute("jwt_auth_error", "Mật khẩu đã được thay đổi. Vui lòng đăng nhập lại.");
                     } else {
                         Collection<? extends GrantedAuthority> authorities = buildAuthorities(userDetails);
                         UsernamePasswordAuthenticationToken authentication =
@@ -84,6 +91,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isTokenIssuedBeforePasswordChange(String jwt, java.time.OffsetDateTime passwordChangedAt) {
+        java.util.Date issuedAt = jwtTokenProvider.extractIssuedAt(jwt);
+        if (issuedAt == null) {
+            return true;
+        }
+        return issuedAt.toInstant().isBefore(passwordChangedAt.toInstant().minusSeconds(1));
     }
 
     private UserDetails resolveUserDetails(String email, Long accountId) {

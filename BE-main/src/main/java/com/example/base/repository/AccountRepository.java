@@ -49,10 +49,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
                    :keyword IS NULL OR :keyword = ''
                    OR LOWER(a.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(COALESCE(a.fullName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR REPLACE(COALESCE(a.phone, ''), ' ', '') LIKE CONCAT('%', :phoneKeyword, '%')
+                   OR (:altPhoneKeyword IS NOT NULL AND :altPhoneKeyword <> '' AND REPLACE(COALESCE(a.phone, ''), ' ', '') LIKE CONCAT('%', :altPhoneKeyword, '%'))
               )
             """)
     Page<Account> searchAccounts(
             @Param("keyword") String keyword,
+            @Param("phoneKeyword") String phoneKeyword,
+            @Param("altPhoneKeyword") String altPhoneKeyword,
             @Param("role") AccountRole role,
             @Param("status") AccountStatus status,
             Pageable pageable

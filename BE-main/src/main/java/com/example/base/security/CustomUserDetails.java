@@ -20,6 +20,7 @@ public class CustomUserDetails implements UserDetails {
     private final AccountStatus status;
     private final OffsetDateTime lockedUntil;
     private final OffsetDateTime validUntil;
+    private final OffsetDateTime passwordChangedAt;
 
     public CustomUserDetails(Account account) {
         this.id = account.getId();
@@ -29,6 +30,7 @@ public class CustomUserDetails implements UserDetails {
         this.status = account.getStatus();
         this.lockedUntil = account.getLockedUntil();
         this.validUntil = account.getValidUntil();
+        this.passwordChangedAt = account.getPasswordChangedAt();
     }
 
     public Long getId() {
@@ -45,6 +47,10 @@ public class CustomUserDetails implements UserDetails {
 
     public AccountStatus getStatus() {
         return status;
+    }
+
+    public OffsetDateTime getPasswordChangedAt() {
+        return passwordChangedAt;
     }
 
     @Override

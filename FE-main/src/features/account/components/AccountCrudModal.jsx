@@ -7,6 +7,8 @@ export default function AccountCrudModal({
   setCrudModal,
   formData,
   setFormData,
+  modalError,
+  setModalError,
   submitCrud,
   submitting,
 }) {
@@ -57,6 +59,24 @@ export default function AccountCrudModal({
         </h3>
 
         <form onSubmit={submitCrud} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {modalError && (
+            <div
+              role="alert"
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                fontSize: '0.82rem',
+                fontWeight: 500,
+                lineHeight: 1.45,
+              }}
+            >
+              {modalError}
+            </div>
+          )}
+
           {/* Tên người dùng */}
           <div>
             <label
@@ -106,7 +126,42 @@ export default function AccountCrudModal({
               required
               placeholder="VD: user01@gmail.com"
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) => {
+                if (modalError && setModalError) setModalError('');
+                setFormData({ ...formData, email: e.target.value });
+              }}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                outline: 'none',
+                fontSize: '0.85rem',
+              }}
+            />
+          </div>
+
+          {/* Số điện thoại */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                marginBottom: '6px',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              Số điện thoại Việt Nam (tùy chọn)
+            </label>
+            <input
+              type="tel"
+              placeholder="VD: 0912345678 hoặc +84912345678"
+              value={formData.phone || ''}
+              onChange={(e) => {
+                if (modalError && setModalError) setModalError('');
+                setFormData({ ...formData, phone: e.target.value });
+              }}
               style={{
                 width: '100%',
                 padding: '9px 12px',

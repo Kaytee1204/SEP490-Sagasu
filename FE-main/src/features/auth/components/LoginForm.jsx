@@ -26,7 +26,6 @@ export default function LoginForm({ initialMode = 'login' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   // OTP Login states (nếu luồng đăng nhập yêu cầu OTP)
   const [otpCode, setOtpCode] = useState('');
@@ -44,7 +43,7 @@ export default function LoginForm({ initialMode = 'login' }) {
 
   // General feedback states (dòng chữ đỏ/xanh hiển thị trực tiếp trên form)
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [success, setSuccess] = useState(location.state?.notice || '');
   const [loading, setLoading] = useState(false);
 
   const { login, verifyOtp } = useAuth();
@@ -974,41 +973,15 @@ export default function LoginForm({ initialMode = 'login' }) {
           </button>
         </div>
 
-        {/* Remember me & Forgot Password */}
+        {/* Forgot Password */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             marginTop: '-4px',
           }}
         >
-          <label
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '0.86rem',
-              color: '#475569',
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              style={{
-                width: '16px',
-                height: '16px',
-                accentColor: '#5848f4',
-                cursor: 'pointer',
-                borderRadius: '4px',
-              }}
-            />
-            <span>Ghi nhớ đăng nhập</span>
-          </label>
-
           <button
             type="button"
             onClick={() => {

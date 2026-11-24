@@ -5,14 +5,15 @@ const BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8080/api';
 class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
+    this.token = null;
+  }
+
+  setToken(token) {
+    this.token = token || null;
   }
 
   getToken() {
-    try {
-      return localStorage.getItem('timdo_auth_token') || null;
-    } catch {
-      return null;
-    }
+    return this.token || null;
   }
 
   getHeaders(customHeaders = {}, isMultipart = false) {
