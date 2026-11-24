@@ -49,14 +49,15 @@ public class OfficeReturnService {
             Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
             requireAvailable(c);
             if (activeAppointment(id)!=null) throw bad("Yêu cầu đã có lịch hẹn. Hãy tải lại hồ sơ.");
-            if (!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1)))
+            OffsetDateTime now=OffsetDateTime.now();
+            if (!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
                 throw bad("Giờ hẹn cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
             c.contactEmail(request.email().strip().toLowerCase(Locale.ROOT));
-            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note()));
+            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
             c.touchWorkflow();
             claims.flush();
             if (c.getClaimant()!=null) notifications.notifyUser(c.getClaimant().getId(), "APPOINTMENT_SCHEDULED",
-                "Văn phòng đã lập lịch nhận tài sản", "Xem và phản hồi lịch hẹn của yêu cầu #" + id + ".",
+                "Văn phòng đã lập lịch nhận tài sản", "Hãy phản hồi lịch của yêu cầu #" + id + " trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối.",
                 "/van-phong/claims/" + id, false);
         });
         return sendInvitation(id);
@@ -66,19 +67,21 @@ public class OfficeReturnService {
         new TransactionTemplate(transactions).executeWithoutResult(tx->{
             Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
             requireAvailable(c);
-            if(!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1))) throw bad("Lịch mới cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
+            OffsetDateTime now=OffsetDateTime.now();
+            if(!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1))) throw bad("Lịch mới cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
             Appointment old=scheduled(c);
             requireNotVerified(c,old);
             old.cancelByOffice(request.reason().strip());
             appointments.flush();
-            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note()));
+            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
             c.touchWorkflow();
             activities.save(new ClaimActivity(c,actor,"RESCHEDULE","APPROVED",request.reason().strip()));
             claims.flush();
             if(c.getClaimant()!=null) {
                 notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_RESCHEDULED",
                     "Văn phòng đã đổi lịch hẹn nhận đồ #" + c.getId(),
-                    "Lịch hẹn mới cho \"" + c.getPost().getTitle() + "\" tại " + request.location().strip() + ". Lý do: " + request.reason().strip(),
+                    "Lịch hẹn mới cho \"" + c.getPost().getTitle() + "\" tại " + request.location().strip()
+                        + ". Hãy phản hồi trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối. Lý do đổi lịch: " + request.reason().strip(),
                     "/van-phong/claims/" + c.getId(),false);
             }
         });
@@ -121,14 +124,41 @@ public class OfficeReturnService {
         return view(c,actor);
     }
 
+    private record AppealDecision(long approvalId, long claimId, long reportId, long decisionId,
+                                  long managerId, String conclusion) {}
+
+    // Both a Manager's conclusion and the withdrawal of the last open appeal can finish a round.
     @Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)
-    public void reopenFromAppeal(Claim c, long approvalId, String reason, CustomUserDetails user) {
-        Account actor=access.require(user,AccountRole.MANAGER);
-        manageable(c,actor);
-        reportHolds.requireAvailable(c.getPost().getId());
-        if (!appeals.canReopenFromDecision(c,approvalId) || appeals.hasUnresolvedAppeal(c.getPost().getId()))
-            throw bad("Lần duyệt đã thay đổi hoặc còn tranh chấp chưa được xử lý.");
-        reopenApproval(c,actor,reason);
+    public void finishAppealReview(long postId) {
+        var decision = jdbc.query("""
+            select a.approval_id, a.approved_claim_id, r.report_id, d.decision_id, d.actor_id, d.conclusion
+            from p2p_claim_approval a join claim chosen on chosen.claim_id=a.approved_claim_id
+            join p2p_claim_appeal appeal using(approval_id) join report r using(report_id)
+            join report_decision d using(report_id)
+            where chosen.post_id=? and a.custody_mode='OFFICE' and a.closed_at is null
+              and r.status='RESOLVED' and d.action='APPEAL_WRONG_RECIPIENT'
+              and not exists (select 1 from p2p_claim_appeal other join report pending using(report_id)
+                  where other.approval_id=a.approval_id and pending.status in ('OPEN','IN_REVIEW'))
+            order by d.decision_id desc limit 1
+            """, (row, index) -> new AppealDecision(row.getLong("approval_id"), row.getLong("approved_claim_id"),
+                row.getLong("report_id"), row.getLong("decision_id"), row.getLong("actor_id"), row.getString("conclusion")), postId)
+            .stream().findFirst().orElse(null);
+        if (decision == null) return;
+
+        Claim claim = lock(decision.claimId());
+        Account manager = em.getReference(Account.class, decision.managerId());
+        manageable(claim, manager);
+        reportHolds.requireAvailable(postId);
+        if (!appeals.canReopenFromDecision(claim, decision.approvalId()))
+            throw bad("Lần duyệt đã thay đổi. Hãy tải lại.");
+        String conclusion = decision.conclusion();
+        reopenApproval(claim, manager, "Báo cáo #" + decision.reportId() + ": " + conclusion.substring(0, Math.min(1800, conclusion.length())));
+        jdbc.update("""
+            update report_decision set after_state=after_state||'{"approvalReopened":true}'::jsonb where decision_id=?
+            """, decision.decisionId());
+        notifications.notifyRoles(List.of(APPROVER), decision.managerId(), "CLAIM_REVIEW_REOPENED",
+            "Yêu cầu nhận tài sản được mở lại để xét duyệt", "Quản lý đã kết luận tranh chấp cho lần duyệt trước.",
+            "/approver/office-claims/post/" + postId, false);
     }
 
     private void reopenApproval(Claim c, Account actor, String reason) {

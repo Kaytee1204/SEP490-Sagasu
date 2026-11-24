@@ -49,7 +49,7 @@ public class ApproverIntakeService {
         if (page < 1 || size < 1 || size > 100 || kw.length() > 200 || !Set.of("ALL", "DRAFT", "SUBMITTED", "IN_STORAGE", "RETURNED", "REJECTED").contains(filter)) {
             throw new AppException(ErrorCode.BAD_REQUEST, "Bộ lọc hoặc phân trang không hợp lệ");
         }
-        var ids = receipts.findIntakeIds(kw, filter, PageRequest.of(page - 1, size));
+        var ids = receipts.findIntakeIds(owner, kw, filter, PageRequest.of(page - 1, size));
         var byId = ids.isEmpty() ? Map.<Long, ItemReceipt>of() : receipts.findQueueDetails(ids.getContent()).stream()
                 .collect(Collectors.toMap(ItemReceipt::getId, r -> r));
         var items = ids.stream().map(id -> summary(byId.get(id))).toList();
@@ -125,7 +125,7 @@ public class ApproverIntakeService {
         Account officer = activeApprover(owner);
         ItemReceipt receipt = lock(id, owner);
         if (receipt.getPostId() != null && receipt.getReceivedAt() != null) return dto(receipt);
-        requireDraft(receipt);
+        requireProcessable(receipt);
         requireCurrent(receipt, request.expectedUpdatedAt());
         activeCategory(receipt.getCategory().getCategoryId());
         if (receipt.getTitle().isBlank() || receipt.getDescription().isBlank() || receipt.getFoundLocation().isBlank()
@@ -172,20 +172,29 @@ public class ApproverIntakeService {
 
     private ItemReceipt owned(long id, long owner) {
         if (id < 1) throw new AppException(ErrorCode.BAD_REQUEST, "Mã phiếu không hợp lệ");
-        return receipts.findIntake(id).orElseThrow(() -> new AppException(ErrorCode.RECEIPT_NOT_FOUND));
+        return requireOwner(receipts.findIntake(id).orElseThrow(() -> new AppException(ErrorCode.RECEIPT_NOT_FOUND)), owner);
     }
 
     private ItemReceipt lock(long id, long owner) {
         ItemReceipt receipt = receipts.lockIntake(id).orElseThrow(() -> new AppException(ErrorCode.RECEIPT_NOT_FOUND));
         // OSIV may still contain the pre-upload entity, even after acquiring a lock.
         entityManager.refresh(receipt, LockModeType.PESSIMISTIC_WRITE);
+        return requireOwner(receipt, owner);
+    }
+
+    private ItemReceipt requireOwner(ItemReceipt receipt, long owner) {
+        if (receipt.getRecordedBy() == null || !Objects.equals(receipt.getRecordedBy().getId(), owner))
+            throw new AppException(ErrorCode.RECEIPT_NOT_FOUND);
         return receipt;
     }
 
     private void requireDraft(ItemReceipt receipt) {
-        if (!Set.of("WALK_IN", "EXISTING_POST").contains(receipt.getSource())
-                || !Set.of("DRAFT", "SUBMITTED").contains(receipt.getStatus())
-                || "REJECTED".equals(receipt.getReviewStatus()) || receipt.getPostId() != null || receipt.getReceivedAt() != null) {
+        if (!"DRAFT".equals(receipt.getStatus())) throw new AppException(ErrorCode.RECEIPT_NOT_EDITABLE);
+        requireProcessable(receipt);
+    }
+
+    private void requireProcessable(ItemReceipt receipt) {
+        if (!receipt.canProcess()) {
             throw new AppException(ErrorCode.RECEIPT_NOT_EDITABLE);
         }
     }

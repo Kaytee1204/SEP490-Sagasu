@@ -10,6 +10,7 @@ import com.example.base.security.CustomUserDetails;
 import com.example.base.service.account.AccountService;
 import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.claim.ClaimService;
+import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.office.*;
 import jakarta.validation.constraints.*;
@@ -40,6 +41,7 @@ public class ReportReviewService {
   private final NotificationService notifications;
   private final ChatConversationService chat;
   private final ClaimService claims;
+  private final P2pClaimAppealService claimAppeals;
   private final ReportReviewCalendar calendar;
 
   public enum AppealFinding { INSUFFICIENT_EVIDENCE, INVALID_CLAIM }
@@ -91,6 +93,12 @@ public class ReportReviewService {
   @Transactional(readOnly = true)
   public Map<String,Object> list(int page, String status, String kind, String target, String q,
       String queue, Long targetId, String assignee, CustomUserDetails user) {
+    return list(page, status, kind, target, q, queue, targetId, assignee, null, user);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String,Object> list(int page, String status, String kind, String target, String q,
+      String queue, Long targetId, String assignee, Long approvalId, CustomUserDetails user) {
     Account actor = access.require(user, AccountRole.MANAGER);
     if (!Set.of("ALL","READY","UNASSIGNED","MINE","WAITING","REPLIED","HISTORY").contains(queue))
       throw bad("Hàng đợi không hợp lệ.");
@@ -105,6 +113,9 @@ public class ReportReviewService {
       !Set.of("ALL", "UNASSIGNED", "MINE").contains(assignee) ||
       q.length() > 200
     ) throw bad("Bộ lọc không hợp lệ.");
+    if (approvalId != null && (approvalId <= 0 || targetId != null || !"CLAIM_APPEAL".equals(kind)))
+      throw bad("Bộ lọc lần duyệt không hợp lệ.");
+    boolean expandedGroup = targetId != null || approvalId != null;
     // Compiling the priority expressions can take longer than reading the report queue itself.
     jdbc.execute("set local jit = off");
     Instant now = Instant.now();
@@ -126,7 +137,7 @@ public class ReportReviewService {
     var args = new ArrayList<Object>(List.of(shift.end().atOffset(ZoneOffset.UTC), kind, kind));
     String query = q.strip();
     var reference = REPORT_REFERENCE.matcher(query);
-    boolean lookupById = targetId == null && reference.matches();
+    boolean lookupById = !expandedGroup && reference.matches();
     List<Long> selectionArgs = lookupById ? List.of(parseReportId(reference.group(1))) : List.of();
     String selection = lookupById ? "r.report_id=?" : switch (queue) {
       case "READY", "WAITING", "HISTORY" -> "queue_state.work_state='" + queue + "'";
@@ -162,6 +173,10 @@ public class ReportReviewService {
       where += " and r." + column + "=?";
       args.add(targetId);
     }
+    if (approvalId != null) {
+      where += " and appeal.approval_id=? and approval.custody_mode='OFFICE'";
+      args.add(approvalId);
+    }
     String objectKey = """
         case when appeal.report_id is not null and approval.custody_mode='OFFICE' then 'OFFICE_APPEAL:'||appeal.approval_id
           when appeal.report_id is not null then 'APPEAL:'||r.report_id
@@ -188,14 +203,14 @@ public class ReportReviewService {
         ) classified
         """.formatted(objectKey, selection, where), tallyArgs.toArray());
     long reportCount = ((Number) totals.get("reports")).longValue();
-    long count = targetId == null ? ((Number) totals.get("groups")).longValue() : reportCount;
+    long count = expandedGroup ? reportCount : ((Number) totals.get("groups")).longValue();
     int resultPage = lookupById ? 1 : page;
     var params = new ArrayList<>(args);
     params.addAll(selectionArgs);
     params.add((resultPage - 1) * 12);
     String projection = """
       select r.report_id,case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end as kind,
-        approval.custody_mode as appeal_custody_mode,
+        appeal.approval_id, approval.custody_mode as appeal_custody_mode,
         r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.reason_code,
         case when appeal.report_id is null then r.reason_label_snapshot end as reason_label_snapshot,
         r.status,r.created_at,
@@ -227,7 +242,7 @@ public class ReportReviewService {
              from post_image image where image.post_id=queue_rows.related_post_id
              order by image.sort_order limit 1) as post_thumbnail
           """
-        + "from queue_rows " + (targetId == null ? "where object_row=1 " : "")
+        + "from queue_rows " + (expandedGroup ? "" : "where object_row=1 ")
         + "order by " + order + " limit 12 offset ?",
       params.toArray()
     );
@@ -834,14 +849,16 @@ public class ReportReviewService {
     );
     if (finished) {
       closeInquiries(reportId);
-      if ("P2P".equals(appeal.get("claim_type"))) jdbc.queryForList("select finish_empty_p2p_window(?)", id(appeal, "post_id"));
+      if ("APPEAL_REJECT_CLAIM".equals(recordedAction) && Boolean.TRUE.equals(appeal.get("active"))) {
+        claimAppeals.releaseWindowIfUncontested(id(appeal, "post_id"));
+      }
       chat.notifyAppealChanged(reportId);
       jdbc.update(
         "update report_hold set released_at=now() where report_id=? and released_at is null",
         reportId
       );
       if (officeAppeal && Boolean.TRUE.equals(appeal.get("active"))) {
-        reopenOfficeAfterAppeals(appeal, actor.getId(), user);
+        claims.finishOfficeAppealReview(id(appeal, "post_id"));
       }
       Set<Long> recipients = participantsFor(r);
       Long finderToReview = "APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal ? id(appeal, "finder_id") : null;
@@ -866,31 +883,6 @@ public class ReportReviewService {
         chat.notifyHandoverChanged(id(r, "claim_id"));
     }
     return detail(reportId, user);
-  }
-
-  private void reopenOfficeAfterAppeals(Map<String,Object> appeal, long actorId, CustomUserDetails user) {
-    long approvalId=id(appeal,"approval_id");
-    var result=context.one("""
-        select r.report_id,r.resolution_note from p2p_claim_appeal a join report r using(report_id)
-        join report_decision d using(report_id)
-        where a.approval_id=? and r.status='RESOLVED' and d.action='APPEAL_WRONG_RECIPIENT'
-          and not exists (
-            select 1 from p2p_claim_appeal b join report pending using(report_id)
-            where b.approval_id=a.approval_id and pending.status in ('OPEN','IN_REVIEW')
-          )
-        order by d.decision_id desc limit 1
-        """,approvalId);
-    if (result.isEmpty()) return;
-    long acceptedReport=id(result,"report_id");
-    claims.reopenOfficeApprovalFromAppeal(id(appeal,"approved_claim_id"),approvalId,
-        claimNote(acceptedReport,(String)result.get("resolution_note")),user);
-    jdbc.update("""
-        update report_decision set after_state=after_state||'{"approvalReopened":true}'::jsonb
-        where report_id=? and action='APPEAL_WRONG_RECIPIENT'
-        """,acceptedReport);
-    notifications.notifyRoles(List.of(AccountRole.APPROVER),actorId,"CLAIM_REVIEW_REOPENED",
-        "Yêu cầu nhận tài sản được mở lại để xét duyệt", "Quản lý đã kết luận tranh chấp cho lần duyệt trước.",
-        "/approver/office-claims/post/"+id(appeal,"post_id"),false);
   }
 
   private void closeOtherAppeals(long reportId, long approvalId, long actorId) {

@@ -15,7 +15,7 @@ public record PostDetailDto(
         String status, String custodyMode, OffsetDateTime createdAt,
         List<ImageDto> images, boolean canEditOwnPost, String moderationStatus,
         String authorName, OfficeReceiptDto officeReceipt, boolean canRequestOfficeHandover,
-        boolean isOwner, boolean officeTransferPending) {
+        boolean isOwner, boolean officeTransferPending, boolean canOpenChat) {
     public record ImageDto(Long id, String url, int sortOrder) {
     }
 }

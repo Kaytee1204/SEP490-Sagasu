@@ -52,9 +52,8 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
   const options = structured ? verificationOptions(inquiryData) : [];
   const [kind, setKind] = useState("");
   const selected = options.find(option => option.kind === kind && !option.reason);
-  const custody = structured && kind === "CUSTODY";
   const targetId = structured ? selected?.person.id : Number(recipientId);
-  const canSend = targetId && (custody || question.trim());
+  const canSend = targetId && question.trim();
   function close() {
     setOpen(false);
     setQuestion("");
@@ -146,7 +145,6 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
                 </select>
               </label>
               {selected && <p>Gửi đến <strong>{selected.person.full_name}</strong> · {selected.role}</p>}
-              {custody && <p>Người nhặt sẽ chọn “Tôi vẫn giữ đồ” hoặc “Tôi đã giao đồ”.</p>}
             </> : <label>
               Người nhận *
               <select
@@ -163,7 +161,7 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
                 ))}
               </select>
             </label>}
-            {(!structured || (selected && !custody)) && <label>
+            {(!structured || selected) && <label>
               {kind === "OWNERSHIP" ? "Bạn cần thêm bằng chứng nào?" : kind === "DISCREPANCY" ? "Chi tiết nào cần người nhận mô tả lại?" : "Nội dung cần làm rõ *"}
               <textarea
                 required

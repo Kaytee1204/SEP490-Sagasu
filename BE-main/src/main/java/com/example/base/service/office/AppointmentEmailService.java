@@ -25,13 +25,13 @@ public class AppointmentEmailService {
     }
     public record Mail(Long claimId,String recipient,String name,String title,OffsetDateTime time,String location,String note) {}
     private static String h(String text) { return HtmlUtils.htmlEscape(text==null?"":text); }
-    private static String date(OffsetDateTime time) {
+    static String date(OffsetDateTime time) {
         return time.atZoneSameInstant(ZoneId.of("Asia/Bangkok")).format(DateTimeFormatter.ofPattern("HH:mm 'ngày' dd/MM/yyyy"));
     }
     public boolean send(Mail mail,String token,OffsetDateTime deadline) {
         String url=frontendUrl+"/van-phong/lich-hen#token="+token;
         String confirm=url+"&decision=CONFIRM", decline=url+"&decision=DECLINE";
-        String limit=deadline==null?"12 giờ kể từ khi gửi lời mời thành công":date(deadline)+" (UTC+7)";
+        String limit=date(deadline)+" (UTC+7)";
         String plain="Xin chào "+mail.name()+",\n\nVăn phòng mời bạn đến nhận đồ.\nHồ sơ: #"+mail.claimId()
             +"\nĐồ vật: "+mail.title()+"\nThời gian: "+date(mail.time())+" (UTC+7)\nĐịa điểm: "+mail.location()
             +"\nHạn phản hồi: "+limit+"\n\nĐồng ý lịch hẹn: "+confirm+"\nTừ chối lịch hẹn: "+decline
@@ -64,27 +64,22 @@ public class AppointmentEmailService {
             LoggerFactory.getLogger(getClass()).warn("Office appointment mail failed for claim {} ({})",mail.claimId(),failure.getClass().getSimpleName()); return false;
         }
     }
-    public boolean sendIntake(IntakeMail mail, String token, OffsetDateTime deadline) {
-        String link=frontendUrl+"/van-phong/hen-giao-do#token="+token;
-        String confirm=link+"&decision=CONFIRM", decline=link+"&decision=DECLINE";
-        String plain="Xin chào "+mail.name()+",\nVăn phòng mời bạn mang đồ đến bàn giao.\nĐồ vật: "+mail.title()
-                +"\nThời gian: "+date(mail.time())+" (UTC+7)\nĐịa điểm: "+mail.location()
-                +"\nHạn phản hồi: "+date(deadline)+" (UTC+7)\nĐồng ý: "+confirm+"\nTừ chối: "+decline
-                +"\nVăn phòng chỉ nhận trách nhiệm giữ đồ sau khi kiểm tra và nhận đồ thực tế."
-                +"\nNếu chưa sắp xếp được, hãy từ chối lịch để văn phòng hẹn lại. Không cần đăng nhập."
+    public boolean sendIntake(IntakeMail mail, OffsetDateTime deadline) {
+        String link=frontendUrl+"/van-phong/chuyen-giao/"+mail.transferId();
+        String rule="Nếu văn phòng chưa nhận đồ trước hạn tiếp nhận, yêu cầu sẽ tự động bị hủy.";
+        String plain="Xin chào "+mail.name()+",\n\nVăn phòng mời bạn mang đồ đến bàn giao.\nĐồ vật: "+mail.title()
+                +"\nGiờ hẹn: "+date(mail.time())+" (UTC+7)\nĐịa điểm: "+mail.location()
+                +"\nHạn tiếp nhận: "+date(deadline)+" (UTC+7)\n"+rule+"\nXem yêu cầu: "+link
                 +(mail.note()==null?"":"\nLời nhắn: "+mail.note());
         String html="""
-            <!doctype html><html lang="vi"><body style="font-family:Arial,sans-serif;background:#f1f5f4;padding:24px;color:#183b3b">
+            <!doctype html><html lang="vi"><body style="font-family:Arial,sans-serif;background:#f1f5f4;padding:24px">
             <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:16px">
-            <p style="color:#0f766e">VĂN PHÒNG · SAGASU</p><h1>Lịch mang đồ đến văn phòng</h1>
-            <p>Xin chào %s,</p><p>Cảm ơn bạn đã giữ giúp đồ thất lạc. Bạn có thể mang đồ đến theo lịch sau:</p>
-            <p><strong>%s</strong></p><p>Thời gian: %s (UTC+7)</p><p>Địa điểm: %s</p><p>%s</p>
-            <p>Vui lòng phản hồi trước %s (UTC+7).</p>
-            <p><a href="%s" style="display:inline-block;background:#0f766e;color:white;padding:14px;border-radius:8px">Đồng ý lịch hẹn</a></p>
-            <p><a href="%s">Tôi chưa sắp xếp được</a></p>
-            <p>Văn phòng sẽ kiểm tra và xác nhận khi bạn mang đồ đến. Nếu từ chối hoặc chưa phản hồi trong 12 giờ,
-            yêu cầu tiếp nhận vẫn được giữ để văn phòng hẹn lại.</p><p>Không cần đăng nhập. Không chia sẻ liên kết này.</p></div></body></html>
-            """.formatted(h(mail.name()),h(mail.title()),h(date(mail.time())),h(mail.location()),h(mail.note()),h(date(deadline)),h(confirm),h(decline));
+            <h1>Lịch mang đồ đến văn phòng</h1><p>Xin chào %s,</p><p>%s</p>
+            <p><strong>Giờ hẹn</strong> %s (UTC+7)</p><p><strong>Địa điểm</strong> %s</p>
+            <p><strong>Hạn tiếp nhận</strong> %s (UTC+7)</p><p>%s</p><p>%s</p>
+            <p><a href="%s">Xem yêu cầu tiếp nhận</a></p></div></body></html>
+            """.formatted(h(mail.name()),h(mail.title()),h(date(mail.time())),h(mail.location()),
+                h(date(deadline)),h(rule),h(mail.note()),h(link));
         try {
             var message=sender.createMimeMessage();var helper=new MimeMessageHelper(message,true,"UTF-8");
             if(!from.isBlank())helper.setFrom(from);

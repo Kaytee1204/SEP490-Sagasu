@@ -68,7 +68,7 @@ public class ChatService {
                 && !Objects.equals(actor.getId(), claim.getClaimant().getId())) throw missing();
         claim = claims.findForUpdate(claim.getId()).orElseThrow(this::missing);
         entityManager.refresh(claim, LockModeType.PESSIMISTIC_WRITE);
-        if (!policy.eligible(claim)) throw new AppException(ErrorCode.CHAT_UNAVAILABLE);
+        if (!policy.canOpen(claim)) throw new AppException(ErrorCode.CHAT_UNAVAILABLE);
         return dto(conversationService.forApprovedClaim(claim), actor.getId());
     }
 

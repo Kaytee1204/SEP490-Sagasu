@@ -98,7 +98,10 @@ public class DataInitializer {
             "db/migrations/35_shared_claim_appeals.sql",
             "db/migrations/36_report_inquiry_reminders.sql",
             "db/migrations/37_report_verification_kind.sql",
-            "db/migrations/38_p2p_dispute_transitions.sql"
+            "db/migrations/38_p2p_dispute_transitions.sql",
+            "db/migrations/39_office_claim_review_alignment.sql",
+            "db/migrations/40_office_pickup_response_window.sql",
+            "db/migrations/41_office_intake_deadline.sql"
     );
 
     @Bean

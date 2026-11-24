@@ -457,7 +457,21 @@
 }
 
 .sw-grid-storage {
-  grid-template-columns: minmax(240px, 1.35fr) minmax(170px, 0.95fr) minmax(140px, 0.85fr) 230px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 0.85fr) 230px;
+}
+
+.sw-grid-storage .sw-code-tag {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.sw-storage-condition {
+  overflow-wrap: anywhere;
+}
+
+.sw-storage-condition > small {
+  display: none;
 }
 
 .sw-grid-news {
@@ -747,6 +761,12 @@
   .sw-item-cell,
   .sw-action-cell {
     grid-column: 1 / -1;
+  }
+  .sw-storage-condition {
+    grid-column: 1 / -1;
+  }
+  .sw-storage-condition > small {
+    display: block;
   }
   .sw-action-cell {
     justify-content: flex-start;

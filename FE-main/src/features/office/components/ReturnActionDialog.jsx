@@ -52,7 +52,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
     }
   }
   const confirmMeta = {
-    schedule: { variant: "info", title: "Xác nhận lịch hẹn?", description: "Hệ thống sẽ gửi thư mời. Người nhận có 12 giờ để phản hồi kể từ khi gửi thành công.", confirmLabel: "Lập lịch và gửi thư" },
+    schedule: { variant: "info", title: "Xác nhận lịch hẹn?", description: "Người nhận có 12 giờ để phản hồi kể từ khi lưu lịch. Hệ thống cũng sẽ gửi email mời.", confirmLabel: "Lập lịch" },
     revoke: { variant: "warning", title: "Thu hồi chấp thuận?",
       description: claim.appointment?.status === "SCHEDULED"
         ? "Lịch hẹn hiện tại sẽ bị hủy. Yêu cầu được đưa về bước xét duyệt."
@@ -61,7 +61,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
     verify: form.result === "PASSED"
       ? { variant: "success", title: "Xác nhận kết quả Đạt?", description: `Ghi nhận ${claim.claimantName} đã vượt qua bước đối chiếu trực tiếp tại quầy và đủ điều kiện nhận đồ.`, confirmLabel: "Xác nhận Đạt" }
       : { variant: "danger", title: "Xác nhận Không đạt & Từ chối?", description: `Yêu cầu #${claim.id} sẽ bị từ chối và lịch hẹn bị hủy. Người này sẽ không thể gửi lại yêu cầu cho món đồ này.`, confirmLabel: "Từ chối nhận đồ" },
-    reschedule: { variant: "info", title: "Xác nhận đổi lịch hẹn?", description: "Lịch hẹn cũ sẽ hết hiệu lực và hệ thống sẽ gửi email mời người nhận xác nhận lịch mới.", confirmLabel: "Đồng ý đổi lịch" },
+    reschedule: { variant: "info", title: "Xác nhận đổi lịch hẹn?", description: "Lịch hẹn cũ sẽ hết hiệu lực. Người nhận có 12 giờ để phản hồi lịch mới kể từ khi lưu.", confirmLabel: "Đồng ý đổi lịch" },
     handover: { variant: "success", title: "Xác nhận hoàn tất trao trả?", description: `Món đồ sẽ được ghi nhận đã bàn giao cho ${claim.claimantName}, xuất khỏi kho và đóng các yêu cầu đang chờ.`, confirmLabel: "Hoàn tất trao trả" },
     complete: { variant: "success", title: "Xác nhận hoàn tất biên bản?", description: "Xác nhận văn phòng đã giao đúng và đủ đồ cho người nhận theo biên bản.", confirmLabel: "Xác nhận hoàn tất" },
   }[action] || { variant: "warning", title: "Bạn có chắc chắn?", description: "Xác nhận thực hiện thao tác xử lý hồ sơ này.", confirmLabel: "Xác nhận" };
@@ -77,7 +77,6 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
         <label>Nội dung đã đối chiếu *<textarea required maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} placeholder="Danh tính, dấu hiệu riêng và bằng chứng đã đối chiếu…" /></label>
       </>}
       {["schedule", "reschedule"].includes(action) && <>
-        {action === "reschedule" && <Notice>Lịch cũ sẽ hết hiệu lực. Người nhận có 12 giờ để phản hồi lịch mới kể từ khi gửi thư thành công.</Notice>}
         <label>Ngày và giờ hẹn (UTC+7) *<input type="datetime-local" min={earliestAppointment()} required value={form.scheduledAt} disabled={busy} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn thời điểm cách hiện tại hơn 12 giờ.</small></label>
         <label>Địa điểm *<input required maxLength={1000} value={form.location} disabled={busy} onChange={(e) => change("location", e.target.value)} /></label>
         {action === "schedule" && <label>Thư điện tử người nhận *<input type="email" required maxLength={255} value={form.email} disabled={busy} onChange={(e) => change("email", e.target.value)} /></label>}

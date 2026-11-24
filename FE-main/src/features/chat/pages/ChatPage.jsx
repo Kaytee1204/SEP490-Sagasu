@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ClipboardCheck, Flag, Package, UserRound } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { claimDate } from '@/features/claims/utils/claimUtils';
 import { getChat } from '../api/chatApi';
 import { useChat } from '@/features/chat/hooks/useChat';
 import ChatList from '../components/ChatList';
@@ -69,6 +70,16 @@ function ChatHandoverReporting({ chat, revision }) {
       .catch(() => { if (!cancelled) setHandover(null); });
     return () => { cancelled = true; };
   }, [chat.claimId, revision]);
+  const { refresh } = useChat();
+  const state = handover?.appealWindow?.state;
+  const deadline = handover?.appealWindow?.deadline;
+  useEffect(() => {
+    if (state !== 'OPEN' && state !== 'UNDER_REVIEW') return;
+    const remaining = Date.parse(deadline) - Date.now();
+    const timer = state === 'OPEN' && remaining > 0 ? window.setTimeout(refresh, remaining + 100) : undefined;
+    const interval = window.setInterval(refresh, 30000);
+    return () => { window.clearTimeout(timer); window.clearInterval(interval); };
+  }, [state, deadline, refresh]);
   const openReport = message => setSelection({ handover, message });
   return <div className="chat-thread-area">
     {handover?.canReportIssue && <div className="chat-issue-actions">
@@ -79,7 +90,7 @@ function ChatHandoverReporting({ chat, revision }) {
     {submittedReportId && <p role="status" className="chat-issue-actions">
       Đã gửi báo cáo <Link to={`/bao-cao/${submittedReportId}`}>#{submittedReportId}</Link>
     </p>}
-    <ChatThread chat={chat} onReportMessage={handover?.canReportIssue ? openReport : undefined} />
+    <ChatThread chat={chat} pauseMessage={state === 'OPEN' ? `Chờ hết hạn gửi tranh chấp lúc ${claimDate(deadline)}. Trong thời gian này, bạn chỉ có thể xem lịch sử chat.` : undefined} onReportMessage={handover?.canReportIssue ? openReport : undefined} />
     {selection && <ReportHandoverIssueDialog claim={{ id: chat.claimId, postTitle: chat.postTitle }}
       handover={selection.handover} initialMessage={selection.message} onClose={() => setSelection(null)}
       onReported={data => {

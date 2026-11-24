@@ -81,8 +81,8 @@ function ContextDisclosure({ title, children }) {
 function Evidence({ data }) {
   const { current, approvedContext } = data;
   return <div className="rr-stack">
-    {approvedContext ? <AppealEvidenceComparison current={current} approved={approvedContext} /> : <ContextPanel data={current} />}
-    {data.caseKind === "CLAIM_APPEAL" && current.post?.post_id && <section className="rr-card rr-post-summary">
+    {approvedContext ? <AppealEvidenceComparison current={current} approved={approvedContext} /> : <ContextPanel data={current} violation={data.caseKind === "GENERAL"} />}
+    {(data.caseKind === "CLAIM_APPEAL" || data.caseKind === "GENERAL") && current.post?.post_id && <section className="rr-card rr-post-summary">
       <h2>Bài đăng liên quan</h2>
       <ItemPostSummary postId={current.post.post_id} post={{ ...current.post, images: current.postImages, locationText: current.post.location_text, eventAt: current.post.event_at, postType: current.post.post_type }} />
     </section>}
@@ -309,6 +309,8 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
 
   const report = data?.report;
   const kind = data?.caseKind;
+  const isViolation = kind === "GENERAL";
+  const isAppeal = kind === "CLAIM_APPEAL";
   const current = data?.current;
   const reporter = current?.participants.find(person => person.id === report.reporter_id);
   const thumbnail = current?.postImages?.[0]?.url || data?.snapshot?.payload?.postImages?.[0]?.url;
@@ -344,34 +346,34 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
         {appealSteps[data.appeal?.follow_up] ? <span className="rr-badge">Tranh chấp đã có kết luận</span> : <Badge value={report.status} />}
       </header>
       <div className="rr-detail-sections">
-          <div className="rr-detail-nav" role="group" aria-label="Thông tin báo cáo">
+          {!isViolation && <div className="rr-detail-nav" role="group" aria-label="Thông tin báo cáo">
             {[
               ["process", "Hồ sơ và xử lý", ClipboardCheck],
               ["inquiries", data.inquiries.length ? `Trao đổi (${data.inquiries.length})` : "Trao đổi", MessageSquare],
-              ["history", "Lịch sử", History],
+              ...(isAppeal ? [] : [["history", "Lịch sử", History]]),
             ].map(([key, label, TabIcon]) => <button type="button" key={key} aria-pressed={tab === key}
               onClick={event => {
                 setTab(key);
                 const sections = event.currentTarget.closest(".rr-detail-sections");
                 if (sections.getBoundingClientRect().top < 0) sections.scrollIntoView({ block: "start" });
               }}><TabIcon size={16} aria-hidden="true" />{label}</button>)}
-          </div>
-          {tab === "process" && <div className="rr-review-sheet">
+          </div>}
+          {(isViolation || tab === "process") && <div className="rr-review-sheet">
             <div className="rr-sheet-main">
               <Submission data={data} />
               <Evidence data={data} />
             </div>
             <div className="rr-sheet-side">
-              <ProcessingPanel data={data} busy={busy} take={() => setConfirmTake(true)} onAsk={() => { setTab("inquiries"); setInquiryData(data); }}
+              <ProcessingPanel data={data} busy={busy} take={() => setConfirmTake(true)} onAsk={() => { if (!isViolation) setTab("inquiries"); setInquiryData(data); }}
                 onAction={value => setAction({ value, data })} />
               <RelatedInformation data={data} onRelated={onRelated} />
             </div>
           </div>}
-          {tab === "inquiries" && <div id="trao-doi" tabIndex={-1} className="rr-stack">
+          {(isViolation ? (inquiryData || data.inquiries.length > 0) : tab === "inquiries") && <div id="trao-doi" tabIndex={-1} className="rr-stack">
             <Inquiries data={data} onSaved={setData} open={!!inquiryData} setOpen={value => setInquiryData(value ? data : null)} draftData={inquiryData} />
-            {!data.conflict && (report.claim_id || report.message_id) && <ChatContext id={id} reportedMessage={report.message_id} />}
+            {!isViolation && !isAppeal && !data.conflict && (report.claim_id || report.message_id) && <ChatContext id={id} reportedMessage={report.message_id} />}
           </div>}
-          {tab === "history" && <div className="rr-stack">
+          {!isViolation && !isAppeal && tab === "history" && <div className="rr-stack">
             <HistoryPanel history={data.history} decisions={data.decisions} />
             {data.snapshot?.payload && <ContextDisclosure title="Bản lưu hồ sơ">
               <p className="rr-muted">{data.snapshot.capture_source === "SUBMISSION" ? "Lưu khi gửi báo cáo" : "Lưu khi quản lý mở hồ sơ lần đầu"} · {date(data.snapshot.captured_at)}</p>

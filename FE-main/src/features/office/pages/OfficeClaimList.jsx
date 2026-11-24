@@ -23,7 +23,6 @@ import "../StaffWorkspace.css";
 const STAFF_CLAIM_TABS = [
   { value: "ALL", label: "Tất cả" },
   { value: "PENDING", label: "Chờ xử lý", tone: "warning" },
-  { value: "NEEDS_INFO", label: "Chờ bổ sung", tone: "warning" },
   { value: "APPROVED", label: "Đã duyệt" },
   { value: "COMPLETED", label: "Hoàn tất" },
   { value: "REJECTED", label: "Từ chối" },
@@ -54,7 +53,15 @@ export default function OfficeClaimList({ mine = false }) {
   const [filters, setFilters] = useState(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(filterKey));
-      return saved ? { ...DEFAULT_FILTERS, ...saved } : DEFAULT_FILTERS;
+      if (!saved) return DEFAULT_FILTERS;
+      const restored = { ...DEFAULT_FILTERS, ...saved };
+      for (const key of ["status", "stage"]) {
+        if (restored[key] === "NEEDS_INFO") {
+          restored[key] = "ALL";
+          restored.page = 1;
+        }
+      }
+      return restored;
     } catch {
       return DEFAULT_FILTERS;
     }
@@ -118,7 +125,6 @@ export default function OfficeClaimList({ mine = false }) {
               options={[
                 "ALL",
                 "PENDING",
-                "NEEDS_INFO",
                 "APPROVED",
                 "REJECTED",
                 "CANCELLED",
@@ -304,7 +310,7 @@ export default function OfficeClaimList({ mine = false }) {
                 onChange={(e) => change("stage", e.target.value)}
               >
                 <option value="ALL">Tất cả tiến trình</option>
-                {Object.entries(progressLabels).map(([val, lbl]) => (
+                {Object.entries(progressLabels).filter(([value]) => value !== "NEEDS_INFO").map(([val, lbl]) => (
                   <option key={val} value={val}>
                     {lbl}
                   </option>

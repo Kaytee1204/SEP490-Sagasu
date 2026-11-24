@@ -74,7 +74,7 @@ export default function OfficeReturnPanel({ claim, state, mine, onChanged }) {
         </>}
         {h.issueNote && <Notice error><strong>Nội dung phản ánh: </strong>{h.issueNote}</Notice>}
       </div>}
-      {action && <ReturnActionDialog action={action} claim={claim} workflow={workflow} onClose={() => setAction(null)} onDone={(result) => {setAction(null);setMessage({error: result.emailStatus === "FAILED",text: result.emailStatus === "FAILED" ? "Đã lưu lịch hẹn. Cần gửi lại email mời xác nhận." : "Đã cập nhật tiến trình trao trả."});onChanged(result);}} />}
+      {action && <ReturnActionDialog action={action} claim={claim} workflow={workflow} onClose={() => setAction(null)} onDone={(result) => {setAction(null);setMessage({error: result.emailStatus === "FAILED",text: result.emailStatus === "FAILED" ? "Đã lưu lịch. Email chưa gửi được, người nhận vẫn có thể phản hồi trên hệ thống." : "Đã cập nhật tiến trình trao trả."});onChanged(result);}} />}
     </>}</LoadState>
   </section>;
 }

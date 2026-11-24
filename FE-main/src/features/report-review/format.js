@@ -156,14 +156,12 @@ export function verificationOptions(data) {
   const targets = [
     ["OWNERSHIP", data.report.reporter_id, "Người gửi tranh chấp"],
     ["DISCREPANCY", data.appeal.approved_recipient_id, "Người được chấp thuận"],
-    ["CUSTODY", data.appeal.finder_id, "Người nhặt"],
   ];
   return targets.map(([kind, id, role]) => {
     const person = data.current.participants.find(p => p.id === id);
     let reason = "";
     if (!person) reason = "Chưa xác định người nhận";
     else if (pending.has(id)) reason = "Đang chờ phản hồi";
-    else if (kind === "CUSTODY" && !data.appeal.can_reopen_approval) reason = "Chưa đủ điều kiện xác minh";
     return { kind, person, role, reason };
   });
 }

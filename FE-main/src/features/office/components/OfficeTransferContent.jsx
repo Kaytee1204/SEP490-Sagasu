@@ -11,12 +11,10 @@ import LoadState from "./LoadState";
 import Notice from "./Notice";
 import IntakeEvidencePicker from "./IntakeEvidencePicker";
 import IntakeScheduleForm from "./IntakeScheduleForm";
-import AppointmentReply from "./AppointmentReply";
 import TransferStage from "./TransferStage";
 import { transferStage } from "../transferStage";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 
-const responses = { UNSENT: "Chưa gửi được email", PENDING: "Chờ người giao phản hồi", CONFIRMED: "Người giao đã đồng ý", DECLINED: "Người giao chưa sắp xếp được", EXPIRED: "Chưa phản hồi trong thời hạn" };
 const outcomes = { RECEIVED: "Văn phòng đã nhận đồ", REJECTED: "Yêu cầu đã bị từ chối", CANCELLED: "Yêu cầu đã hủy" };
 export default function OfficeTransferContent({ id, mine, openSchedule, onClose, onDone }) {
   const { user } = useAuth();
@@ -42,7 +40,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
   const change = (key, value) => setForm((old) => ({ ...old, [key]: value }));
   function updated(result) {
     setMode(null); setError("");setChecked(false);setFiles([]);setConfirmOpen(false);
-    setNotice(result === "FAILED" ? { error: true, text: "Đã lưu lịch nhưng chưa gửi được email. Bạn có thể gửi lại bên dưới." } : result === "EXPIRED" ? { text: "Lịch này đã hết hạn phản hồi. Hãy hẹn lại thời gian phù hợp." } : result === "SENT" ? { text: "Đã gửi lịch mang đồ đến qua email." } : { text: "Đã cập nhật yêu cầu." });
+    setNotice(result === "FAILED" ? { error: true, text: "Lịch đã hiện trên hệ thống. Email chưa gửi được, bạn có thể gửi lại." } : result === "SENT" ? { text: "Đã gửi thông tin lịch và hạn tiếp nhận qua email." } : { text: "Đã cập nhật yêu cầu." });
     state.reload();onDone();
   }
   async function resend() {
@@ -99,8 +97,19 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
         {mine && <div className="of-actions"><button className="of-button" onClick={() => guard()}>Đóng</button></div>}
       </> : <>
         {transfer.activeClaims > 0 && <p className="of-muted">Đồ vật này có {transfer.activeClaims} yêu cầu nhận lại đồ.</p>}
-        {mine && a && <AppointmentReply key={a.id} appointment={a} id={id} intake onBusyChange={setBusy} onChanged={() => { state.reload(); onDone(); }} />}
-        {!mine && a && <section className={`of-intake-appointment${needsSchedule ? " is-old" : ""}`}><h3><CalendarDays size={18} /> {needsSchedule ? "Lịch hẹn cũ" : "Lịch mang đồ đến"}</h3><strong>{date(a.scheduledAt)}</strong><p className="of-prose">{a.location}</p><p className="of-stage-label">{responses[a.responseStatus]}</p>{a.note && <p className="of-prose">{a.note}</p>}{a.cancellationReason && <p className="of-prose"><strong>Lý do: </strong>{a.cancellationReason}</p>}{a.responseStatus === "PENDING" && <small>Hạn phản hồi: {date(a.responseDeadline)} · Qua email hoặc trên hệ thống.</small>}</section>}
+        {a && <section className={`of-intake-appointment${needsSchedule ? " is-old" : ""}`}>
+          <h3><CalendarDays size={18} /> {needsSchedule ? "Lịch hẹn cũ" : "Lịch mang đồ đến"}</h3>
+          <dl className="of-facts">
+            <div><dt>Giờ hẹn</dt><dd>{date(a.scheduledAt)}</dd></div>
+            <div><dt>Địa điểm tiếp nhận</dt><dd>{a.location}</dd></div>
+            {!needsSchedule && a.intakeDeadline && <div><dt>Hạn tiếp nhận</dt><dd>{date(a.intakeDeadline)}</dd></div>}
+          </dl>
+          {!needsSchedule && a.intakeDeadline && <p>Yêu cầu tự hủy nếu văn phòng chưa nhận đồ trước hạn tiếp nhận.</p>}
+          {!needsSchedule && !a.intakeDeadline && <p>Lịch cũ chưa có hạn tiếp nhận.</p>}
+          {!mine && !needsSchedule && a.emailStatus === "FAILED" && <p>Email thông báo chưa gửi được.</p>}
+          {a.note && <p className="of-prose"><strong>Lời nhắn:</strong> {a.note}</p>}
+          {a.cancellationReason && <p className="of-prose"><strong>Lý do:</strong> {a.cancellationReason}</p>}
+        </section>}
         {!a && <p className="of-callout">{mine ? "Văn phòng sẽ hẹn bạn mang đồ đến. Bạn cứ giữ đồ cẩn thận trong lúc chờ nhé." : officer && !self ? "Chưa có lịch. Nếu người giao đã đến quầy, có thể ghi nhận tiếp nhận ngay." : "Văn phòng chưa hẹn ngày mang đồ đến."}</p>}
         <Notice error>{error}</Notice>
         {self && <Notice>Nhờ một nhân viên khác xử lý yêu cầu tiếp nhận của bạn.</Notice>}
@@ -110,8 +119,8 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
         </div>}
         {!mode && (mine || officer && !self) && <details className="of-secondary-actions"><summary>{mine ? "Hủy yêu cầu tiếp nhận" : "Điều chỉnh yêu cầu"}</summary><div className="of-actions of-actions-wrap">
           {mine ? <><p>Chỉ hủy nếu bạn không còn muốn gửi đồ cho văn phòng.</p><button className="of-button of-danger" disabled={busy} onClick={() => setMode("withdraw")}>Hủy yêu cầu</button></> : <>
-            {a && !["DECLINED", "EXPIRED"].includes(a.responseStatus) && <button className="of-button" disabled={busy} onClick={() => setMode("schedule")}>Đổi lịch hẹn</button>}
-            {a?.status === "SCHEDULED" && ["UNSENT", "PENDING"].includes(a.responseStatus) && <button className="of-button" disabled={busy} onClick={resend}>{busy ? "Đang gửi…" : "Gửi lại email lịch hẹn"}</button>}
+            {a?.status === "SCHEDULED" && <button className="of-button" disabled={busy} onClick={() => setMode("schedule")}>Đổi lịch hẹn</button>}
+            {a?.status === "SCHEDULED" && a.intakeDeadline && <button className="of-button" disabled={busy} onClick={resend}>{busy ? "Đang gửi…" : "Gửi lại email lịch hẹn"}</button>}
             <button className="of-button of-danger" disabled={busy} onClick={() => setMode("reject")}>Từ chối tiếp nhận</button>
           </>}
         </div></details>}
