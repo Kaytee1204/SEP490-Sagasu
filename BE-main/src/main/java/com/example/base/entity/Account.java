@@ -54,6 +54,9 @@ public class Account {
     @Column(name = "valid_until")
     private OffsetDateTime validUntil;
 
+    @Column(name = "password_changed_at")
+    private OffsetDateTime passwordChangedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -181,6 +184,14 @@ public class Account {
 
     public void setValidUntil(OffsetDateTime validUntil) {
         this.validUntil = validUntil;
+    }
+
+    public OffsetDateTime getPasswordChangedAt() {
+        return passwordChangedAt;
+    }
+
+    public void setPasswordChangedAt(OffsetDateTime passwordChangedAt) {
+        this.passwordChangedAt = passwordChangedAt;
     }
 
     public OffsetDateTime getCreatedAt() {

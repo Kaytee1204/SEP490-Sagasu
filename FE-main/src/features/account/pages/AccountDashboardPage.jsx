@@ -36,6 +36,8 @@ export default function AccountDashboardPage() {
     setCrudModal,
     formData,
     setFormData,
+    modalError,
+    setModalError,
     submitting,
     openCrudModal,
     submitCrud,
@@ -278,6 +280,8 @@ export default function AccountDashboardPage() {
         setCrudModal={setCrudModal}
         formData={formData}
         setFormData={setFormData}
+        modalError={modalError}
+        setModalError={setModalError}
         submitCrud={submitCrud}
         submitting={submitting}
       />
