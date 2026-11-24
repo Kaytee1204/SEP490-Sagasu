@@ -252,9 +252,10 @@ public class P2pClaimAppealService {
                         request.clientRequestId(), prepared.hash(), uploaded);
                 jdbc.update("insert into p2p_claim_appeal(approval_id, appellant_claim_id, report_id) values (?, ?, ?)",
                         request.approvalId(), claimId, report.getId());
+                Long managerId = inheritAppealAssignment(request.approvalId(), report.getId(), actor);
                 used[0] = true;
                 if (!claim.isOffice()) chat.notifyAppealChanged(report.getId());
-                notifyAppeal(post, actor, report.getId(), request.approvalId());
+                notifyAppeal(post, actor, report.getId(), request.approvalId(), managerId);
                 return new Submitted(report.getId());
             });
             if (!used[0]) images.cleanup(uploaded);
@@ -310,24 +311,58 @@ public class P2pClaimAppealService {
                 rs.getObject(3, UUID.class), rs.getString(4)), approvalId, appellantClaimId).stream().findFirst().orElse(null);
     }
 
-    private void notifyAppeal(Post post, long actor, long reportId, long approvalId) {
-        notifications.notifyRoles(List.of(AccountRole.MANAGER), actor, "REPORT_CREATED",
-                "Có tranh chấp kết quả nhận đồ (#" + reportId + ")",
-                "Đối chiếu hồ sơ rồi chọn giữ kết quả hoặc ghi kết luận cần xét lại người nhận.",
-                "/admin/reports/" + reportId + "?kind=CLAIM_APPEAL", false);
+    private Long inheritAppealAssignment(long approvalId, long reportId, long reporterId) {
+        var owners = jdbc.queryForList("""
+            select r.assigned_to from p2p_claim_appeal a join report r using(report_id)
+            where a.approval_id=? and r.status in ('OPEN','IN_REVIEW') and r.assigned_to is not null
+            group by r.assigned_to
+            """, Long.class, approvalId);
+        if (owners.size() > 1) return null;
+        Long owner = owners.isEmpty() ? jdbc.queryForList("""
+            select r.assigned_to from p2p_claim_appeal a join report r using(report_id)
+            where a.approval_id=? and r.assigned_to is not null
+            order by r.resolved_at desc nulls last,r.assigned_at desc nulls last,r.report_id desc limit 1
+            """, Long.class, approvalId).stream().findFirst().orElse(null) : owners.getFirst();
+        if (owner == null || owner == reporterId || !Boolean.TRUE.equals(jdbc.queryForObject("""
+            select exists(select 1 from accounts where id=? and role='MANAGER' and status='ACTIVE'
+                and (locked_until is null or locked_until<now()))
+              and not exists(select 1 from p2p_claim_appeal a join report r using(report_id)
+                where a.approval_id=? and r.reporter_id=?)
+            """, Boolean.class, owner, approvalId, owner))) return null;
+        jdbc.update("""
+            update report set assigned_to=?,assigned_at=now(),status='IN_REVIEW',version=version+1,updated_at=now()
+            where report_id=?
+            """, owner, reportId);
+        jdbc.update("""
+            insert into report_activity(report_id,actor_id,action,from_status,to_status,public_note) values
+            (?,?,'TAKE','OPEN','IN_REVIEW','Hệ thống đã phân công cho quản lý đang phụ trách vụ việc.')
+            """, reportId, owner);
+        return owner;
+    }
+
+    private void notifyAppeal(Post post, long actor, long reportId, long approvalId, Long managerId) {
+        String title = "Có tranh chấp kết quả nhận đồ (#" + reportId + ")";
+        String path = "/admin/reports/" + reportId + "?kind=CLAIM_APPEAL";
+        if (managerId == null) {
+            notifications.notifyRoles(List.of(AccountRole.MANAGER), actor, "REPORT_CREATED", title,
+                "Vụ việc cần được quản lý tiếp nhận và đối chiếu hồ sơ.", path, false);
+        } else {
+            notifications.notifyUser(managerId, "REPORT_CREATED", title,
+                "Một báo cáo mới đã được bổ sung vào vụ việc bạn đang phụ trách.", path, false);
+        }
         claims.findFirstByPost_IdAndStatusOrderByCreatedAtDescIdDesc(post.getId(), "APPROVED").ifPresent(selected -> {
-            String title = "Bàn giao được tạm dừng để xử lý tranh chấp";
+            String holdTitle = "Bàn giao được tạm dừng để xử lý tranh chấp";
             String message = "Có tranh chấp cho bài «" + post.getTitle() + "». Hãy chờ kết quả trước khi giao đồ.";
             boolean emailFirstDispute = !selected.isOffice() && !Boolean.TRUE.equals(jdbc.queryForObject("""
                     select exists(select 1 from p2p_claim_appeal where approval_id=? and report_id<>?)
                     """, Boolean.class, approvalId, reportId));
             if (selected.isOffice()) {
-                notifications.notifyRoles(List.of(AccountRole.APPROVER), actor, "CLAIM_APPEAL_FILED", title, message,
+                notifications.notifyRoles(List.of(AccountRole.APPROVER), actor, "CLAIM_APPEAL_FILED", holdTitle, message,
                     "/approver/office-claims/" + selected.getId(), false);
             } else {
-                notifications.notifyUser(post.getAccount().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), emailFirstDispute);
+                notifications.notifyUser(post.getAccount().getId(), "CLAIM_APPEAL_FILED", holdTitle, message, claimPath(selected), emailFirstDispute);
             }
-            notifications.notifyUser(selected.getClaimant().getId(), "CLAIM_APPEAL_FILED", title, message, claimPath(selected), emailFirstDispute);
+            notifications.notifyUser(selected.getClaimant().getId(), "CLAIM_APPEAL_FILED", holdTitle, message, claimPath(selected), emailFirstDispute);
         });
     }
 

@@ -71,7 +71,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const isWrongRecipientDecision = action === "APPEAL_WRONG_RECIPIENT";
   const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
   const confirmingCorrection = ["HANDOVER_COMPLETED", "RESOLVE"].includes(action) && ["HANDOVER_WRONG_ITEM", "HANDOVER_MISSING_ITEMS"].includes(data.report.reason_code) && data.caseKind === "HANDOVER_ISSUE";
-  const requiresCustody = confirmingCorrection || isWrongRecipientDecision || requiresRecoveryCheck
+  const requiresCustody = confirmingCorrection || requiresRecoveryCheck
     || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
     || (isKeepApproval && data.recoveryRequested);
   const officeAppeal = data.appeal?.claim_type === "OFFICE";
@@ -184,10 +184,10 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             </label>)}
           </fieldset>
           {appealFinding === "INSUFFICIENT_EVIDENCE" && <p className="rr-callout">
-            Kết thúc tranh chấp và giữ nguyên yêu cầu nhận đồ của người gửi. {!officeAppeal && "Hạn 24 giờ vẫn tính từ lúc người nhặt chấp thuận."}
+            Giữ nguyên người được chấp thuận và lưu kết luận cho các báo cáo đang mở cùng lần duyệt. Người đủ điều kiện vẫn có thể gửi tranh chấp trong thời hạn đã thông báo.
           </p>}
           {appealFinding === "INVALID_CLAIM" && <p className="rr-callout">
-            Bác yêu cầu nhận đồ của người gửi tranh chấp và chặn tài khoản đó gửi lại yêu cầu trên bài đăng này. {!officeAppeal && "Chat và bàn giao mở sớm nếu không còn hồ sơ chờ duyệt hoặc tranh chấp đang xử lý."}
+            Bác yêu cầu của người gửi báo cáo này và chặn tài khoản đó gửi lại yêu cầu trên bài đăng. Các báo cáo còn mở trong vụ việc vẫn cần được xem xét.
           </p>}
         </>}
         {!isKeepApproval && warning && <p className="rr-callout">{warning}</p>}
@@ -240,7 +240,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
               checked={custodyVerified}
               onChange={(e) => setCustody(e.target.checked)}
             />
-            {confirmingCorrection ? (data.report.reason_code === "HANDOVER_WRONG_ITEM" ? "Đã xác minh người nhận đang giữ đúng món và đã đối chiếu việc trả lại món giao nhầm, nếu có." : "Đã đối chiếu danh sách phụ kiện và xác minh người nhận đã nhận đủ.") : isWrongRecipientDecision ? (officeAppeal ? "Tôi đã xác minh tài sản còn lưu kho tại văn phòng." : "Tôi đã xác minh người nhặt vẫn đang giữ món đồ.")
+            {confirmingCorrection ? (data.report.reason_code === "HANDOVER_WRONG_ITEM" ? "Đã xác minh người nhận đang giữ đúng món và đã đối chiếu việc trả lại món giao nhầm, nếu có." : "Đã đối chiếu danh sách phụ kiện và xác minh người nhận đã nhận đủ.")
               : action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
               : requiresRecoveryCheck
               ? "Đã xác minh tình trạng món đồ và có đủ căn cứ áp dụng kết quả bàn giao này."

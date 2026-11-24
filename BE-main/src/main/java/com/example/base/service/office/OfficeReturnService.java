@@ -6,6 +6,7 @@ import com.example.base.entity.*;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.claim.P2pClaimAppealService;
+import com.example.base.service.report.ReportService;
 import com.example.base.service.report.WorkflowImages;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -23,6 +24,7 @@ import static com.example.base.service.office.OfficeAccess.bad;
 
 @Service @RequiredArgsConstructor
 public class OfficeReturnService {
+    private static final String NO_SHOW_REASON = "Không đến xác minh trong thời hạn.";
     // DaiHV integration: investigation holds apply to physical handover, not to reading the dossier.
     private final com.example.base.service.report.ReportHoldGuard reportHolds;
     private final OfficeAccess access;
@@ -50,8 +52,7 @@ public class OfficeReturnService {
             requireAvailable(c);
             if (activeAppointment(id)!=null) throw bad("Yêu cầu đã có lịch hẹn. Hãy tải lại hồ sơ.");
             OffsetDateTime now=OffsetDateTime.now();
-            if (!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
-                throw bad("Giờ hẹn cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
+            invitations.validatePickupSchedule(request.scheduledAt(),now);
             c.contactEmail(request.email().strip().toLowerCase(Locale.ROOT));
             appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
             c.touchWorkflow();
@@ -68,9 +69,10 @@ public class OfficeReturnService {
             Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
             requireAvailable(c);
             OffsetDateTime now=OffsetDateTime.now();
-            if(!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1))) throw bad("Lịch mới cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
+            invitations.validatePickupSchedule(request.scheduledAt(),now);
             Appointment old=scheduled(c);
             requireNotVerified(c,old);
+            requireVerificationWindow(old);
             old.cancelByOffice(request.reason().strip());
             appointments.flush();
             appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
@@ -93,6 +95,61 @@ public class OfficeReturnService {
         try { delivery=invitations.send(id)?"SENT":"FAILED"; }
         catch(RuntimeException failure) { delivery="FAILED"; }
         return new ReviewResult(id,"APPROVED",delivery);
+    }
+
+    public void expireMissedPickups() {
+        OffsetDateTime cutoff = OffsetDateTime.now().minusHours(24);
+        var due = jdbc.queryForList("""
+            select a.claim_id from appointment a join claim c using (claim_id) join post p using (post_id)
+            where a.status='SCHEDULED' and a.response_status='CONFIRMED' and a.scheduled_at<=?
+              and c.claim_type='OFFICE' and c.status='APPROVED'
+              and p.custody_mode='OFFICE' and p.status='RESERVED'
+              and not exists (
+                  select 1 from office_claim_verification v where v.appointment_id=a.appointment_id
+              )
+              and not exists (select 1 from office_handover h where h.claim_id=c.claim_id)
+            order by a.scheduled_at, a.appointment_id limit 100
+            """, Long.class,cutoff);
+        var tx = new TransactionTemplate(transactions);
+        for (long id : due) {
+            try {
+                tx.executeWithoutResult(ignored -> expireMissedPickup(id));
+            } catch (RuntimeException failure) {
+                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Could not expire office pickup for claim {}",id,failure);
+            }
+        }
+    }
+
+    private void expireMissedPickup(long id) {
+        Claim claim = lock(id);
+        if (!"APPROVED".equals(claim.getStatus())
+                || !"OFFICE".equals(claim.getPost().getCustodyMode())
+                || !"RESERVED".equals(claim.getPost().getStatus())) return;
+        Appointment appointment = activeAppointment(id);
+        if (appointment == null) return;
+        em.refresh(appointment,LockModeType.PESSIMISTIC_WRITE);
+        if (!"CONFIRMED".equals(appointment.getResponseStatus())
+                || !verificationExpired(appointment)
+                || verifications(id).stream().anyMatch(v -> v.appointmentId()==appointment.getId())
+                || handover(id)!=null) return;
+
+        appointment.cancelByOffice(NO_SHOW_REASON);
+        claim.cancel();
+        claim.getPost().reopenAfterClaimCancellation();
+        activities.save(new ClaimActivity(claim,appointment.getCreatedBy(),"CANCEL","APPROVED",NO_SHOW_REASON));
+        claims.flush();
+        appeals.reopen(claim);
+        if (claim.getClaimant()!=null) notifications.notifyUser(claim.getClaimant().getId(),"CLAIM_CANCELLED",
+            "Đã hủy yêu cầu nhận đồ #"+id,NO_SHOW_REASON,"/van-phong/claims/"+id,false);
+    }
+
+    private boolean verificationExpired(Appointment appointment) {
+        return !OffsetDateTime.now().isBefore(OfficePickupSchedule.verificationDeadline(appointment.getScheduledAt()));
+    }
+
+    private void requireVerificationWindow(Appointment appointment) {
+        if ("CONFIRMED".equals(appointment.getResponseStatus()) && verificationExpired(appointment))
+            throw bad("Đã hết hạn đến quầy xác minh.");
     }
 
     @Transactional
@@ -182,6 +239,7 @@ public class OfficeReturnService {
         requireAvailable(c);
         Appointment a=scheduled(c);
         if(!"CONFIRMED".equals(a.getResponseStatus())) throw bad("Người nhận cần đồng ý lịch hẹn trước khi xác minh tại quầy.");
+        requireVerificationWindow(a);
         jdbc.update("insert into office_claim_verification(claim_id,appointment_id,verified_by,result,note) values(?,?,?,?,?)",
                 id,a.getId(),actor.getId(),request.result(),request.note().strip());
         if("FAILED".equals(request.result())) {
@@ -339,6 +397,7 @@ public class OfficeReturnService {
         boolean preparing=officer && approved && h==null && a!=null && inStorage && !blocked && !onHold;
         boolean confirmed=a!=null&&"CONFIRMED".equals(a.getResponseStatus());
         boolean verified=confirmed&&!history.isEmpty()&&history.getFirst().appointmentId()==a.getId()&&"PASSED".equals(history.getFirst().result());
+        boolean missed=confirmed&&!verified&&verificationExpired(a);
         boolean canComplete=officer&&h!=null&&approved&&"WAITING_CONFIRMATION".equals(h.status());
         boolean rejectedAtCounter="REJECTED".equals(c.getStatus())&&!history.isEmpty()&&"FAILED".equals(history.getFirst().result());
         String next=h!=null?switch(h.status()) {case "COMPLETED"->"Đã hoàn tất trao trả.";case "DISPUTED"->"Đã ghi nhận phản ánh. Vui lòng liên hệ văn phòng.";default->"Đã có biên bản giao đồ. Nhân viên văn phòng cần xác nhận hoàn tất.";}
@@ -350,12 +409,15 @@ public class OfficeReturnService {
                     case REVIEW_REQUIRED -> "Kết luận tranh chấp yêu cầu xét duyệt lại.";
                     case CLEARED -> throw new IllegalStateException();
                 }:onHold?"Hồ sơ đang tạm dừng để xử lý báo cáo."
-                :a==null?"Đủ điều kiện lập lịch nhận tài sản.":!confirmed?OfficeAppointmentGuidance.pendingMessage(a,OffsetDateTime.now()):!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy.":"Đã xác minh. Có thể ghi nhận giao đồ.";
-        return new Workflow(history,h,preparing&&confirmed,preparing&&verified,preparing&&!verified,preparing&&!verified,
+                :a==null?"Đủ điều kiện lập lịch nhận tài sản.":!confirmed?OfficeAppointmentGuidance.pendingMessage(a,OffsetDateTime.now()):missed?"Đã hết hạn đến quầy xác minh.":!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy.":"Đã xác minh. Có thể ghi nhận giao đồ.";
+        return new Workflow(history,h,preparing&&confirmed&&!missed,preparing&&verified,preparing&&!verified&&!missed,preparing&&!verified,
             canComplete&&!blocked&&!onHold,next,officer&&approved&&h==null&&a==null&&inStorage&&!blocked&&!onHold,
             officer&&approved&&h==null&&!verified&&inStorage&&!onHold
                 && (window==null||window.state()==P2pClaimAppealService.State.OPEN||window.state()==P2pClaimAppealService.State.CLEARED),
             officer&&"PENDING".equals(c.getStatus())&&appeals.hasCompetitors(c),blocked?window.deadline():null,
-            filedAppeal==null?null:new FiledAppeal(filedAppeal.reportId(),filedAppeal.reportStatus()));
+            filedAppeal==null?null:new FiledAppeal(filedAppeal.reportId(),filedAppeal.reportStatus()),
+            a==null||verified?null:OfficePickupSchedule.verificationDeadline(a.getScheduledAt()),
+            h!=null&&"COMPLETED".equals(h.status())&&h.confirmedAt()!=null
+                ? ReportService.officeHandoverReportDeadline(h.confirmedAt()) : null);
     }
 }

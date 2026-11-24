@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { officeApi } from "../api/officeApi";
 import { workflowApi } from "../api/workflowApi";
 import useLoad from "../hooks/useLoad";
-import { date } from "../officeUtils";
+import { date, validateRequiredText } from "../officeUtils";
 import WorkflowPageFrame from "./WorkflowPageFrame";
 import LoadState from "./LoadState";
 import Notice from "./Notice";
@@ -51,7 +51,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
     event.preventDefault();
     if (busy || (receiving && (!files.length || !checked))) return;
     setError("");
-    setConfirmOpen(true);
+    if (validateRequiredText(event.currentTarget)) setConfirmOpen(true);
   }
   async function executeSubmit() {
     if (busy || (receiving && (!files.length || !checked))) return;

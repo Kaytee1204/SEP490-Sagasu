@@ -960,6 +960,13 @@
   background: #f4f8fb;
   margin: 12px 0;
 }
+.of-report-deadline {
+  margin-top: 8px;
+  font-weight: 600;
+}
+.of-report-deadline strong {
+  font-weight: 700;
+}
 .of-appointment {
   background: linear-gradient(120deg, #edf9f5, #f5fbff);
   border-color: #aad5c7;

@@ -28,6 +28,8 @@ export const date = (value) =>
       })
     : "—";
 
+export const closedAfterReturn = claim => claim.status === "CLOSED" && claim.closeReason === "ITEM_RETURNED";
+
 export function claimActivityReason(activity, hideVerificationNote = false) {
   const { action, reason } = activity;
   if (action === "AUTO_CLOSE" && reason === "ITEM_RETURNED") {
@@ -45,6 +47,33 @@ export function earliestAppointment() {
     timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).format(time).replace(' ', 'T');
+}
+
+export const pickupScheduleHint = "Đặt lịch từ thứ Hai đến thứ Năm, trong ca 08:00–12:00 hoặc 13:00–17:00 (giờ Việt Nam).";
+
+export function pickupScheduleError(value) {
+  if (!value) return "";
+  const [day, time] = value.split("T");
+  const weekday = new Date(day).getUTCDay();
+  const inWorkingHours = (time >= "08:00" && time < "12:00") || (time >= "13:00" && time < "17:00");
+  return weekday >= 1 && weekday <= 4 && inWorkingHours ? "" : pickupScheduleHint;
+}
+
+export function validateRequiredText(form) {
+  const textInputs = 'input[required]:enabled:is(:not([type]), [type="text"]), textarea[required]:enabled';
+  const blank = Array.from(form.querySelectorAll(textInputs)).find(field => !field.value.trim());
+  if (!blank) return true;
+
+  const clearError = () => {
+    blank.setCustomValidity("");
+    blank.removeEventListener("input", clearError);
+    blank.removeEventListener("blur", clearError);
+  };
+  blank.setCustomValidity("Nhập nội dung cho trường này.");
+  blank.addEventListener("input", clearError);
+  blank.addEventListener("blur", clearError);
+  blank.reportValidity();
+  return false;
 }
 
 export const progressLabels = {

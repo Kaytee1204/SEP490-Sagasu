@@ -222,6 +222,11 @@ public class ReportService {
     private void validateTarget(String type,Long id) {
         if(id==null || id<1 || !Set.of("POST","CLAIM").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
     }
+
+    public static OffsetDateTime officeHandoverReportDeadline(OffsetDateTime confirmedAt) {
+        return confirmedAt.plusDays(7);
+    }
+
     private void checkTarget(Submit r,long actor) {
         boolean allowed=switch(r.targetType()) {
             case "POST" -> {
@@ -231,9 +236,26 @@ public class ReportService {
                     throw new AppException(ErrorCode.REPORT_SELF_POST_NOT_ALLOWED);
                 yield post!=null && post.getDeletedAt()==null && "VISIBLE".equals(post.getModerationStatus());
             }
-            case "CLAIM" -> {Claim c=em.find(Claim.class,r.targetId()); yield c!=null && ((c.isOffice() && c.getClaimant()!=null && c.getClaimant().getId()==actor) || claimPolicy.reviewer(c,em.find(Account.class,actor)));}
+            case "CLAIM" -> {
+                Claim claim=em.find(Claim.class,r.targetId());
+                if (claim==null) yield false;
+                if (claim.isOffice() && claim.getClaimant()!=null && claim.getClaimant().getId()==actor) {
+                    if ("CLOSED".equals(claim.getStatus()) && "ITEM_RETURNED".equals(claim.getCloseReason()))
+                        throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE,
+                            "Yêu cầu đã đóng vì món đồ được trao theo yêu cầu khác.");
+                    yield true;
+                }
+                yield claimPolicy.reviewer(claim,em.find(Account.class,actor));
+            }
             default -> false;
         };
         if(!allowed)throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);
+        if ("CLAIM".equals(r.targetType())) {
+            var completedAt=jdbc.query("""
+                select confirmed_at from office_handover where claim_id=? and status='COMPLETED' and confirmed_at is not null
+                """,(row,index)->row.getObject("confirmed_at",OffsetDateTime.class),r.targetId()).stream().findFirst();
+            if (completedAt.filter(at -> !OffsetDateTime.now().isBefore(officeHandoverReportDeadline(at))).isPresent())
+                throw new AppException(ErrorCode.REPORT_HANDOVER_EXPIRED);
+        }
     }
 }

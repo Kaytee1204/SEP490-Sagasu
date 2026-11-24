@@ -233,8 +233,7 @@ public class OfficeClaimService {
                 deadline=appeals.open(c);
                 if (deadline==null && request.scheduledAt()!=null) {
                     OffsetDateTime now=OffsetDateTime.now();
-                    if (!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
-                        throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
+                    invitations.validatePickupSchedule(request.scheduledAt(),now);
                     if (clean(request.location())==null) throw bad("Nhập địa điểm nhận đồ.");
                     String recipient=clean(request.email());
                     if (recipient==null) recipient=recipient(c);
@@ -342,7 +341,8 @@ public class OfficeClaimService {
             detail?c.getEvidence().stream().map(e->new ClaimDetailDto.EvidenceDto(e.getId(),storage.readUrl(e.getStorageKey(),null),e.getOriginalName(),e.getMimeType(),e.getSizeBytes())).toList():List.of(),
             detail?activities.findByClaim_IdOrderByCreatedAtAscIdAsc(c.getId()).stream().map(e->new ClaimDetailDto.ActivityDto(e.getId(),e.getAction(),person(e.getActor()),e.getFromStatus(),e.getToStatus(),e.getReason(),e.getCreatedAt())).toList():List.of(),appointment,detail?c.getAnswers().stream().map(a->new AnswerView(a.getId(),a.getQuestionLabel(),a.getAnswerText(),a.getSectionTitle())).toList():List.of(),phase.stage(),phase.scheduledAt(),canReview,ownRequest,
             detail && ownRequest && ClaimService.canWithdrawOfficeRequest(c),
-            detail && canReview ? claims.lastWrongRecipientConclusion(c.getId()) : null);
+            detail && canReview ? claims.lastWrongRecipientConclusion(c.getId()) : null,
+            c.getCloseReason());
     }
 }
 

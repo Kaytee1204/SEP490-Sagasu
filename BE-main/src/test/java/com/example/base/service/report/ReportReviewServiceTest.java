@@ -173,13 +173,19 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void appealHistoryGroupsByReportIdSoSeparateDisputesOnTheSameClaimStayVisible() {
-        givenTotals(2L, 2L);
-        service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "HISTORY", null, user);
+    void appealHistoryGroupsByApprovalAndExpandsToIndividualReports() {
+        givenTotals(2L, 1L);
+        var grouped = service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "HISTORY", null, user);
+        var expanded = service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "HISTORY", null, "ALL", 30L, user);
 
-        String appealKey = "when appeal.report_id is not null then 'APPEAL:'||r.report_id";
-        verify(jdbc).queryForMap(contains(appealKey), any(Object[].class));
-        verify(jdbc).queryForList(contains(appealKey), any(Object[].class));
+        String appealKey = "when appeal.report_id is not null then 'APPEAL:'||appeal.approval_id";
+        verify(jdbc, times(2)).queryForMap(contains(appealKey), any(Object[].class));
+        verify(jdbc).queryForList(argThat(sql -> sql.contains(appealKey) && sql.contains("where object_row=1")),
+                any(Object[].class));
+        verify(jdbc).queryForList(argThat(sql -> sql.contains("and appeal.approval_id=?") && !sql.contains("where object_row=1")),
+                any(Object[].class));
+        assertThat(grouped).containsEntry("totalElements", 1L).containsEntry("totalReports", 2L);
+        assertThat(expanded).containsEntry("totalElements", 2L);
     }
 
     @Test
@@ -599,21 +605,21 @@ class ReportReviewServiceTest {
                 "active", true, "can_reopen_approval", true, "post_id", 10L, "finder_id", 8L,
                 "claim_type", "P2P", "waiting_other_appeals", true));
         rows(jdbc, "where appeal.approval_id=? and r.report_id<>?", row("report_id", 6L, "reporter_id", 9L, "status", "OPEN"));
-        when(jdbc.update(startsWith("update report set status='RESOLVED'"), anyString(), eq(1L), eq(6L))).thenReturn(1);
+        when(jdbc.update(startsWith("update report set status=?,resolution_note="),
+                eq("RESOLVED"), anyString(), eq(1L), eq(6L))).thenReturn(1);
         assertThat(service.detail(5L, user).get("actions")).isEqualTo(List.of("APPEAL_KEEP", "APPEAL_WRONG_RECIPIENT"));
         assertBad(() -> service.act(5L, action("RESOLVE"), user), "quyết định xử lý tranh chấp");
         assertBad(() -> service.act(5L, action("APPEAL_REQUIRE_REVIEW"), user), "Thao tác không hợp lệ");
         assertBad(() -> service.act(5L, action("APPEAL_WRONG_RECIPIENT"), user), "Cần xác nhận đã đối chiếu");
-        assertBad(() -> service.act(5L, new ReportReviewService.Action(3L, "APPEAL_WRONG_RECIPIENT",
-                "Conclusion", "Basis", null, false, null, true), user), "Cần xác minh đồ");
         service.act(5L, new ReportReviewService.Action(3L, "APPEAL_WRONG_RECIPIENT",
-                "Conclusion", "Basis", null, true, null, true), user);
+                "Conclusion", "Basis", null, false, null, true), user);
         verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
                 eq("APPEAL_WRONG_RECIPIENT"), eq("Conclusion"), eq("Basis"), anyString(),
                 contains("\"approvalReopened\":true"));
         verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L));
         verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(6L));
-        verify(jdbc).update(startsWith("update report set status='RESOLVED'"), contains("đã được mở lại"), eq(1L), eq(6L));
+        verify(jdbc).update(startsWith("update report set status=?,resolution_note="),
+                eq("RESOLVED"), contains("mở lại xét duyệt"), eq(1L), eq(6L));
         verify(notifications).notifyUserWithEmail(eq(8L), eq("REPORT_RESOLVED"), eq("Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt"),
                 anyString(), eq("/bai-dang/10/claims?claimStatus=PENDING"), contains("chọn người nhận"));
         verify(notifications).notifyUser(eq(9L), eq("REPORT_RESOLVED"), anyString(), anyString(), eq("/bao-cao/6#ket-qua"), eq(true));

@@ -123,6 +123,8 @@ function ReportDetail({ id }) {
           </div>
           {subject.value && <p className="report-detail-subject">{subject.label} <span className="report-meta-dot">·</span> <strong>{subject.value}</strong></p>}
           <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
+          {office && report.mine && report.report_type === 'HANDOVER_ISSUE' && !concluded &&
+            <p className="report-detail-subject">Báo cáo đã gửi vẫn được xem xét sau khi hết hạn gửi sự cố.</p>}
           {(submission || report.report_reason) && <section className="report-submission">
             <h2>{isAppeal ? 'Nội dung tranh chấp' : 'Nội dung báo cáo'}{evidence.length > 0 && ` · ${evidence.length} ảnh`}</h2>
             <dl className="report-detail-fields">
