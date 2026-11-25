@@ -1,6 +1,7 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, AlertTriangle, Check, Info, X } from 'lucide-react';
+import './ConfirmActionPopup.css';
 
 const VARIANT_CONFIG = {
   warning: {
@@ -40,19 +41,26 @@ export default function ConfirmActionPopup({
 }) {
   const titleId = useId();
   const descId = useId();
+  const dialogRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && !busy) {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose?.();
+    const el = dialogRef.current;
+    if (!open || !el) return;
+
+    if (!el.open) {
+      try {
+        el.showModal();
+      } catch {
+        el.setAttribute('open', '');
+      }
+    }
+
+    return () => {
+      if (el.open) {
+        el.close();
       }
     };
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [open, busy, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -80,26 +88,22 @@ export default function ConfirmActionPopup({
   };
 
   const modalNode = (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={dialogRef}
+      className="confirm-action-popup-dialog"
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
+      onCancel={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!busy) {
+          onClose?.();
+        }
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           handleClose(e);
         }
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 10050,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        backgroundColor: 'rgba(15, 23, 42, 0.48)',
-        backdropFilter: 'blur(2px)',
       }}
     >
       <div
@@ -197,7 +201,7 @@ export default function ConfirmActionPopup({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 
   return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
