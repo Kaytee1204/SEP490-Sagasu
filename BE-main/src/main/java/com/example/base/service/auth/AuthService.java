@@ -350,6 +350,8 @@ public class AuthService {
         Account account = accountRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
 
+        // GBR-06: chỉ tài khoản được phép đăng nhập mới nhận token qua OTP
+        validateAccountCanAuthenticate(account);
         validateAccountObjectAndVerifyOtp(account, request.getOtp().trim(), purpose);
 
         recordAuditLog(account, "OTP_VERIFY_" + purpose.name(), true, Map.of("purpose", purpose.name()));
@@ -432,11 +434,14 @@ public class AuthService {
                         : java.util.Optional.empty())
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
 
-        validateAccountObjectAndVerifyOtp(account, request.getOtp().trim(), OtpPurpose.FORGOT_PASSWORD);
+        // Kiểm tra OTP nhưng chưa đánh dấu đã dùng: nhập trùng mật khẩu cũ thì vẫn dùng lại OTP được
+        OtpChallenge challenge = verifyOtpChallenge(account, request.getOtp().trim(), OtpPurpose.FORGOT_PASSWORD);
 
         if (passwordEncoder.matches(request.getNewPassword(), account.getPasswordHash())) {
             throw new AppException(ErrorCode.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại");
         }
+        challenge.setUsedAt(OffsetDateTime.now());
+        otpChallengeRepository.save(challenge);
 
         // DaiHV integration: reset credentials only unlocks automatic password-failure locks,
         // not an administrative suspension imposed while resolving a report.
@@ -463,6 +468,12 @@ public class AuthService {
     }
 
     private void validateAccountObjectAndVerifyOtp(Account account, String rawOtp, OtpPurpose purpose) {
+        OtpChallenge challenge = verifyOtpChallenge(account, rawOtp, purpose);
+        challenge.setUsedAt(OffsetDateTime.now());
+        otpChallengeRepository.save(challenge);
+    }
+
+    private OtpChallenge verifyOtpChallenge(Account account, String rawOtp, OtpPurpose purpose) {
         OtpChallenge challenge = otpChallengeRepository
                 .findFirstByAccount_IdAndPurposeAndUsedAtIsNullAndRevokedAtIsNullOrderByCreatedAtDesc(account.getId(), purpose)
                 .orElseThrow(() -> new AppException(ErrorCode.OTP_NOT_FOUND));
@@ -491,9 +502,7 @@ public class AuthService {
             recordAuditLog(account, "OTP_VERIFY_FAILED", false, Map.of("purpose", purpose.name(), "attempts", newAttempts));
             throw new AppException(ErrorCode.OTP_INVALID);
         }
-
-        challenge.setUsedAt(now);
-        otpChallengeRepository.save(challenge);
+        return challenge;
     }
 
     private void validateAccountCanAuthenticate(Account account) {
@@ -504,6 +513,10 @@ public class AuthService {
             throw new AppException(ErrorCode.ACCOUNT_LOCKED, account.getFailedLoginCount()>=5
                     ? "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp."
                     : "Tài khoản đang bị đình chỉ. Liên hệ văn phòng để được hỗ trợ.");
+        }
+        // GBR-06: tài khoản chờ kích hoạt chưa được đăng nhập
+        if (account.getStatus() == AccountStatus.PENDING_ACTIVATION) {
+            throw new AppException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản chưa được kích hoạt. Liên hệ văn phòng để được hỗ trợ.");
         }
         OffsetDateTime now = OffsetDateTime.now();
         if (account.getLockedUntil() != null && account.getLockedUntil().isAfter(now)) {

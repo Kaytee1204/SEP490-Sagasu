@@ -280,6 +280,18 @@ public class AccountService {
         account.setCreatedBy(actor);
 
         Account saved = accountRepository.save(account);
+
+        // SRS UC-10 Postcondition 3: ghi audit khi tạo tài khoản
+        Map<String, Object> details = new HashMap<>();
+        details.put("role", saved.getRole().name());
+        details.put("createdById", actor != null ? actor.getId() : null);
+        LoginAuditLog auditLog = new LoginAuditLog();
+        auditLog.setAccount(saved);
+        auditLog.setEventType("ACCOUNT_CREATED");
+        auditLog.setSuccess(true);
+        auditLog.setDetails(details);
+        loginAuditLogRepository.save(auditLog);
+
         AccountDto dto = accountMapper.toDto(saved);
         dto.setGeneratedPassword(rawPassword);
         return dto;
@@ -292,6 +304,11 @@ public class AccountService {
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
 
         enforceRoleHierarchy(actor, account.getRole());
+
+        // SRS UC-11 E1: ngày gia hạn phải ở tương lai
+        if (request.getValidUntil() != null && !request.getValidUntil().isAfter(OffsetDateTime.now())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Ngày gia hạn phải ở tương lai");
+        }
 
         // Chỉ ADMIN mới được phép thay đổi Role (Vai trò)
         if (request.getRole() != null && request.getRole() != account.getRole()) {
@@ -334,6 +351,11 @@ public class AccountService {
 
         if (request.getStatus() != null) {
             account.setStatus(request.getStatus());
+            // SRS UC-12 Alt 2.1: mở khóa thì xóa bộ đếm đăng nhập sai
+            if (request.getStatus() == AccountStatus.ACTIVE) {
+                account.setFailedLoginCount(0);
+                account.setLockedUntil(null);
+            }
             if (request.getStatus() == AccountStatus.DELETED || request.getStatus() == AccountStatus.SUSPENDED) {
                 revokeAllRefreshTokens(account.getId());
             }
