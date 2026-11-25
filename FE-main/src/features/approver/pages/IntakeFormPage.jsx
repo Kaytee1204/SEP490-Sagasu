@@ -24,7 +24,7 @@ function ReceiptEditor({ receipt, categories, locations }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(() => ({
     title: receipt?.title || '', categoryId: String(receipt?.categoryId || ''), description: receipt?.description || '',
-    conditionAtReceipt: receipt?.conditionAtReceipt || '', foundLocation: receipt?.foundLocation || '',
+    itemSummary: receipt?.itemSummary || '', conditionAtReceipt: receipt?.conditionAtReceipt || '', foundLocation: receipt?.foundLocation || '',
     foundAt: vietnamInput(receipt?.foundAt || new Date().toISOString()),
     privateIdentifiers: receipt?.privateIdentifiers || '', note: receipt?.note || '',
     storageLocationId: String(receipt?.storageLocationId || ''),
@@ -103,6 +103,7 @@ function ReceiptEditor({ receipt, categories, locations }) {
     if (!form.title.trim()) nextErrors.title = 'Nhập tên đồ vật để nhận diện hồ sơ.';
     if (!categories.some((category) => String(category.categoryId) === form.categoryId)) nextErrors.categoryId = 'Chọn một danh mục đang hoạt động.';
     if (!form.description.trim()) nextErrors.description = 'Mô tả màu sắc, đặc điểm hoặc thương hiệu của đồ vật.';
+    if (!form.itemSummary.trim()) nextErrors.itemSummary = 'Vui lòng ghi danh sách tài sản và phụ kiện tiếp nhận.';
     if (!form.conditionAtReceipt.trim()) nextErrors.conditionAtReceipt = 'Ghi rõ tình trạng đồ vật khi văn phòng tiếp nhận.';
     if (!form.foundLocation.trim()) nextErrors.foundLocation = 'Nhập vị trí tìm thấy đồ vật.';
     const foundAt = form.foundAt ? new Date(`${form.foundAt}:00+07:00`) : null;
@@ -127,7 +128,7 @@ function ReceiptEditor({ receipt, categories, locations }) {
     } finally { pending.current = false; setBusy(false); }
   };
 
-  const complete = [!!form.title.trim(), !!form.categoryId, !!form.description.trim(), !!form.conditionAtReceipt.trim(), !!form.foundLocation.trim(), !!form.foundAt, kept.length + files.length > 0].filter(Boolean).length;
+  const complete = [!!form.title.trim(), !!form.categoryId, !!form.description.trim(), !!form.itemSummary.trim(), !!form.conditionAtReceipt.trim(), !!form.foundLocation.trim(), !!form.foundAt, kept.length + files.length > 0].filter(Boolean).length;
   return <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
     <Link to={receipt ? `/approver/receipts/${receipt.id}` : '/approver/receipts'} className="mb-5 inline-flex items-center gap-2 text-base font-medium text-slate-600 hover:text-teal-700"><ArrowLeft size={16} />{receipt ? 'Về chi tiết hồ sơ' : 'Hồ sơ tiếp nhận'}</Link>
     <div className="mb-6"><p className="mb-2 text-sm font-bold tracking-wide text-teal-700">Tiếp nhận tại văn phòng</p><h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">{receipt ? 'Hoàn thiện hồ sơ nháp' : 'Lập hồ sơ tiếp nhận'}</h1><p className="mt-2 text-base leading-6 text-slate-600">Ghi nhận tài sản đã được mang đến văn phòng. Lưu nháp, xem lại thông tin và xác nhận tiếp nhận để đăng bài.</p></div>
@@ -140,7 +141,8 @@ function ReceiptEditor({ receipt, categories, locations }) {
                 <Field name="title" label="Tên đồ vật" required error={errors.title}><input {...control('title')} maxLength={200} placeholder="Ví dụ: Ví da màu nâu, điện thoại Samsung màu đen" /></Field>
                 <Field name="categoryId" label="Danh mục" required error={errors.categoryId}><select {...control('categoryId')}><option value="">Chọn loại đồ vật</option>{receipt && !categories.some((category) => category.categoryId === receipt.categoryId) && <option value={receipt.categoryId} disabled>{receipt.categoryName} — đã ngừng sử dụng</option>}{categories.map((category) => <option key={category.categoryId} value={category.categoryId}>{category.name}</option>)}</select></Field>
                 <Field name="description" label="Mô tả nhận diện" required error={errors.description} hint="Ghi đặc điểm nhìn thấy được. Thông tin bí mật có ô riêng bên dưới."><textarea {...control('description')} rows={3} maxLength={5000} placeholder="Màu sắc, kích thước, thương hiệu, phụ kiện đi kèm…" /></Field>
-                <Field name="conditionAtReceipt" label="Tình trạng khi tiếp nhận" required error={errors.conditionAtReceipt}><textarea {...control('conditionAtReceipt')} rows={3} maxLength={2000} placeholder="Ví dụ: Vỏ trầy nhẹ, màn hình nứt góc phải, không lên nguồn." /></Field>
+                <Field name="itemSummary" label="Tài sản và phụ kiện tiếp nhận" required error={errors.itemSummary}><textarea {...control('itemSummary')} rows={3} maxLength={2000} placeholder="Ví dụ: 01 điện thoại, 01 ốp lưng, 01 dây sạc." /></Field>
+                <Field name="conditionAtReceipt" label="Tình trạng tài sản khi tiếp nhận" required error={errors.conditionAtReceipt}><textarea {...control('conditionAtReceipt')} rows={3} maxLength={2000} placeholder="Ví dụ: Vỏ trầy nhẹ, màn hình nứt góc phải, không lên nguồn." /></Field>
               </div>
             </Section>
             <Section number="02" title="Nơi & thời gian nhặt" subtitle="Thông tin giúp đối chiếu với người báo mất.">
@@ -161,7 +163,7 @@ function ReceiptEditor({ receipt, categories, locations }) {
       </fieldset>
       <div ref={errorElement} className={error ? 'mt-5' : ''}>{error && <ReceiptError message={error} />}</div>
       <div className="sticky bottom-0 z-10 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-t border-slate-200 bg-white/95 px-3 py-4 backdrop-blur-sm sm:px-5">
-        <p className="text-sm text-slate-600"><span className="font-semibold text-teal-700">{complete}/7</span> mục bắt buộc đã điền{dirty && <span className="ml-2 hidden sm:inline">· Có thay đổi chưa lưu</span>}</p>
+        <p className="text-sm text-slate-600"><span className="font-semibold text-teal-700">{complete}/8</span> mục bắt buộc đã điền{dirty && <span className="ml-2 hidden sm:inline">· Có thay đổi chưa lưu</span>}</p>
         <div className="flex gap-3"><button type="button" disabled={busy} onClick={cancel} className="rounded-xl border border-slate-200 px-4 py-2.5 text-base font-semibold text-slate-600 disabled:opacity-50">Hủy</button><button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-2.5 text-base font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{busy ? <LoaderCircle size={17} className="animate-spin" /> : <Save size={17} />}{busy ? 'Đang lưu hồ sơ…' : receipt ? 'Lưu & xem lại' : 'Lưu nháp & xem lại'}</button></div>
       </div>
     </form>

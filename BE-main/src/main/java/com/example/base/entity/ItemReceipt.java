@@ -22,6 +22,7 @@ public class ItemReceipt {
     @JoinColumn(name = "category_id") private Category category;
     @Column(nullable = false, length = 200) private String title;
     @Column(nullable = false, columnDefinition = "text") private String description;
+    @Column(name = "item_summary", columnDefinition = "text") private String itemSummary;
     @Column(name = "condition_at_receipt", columnDefinition = "text") private String conditionAtReceipt;
     @Column(name = "found_location", nullable = false, columnDefinition = "text") private String foundLocation;
     @Column(name = "found_at", nullable = false) private OffsetDateTime foundAt;
@@ -64,17 +65,22 @@ public class ItemReceipt {
     }
 
     // DaiHV integration: retain the existing post and its claim IDs when receiving a transfer.
-    public static ItemReceipt transferred(String code, Account officer, Post post, String condition, StorageLocation location) {
+    public static ItemReceipt transferred(String code, Account officer, Post post, String items,
+                                          String condition, StorageLocation location) {
         ItemReceipt receipt = draft(code, officer);
         receipt.source = "EXISTING_POST";
         receipt.edit(post.getCategory(), post.getTitle(), post.getDescription(), condition,
                 post.getLocationText(), post.getEventAt(), post.getPrivateIdentifiers(), null);
+        receipt.recordItems(items);
         receipt.assignLocation(location);
         // Office integration: actual receipt photos are attached by OfficeTransferService; original post photos stay on the post.
         receipt.receiveAndPublish(officer, post.getId());
         return receipt;
     }
     public void returnedByOffice() { status = "RETURNED"; updatedAt = OffsetDateTime.now(); }
+    public void restoreToOfficeStorage() { status = "IN_STORAGE"; updatedAt = OffsetDateTime.now(); }
+
+    public void recordItems(String items) { itemSummary = cleanOptional(items); updatedAt = OffsetDateTime.now(); }
 
     public void receiveAndPublish(Account officer, Long publishedPostId) {
         if (!java.util.Set.of("DRAFT", "SUBMITTED").contains(status) || "REJECTED".equals(reviewStatus) || postId != null || receivedAt != null

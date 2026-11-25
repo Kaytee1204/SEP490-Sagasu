@@ -136,8 +136,14 @@ export function participantRoles(data, accountId) {
   const isAppeal = caseKind === "CLAIM_APPEAL";
   const roles = [];
   if (accountId === report.reporter_id) roles.push(isAppeal ? "Người gửi tranh chấp" : "Người gửi báo cáo");
-  if (caseKind === "HANDOVER_ISSUE" && accountId === data.current?.post?.account_id) roles.push("Người giao");
-  if (caseKind === "HANDOVER_ISSUE" && accountId === data.current?.claim?.claimant_id) roles.push("Người nhận đã duyệt");
+  if (data.handoverSource === "OFFICE") {
+    if (accountId === data.current?.receipt?.received_by_id) roles.push("Nhân viên tiếp nhận");
+    if (accountId === data.current?.officeHandover?.recorded_by) roles.push("Nhân viên bàn giao");
+    if (accountId === data.current?.officeHandover?.recipient_id) roles.push("Người nhận tại quầy");
+  } else if (caseKind === "HANDOVER_ISSUE") {
+    if (accountId === data.current?.post?.account_id) roles.push("Người giao");
+    if (accountId === data.current?.claim?.claimant_id) roles.push("Người nhận đã duyệt");
+  }
   if (isAppeal && accountId === approvedContext?.claim?.claimant_id) roles.push("Người được chấp thuận");
   if (isAppeal && appeal && accountId === appeal.finder_id) {
     roles.push(appeal.claim_type === "P2P" ? "Người đăng bài (người nhặt được)" : "Người đăng bài");

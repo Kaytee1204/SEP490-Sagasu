@@ -10,6 +10,7 @@ import WorkflowPageFrame from "./WorkflowPageFrame";
 import LoadState from "./LoadState";
 import Notice from "./Notice";
 import IntakeEvidencePicker from "./IntakeEvidencePicker";
+import IntakeAssetFields from "./IntakeAssetFields";
 import IntakeScheduleForm from "./IntakeScheduleForm";
 import TransferStage from "./TransferStage";
 import { transferStage } from "../transferStage";
@@ -21,7 +22,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
   const state = useLoad(() => workflowApi.transfer(id), id);
   const locations = useLoad(() => !mine && user?.role === "APPROVER" ? officeApi.locations() : Promise.resolve([]), "locations");
   const [selectedMode, setMode] = useState(openSchedule ? "schedule" : null);
-  const [form, setForm] = useState({ locationId: "", condition: "", reason: "", reconciliationNote: "" });
+  const [form, setForm] = useState({ locationId: "", items: "", condition: "", reason: "", reconciliationNote: "" });
   const [checked, setChecked] = useState(false);
   const [files,setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -91,6 +92,10 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
         {transfer.reason && <div className="of-reason"><strong>Lý do:</strong><p className="of-prose">{transfer.reason}</p></div>}
         {transfer.reconciliationNote && <p className="of-prose">{transfer.reconciliationNote}</p>}
         {transfer.receiptId && <p>Hồ sơ tiếp nhận #{transfer.receiptId} · Văn phòng đang phụ trách đồ vật này.</p>}
+        {transfer.receiptId && <dl className="of-facts">
+          <div><dt>Tài sản và phụ kiện tiếp nhận</dt><dd className="of-prose">{transfer.receiptItems || "Chưa ghi nhận riêng"}</dd></div>
+          <div><dt>Tình trạng tài sản khi tiếp nhận</dt><dd className="of-prose">{transfer.receiptCondition || "Chưa ghi nhận"}</dd></div>
+        </dl>}
         {transfer.receiptId && <section><h3>Ảnh khi văn phòng tiếp nhận</h3>
           {transfer.receiptEvidence?.length ? <div className="of-gallery">{transfer.receiptEvidence.map((url,i)=><a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Ảnh tiếp nhận ${i+1}`} /></a>)}</div> : <p className="of-muted">Phiếu cũ chưa lưu ảnh tiếp nhận riêng.</p>}
         </section>}
@@ -131,7 +136,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
           {receiving ? <>
             <label>Vị trí lưu kho *<select required value={form.locationId} disabled={busy || locations.loading} onChange={(e) => change("locationId", e.target.value)}><option value="">Chọn vị trí</option>{(locations.data || []).filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</select></label>
             <Notice error>{locations.error}</Notice>
-            <label>Tình trạng đồ khi nhận *<textarea required maxLength={2000} value={form.condition} disabled={busy} onChange={(e) => change("condition", e.target.value)} /></label>
+            <IntakeAssetFields items={form.items} condition={form.condition} onChange={change} disabled={busy} />
             {transfer.previousHandovers > 0 && <label>Đối chiếu việc giao lại đồ *<small>Đã có biên bản giao đồ trước đó. Ghi rõ người giao lại và tình trạng đồ thực tế.</small><textarea required maxLength={2000} value={form.reconciliationNote} disabled={busy} onChange={(e) => change("reconciliationNote", e.target.value)} /></label>}
             <IntakeEvidencePicker files={files} setFiles={setFiles} disabled={busy} />
           <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi đã trực tiếp nhận và kiểm tra đúng đồ.</span></label>

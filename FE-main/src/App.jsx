@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import HomePage from '@/features/home/pages/HomePage';
 import LandingLoginPage from '@/features/home/pages/LandingLoginPage';
@@ -24,6 +24,7 @@ import StoragePage from '@/features/office/pages/StoragePage';
 import OfficeClaimList from '@/features/office/pages/OfficeClaimList';
 import OfficeClaimForm from '@/features/office/pages/OfficeClaimForm';
 import OfficeClaimDetail from '@/features/office/pages/OfficeClaimDetail';
+import { counterConfirmationReturn } from '@/features/office/officeRoutes';
 import InvitationPage from '@/features/office/pages/InvitationPage';
 // DaiHV integration: office custody requests share the existing protected layouts.
 import OfficeTransfers from '@/features/office/pages/OfficeTransfers';
@@ -52,9 +53,12 @@ import SavedPostsProvider from '@/features/items/context/SavedPostsProvider';
 
 function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
   const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
+  const location = useLocation();
 
   if (!isAuthenticated) {
-    return <Navigate to="/dang-nhap" replace />;
+    // A counter QR may be scanned before the recipient signs in.
+    const officeReceipt = counterConfirmationReturn(location.pathname + location.hash);
+    return <Navigate to="/dang-nhap" replace state={officeReceipt ? { officeReceipt } : undefined} />;
   }
 
   // Chỉ ADMIN và MANAGER mới được phép vào trang Dashboard (/admin)
@@ -82,6 +86,8 @@ function ReportWorkspaceRedirect({ results = false }) {
 function AppRoutes() {
   const { isAuthenticated, isAdmin, isApprover } = useAuth();
   const postLoginRedirect = isApprover ? '/approver/receipts' : isAdmin ? '/admin' : '/';
+  const location = useLocation();
+  const officeReceipt = counterConfirmationReturn(location.state?.officeReceipt);
 
   return (
     <Routes>
@@ -90,7 +96,7 @@ function AppRoutes() {
       {/* ── AUTH ROUTES (Dành cho tất cả các Role) ── */}
       <Route
         path="/dang-nhap"
-        element={isAuthenticated ? <Navigate to={postLoginRedirect} replace /> : <AuthPage defaultMode="login" />}
+        element={isAuthenticated ? <Navigate to={officeReceipt || postLoginRedirect} replace /> : <AuthPage defaultMode="login" />}
       />
       <Route path="/login" element={<Navigate to="/dang-nhap" replace />} />
       <Route

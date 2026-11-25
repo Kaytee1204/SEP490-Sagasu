@@ -9,6 +9,10 @@
 .report-dialog textarea { min-height:90px; }
 .report-target-context { display:grid; gap:4px; padding:12px 14px; border-radius:10px; background:#f1f8f7; overflow-wrap:anywhere; }
 .report-target-context > span { font-size:.78rem; color:#58747b; }
+.report-office-facts { display:grid; gap:6px; margin:6px 0 0; font-size:.875rem; }
+.report-office-facts > div { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:baseline; }
+.report-office-facts dt { color:#476268; }
+.report-office-facts dd { margin:0; font-weight:600; }
 .report-reason-picker { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; min-width:0; border:0; padding:0; margin:0; }
 .report-reason-picker legend { margin-bottom:10px; font-size:.9rem; font-weight:600; }
 .report-reason-picker label.report-reason-option { display:flex; flex-direction:row; align-items:center; gap:10px; min-height:44px; padding:10px 12px; border:1px solid #dbe7e9; border-radius:10px; font-size:.9rem; line-height:1.45; cursor:pointer; }

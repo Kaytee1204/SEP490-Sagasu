@@ -51,6 +51,9 @@ public class Appointment {
         responseTokenHash = null;
     }
     public void completeAtOffice() { status = "COMPLETED"; responseTokenHash = null; }
+    public void restoreAfterOfficeHandover() {
+        if ("COMPLETED".equals(status) && "CONFIRMED".equals(responseStatus)) status = "SCHEDULED";
+    }
     @PrePersist void create() { createdAt = updatedAt = OffsetDateTime.now(); }
     @PreUpdate void update() { updatedAt = OffsetDateTime.now(); }
 }

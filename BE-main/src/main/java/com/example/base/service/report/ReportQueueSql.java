@@ -25,7 +25,7 @@ final class ReportQueueSql {
           or (chosen.claim_type='OFFICE' and exists (
             select 1 from item_receipt receipt where receipt.post_id=p.post_id and receipt.status='IN_STORAGE'
           ) and not exists (
-            select 1 from office_handover office_record where office_record.claim_id=chosen.claim_id
+            select 1 from office_handover office_record where office_record.claim_id=chosen.claim_id and office_record.status<>'CANCELLED'
           )))
         and not exists (
           select 1 from p2p_claim_appeal custody_appeal join report_inquiry inquiry using (report_id)
@@ -62,7 +62,8 @@ final class ReportQueueSql {
       left join lateral (
         select min(ap.scheduled_at) as next_pickup
         from appointment ap join claim scheduled on scheduled.claim_id=ap.claim_id
-        where r.kind='HANDOVER_ISSUE' and appeal.report_id is null and scheduled.post_id=p.post_id
+        where r.kind='HANDOVER_ISSUE' and appeal.report_id is null and office_issue.report_id is null
+          and scheduled.post_id=p.post_id
           and scheduled.status='APPROVED' and ap.status='SCHEDULED'
           and coalesce(ap.response_status,'LEGACY') not in ('DECLINED','EXPIRED') and ap.scheduled_at>=now()
       ) pickup on true

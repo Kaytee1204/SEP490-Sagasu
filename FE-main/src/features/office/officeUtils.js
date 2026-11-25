@@ -28,7 +28,6 @@ export const date = (value) =>
       })
     : "—";
 
-export const closedAfterReturn = claim => claim.status === "CLOSED" && claim.closeReason === "ITEM_RETURNED";
 
 export function claimActivityReason(activity, hideVerificationNote = false) {
   const { action, reason } = activity;
@@ -85,5 +84,7 @@ export const progressLabels = {
   REVIEW: "Chờ xét duyệt", NEEDS_INFO: "Chờ bổ sung thông tin", EMAIL_UNSENT: "Cần gửi lịch hẹn",
   AWAITING_REPLY: "Chờ đồng ý lịch hẹn", REPLY_EXPIRED: "Hết hạn phản hồi lịch", COUNTER_VERIFICATION: "Chờ đến xác minh", VERIFICATION_FAILED: "Không đạt xác minh",
   READY_TO_HANDOVER: "Sẵn sàng trao trả", OFFICE_COMPLETION: "Cần xác nhận hoàn tất", COMPLETED: "Đã trao trả",
+  AWAITING_RECEIPT: "Chờ người nhận xác nhận",
+  COUNTER_CONFIRMATION_EXPIRED: "Hết hạn xác nhận tại quầy",
   DISPUTED: "Có phản ánh cần xử lý", REJECTED: "Đã từ chối", CANCELLED: "Đã hủy", CLOSED: "Đã kết thúc",
 };

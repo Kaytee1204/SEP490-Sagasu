@@ -10,6 +10,7 @@ import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
 import { ItemPostSummary } from "@/features/chat/components/ChatItemPanel";
 import AppealEvidenceComparison from "./AppealEvidenceComparison";
+import OfficeHandoverEvidence from "./OfficeHandoverEvidence";
 import useReportResource from "@/features/reports/hooks/useReportResource";
 import { appealInstruction, appealSteps } from "@/features/reports/utils/reportUtils";
 import { handoverStatusLabels, incidentPhaseLabels } from "@/features/handover/utils/issueForm";
@@ -80,6 +81,7 @@ function ContextDisclosure({ title, children }) {
 
 function Evidence({ data }) {
   const { current, approvedContext } = data;
+  if (data.handoverSource === "OFFICE") return <OfficeHandoverEvidence data={data} />;
   const snapshot = data.snapshot?.payload;
   const post = current.post?.post_id ? current.post : snapshot?.post;
   const images = [current.postImages, snapshot?.postImages].find(list => list?.some(image => image.url))?.filter(image => image.url) ?? [];
@@ -132,9 +134,16 @@ const handoverInstructions = {
   P2P_HANDOVER_THREAT: "Xem bằng chứng, hỏi riêng người báo và bên được phản ánh. Tạm dừng giao nhận nếu việc gặp trực tiếp có rủi ro.",
 };
 
+const officeHandoverInstructions = {
+  HANDOVER_WRONG_ITEM: "Đối chiếu đặc điểm tài sản trên phiếu tiếp nhận, biên bản bàn giao và ảnh người nhận cung cấp. Ghi nhận kết quả đổi đúng tài sản nếu xác minh có nhầm lẫn.",
+  HANDOVER_MISSING_ITEMS: "Đối chiếu danh sách phụ kiện và giải trình chênh lệch. Xác minh với nhân viên bàn giao và người nhận về phần còn thiếu.",
+  HANDOVER_CONDITION: "So sánh ảnh và mô tả tình trạng lúc tiếp nhận, lúc bàn giao và do người nhận cung cấp. Ghi rõ chênh lệch đã xác minh.",
+};
+
 function FollowUp({ data }) {
   const { caseKind, report, appeal, recoveryRequested, decisions } = data;
   const appealCase = caseKind === "CLAIM_APPEAL";
+  const officeHandover = data.handoverSource === "OFFICE";
   const assigned = data.assigneeName || "Quản lý phụ trách";
   const lastDecision = decisions?.at(-1)?.action;
   const needsReview = appealCase && report.status === "RESOLVED" && appeal?.active;
@@ -160,7 +169,7 @@ function FollowUp({ data }) {
     const overdue = questions.filter(i => i.overdue);
     const outstanding = overdue.map(i => [i.recipient, verificationLabels[i.verification_kind]].filter(Boolean).join(" · ")).join(", ");
     text = overdue.length ? `Quá hạn phản hồi của ${outstanding}. Xem trao đổi và kết luận theo căn cứ hiện có.` : "Chờ bổ sung thông tin. Mở Trao đổi để xem câu hỏi và hạn phản hồi của từng người.";
-    if (overdue.length && caseKind === "HANDOVER_ISSUE") {
+    if (overdue.length && caseKind === "HANDOVER_ISSUE" && !officeHandover) {
       const giverId = data.current.post?.account_id;
       const missingGiver = overdue.some(i => i.recipient_id === giverId);
       const missingReceiver = overdue.some(i => i.recipient_id === data.current.claim?.claimant_id);
@@ -200,6 +209,7 @@ function FollowUp({ data }) {
 
   if (!text && data.canProcess) text = caseKind === "CLAIM_APPEAL"
     ? "Đối chiếu câu trả lời và ảnh của hai người trước khi ghi kết luận."
+    : officeHandover ? officeHandoverInstructions[report.reason_code] || "Đối chiếu phiếu tiếp nhận, biên bản bàn giao và tài liệu người nhận cung cấp trước khi ghi kết luận."
     : caseKind === "HANDOVER_ISSUE" ? (handoverInstructions[report.reason_code] || "Đối chiếu ảnh bàn giao và xác minh ai đang giữ món đồ trước khi ghi kết luận.")
       : "Đối chiếu nội dung bị báo cáo, ghi kết luận và chọn biện pháp nếu xác định có vi phạm.";
   return text && <div className="rr-callout rr-follow-up">
@@ -341,6 +351,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
   const kind = data?.caseKind;
   const isViolation = kind === "GENERAL";
   const isAppeal = kind === "CLAIM_APPEAL";
+  const officeHandover = data?.handoverSource === "OFFICE";
   const current = data?.current;
   const reporter = current?.participants.find(person => person.id === report.reporter_id);
   const thumbnail = current?.postImages?.[0]?.url || data?.snapshot?.payload?.postImages?.[0]?.url;
@@ -366,6 +377,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
         <div>
           <div className="rr-detail-meta">
             <span>{type}</span>
+            {(officeHandover || data.appeal?.claim_type === "OFFICE") && <span>Văn phòng</span>}
           </div>
           <h1>{subject}</h1>
           <div className="rr-detail-meta">
@@ -401,7 +413,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
           </div>}
           {(isViolation ? (inquiryData || data.inquiries.length > 0) : tab === "inquiries") && <div id="trao-doi" tabIndex={-1} className="rr-stack">
             <Inquiries data={data} onSaved={setData} open={!!inquiryData} setOpen={value => setInquiryData(value ? data : null)} draftData={inquiryData} />
-            {!isViolation && !isAppeal && !data.conflict && (report.claim_id || report.message_id) && <ChatContext id={id} reportedMessage={report.message_id} />}
+            {!isViolation && !isAppeal && !officeHandover && !data.conflict && (report.claim_id || report.message_id) && <ChatContext id={id} reportedMessage={report.message_id} />}
           </div>}
           {!isViolation && !isAppeal && tab === "history" && <div className="rr-stack">
             <HistoryPanel history={data.history} decisions={data.decisions} />

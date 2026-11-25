@@ -23,6 +23,10 @@ public class ReportContextService {
       post = id(report, "post_id"),
       message = id(report, "message_id"),
       target = id(report, "reported_account_id");
+    Long officeHandoverId = "HANDOVER_ISSUE".equals(report.get("kind"))
+        ? id(one("select handover_id from office_handover_issue where report_id=?", id(report, "report_id")), "handover_id")
+        : null;
+    if (officeHandoverId != null) result.put("handoverSource", "OFFICE");
     if (message != null) {
       var m = one(
         "select message_id,conversation_id,sender_id,sequence_no,message_type,body,created_at,read_at,location_label from chat_message where message_id=?",
@@ -99,28 +103,37 @@ public class ReportContextService {
           claim
         )
       );
-      var p2pHandover = one("""
+      var p2pHandover = officeHandoverId == null ? one("""
           select h.handover_id,h.status,h.recorded_by,h.recorded_at,h.note,h.confirmed_by,h.confirmed_at,
             a.full_name as recorded_by_name,b.full_name as confirmed_by_name
           from p2p_handover h join accounts a on a.id=h.recorded_by left join accounts b on b.id=h.confirmed_by
           left join p2p_handover_issue i on i.report_id=?
           where h.claim_id=? and (i.report_id is null or i.handover_id=h.handover_id)
           order by h.handover_id desc limit 1
-          """, id(report, "report_id"), claim);
+          """, id(report, "report_id"), claim) : Map.<String, Object>of();
       result.put("p2pHandover", p2pHandover);
-      result.put(
-        "officeHandover",
-        one(
-          "select h.handover_id,h.item_receipt_id,h.verification_id,h.recorded_by,h.recipient_id,h.recorded_at,h.condition_note,h.status,h.confirmed_at,h.issue_note,a.full_name as recorded_by_name,b.full_name as recipient_name from office_handover h join accounts a on a.id=h.recorded_by left join accounts b on b.id=h.recipient_id where h.claim_id=?",
-          claim
-        )
-      );
+      var officeHandover = one("""
+          select h.handover_id,h.item_receipt_id,h.verification_id,h.recorded_by,h.recipient_id,h.recorded_at,
+            h.item_summary,h.condition_note,h.difference_note,h.status,h.confirmed_at,h.confirmation_deadline,h.completion_method,
+            case when h.completion_method='RECIPIENT' then h.confirmed_at + interval '168 hours' end as report_deadline,
+            h.issue_note,a.full_name as recorded_by_name,b.full_name as recipient_name
+          from office_handover h join accounts a on a.id=h.recorded_by
+          left join accounts b on b.id=h.recipient_id
+          where h.claim_id=? and (h.handover_id=? or (cast(? as bigint) is null and h.status<>'CANCELLED'))
+          order by h.handover_id desc limit 1
+          """, claim, officeHandoverId, officeHandoverId);
+      result.put("officeHandover", officeHandover);
       result.put(
         "handoverEvidence",
         jdbc.queryForList(
-          "select e.storage_key,e.original_name from p2p_handover_evidence e where e.handover_id=? union all select e.storage_key,e.original_name from office_handover_evidence e join office_handover h using(handover_id) where h.claim_id=?",
+          """
+          select storage_key,original_name,sort_order from p2p_handover_evidence where handover_id=?
+          union all
+          select storage_key,original_name,sort_order from office_handover_evidence where handover_id=?
+          order by sort_order
+          """,
           id(p2pHandover, "handover_id"),
-          claim
+          id(officeHandover, "handover_id")
         )
       );
     }
@@ -142,7 +155,7 @@ public class ReportContextService {
       result.put(
         "receipt",
         one(
-          "select r.item_receipt_id,r.receipt_code,r.source,r.private_identifiers,r.condition_at_receipt,r.recorded_at,r.received_at,r.finder_name,r.finder_contact,r.status,r.note,a.full_name as received_by,l.name as storage_location from item_receipt r left join accounts a on a.id=r.received_by left join storage_location l on l.storage_location_id=r.storage_location_id where r.post_id=?",
+          "select r.item_receipt_id,r.receipt_code,r.source,r.private_identifiers,r.item_summary,r.condition_at_receipt,r.recorded_at,r.received_at,r.finder_name,r.finder_contact,r.status,r.note,r.received_by as received_by_id,a.full_name as received_by,l.name as storage_location from item_receipt r left join accounts a on a.id=r.received_by left join storage_location l on l.storage_location_id=r.storage_location_id where r.post_id=?",
           post
         )
       );

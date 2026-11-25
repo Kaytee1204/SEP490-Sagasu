@@ -21,6 +21,6 @@ public class ReceiptMapper {
                 r.getSource(), r.getRecordedBy().getFullName(), location == null ? null : location.getId(),
                 location == null ? null : location.getName(), location != null && location.isActive(),
                 r.getReceivedAt(), r.getFinderName(), r.getFinderContact(), r.getPostId(),
-                r.getReceivedBy() == null ? null : r.getReceivedBy().getFullName(), r.canProcess());
+                r.getReceivedBy() == null ? null : r.getReceivedBy().getFullName(), r.canProcess(), r.getItemSummary());
     }
 }

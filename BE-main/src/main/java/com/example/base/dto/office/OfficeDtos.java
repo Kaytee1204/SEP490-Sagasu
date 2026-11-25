@@ -15,7 +15,8 @@ public final class OfficeDtos {
         Long parentId, boolean active) {}
     public record LocationView(Long id, String code, String name, Long parentId, boolean active) {}
     public record ReceiptView(Long id, String code, Long postId, String title, String status, String condition,
-        String location, Long locationId, String receivedBy, OffsetDateTime receivedAt, String finderName, String finderContact) {}
+        String location, Long locationId, String receivedBy, OffsetDateTime receivedAt, String finderName, String finderContact,
+        String items) {}
     public record PostView(Long id, String title, String description, String postType, String status,
         String moderationStatus, String custodyMode, String category, String author, String authorEmail,
         String location, OffsetDateTime createdAt, OffsetDateTime updatedAt, String moderationNote,

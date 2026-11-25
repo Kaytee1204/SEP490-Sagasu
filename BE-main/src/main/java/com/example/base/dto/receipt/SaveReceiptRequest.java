@@ -16,6 +16,14 @@ public record SaveReceiptRequest(
         @Size(max = 2000) String note,
         @NotNull(message = "Thiếu danh sách ảnh cần giữ") @Size(max = 5) List<@NotNull @Positive Long> keptImageIds,
         OffsetDateTime expectedUpdatedAt,
-        @Positive Long storageLocationId
-) {}
+        @Positive Long storageLocationId,
+        @NotBlank(message = "Vui lòng ghi danh sách tài sản và phụ kiện tiếp nhận") @Size(max = 2000) String itemSummary
+) {
+    public SaveReceiptRequest(Long categoryId, String title, String description, String conditionAtReceipt,
+                              String foundLocation, OffsetDateTime foundAt, String privateIdentifiers, String note,
+                              List<Long> keptImageIds, OffsetDateTime expectedUpdatedAt, Long storageLocationId) {
+        this(categoryId, title, description, conditionAtReceipt, foundLocation, foundAt, privateIdentifiers,
+            note, keptImageIds, expectedUpdatedAt, storageLocationId, null);
+    }
+}
 

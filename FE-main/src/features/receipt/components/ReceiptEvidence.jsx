@@ -11,7 +11,10 @@ export default function ReceiptEvidence({ receipt }) {
     <section className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <h2 className="font-semibold text-slate-800">Thông tin ghi nhận</h2>
       <ReceiptText title="Mô tả đồ vật">{receipt.description}</ReceiptText>
-      <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-4"><ReceiptText title="Tình trạng khi tiếp nhận">{receipt.conditionAtReceipt}</ReceiptText></div>
+      <div className="grid gap-5 rounded-xl border border-teal-100 bg-teal-50/50 p-4 sm:grid-cols-2">
+        <ReceiptText title="Tài sản và phụ kiện tiếp nhận">{receipt.itemSummary}</ReceiptText>
+        <ReceiptText title="Tình trạng tài sản khi tiếp nhận">{receipt.conditionAtReceipt}</ReceiptText>
+      </div>
       <div className="grid gap-5 sm:grid-cols-2"><div className="flex items-start gap-3"><MapPin size={19} className="mt-1 shrink-0 text-teal-600" /><ReceiptText title="Nơi nhặt được">{receipt.foundLocation}</ReceiptText></div><div className="flex items-start gap-3"><Clock size={19} className="mt-1 shrink-0 text-teal-600" /><ReceiptText title="Thời gian nhặt · UTC+7">{receiptDate(receipt.foundAt)}</ReceiptText></div></div>
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
