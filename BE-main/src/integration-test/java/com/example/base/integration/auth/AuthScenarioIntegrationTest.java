@@ -16,9 +16,11 @@ import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
 /**
- * Report-5.2 (scenario style) sheet "Auth": TC-AUTH-01 .. TC-AUTH-09, per SRS 2.0 v2 UC-02, UC-04, GBR-03..GBR-06.
+ * Report-5.2 (scenario style) sheet "Auth": TC-AUTH-01 .. TC-AUTH-14, per SRS 2.0 v2 UC-01, UC-02, UC-04, UC-08 Alt 5.1, UC-12, GBR-03..GBR-07.
  * Only flows that need the real stack (DB, security filter, mail, several requests in a row).
  * Pure input validation (blank / bad e-mail, password format boundaries) is covered by Report-5.1 (Auth/Account UTC).
  */
@@ -251,5 +253,129 @@ class AuthScenarioIntegrationTest extends ScenarioTestBase {
         expect("Step 4 reset suspended user02", reset(USER02, otp2, NEW_PW), 200, null, MSG_RESET_OK);
         soft.assertThat(reload(user02).getStatus()).as("Step 4 user02 stays SUSPENDED").isEqualTo(AccountStatus.SUSPENDED);
         expect("Step 4 login user02", login(USER02, NEW_PW), 403, "ACC_403_LOCKED", MSG_SUSPENDED);
+    }
+
+    // ---------- Session & Access Control ----------
+
+    static final String NEW3 = "sagasunewtest03@gmail.com";
+
+    Res manage(String token, Account target, Object body) throws Exception {
+        return send(put("/api/accounts/" + target.getId()), token, body);
+    }
+
+    // N/A since Round 3 (25/11/2026): out of scope for this release - AUTH-DE04 (forced password change at first login) needs a new BE filter and FE screen
+    // The test below is kept as a comment so it is not run.
+    // @Test
+    // @DisplayName("TC-AUTH-10 A new account must change the generated password at first login before using other features")
+    // void tcAuth10_mustChangePasswordFirstLogin() throws Exception {
+    //     account(MANAGER01, AccountRole.MANAGER);
+    //     Res c = send(post("/api/accounts"), token(MANAGER01), body("fullName", "Nguyen Van Moi", "email", NEW3, "role", "USER"));
+    //     expect("Step 1 manager creates the account", c, 200, null, "Tạo tài khoản thành công");
+    //     String generated = c.text("/data/generatedPassword");
+    //     Res l = login(NEW3, generated);
+    //     expect("Step 2 first login with the generated password", l, 200, null, "Đăng nhập thành công");
+    //     soft.assertThat(l.text("/data/account/mustChangePassword")).as("Step 2 mustChangePassword").isEqualTo("true");
+    //     String t = l.text("/data/accessToken");
+    //     Res feature = send(get("/api/posts"), t, null);
+    //     soft.assertThat(feature.status()).as("Step 3 other features blocked until the password is changed (UC-08 Alt 5.1): HTTP status").isEqualTo(403);
+    //     Res ch = send(put("/api/accounts/me"), t, body("currentPassword", generated, "newPassword", NEW_PW));
+    //     expect("Step 4 change password", ch, 200, null, "Cập nhật hồ sơ cá nhân thành công");
+    //     soft.assertThat(ch.text("/data/mustChangePassword")).as("Step 4 mustChangePassword = false (UC-08 Postcondition 2)").isEqualTo("false");
+    //     expect("Step 5 feature after the change", send(get("/api/posts"), t, null), 200, null, null);
+    //     Res again = login(NEW3, NEW_PW);
+    //     expect("Step 5 login with the new password", again, 200, null, null);
+    //     soft.assertThat(again.text("/data/account/mustChangePassword")).as("Step 5 no forced change any more").isEqualTo("false");
+    // }
+
+    @Test
+    @DisplayName("TC-AUTH-11 An access token stops working as soon as the account is suspended, locked, expired or deleted")
+    void tcAuth11_tokenRefusedAfterRestriction() throws Exception {
+        account(MANAGER01, AccountRole.MANAGER);
+        String m = token(MANAGER01);
+        String t = token(USER01);
+        expect("Step 1 token works", send(get("/api/accounts/me"), t, null), 200, null, null);
+
+        manage(m, user01, body("status", "SUSPENDED", "reason", "Vi phạm nội quy"));
+        expect("Step 2 after Manager suspends", send(get("/api/accounts/me"), t, null), 401, "ERR_401", MSG_401);
+        expect("Step 2 post list after suspension", send(get("/api/posts"), t, null), 401, "ERR_401", MSG_401);
+
+        user01 = account(USER01, AccountRole.USER);
+        t = token(USER01);
+        for (int i = 0; i < 5; i++) login(USER01, WRONG);
+        expect("Step 3 after 5 wrong passwords elsewhere", send(get("/api/accounts/me"), t, null), 401, "ERR_401", MSG_401);
+
+        user01 = account(USER01, AccountRole.USER);
+        t = token(USER01);
+        user01.setValidUntil(OffsetDateTime.now().minusMinutes(1));
+        save(user01);
+        expect("Step 4 after the validity date passes", send(get("/api/accounts/me"), t, null), 401, "ERR_401", MSG_401);
+
+        user01 = account(USER01, AccountRole.USER);
+        t = token(USER01);
+        send(delete("/api/accounts/" + user01.getId()), m, null);
+        expect("Step 5 after Manager deletes", send(get("/api/accounts/me"), t, null), 401, "ERR_401", MSG_401);
+    }
+
+    @Test
+    @DisplayName("TC-AUTH-12 The OTP endpoints cannot be used to get a session for a restricted account")
+    void tcAuth12_otpEndpointsRespectRestrictions() throws Exception {
+        Res s = send(post("/api/auth/send-otp"), null, body("email", USER01, "purpose", "LOGIN"));
+        expect("Step 1 send OTP to an active account", s, 200, null, "Đã xử lý yêu cầu gửi OTP");
+        Res v = send(post("/api/auth/verify-otp"), null, body("email", USER01, "otp", lastMailedOtp(), "purpose", "LOGIN"));
+        expect("Step 1 verify OTP", v, 200, null, "Xác thực OTP thành công");
+
+        user02.setStatus(AccountStatus.SUSPENDED);
+        save(user02);
+        expect("Step 2 send LOGIN OTP to a suspended account", send(post("/api/auth/send-otp"), null, body("email", USER02, "purpose", "LOGIN")),
+                403, "ACC_403_LOCKED", MSG_SUSPENDED);
+
+        String otp = forgotOtp(USER02);
+        int tokensBefore = activeTokens(user02).size();
+        Res bypass = send(post("/api/auth/verify-otp"), null, body("email", USER02, "otp", otp, "purpose", "FORGOT_PASSWORD"));
+        soft.assertThat(bypass.status()).as("Step 3 verify-otp with the reset OTP of a suspended account (GBR-06): HTTP status").isEqualTo(403);
+        soft.assertThat(bypass.text("/data/accessToken")).as("Step 3 no token for a suspended account").isNull();
+        soft.assertThat(activeTokens(user02)).as("Step 3 no refresh token stored").hasSize(tokensBefore);
+        String leaked = bypass.text("/data/accessToken");
+        if (leaked != null) expect("Step 4 the leaked token on a protected API", send(get("/api/accounts/me"), leaked, null), 401, "ERR_401", MSG_401);
+        expect("Step 5 suspended account still cannot log in", login(USER02, PW), 403, "ACC_403_LOCKED", MSG_SUSPENDED);
+    }
+
+    @Test
+    @DisplayName("TC-AUTH-13 An expired account logs in again after the Manager extends its validity")
+    void tcAuth13_expiredThenExtended() throws Exception {
+        account(MANAGER01, AccountRole.MANAGER);
+        user02.setValidUntil(OffsetDateTime.now().minusDays(1));
+        save(user02);
+        expect("Step 1 expired account logs in", login(USER02, PW), 403, "ACC_403_EXPIRED", "Tài khoản đã hết thời hạn hiệu lực");
+        Res ext = manage(token(MANAGER01), user02, body("validUntil", OffsetDateTime.now().plusYears(1).withNano(0).toString()));
+        expect("Step 2 Manager extends 1 year", ext, 200, null, "Cập nhật tài khoản thành công");
+        soft.assertThat(reload(user02).getValidUntil()).as("Step 2 valid_until in the future").isAfter(OffsetDateTime.now());
+        Res l = login(USER02, PW);
+        expect("Step 3 login", l, 200, null, "Đăng nhập thành công");
+        if (l.status() == 200) expect("Step 3 profile with the new token", send(get("/api/accounts/me"), l.text("/data/accessToken"), null), 200, null, null);
+    }
+
+    @Test
+    @DisplayName("TC-AUTH-14 After login each role reaches only its own area")
+    void tcAuth14_roleAccessAcrossModules() throws Exception {
+        account(STAFF01, AccountRole.APPROVER);
+        account(MANAGER01, AccountRole.MANAGER);
+        account(ADMIN01, AccountRole.ADMIN);
+        String[] apis = {"/api/posts", "/api/approver/receipts", "/api/office/posts", "/api/accounts", "/api/admin/dashboard"};
+        Object[][] matrix = {
+                {USER01, new int[]{200, 403, 403, 403, 403}},
+                {STAFF01, new int[]{200, 200, 403, 403, 403}},
+                {MANAGER01, new int[]{200, 403, 200, 200, 200}},
+                {ADMIN01, new int[]{200, 403, 403, 200, 200}},
+        };
+        for (Object[] row : matrix) {
+            String who = (String) row[0], t = token(who);
+            int[] want = (int[]) row[1];
+            for (int i = 0; i < apis.length; i++) {
+                Res r = send(get(apis[i]), t, null);
+                soft.assertThat(r.status()).as(who + " GET " + apis[i]).isEqualTo(want[i]);
+                if (want[i] == 403) soft.assertThat(r.message()).as(who + " GET " + apis[i] + " message").isEqualTo(MSG_403);
+            }
+        }
     }
 }

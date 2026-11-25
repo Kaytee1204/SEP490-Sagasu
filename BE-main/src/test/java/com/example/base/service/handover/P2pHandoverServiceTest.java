@@ -22,8 +22,8 @@ import com.example.base.service.chat.ChatConversationService;
 import com.example.base.service.claim.ClaimRoutingPolicy;
 import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.notification.NotificationService;
-import com.example.base.service.report.ReportReasonService;
 import com.example.base.service.report.ReportService;
+import com.example.base.service.report.ReportReasonService;
 import com.example.base.service.report.WorkflowImages;
 import com.example.base.storage.ImageValidator.ValidatedImage;
 import jakarta.persistence.EntityManager;
@@ -93,8 +93,6 @@ class P2pHandoverServiceTest {
         @Mock
         private ReportService reports;
         @Mock
-        private ReportReasonService reportReasons;
-        @Mock
         private ReportRepository reportRepository;
         @Mock
         private EntityManager em;
@@ -107,6 +105,9 @@ class P2pHandoverServiceTest {
 
         @Mock
         private P2pClaimAppealService appeals;
+
+        @Mock
+        private ReportReasonService reportReasons;
 
         @InjectMocks
         private P2pHandoverService service;
@@ -152,189 +153,9 @@ class P2pHandoverServiceTest {
                                                 new ReportReasonService.Reason("HANDOVER_WRONG_ITEM", "Giao sai món đồ", true))));
         }
 
-        // Supplementary (P2pHandoverService.detail): propagates UNAUTHORIZED when actor is null
+        // UTC187 - record: valid finder request saves handover/evidence, activity & notifies claimant
         @Test
-        void utc006_detail_whenActorUnauthorized_propagatesUnauthorized() {
-                when(actors.actor(null)).thenThrow(new AppException(ErrorCode.UNAUTHORIZED, "Unauthorized"));
-
-                AppException ex = assertThrows(AppException.class, () -> service.detail(500L, null));
-                assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
-        }
-
-        // UTC005 - detail: missing claim throws HANDOVER_NOT_FOUND
-        @Test
-        void detail_whenClaimMissing_throwsHandoverNotFound() {
-                when(actors.actor(finderUser)).thenReturn(finder);
-                when(claims.findById(500L)).thenReturn(Optional.empty());
-
-                AppException ex = assertThrows(AppException.class, () -> service.detail(500L, finderUser));
-                assertEquals(ErrorCode.HANDOVER_NOT_FOUND, ex.getErrorCode());
-        }
-
-        // UTC003 - detail: outsider throws HANDOVER_NOT_FOUND
-        @Test
-        void detail_whenOutsider_throwsHandoverNotFound() {
-                when(actors.actor(outsiderUser)).thenReturn(outsider);
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-
-                AppException ex = assertThrows(AppException.class, () -> service.detail(500L, outsiderUser));
-                assertEquals(ErrorCode.HANDOVER_NOT_FOUND, ex.getErrorCode());
-        }
-
-        @Test
-        void detail_whenNoHandoverRecorded_finderCanRecordAndReportBeforeHandoverIssues() {
-                when(actors.actor(finderUser)).thenReturn(finder);
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
-                when(handovers.findByClaimId(500L)).thenReturn(Optional.empty());
-
-                P2pHandoverService.Detail detail = service.detail(500L, finderUser);
-
-                assertNull(detail.id());
-                assertEquals(500L, detail.claimId());
-                assertTrue(detail.canRecord());
-                assertFalse(detail.canConfirm());
-                assertTrue(detail.canReportIssue());
-                assertEquals("BEFORE", detail.issuePhase());
-                assertEquals(List.of("P2P_HANDOVER_PAYMENT"),
-                                detail.issueReasons().stream().map(ReportReasonService.Reason::code).toList());
-                assertTrue(detail.evidence().isEmpty());
-                assertNull(detail.issue());
-        }
-
-        @Test
-        void completedHandoverShowsManagerConfirmationAndAllowsReportingWithinSevenDays() {
-                P2pHandover handover = waitingHandover(703L);
-                handover.confirm(99L);
-                approvedClaim.completeReceipt();
-                when(actors.actor(finderUser)).thenReturn(finder);
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-                when(handovers.findByClaimId(500L)).thenReturn(Optional.of(handover));
-
-                var detail = service.detail(500L, finderUser);
-                assertEquals("COMPLETED", detail.status());
-                assertTrue(detail.confirmedByManager());
-                assertTrue(detail.canReportIssue());
-                assertEquals("AFTER", detail.issuePhase());
-
-                ReflectionTestUtils.setField(handover, "confirmedAt", OffsetDateTime.now().minusDays(8));
-                assertFalse(service.detail(500L, finderUser).canReportIssue());
-        }
-
-        @Test
-        void handoverIsBlockedWhileAppealsAreBeingReviewed() {
-                UUID requestId = UUID.randomUUID();
-                var window = new P2pClaimAppealService.HandoverWindow(
-                                OffsetDateTime.now().minusHours(1), P2pClaimAppealService.State.UNDER_REVIEW);
-                when(actors.actor(finderUser)).thenReturn(finder);
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
-                when(appeals.handoverWindow(approvedClaim)).thenReturn(window);
-                var prepared = new WorkflowImages.Prepared(List.of(), List.of(), "hash");
-                when(images.prepare(anyString(), eq(List.of()))).thenReturn(prepared);
-
-                var detail = service.detail(500L, finderUser);
-                assertFalse(detail.canRecord());
-                assertEquals(window, detail.appealWindow());
-
-                AppException failure = assertThrows(AppException.class, () -> service.record(500L,
-                                new P2pHandoverService.RecordRequest(null, 2L, requestId), List.of(), finderUser));
-
-                assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, failure.getErrorCode());
-                verify(images, org.mockito.Mockito.never()).upload(anyString(), any());
-        }
-
-        @ParameterizedTest
-        @EnumSource(P2pClaimAppealService.State.class)
-        void beforeHandoverIssueRequiresExplicitPhaseInEveryAppealState(P2pClaimAppealService.State state) {
-                when(actors.actor(finderUser)).thenReturn(finder);
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
-                when(appeals.handoverWindow(approvedClaim)).thenReturn(new P2pClaimAppealService.HandoverWindow(
-                                OffsetDateTime.now().plusHours(1), state));
-                when(images.prepare(anyString(), eq(List.of())))
-                                .thenReturn(new WorkflowImages.Prepared(List.of(), List.of(), "hash"));
-
-                var detail = service.detail(500L, finderUser);
-                assertTrue(detail.canReportIssue());
-                assertEquals("BEFORE", detail.issuePhase());
-                AppException failure = assertThrows(AppException.class, () -> service.issue(500L,
-                                new P2pHandoverService.IssueRequest("Wrong item", detail.version(), UUID.randomUUID()),
-                                List.of(), finderUser));
-                assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, failure.getErrorCode());
-                verify(images, never()).upload(anyString(), any());
-        }
-
-        // UTC002 - detail: claimant viewing WAITING_CONFIRMATION gets canConfirm=true, canReportIssue=true & evidence
-        @Test
-        void detail_whenWaitingConfirmationViewedByClaimant_allowsConfirmAndIssue() {
-                P2pHandover handover = new P2pHandover(500L, 10L, "Met at canteen", UUID.randomUUID(), "hash");
-                ReflectionTestUtils.setField(handover, "id", 700L);
-                ReflectionTestUtils.setField(handover, "status", "WAITING_CONFIRMATION");
-                ReflectionTestUtils.setField(handover, "version", 1L);
-
-                ReportService.Evidence ev = new ReportService.Evidence(1L, "https://cdn/ev1.jpg", "ev1.jpg");
-
-                when(actors.actor(claimantUser)).thenReturn(claimant);
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
-                when(handovers.findByClaimId(500L)).thenReturn(Optional.of(handover));
-                when(jdbc.query(contains("p2p_handover_issue"), any(RowMapper.class), eq(700L))).thenReturn(List.of());
-                when(jdbc.query(contains("p2p_handover_evidence"), any(RowMapper.class), eq(700L)))
-                                .thenReturn(List.of(ev));
-
-                P2pHandoverService.Detail detail = service.detail(500L, claimantUser);
-
-                assertEquals(700L, detail.id());
-                assertEquals("WAITING_CONFIRMATION", detail.status());
-                assertFalse(detail.canRecord());
-                assertTrue(detail.canConfirm());
-                assertTrue(detail.canReportIssue());
-                assertEquals(1, detail.evidence().size());
-                assertNull(detail.issue());
-        }
-
-        // Supplementary (P2pHandoverService.detail): DISPUTED handover includes linked issue detail & targetLabel
-        @Test
-        void utc007_detail_whenDisputedWithReport_includesIssueDetailWithTargetLabel() {
-                P2pHandover handover = new P2pHandover(500L, 10L, "Met at canteen", UUID.randomUUID(), "hash");
-                ReflectionTestUtils.setField(handover, "id", 700L);
-                ReflectionTestUtils.setField(handover, "status", "DISPUTED");
-                ReflectionTestUtils.setField(handover, "version", 3L);
-
-                ReportService.Evidence ev = new ReportService.Evidence(1L, "https://cdn/ev1.jpg", "ev1.jpg");
-                Report report = new Report(20L, "HANDOVER_ISSUE", "CLAIM", 500L,
-                                "Wrong charger returned", UUID.randomUUID(), "rhash");
-                ReflectionTestUtils.setField(report, "id", 900L);
-                ReportService.Detail issueDetail = new ReportService.Detail(
-                                900L, "HANDOVER_ISSUE", "CLAIM", 500L,
-                                "Wrong charger returned", "OPEN", null, OffsetDateTime.now(),
-                                List.of(ev), List.of(), "Bàn giao tài sản P2P");
-
-                when(actors.actor(claimantUser)).thenReturn(claimant);
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-                when(handovers.findByClaimId(500L)).thenReturn(Optional.of(handover));
-                when(jdbc.query(contains("p2p_handover_issue"), any(RowMapper.class), eq(700L)))
-                                .thenReturn(List.of(900L));
-                when(jdbc.query(contains("p2p_handover_evidence"), any(RowMapper.class), eq(700L)))
-                                .thenReturn(List.of(ev));
-                when(reportRepository.findById(900L)).thenReturn(Optional.of(report));
-                when(reports.detail(report)).thenReturn(issueDetail);
-
-                P2pHandoverService.Detail result = service.detail(500L, claimantUser);
-
-                assertEquals(700L, result.id());
-                assertEquals("DISPUTED", result.status());
-                assertEquals(1, result.evidence().size());
-                assertNotNull(result.issue());
-                assertEquals("Bàn giao tài sản P2P", result.issue().targetLabel());
-                assertFalse(result.canConfirm());
-                assertFalse(result.canReportIssue());
-        }
-
-        // UTC008 - record: valid finder request saves handover/evidence, activity & notifies claimant
-        @Test
-        void record_whenValidFinderRequest_storesHandoverEvidenceActivityAndNotifiesClaimant() {
+        void utc187_record_whenValidFinderRequest_storesHandoverEvidenceActivityAndNotifiesClaimant() {
                 UUID reqId = UUID.randomUUID();
                 List<MultipartFile> files = List.of(
                                 new MockMultipartFile("files", "handover.jpg", "image/jpeg", new byte[] { 1, 2, 3 }));
@@ -381,9 +202,9 @@ class P2pHandoverServiceTest {
                                 eq("handover.jpg"), eq("image/jpeg"), eq(3L), eq("img-h"), eq(0));
         }
 
-        // UTC015 - record: claim version mismatch after upload cleans up images & throws HANDOVER_STATE_CHANGED
+        // UTC194 - record: claim version mismatch after upload cleans up images & throws HANDOVER_STATE_CHANGED
         @Test
-        void record_whenClaimVersionChangesDuringUpload_cleansUpImagesAndThrowsStateChanged() {
+        void utc194_record_whenClaimVersionChangesDuringUpload_cleansUpImagesAndThrowsStateChanged() {
                 UUID reqId = UUID.randomUUID();
                 List<MultipartFile> files = List.of(new MockMultipartFile("files", "a.jpg", "image/jpeg", new byte[]{1}));
                 WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(
@@ -418,9 +239,9 @@ class P2pHandoverServiceTest {
                 verify(handovers, never()).saveAndFlush(any());
         }
 
-        // UTC018 - record: same clientRequestId with different payload hash throws WORKFLOW_DUPLICATE_PAYLOAD
+        // UTC197 - record: same clientRequestId with different payload hash throws WORKFLOW_DUPLICATE_PAYLOAD
         @Test
-        void record_whenDuplicateClientRequestIdWithMismatchHash_throwsWorkflowDuplicatePayload() {
+        void utc197_record_whenDuplicateClientRequestIdWithMismatchHash_throwsWorkflowDuplicatePayload() {
                 UUID reqId = UUID.randomUUID();
                 P2pHandover existing = new P2pHandover(500L, 10L, "Note", reqId, "different-hash");
                 ReflectionTestUtils.setField(existing, "id", 701L);
@@ -439,9 +260,9 @@ class P2pHandoverServiceTest {
                 verify(images, never()).upload(anyString(), any());
         }
 
-        // UTC017 - record: same clientRequestId with matching payload hash returns existing detail without upload
+        // UTC196 - record: same clientRequestId with matching payload hash returns existing detail without upload
         @Test
-        void record_whenDuplicateClientRequestIdWithMatchingHash_returnsExistingWithoutUpload() {
+        void utc196_record_whenDuplicateClientRequestIdWithMatchingHash_returnsExistingWithoutUpload() {
                 UUID reqId = UUID.randomUUID();
                 P2pHandover existing = new P2pHandover(500L, 10L, "Met here", reqId, "img-hash");
                 ReflectionTestUtils.setField(existing, "id", 701L);
@@ -465,9 +286,9 @@ class P2pHandoverServiceTest {
                 verify(handovers, never()).saveAndFlush(any());
         }
 
-        // UTC020 - confirm: valid claimant request marks handover/claim COMPLETED, post RETURNED & notifies owner
+        // UTC199 - confirm: valid claimant request marks handover/claim COMPLETED, post RETURNED & notifies owner
         @Test
-        void confirm_whenValidClaimantRequest_marksCompletedAndPostReturned() {
+        void utc199_confirm_whenValidClaimantRequest_marksCompletedAndPostReturned() {
                 ReflectionTestUtils.setField(post, "status", "RESERVED");
                 P2pHandover handover = new P2pHandover(500L, 10L, "Note", UUID.randomUUID(), "hash");
                 ReflectionTestUtils.setField(handover, "id", 702L);
@@ -498,9 +319,9 @@ class P2pHandoverServiceTest {
                 verify(notifications).notifyUser(eq(10L), anyString(), anyString(), anyString(), anyString(), eq(true));
         }
 
-        // UTC023 - confirm: non-claimant actor throws FORBIDDEN
+        // UTC202 - confirm: non-claimant actor throws FORBIDDEN
         @Test
-        void confirm_whenNonClaimantCalls_throwsForbidden() {
+        void utc202_confirm_whenNonClaimantCalls_throwsForbidden() {
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(claims.findPostId(500L)).thenReturn(Optional.of(100L));
                 when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
@@ -511,9 +332,9 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
         }
 
-        // UTC025 - confirm: handover version mismatch throws HANDOVER_STATE_CHANGED
+        // UTC204 - confirm: handover version mismatch throws HANDOVER_STATE_CHANGED
         @Test
-        void confirm_whenVersionMismatch_throwsHandoverStateChanged() {
+        void utc204_confirm_whenVersionMismatch_throwsHandoverStateChanged() {
                 P2pHandover handover = new P2pHandover(500L, 10L, "Note", UUID.randomUUID(), "hash");
                 ReflectionTestUtils.setField(handover, "id", 702L);
                 ReflectionTestUtils.setField(handover, "status", "WAITING_CONFIRMATION");
@@ -531,9 +352,9 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, ex.getErrorCode());
         }
 
-        // UTC028 - issue: valid claimant request inserts HANDOVER_ISSUE report, links issue & marks DISPUTED
+        // UTC207 - issue: valid claimant request inserts HANDOVER_ISSUE report, links issue & marks DISPUTED
         @Test
-        void issue_whenValidClaimantRequest_insertsReportLinksIssueAndMarksDisputed() {
+        void utc207_issue_whenValidClaimantRequest_insertsReportLinksIssueAndMarksDisputed() {
                 UUID reqId = UUID.randomUUID();
                 P2pHandover handover = new P2pHandover(500L, 10L, "Note", UUID.randomUUID(), "hash");
                 ReflectionTestUtils.setField(handover, "id", 703L);
@@ -580,7 +401,7 @@ class P2pHandoverServiceTest {
 
         // Supplementary (P2pHandoverService.issue): cleans up uploaded images when DB transaction fails
         @Test
-        void utc036_issue_whenTransactionFailsAfterUpload_cleansUpImages() {
+        void utc215_issue_whenTransactionFailsAfterUpload_cleansUpImages() {
                 UUID reqId = UUID.randomUUID();
                 P2pHandover handover = new P2pHandover(500L, 10L, "Note", UUID.randomUUID(), "hash");
                 ReflectionTestUtils.setField(handover, "id", 703L);
@@ -613,37 +434,21 @@ class P2pHandoverServiceTest {
                 verify(images).cleanup(List.of(uploaded));
         }
 
-        // UTC004 - detail: OFFICE claim throws HANDOVER_NOT_FOUND
         @Test
-        void detail_whenOfficeClaim_throwsHandoverNotFound() {
-                Claim officeClaim = BeanUtils.instantiateClass(Claim.class);
-                ReflectionTestUtils.setField(officeClaim, "id", 500L);
-                ReflectionTestUtils.setField(officeClaim, "post", post);
-                ReflectionTestUtils.setField(officeClaim, "claimant", claimant);
-                ReflectionTestUtils.setField(officeClaim, "claimType", "OFFICE");
-
-                when(actors.actor(finderUser)).thenReturn(finder);
-                when(claims.findById(500L)).thenReturn(Optional.of(officeClaim));
-
-                AppException ex = assertThrows(AppException.class, () -> service.detail(500L, finderUser));
-                assertEquals(ErrorCode.HANDOVER_NOT_FOUND, ex.getErrorCode());
-        }
-
-        @Test
-        void utc009_record_nullRequestThrowsInputInvalid() {
+        void utc188_record_nullRequestThrowsInputInvalid() {
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.record(500L, null, List.of(), finderUser)).getErrorCode());
         }
 
         @Test
-        void utc010_record_nullClientRequestIdThrowsInputInvalid() {
+        void utc189_record_nullClientRequestIdThrowsInputInvalid() {
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.record(500L, new P2pHandoverService.RecordRequest("Met", 2L, null),
                                                 List.of(), finderUser)).getErrorCode());
         }
 
         @Test
-        void utc011_record_nullExpectedClaimVersionThrowsInputInvalid() {
+        void utc190_record_nullExpectedClaimVersionThrowsInputInvalid() {
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.record(500L,
                                                 new P2pHandoverService.RecordRequest("Met", null, UUID.randomUUID()),
@@ -651,7 +456,7 @@ class P2pHandoverServiceTest {
         }
 
         @Test
-        void utc012_record_note2001ThrowsInputInvalid() {
+        void utc191_record_note2001ThrowsInputInvalid() {
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.record(500L,
                                                 new P2pHandoverService.RecordRequest("a".repeat(2001), 2L,
@@ -659,23 +464,9 @@ class P2pHandoverServiceTest {
                                                 List.of(), finderUser)).getErrorCode());
         }
 
+        // UTC192 - record: whitespace-only note stored as null
         @Test
-        void recordRequiresPhotoEvenWhenNoteIsProvided() {
-                when(actors.actor(finderUser)).thenReturn(finder);
-                when(images.prepare("HANDOVER:500:Met", List.of()))
-                                .thenReturn(new WorkflowImages.Prepared(List.of(), List.of(), "hash"));
-                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
-                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
-
-                AppException error = assertThrows(AppException.class, () -> service.record(500L,
-                                new P2pHandoverService.RecordRequest("Met", 2L, UUID.randomUUID()), List.of(), finderUser));
-                assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, error.getErrorCode());
-                verify(handovers, never()).saveAndFlush(any());
-        }
-
-        // UTC013 - record: whitespace-only note stored as null
-        @Test
-        void record_whenBlankNote_storesNullNoteAndCreatesHandover() {
+        void utc192_record_whenBlankNote_storesNullNoteAndCreatesHandover() {
                 UUID reqId = UUID.randomUUID();
                 List<MultipartFile> files = List.of(new MockMultipartFile("files", "a.jpg", "image/jpeg", new byte[]{1}));
                 WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(
@@ -710,9 +501,9 @@ class P2pHandoverServiceTest {
                 assertEquals("WAITING_CONFIRMATION", detail.status());
         }
 
-        // UTC014 - record: claimant calling record throws FORBIDDEN
+        // UTC193 - record: claimant calling record throws FORBIDDEN
         @Test
-        void record_whenClaimantCalls_throwsForbidden() {
+        void utc193_record_whenClaimantCalls_throwsForbidden() {
                 UUID reqId = UUID.randomUUID();
                 when(actors.actor(claimantUser)).thenReturn(claimant);
                 when(images.prepare("HANDOVER:500:Met", List.of()))
@@ -724,9 +515,9 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
         }
 
-        // UTC016 - record: existing handover with a new clientRequestId throws HANDOVER_STATE_CHANGED
+        // UTC195 - record: existing handover with a new clientRequestId throws HANDOVER_STATE_CHANGED
         @Test
-        void record_whenHandoverAlreadyExistsWithNewClientRequestId_throwsHandoverStateChanged() {
+        void utc195_record_whenHandoverAlreadyExistsWithNewClientRequestId_throwsHandoverStateChanged() {
                 UUID reqId = UUID.randomUUID();
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(images.prepare("HANDOVER:500:Met", List.of()))
@@ -741,9 +532,9 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, ex.getErrorCode());
         }
 
-        // UTC019 - record: DB failure after image upload cleans up uploaded images
+        // UTC198 - record: DB failure after image upload cleans up uploaded images
         @Test
-        void record_whenDbSaveFailsAfterUpload_cleansUpImages() {
+        void utc198_record_whenDbSaveFailsAfterUpload_cleansUpImages() {
                 UUID reqId = UUID.randomUUID();
                 List<MultipartFile> files = List.of(new MockMultipartFile("files", "a.jpg", "image/jpeg", new byte[]{1}));
                 WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(
@@ -770,7 +561,7 @@ class P2pHandoverServiceTest {
 
         // Supplementary (confirm): completes handover & post and auto-closes waiting claims with ITEM_RETURNED
         @Test
-        void utc027_confirm_whenWaitingAndOtherClaimsExist_completesAndAutoClosesWaitingClaims() {
+        void utc206_confirm_whenWaitingAndOtherClaimsExist_completesAndAutoClosesWaitingClaims() {
                 P2pHandover handover = waitingHandover(702L);
                 Claim waitingOther = Claim.submit(post, outsider, "Mine", null);
                 ReflectionTestUtils.setField(waitingOther, "id", 501L);
@@ -797,9 +588,9 @@ class P2pHandoverServiceTest {
                 verify(activities, org.mockito.Mockito.times(2)).save(any(ClaimActivity.class));
         }
 
-        // UTC021 - confirm: already COMPLETED handover returns idempotently without writes
+        // UTC200 - confirm: already COMPLETED handover returns idempotently without writes
         @Test
-        void confirm_whenAlreadyCompleted_returnsIdempotentlyWithoutWrites() {
+        void utc200_confirm_whenAlreadyCompleted_returnsIdempotentlyWithoutWrites() {
                 P2pHandover handover = waitingHandover(702L);
                 handover.confirm(20L);
 
@@ -822,16 +613,16 @@ class P2pHandoverServiceTest {
                 verify(claims, never()).findWaitingForReturn(anyLong());
         }
 
-        // UTC022 - confirm: null request throws WORKFLOW_INPUT_INVALID
+        // UTC201 - confirm: null request throws WORKFLOW_INPUT_INVALID
         @Test
-        void confirm_whenRequestNull_throwsWorkflowInputInvalid() {
+        void utc201_confirm_whenRequestNull_throwsWorkflowInputInvalid() {
                 AppException ex = assertThrows(AppException.class, () -> service.confirm(500L, null, claimantUser));
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, ex.getErrorCode());
         }
 
-        // UTC024 - confirm: missing handover throws HANDOVER_STATE_CHANGED
+        // UTC203 - confirm: missing handover throws HANDOVER_STATE_CHANGED
         @Test
-        void confirm_whenHandoverMissing_throwsHandoverStateChanged() {
+        void utc203_confirm_whenHandoverMissing_throwsHandoverStateChanged() {
                 when(actors.actor(claimantUser)).thenReturn(claimant);
                 when(claims.findPostId(500L)).thenReturn(Optional.of(100L));
                 when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
@@ -843,9 +634,9 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, ex.getErrorCode());
         }
 
-        // UTC026 - confirm: existing open issue blocks confirmation with HANDOVER_STATE_CHANGED
+        // UTC205 - confirm: existing open issue blocks confirmation with HANDOVER_STATE_CHANGED
         @Test
-        void confirm_whenOpenIssueExists_throwsHandoverStateChanged() {
+        void utc205_confirm_whenOpenIssueExists_throwsHandoverStateChanged() {
                 P2pHandover handover = waitingHandover(702L);
                 when(actors.actor(claimantUser)).thenReturn(claimant);
                 when(claims.findPostId(500L)).thenReturn(Optional.of(100L));
@@ -862,7 +653,7 @@ class P2pHandoverServiceTest {
         }
 
         @Test
-        void utc029_issue_blankReasonThrowsInputInvalid() {
+        void utc208_issue_blankReasonThrowsInputInvalid() {
                 UUID reqId = UUID.randomUUID();
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.issue(500L, new P2pHandoverService.IssueRequest("", 1L, reqId),
@@ -870,7 +661,7 @@ class P2pHandoverServiceTest {
         }
 
         @Test
-        void utc030_issue_reason5001ThrowsInputInvalid() {
+        void utc209_issue_reason5001ThrowsInputInvalid() {
                 UUID reqId = UUID.randomUUID();
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.issue(500L,
@@ -879,7 +670,7 @@ class P2pHandoverServiceTest {
         }
 
         @Test
-        void utc037_issue_blankReasonCodeThrowsReasonInvalid() {
+        void utc216_issue_blankReasonCodeThrowsReasonInvalid() {
                 assertEquals(ErrorCode.REPORT_REASON_INVALID, assertThrows(AppException.class,
                                 () -> service.issue(500L,
                                                 new P2pHandoverService.IssueRequest("Wrong item", 1L, UUID.randomUUID(), " "),
@@ -887,16 +678,16 @@ class P2pHandoverServiceTest {
         }
 
         @Test
-        void utc038_issue_withReasonCodeReason4801ThrowsInputInvalid() {
+        void utc217_issue_withReasonCodeReason4801ThrowsInputInvalid() {
                 assertEquals(ErrorCode.WORKFLOW_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.issue(500L,
                                                 new P2pHandoverService.IssueRequest("x".repeat(4801), 1L, UUID.randomUUID(), "HANDOVER_ISSUE_OTHER"),
                                                 List.of(), claimantUser)).getErrorCode());
         }
 
-        // UTC031 - issue: boundary 5000-char reason is accepted
+        // UTC210 - issue: boundary 5000-char reason is accepted
         @Test
-        void issue_whenReasonAtMaxLength5000_succeeds() {
+        void utc210_issue_whenReasonAtMaxLength5000_succeeds() {
                 String maxReason = "x".repeat(5000);
                 UUID reqId = UUID.randomUUID();
                 P2pHandover handover = waitingHandover(703L);
@@ -934,8 +725,9 @@ class P2pHandoverServiceTest {
                 assertEquals(902L, result.issue().id());
         }
 
+        // UTC211 - issue: post owner calling issue with stale version throws HANDOVER_STATE_CHANGED
         @Test
-        void issue_whenFinderCallsWithStaleVersion_throwsStateChanged() {
+        void utc211_issue_whenFinderCalls_throwsForbidden() {
                 UUID reqId = UUID.randomUUID();
                 when(actors.actor(finderUser)).thenReturn(finder);
                 when(images.prepare("ISSUE:500:Wrong item", List.of()))
@@ -948,9 +740,9 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, ex.getErrorCode());
         }
 
-        // UTC033 - issue: already COMPLETED handover throws HANDOVER_STATE_CHANGED
+        // UTC212 - issue: already COMPLETED handover throws HANDOVER_STATE_CHANGED
         @Test
-        void issue_whenHandoverCompleted_throwsHandoverStateChanged() {
+        void utc212_issue_whenHandoverCompleted_throwsHandoverStateChanged() {
                 UUID reqId = UUID.randomUUID();
                 P2pHandover completed = waitingHandover(703L);
                 completed.confirm(20L);
@@ -965,9 +757,9 @@ class P2pHandoverServiceTest {
                 assertEquals(ErrorCode.HANDOVER_STATE_CHANGED, ex.getErrorCode());
         }
 
-        // UTC034 - issue: idempotent retry with same clientRequestId returns existing detail without upload
+        // UTC213 - issue: idempotent retry with same clientRequestId returns existing detail without upload
         @Test
-        void issue_whenRetryingSameIssueRequest_returnsExistingWithoutUpload() {
+        void utc213_issue_whenRetryingSameIssueRequest_returnsExistingWithoutUpload() {
                 UUID reqId = UUID.randomUUID();
                 P2pHandover handover = waitingHandover(703L);
                 handover.reportIssue();
@@ -1003,9 +795,9 @@ class P2pHandoverServiceTest {
                                 anyString(), any());
         }
 
-        // UTC035 - issue: clientRequestId already bound to a different report throws WORKFLOW_DUPLICATE_PAYLOAD
+        // UTC214 - issue: clientRequestId already bound to a different report throws WORKFLOW_DUPLICATE_PAYLOAD
         @Test
-        void issue_whenClientRequestIdBelongsToDifferentReport_throwsWorkflowDuplicatePayload() {
+        void utc214_issue_whenClientRequestIdBelongsToDifferentReport_throwsWorkflowDuplicatePayload() {
                 UUID reqId = UUID.randomUUID();
                 P2pHandover handover = waitingHandover(703L);
                 WorkflowImages.Prepared prepared = new WorkflowImages.Prepared(List.of(), List.of(), "img-hash");

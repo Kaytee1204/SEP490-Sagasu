@@ -178,7 +178,7 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc284_create_claimByClaimant_created() {
+    void utc284_create_p2pClaimReport_targetUnavailable() {
         Claim c = claim(7L);
         when(em.find(Claim.class, 20L)).thenReturn(c);
 

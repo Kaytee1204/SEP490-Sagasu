@@ -24,7 +24,7 @@ import java.util.Map;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
 /**
- * Report-5.2 (scenario style) sheet "Account Management": TC-ACC-01 .. TC-ACC-12, per SRS 2.0 v2 UC-06..UC-12, GBR-01..GBR-07.
+ * Report-5.2 (scenario style) sheet "Account Management": TC-ACC-01 .. TC-ACC-17, per SRS 2.0 v2 UC-06..UC-12, UC-75, UC-77, GBR-01..GBR-07.
  * Main flows that need the real stack (DB, security config, refresh tokens, mail, Excel upload).
  * Field validation (phone / password / e-mail format, missing current password, Manager role scope, create with a past date)
  * is covered by Report-5.1 Account UTC039-UTC085.
@@ -319,5 +319,149 @@ class AccountScenarioIntegrationTest extends ScenarioTestBase {
         expect("Step 2 user import", upload(token(USER01), xlsx(new String[]{NEW2, PW, "Khach", "USER"})), 403, "ERR_403", MSG_403);
         soft.assertThat(accounts.findByEmailIgnoreCase(NEW2)).as("Step 2 no account").isEmpty();
         expect("Step 3 template without login", send(get("/api/accounts/import/template"), null, null), 401, "ERR_401", MSG_401);
+    }
+
+    // ---------- Operation Statistics & Audit Log ----------
+
+    @org.springframework.beans.factory.annotation.Autowired jakarta.persistence.EntityManager em;
+    @org.springframework.beans.factory.annotation.Autowired com.example.base.repository.PostRepository posts;
+    @org.springframework.beans.factory.annotation.Autowired com.example.base.repository.CategoryRepository categories;
+
+    Res dashboard(String token) throws Exception { em.flush(); return send(get("/api/admin/dashboard"), token, null); }
+
+    Res audit(String token, String query) throws Exception { em.flush(); return send(get("/api/admin/audit-logs" + query), token, null); }
+
+    static long num(Res r, String ptr) { return r.body().at(ptr).asLong(); }
+
+    static List<JsonNode> rows(Res r) {
+        List<JsonNode> out = new ArrayList<>();
+        if (r.body() != null) r.body().at("/data/content").forEach(out::add);
+        return out;
+    }
+
+    // N/A since Round 3 (25/11/2026): out of scope for this release - ACC-DE09 (statistics filter by time range or category) is a new feature
+    // The test below is kept as a comment so it is not run.
+    // @Test
+    // @DisplayName("TC-ACC-13 Admin and Manager view operation statistics that follow account changes at once")
+    // void tcAcc13_dashboard() throws Exception {
+    //     String a = token(ADMIN01), m = token(MANAGER01);
+    //     Res before = dashboard(a);
+    //     expect("Step 1 admin opens the dashboard", before, 200, null, null);
+    //     for (String part : new String[]{"accounts", "posts", "claims", "reports", "office", "dailyTrends", "topCategories"})
+    //         soft.assertThat(before.body().at("/data/" + part).isMissingNode()).as("Step 1 section " + part).isFalse();
+    //     expect("Step 2 manager creates an account", send(post("/api/accounts"), m, newAccount(NEW1)), 200, null, null);
+    //     expect("Step 2 manager suspends user02", send(put("/api/accounts/" + user02.getId()), m, body("status", "SUSPENDED", "reason", "Vi phạm")), 200, null, null);
+    //     Res after = dashboard(a);
+    //     soft.assertThat(num(after, "/data/accounts/total")).as("Step 3 accounts.total +1").isEqualTo(num(before, "/data/accounts/total") + 1);
+    //     soft.assertThat(num(after, "/data/accounts/suspended")).as("Step 3 accounts.suspended +1").isEqualTo(num(before, "/data/accounts/suspended") + 1);
+    //     soft.assertThat(num(after, "/data/accounts/byRole/USER")).as("Step 3 USER count +1").isEqualTo(num(before, "/data/accounts/byRole/USER") + 1);
+    //     Res mgr = dashboard(m);
+    //     expect("Step 4 manager opens the dashboard", mgr, 200, null, null);
+    //     soft.assertThat(num(mgr, "/data/accounts/total")).as("Step 4 same numbers for Manager").isEqualTo(num(after, "/data/accounts/total"));
+    //     expect("Step 5 user", dashboard(token(USER01)), 403, "ERR_403", MSG_403);
+    //     Res bad = send(get("/api/admin/dashboard?fromDate=2026-11-22&toDate=2026-11-01"), a, null);
+    //     soft.assertThat(bad.status()).as("Step 6 start date after end date (UC-77 E1): HTTP status").isEqualTo(400);
+    //     soft.assertThat(bad.message()).as("Step 6 message").isEqualTo("Khoảng thời gian chọn không hợp lệ");
+    // }
+
+    @Test
+    @DisplayName("TC-ACC-14 Admin and Manager find a user's login and profile events in the audit log")
+    void tcAcc14_auditLog() throws Exception {
+        login(USER01, WRONG);
+        String u = token(USER01);
+        send(put("/api/accounts/me"), u, body("phone", "0912345678"));
+        String a = token(ADMIN01);
+        Res all = audit(a, "?keyword=" + USER01 + "&size=50");
+        expect("Step 2 admin searches by e-mail", all, 200, null, null);
+        List<JsonNode> r = rows(all);
+        soft.assertThat(r).as("Step 2 only user01 rows").allMatch(n -> USER01.equals(n.get("actorEmail").asText()));
+        soft.assertThat(r.stream().map(n -> n.get("eventType").asText() + "/" + n.get("success").asBoolean()))
+                .as("Step 2 wrong password, login and profile update logged")
+                .contains("LOGIN_PASSWORD/false", "LOGIN_PASSWORD/true", "PROFILE_UPDATED/true");
+        for (int i = 1; i < r.size(); i++)
+            soft.assertThat(OffsetDateTime.parse(r.get(i).get("createdAt").asText()))
+                    .as("Step 2 newest first (row %d)", i).isBeforeOrEqualTo(OffsetDateTime.parse(r.get(i - 1).get("createdAt").asText()));
+        Res failed = audit(a, "?keyword=" + USER01 + "&eventType=LOGIN_PASSWORD&success=false");
+        soft.assertThat(rows(failed)).as("Step 3 filter action + result").isNotEmpty()
+                .allMatch(n -> "LOGIN_PASSWORD".equals(n.get("eventType").asText()) && !n.get("success").asBoolean());
+        String today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toString();
+        String tomorrow = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(1).toString();
+        soft.assertThat(rows(audit(a, "?keyword=" + USER01 + "&source=SECURITY&fromDate=" + today + "&toDate=" + today)))
+                .as("Step 4 date range today").isNotEmpty();
+        soft.assertThat(num(audit(a, "?keyword=" + USER01 + "&fromDate=" + tomorrow), "/data/totalElements")).as("Step 4 date range tomorrow").isZero();
+        soft.assertThat(num(audit(a, "?keyword=zzznomatch999"), "/data/totalElements")).as("Step 5 no match (UC-75 E1)").isZero();
+        expect("Step 6 manager", audit(token(MANAGER01), "?keyword=" + USER01), 200, null, null);
+        expect("Step 6 user", audit(u, ""), 403, "ERR_403", MSG_403);
+    }
+
+    // ---------- Roles & Cross-module Effects ----------
+
+    @Test
+    @DisplayName("TC-ACC-15 Only Admin changes a role, and the new role applies on the user's next request")
+    void tcAcc15_roleChange() throws Exception {
+        String u = token(USER02);
+        expect("Step 1 user02 opens receipts as USER", send(get("/api/approver/receipts"), u, null), 403, "ERR_403", MSG_403);
+        String m = token(MANAGER01), a = token(ADMIN01);
+        expect("Step 2 manager changes the role", send(put("/api/accounts/" + user02.getId()), m, body("role", "APPROVER")),
+                403, "ERR_403", "Chỉ có ADMIN mới được phép thay đổi Role (Vai trò) của tài khoản");
+        soft.assertThat(reload(user02).getRole()).as("Step 2 role unchanged").isEqualTo(AccountRole.USER);
+        Res r = send(put("/api/accounts/" + user02.getId()), a, body("role", "APPROVER"));
+        expect("Step 3 admin changes USER -> APPROVER", r, 200, null, "Cập nhật tài khoản thành công");
+        soft.assertThat(r.text("/data/role")).as("Step 3 role").isEqualTo("APPROVER");
+        expect("Step 4 same token opens receipts", send(get("/api/approver/receipts"), u, null), 200, null, null);
+        expect("Step 4 same token on the account list", send(get("/api/accounts"), u, null), 403, "ERR_403", MSG_403);
+        expect("Step 5 admin changes APPROVER -> MANAGER", send(put("/api/accounts/" + user02.getId()), a, body("role", "MANAGER")), 200, null, null);
+        expect("Step 5 manager01 updates the new manager", send(put("/api/accounts/" + user02.getId()), m, body("fullName", "Doi Ten")),
+                403, "ERR_403", MSG_SCOPE);
+    }
+
+    @Test
+    @DisplayName("TC-ACC-16 Imported accounts log in with the given or generated password and get their role")
+    void tcAcc16_importThenLogin() throws Exception {
+        Res r = upload(token(ADMIN01), xlsx(
+                new String[]{NEW1, PW, "Khach Co Mat Khau", "USER"},
+                new String[]{NEW2, "", "Can Bo Moi", "APPROVER"}));
+        expect("Step 1 admin imports 2 rows", r, 200, null, "Đã xử lý import file Excel vào database");
+        soft.assertThat(r.text("/data/successCount")).as("Step 1 successCount").isEqualTo("2");
+        String generated = null;
+        if (r.body() != null) for (JsonNode n : r.body().at("/data/importedAccounts"))
+            if (NEW2.equals(n.get("email").asText())) generated = n.get("generatedPassword").asText();
+        soft.assertThat(generated).as("Step 1 generated password for the row without password").isNotBlank();
+        Res l1 = login(NEW1, PW);
+        expect("Step 2 login with the password from the file", l1, 200, null, "Đăng nhập thành công");
+        soft.assertThat(l1.text("/data/account/role")).as("Step 2 role").isEqualTo("USER");
+        soft.assertThat(l1.text("/data/account/mustChangePassword")).as("Step 2 no forced change").isEqualTo("false");
+        Res l2 = login(NEW2, generated == null ? "x" : generated);
+        expect("Step 3 login with the generated password", l2, 200, null, "Đăng nhập thành công");
+        soft.assertThat(l2.text("/data/account/role")).as("Step 3 role").isEqualTo("APPROVER");
+        soft.assertThat(l2.text("/data/account/mustChangePassword")).as("Step 3 must change the generated password").isEqualTo("true");
+        if (l2.status() == 200)
+            expect("Step 4 new staff opens receipts", send(get("/api/approver/receipts"), l2.text("/data/accessToken"), null), 200, null, null);
+    }
+
+    @Test
+    @DisplayName("TC-ACC-17 Soft-deleting an account keeps its posts and audit records and updates the statistics")
+    void tcAcc17_softDeleteKeepsRecords() throws Exception {
+        login(USER02, PW);
+        com.example.base.entity.Category c = new com.example.base.entity.Category();
+        c.setName("ZZ Test Xoa Mem " + System.nanoTime());
+        c.setActive(true);
+        c = categories.saveAndFlush(c);
+        com.example.base.entity.Post p = posts.saveAndFlush(com.example.base.entity.Post.found(user02, c, "Nhặt được ví xóa mềm",
+                "Mô tả", "Thư viện", OffsetDateTime.now().minusHours(3), "P2P", null));
+        String a = token(ADMIN01);
+        long auditBefore = auditLogs.findByAccount_IdOrderByCreatedAtDesc(user02.getId()).size();
+        Res before = dashboard(a);
+        expect("Step 1 manager deletes user02", send(delete("/api/accounts/" + user02.getId()), token(MANAGER01), null), 200, null, "Đã xóa mềm tài khoản thành công");
+        em.flush();
+        em.clear();
+        soft.assertThat(posts.findById(p.getId())).as("Step 2 post row kept (GBR-07)").isPresent();
+        soft.assertThat(auditLogs.findByAccount_IdOrderByCreatedAtDesc(user02.getId()).size()).as("Step 2 audit records kept").isGreaterThanOrEqualTo((int) auditBefore);
+        soft.assertThat(rows(audit(a, "?keyword=" + USER02))).as("Step 3 audit log still shows user02's events").isNotEmpty();
+        Res after = dashboard(a);
+        soft.assertThat(num(after, "/data/accounts/deleted")).as("Step 4 accounts.deleted +1").isEqualTo(num(before, "/data/accounts/deleted") + 1);
+        soft.assertThat(num(after, "/data/accounts/byRole/USER")).as("Step 4 USER count -1 (deleted not counted)").isEqualTo(num(before, "/data/accounts/byRole/USER") - 1);
+        Res list = send(get("/api/accounts?status=DELETED&keyword=" + USER02), a, null);
+        soft.assertThat(emails(list)).as("Step 5 account listed under status DELETED").containsExactly(USER02);
     }
 }
