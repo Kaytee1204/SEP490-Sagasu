@@ -53,9 +53,9 @@ export default function ConfirmReceiptDialog({ claim, handover, onClose, onConfi
 
   return <dialog ref={dialog} className="handover-record-dialog" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); if (!sending.current) onClose(); }}>
-    <header><h2 id={titleId}>Xác nhận đã nhận đúng đồ</h2>
+    <header inert={confirmOpen}><h2 id={titleId}>Xác nhận đã nhận đúng đồ</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={onClose}><X size={20} /></button></header>
-    <form onSubmit={handleFormSubmit}>
+    <form inert={confirmOpen} onSubmit={handleFormSubmit}>
       <div className="handover-record-context"><strong>{claim.postTitle}</strong><p>Người giao: {claim.finderName}</p></div>
       <p>Chỉ xác nhận khi bạn đã nhận và kiểm tra đúng món đồ của mình.</p>
       <ul className="handover-confirm-effects">
@@ -70,6 +70,7 @@ export default function ConfirmReceiptDialog({ claim, handover, onClose, onConfi
         <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'Đang xác nhận…' : 'Xác nhận đã nhận đúng đồ'}</button></footer>
     </form>
     <ConfirmActionPopup
+      inline
       open={confirmOpen}
       variant="success"
       title="Xác nhận đã nhận đúng đồ?"

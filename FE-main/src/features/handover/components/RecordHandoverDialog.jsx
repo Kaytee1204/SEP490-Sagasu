@@ -89,9 +89,9 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
 
   return <dialog ref={dialog} className="handover-record-dialog" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); close(); }}>
-    <header><h2 id={titleId}>Ghi nhận đã giao đồ</h2>
+    <header inert={confirmOpen}><h2 id={titleId}>Ghi nhận đã giao đồ</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
-    <form onSubmit={handleFormSubmit}>
+    <form inert={confirmOpen} onSubmit={handleFormSubmit}>
       <div className="handover-record-context"><strong>{claim.postTitle}</strong><p>Người nhận: {claim.claimantName}</p></div>
       <p>Sau khi ghi nhận, người nhận cần xác nhận đã nhận đúng đồ. Ghi nhận giao đồ không thể sửa hoặc rút lại.</p>
       <div className="handover-record-field"><span>Ảnh bàn giao (bắt buộc)</span>
@@ -117,6 +117,7 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
           <button type="submit" className="btn btn-accent" disabled={!canSubmit}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>}
     </form>
     <ConfirmActionPopup
+      inline
       open={confirmOpen}
       variant="success"
       title="Xác nhận đã giao đồ?"
