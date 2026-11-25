@@ -89,7 +89,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
   }[action] || { variant: "warning", title: "Bạn có chắc chắn?", description: "Xác nhận thực hiện thao tác xử lý hồ sơ này.", confirmLabel: "Xác nhận" };
   return <Dialog title={titles[action]} busy={busy} onClose={onClose}>
     {({ guard }) => <>
-    <form className="of-form" inert={confirmOpen} onSubmit={handleFormSubmit}>
+    <form className="of-form" onSubmit={handleFormSubmit}>
       <Notice error>{error}</Notice>
       <p className="of-muted">Hồ sơ #{claim.id} · {claim.postTitle}</p>
       {action === "verify" && <>
@@ -135,7 +135,6 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard()}>Quay lại</button><button className="of-button of-primary" disabled={busy}>{busy ? "Đang lưu…" : (action === "handover" ? "Kiểm tra và lưu" : titles[action])}</button></div>
     </form>
     <ConfirmActionPopup
-      inline
       open={confirmOpen}
       variant={confirmMeta.variant}
       title={confirmMeta.title}

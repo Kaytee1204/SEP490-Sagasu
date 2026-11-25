@@ -13,7 +13,14 @@ class ApiClient {
   }
 
   getToken() {
-    return this.token || null;
+    if (this.token) {
+      return this.token;
+    }
+    try {
+      return localStorage.getItem('timdo_auth_token') || null;
+    } catch {
+      return null;
+    }
   }
 
   getHeaders(customHeaders = {}, isMultipart = false) {
@@ -43,6 +50,18 @@ class ApiClient {
       const response = await fetch(url, config);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (
+          response.status === 401 &&
+          this.getToken() &&
+          !endpoint.includes('/auth/login') &&
+          typeof window !== 'undefined'
+        ) {
+          window.dispatchEvent(
+            new CustomEvent('sagasu:auth-expired', {
+              detail: { message: errorData.message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' },
+            })
+          );
+        }
         const err = new Error(errorData.message || `Lỗi HTTP ${response.status}`);
         err.code = errorData.code;
         err.status = response.status;
