@@ -10,6 +10,7 @@ import com.example.base.entity.Account;
 import com.example.base.entity.AccountRole;
 import com.example.base.entity.AccountStatus;
 import com.example.base.entity.LoginAuditLog;
+import com.example.base.service.auth.EmailService;
 import com.example.base.entity.RefreshToken;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
@@ -64,14 +65,17 @@ public class AccountService {
     private final LoginAuditLogRepository loginAuditLogRepository;
     private final AccountMapper accountMapper;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     public AccountService(
             AccountRepository accountRepository,
             RefreshTokenRepository refreshTokenRepository,
             LoginAuditLogRepository loginAuditLogRepository,
             AccountMapper accountMapper,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            EmailService emailService
     ) {
+        this.emailService = emailService;
         this.accountRepository = accountRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.loginAuditLogRepository = loginAuditLogRepository;
@@ -292,6 +296,9 @@ public class AccountService {
         auditLog.setDetails(details);
         loginAuditLogRepository.save(auditLog);
 
+        // SRS UC-10 bước 6: gửi email thông tin tài khoản và mật khẩu ban đầu
+        emailService.sendInitialPasswordEmail(saved.getEmail(), saved.getFullName(), rawPassword);
+
         AccountDto dto = accountMapper.toDto(saved);
         dto.setGeneratedPassword(rawPassword);
         return dto;
@@ -304,6 +311,12 @@ public class AccountService {
                 .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_FOUND));
 
         enforceRoleHierarchy(actor, account.getRole());
+
+        // SRS UC-12 E1: khóa tài khoản phải có lý do
+        boolean suspending = request.getStatus() == AccountStatus.SUSPENDED && account.getStatus() != AccountStatus.SUSPENDED;
+        if (suspending && !StringUtils.hasText(request.getReason())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng nhập lý do khóa tài khoản");
+        }
 
         // SRS UC-11 E1: ngày gia hạn phải ở tương lai
         if (request.getValidUntil() != null && !request.getValidUntil().isAfter(OffsetDateTime.now())) {
@@ -370,6 +383,18 @@ public class AccountService {
         }
 
         Account saved = accountRepository.save(account);
+
+        if (suspending) {
+            Map<String, Object> details = new HashMap<>();
+            details.put("reason", request.getReason().trim());
+            details.put("suspendedById", actor != null ? actor.getId() : null);
+            LoginAuditLog auditLog = new LoginAuditLog();
+            auditLog.setAccount(saved);
+            auditLog.setEventType("ACCOUNT_SUSPENDED");
+            auditLog.setSuccess(true);
+            auditLog.setDetails(details);
+            loginAuditLogRepository.save(auditLog);
+        }
         return accountMapper.toDto(saved);
     }
 

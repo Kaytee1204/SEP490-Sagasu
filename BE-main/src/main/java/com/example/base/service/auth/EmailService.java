@@ -57,4 +57,34 @@ public class EmailService {
             return false;
         }
     }
+
+    /** SRS UC-10 bước 6: gửi thông tin đăng nhập và mật khẩu ban đầu cho tài khoản mới. Lỗi gửi mail không chặn việc tạo tài khoản. */
+    public boolean sendInitialPasswordEmail(String toEmail, String fullName, String rawPassword) {
+        if (!StringUtils.hasText(mailPassword) || "YOUR_GMAIL_APP_PASSWORD".equals(mailPassword)) {
+            log.warn("Chưa cấu hình Gmail App Password: bỏ qua gửi email mật khẩu ban đầu tới {}.", toEmail);
+            return false;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            if (StringUtils.hasText(fromEmail)) {
+                message.setFrom(fromEmail);
+            }
+            message.setTo(toEmail);
+            message.setSubject("[SAGASU] Thông tin tài khoản của bạn");
+            message.setText(
+                    "Xin chào " + fullName + ",\n\n"
+                    + "Tài khoản Sagasu của bạn đã được tạo.\n"
+                    + "Email đăng nhập: " + toEmail + "\n"
+                    + "Mật khẩu ban đầu: " + rawPassword + "\n\n"
+                    + "Vui lòng đăng nhập và đổi mật khẩu ngay sau lần đăng nhập đầu tiên.\n\n"
+                    + "Trân trọng,\nHệ thống Sagasu"
+            );
+            mailSender.send(message);
+            log.info("Đã gửi email mật khẩu ban đầu tới {}", toEmail);
+            return true;
+        } catch (Exception ex) {
+            log.error("Không thể gửi email mật khẩu ban đầu tới {}: {}", toEmail, ex.getMessage());
+            return false;
+        }
+    }
 }

@@ -139,7 +139,6 @@ public class AccountController {
     }
 
     @GetMapping("/import/template")
-    @PreAuthorize("permitAll()")
     @Operation(
             summary = "[2.10] Tải file Excel mẫu (accounts_import_template.xlsx) để Import tài khoản",
             description = "Trả về file Excel mẫu có sẵn cột tiêu đề (email, password, full_name, role) và dòng dữ liệu minh họa."

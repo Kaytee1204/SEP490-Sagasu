@@ -416,10 +416,25 @@ public class AuthService {
 
     @Transactional(noRollbackFor = AppException.class)
     public Map<String, Object> forgotPassword(ForgotPasswordRequest request) {
+        // SRS UC-04 E1: không cho biết email có được đăng ký hay không
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        Map<String, Object> generic = Map.of(
+                "email", normalizedEmail,
+                "purpose", OtpPurpose.FORGOT_PASSWORD.name(),
+                "note", "Nếu email đã được đăng ký, mã OTP (hiệu lực 5 phút) đã được gửi tới email này. Vui lòng kiểm tra hộp thư."
+        );
+        boolean known = accountRepository.findByEmailIgnoreCase(normalizedEmail).isPresent()
+                || "admin".equalsIgnoreCase(normalizedEmail)
+                || "user".equalsIgnoreCase(normalizedEmail);
+        if (!known) {
+            return generic;
+        }
         SendOtpRequest otpRequest = new SendOtpRequest();
         otpRequest.setEmail(request.getEmail());
         otpRequest.setPurpose(OtpPurpose.FORGOT_PASSWORD);
-        return sendOtp(otpRequest);
+        Map<String, Object> result = sendOtp(otpRequest);
+        // Chỉ khi chưa cấu hình SMTP (môi trường dev) mới trả ghi chú chứa OTP để test
+        return Boolean.TRUE.equals(result.get("emailSent")) ? generic : result;
     }
 
     @Transactional(noRollbackFor = AppException.class)

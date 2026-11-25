@@ -197,13 +197,14 @@ class AuthLoginForgotPasswordIntegrationTest extends AuthIntegrationTestBase {
     @DisplayName("ITC014 Gửi OTP khôi phục mật khẩu tới email đã đăng ký")
     void itc014_forgotSuccess() throws Exception {
         OffsetDateTime before = OffsetDateTime.now();
-        JsonNode res = read(postJson(FORGOT, body("email", U))
+        // UC-04 E1: the answer is generic (same as for an unregistered e-mail), so the expiry is read from the stored OTP
+        postJson(FORGOT, body("email", U))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Đã gửi mã OTP khôi phục mật khẩu"))
                 .andExpect(jsonPath("$.data.purpose").value("FORGOT_PASSWORD"))
-                .andExpect(jsonPath("$.data.emailSent").value(true)));
+                .andExpect(jsonPath("$.data.emailSent").doesNotExist());
 
-        OffsetDateTime expiresAt = OffsetDateTime.parse(res.at("/data/expiresAt").asText());
+        OffsetDateTime expiresAt = activeOtp(FORGOT_PASSWORD).getExpiresAt();
         assertThat(expiresAt).isBetween(before.plusMinutes(5).minusSeconds(5), OffsetDateTime.now().plusMinutes(5).plusSeconds(5));
 
         assertThat(lastMail().getTo()).containsExactly(U);
@@ -243,7 +244,8 @@ class AuthLoginForgotPasswordIntegrationTest extends AuthIntegrationTestBase {
     @DisplayName("ITC017 Email chưa đăng ký")
     void itc017_forgotUnknownEmail() throws Exception {
         long before = otps.count();
-        expectError(postJson(FORGOT, body("email", UNKNOWN)), 404, "ACC_404", "Không tìm thấy tài khoản");
+        // SRS UC-04 E1: generic answer, the e-mail is not revealed as unregistered
+        postJson(FORGOT, body("email", UNKNOWN)).andExpect(status().isOk());
         assertThat(otps.count()).isEqualTo(before);
     }
 

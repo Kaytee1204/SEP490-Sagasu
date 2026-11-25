@@ -15,6 +15,7 @@ import com.example.base.mapper.AccountMapper;
 import com.example.base.repository.AccountRepository;
 import com.example.base.repository.LoginAuditLogRepository;
 import com.example.base.repository.RefreshTokenRepository;
+import com.example.base.service.auth.EmailService;
 import com.example.base.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +67,8 @@ class AccountServiceTest {
     private AccountMapper accountMapper = new AccountMapper();
     @Mock
     private PasswordEncoder passwordEncoder;
+    @Mock
+    private EmailService emailService;
 
     @InjectMocks
     private AccountService service;
@@ -472,6 +475,7 @@ class AccountServiceTest {
         when(refreshTokenRepository.findByAccount_IdAndRevokedAtIsNull(3L)).thenReturn(List.of(rt));
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setStatus(AccountStatus.SUSPENDED);
+        req.setReason("Vi phạm nội quy");
 
         assertEquals(AccountStatus.SUSPENDED, service.updateAccount(3L, req).getStatus());
         assertNotNull(rt.getRevokedAt());

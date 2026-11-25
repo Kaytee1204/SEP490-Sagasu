@@ -52,7 +52,19 @@ public class UpdateAccountRequest {
     @Schema(description = "Thời hạn hiệu lực tài khoản", example = "2027-12-31T23:59:59+07:00")
     private OffsetDateTime validUntil;
 
+    @Size(max = 500, message = "Lý do khóa tài khoản tối đa 500 ký tự")
+    @Schema(description = "Lý do khóa tài khoản (bắt buộc khi chuyển sang SUSPENDED)", example = "Vi phạm nội quy")
+    private String reason;
+
     public UpdateAccountRequest() {
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
     }
 
     public String getFullName() {
