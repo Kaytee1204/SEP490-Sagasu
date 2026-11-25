@@ -187,10 +187,12 @@ public class AccountService {
         if (StringUtils.hasText(request.getNewPassword())) {
             String trimmedPass = request.getNewPassword().trim();
             validatePasswordFormat(trimmedPass);
-            if (StringUtils.hasText(request.getCurrentPassword())) {
-                if (!passwordEncoder.matches(request.getCurrentPassword(), actor.getPasswordHash())) {
-                    throw new AppException(ErrorCode.INVALID_CREDENTIALS, "Mật khẩu hiện tại không chính xác");
-                }
+            // SRS UC-08: luôn bắt buộc mật khẩu hiện tại khi đổi mật khẩu
+            if (!StringUtils.hasText(request.getCurrentPassword())) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Vui lòng nhập mật khẩu hiện tại");
+            }
+            if (!passwordEncoder.matches(request.getCurrentPassword(), actor.getPasswordHash())) {
+                throw new AppException(ErrorCode.INVALID_CREDENTIALS, "Mật khẩu hiện tại không chính xác");
             }
             if (passwordEncoder.matches(trimmedPass, actor.getPasswordHash())
                     || (StringUtils.hasText(request.getCurrentPassword())
@@ -244,6 +246,11 @@ public class AccountService {
         }
         if (accountRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+
+        // SRS UC-10 bước 5, E2: thời hạn hiệu lực phải ở tương lai
+        if (request.getValidUntil() != null && !request.getValidUntil().isAfter(OffsetDateTime.now())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Thời hạn hiệu lực phải lớn hơn ngày hiện tại");
         }
 
         String rawPassword;

@@ -129,7 +129,7 @@ class AccountServiceTest {
     }
 
     // Upper boundary of the SRS UC-07 rule (Vietnamese 10-digit number).
-    // Expected to fail until defect ACC-DE01 is fixed: PHONE_REGEX ^(0|\+84)[0-9]{9,10}$ still accepts 10 digits after the prefix.
+    // SRS UC-07: Vietnamese 10-digit phone only (defect ACC-DE01, fixed on main 39230da).
     @Test
     void utc043_updateMyProfile_zeroPlusTenDigitsThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPhone("09123456789")));
@@ -195,8 +195,8 @@ class AccountServiceTest {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPassword("Ab@12345678901234")));
     }
 
-    // SRS UC-08: current password required (fails until ACC-DE02 is fixed), new password must differ from it,
-    // other sessions are signed out (fails until ACC-DE03 is fixed).
+    // SRS UC-08: current password required (ACC-DE02, fixed), new password must differ from it,
+    // other sessions are signed out (ACC-DE03, fixed on main 39230da).
     @Test
     void utc053_updateMyProfile_newPasswordWithoutCurrentPasswordThrowsBadRequest() {
         authenticateAs(user);
@@ -358,7 +358,7 @@ class AccountServiceTest {
         assertEquals(1L, dto.getCreatedById());
     }
 
-    // SRS UC-10 step 5, E2: fails until ACC-DE04 is fixed.
+    // SRS UC-10 step 5, E2 (defect ACC-DE04, fixed).
     @Test
     void utc070_createAccount_validUntilInPastThrowsBadRequest() {
         authenticateAs(admin);
