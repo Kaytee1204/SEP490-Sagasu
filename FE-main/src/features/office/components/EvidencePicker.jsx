@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import EvidenceImage from "./EvidenceImage";
 import Notice from "./Notice";
 import useImageUploads from '@/hooks/useImageUploads';
-import { IMAGE_ACCEPT, IMAGE_FORMATS } from '@/utils/imageUploads';
+import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
+import ImageUploadButton from '@/components/common/ImageUploadButton';
 
-export default function EvidencePicker({ files, setFiles, disabled, onProcessing }) {
+export default function EvidencePicker({ files, setFiles, disabled, onProcessing, label = "Thêm ảnh bằng chứng" }) {
   const [error, setError] = useState("");
   const { prepare, processing } = useImageUploads();
   useEffect(() => {
@@ -29,17 +30,10 @@ export default function EvidencePicker({ files, setFiles, disabled, onProcessing
   }
   return (
     <>
-      <label>
-        Ảnh bằng chứng
-        <input
-          type="file"
-          multiple
-          accept={IMAGE_ACCEPT}
-          disabled={busy}
-          onChange={select}
-        />
-        <small>{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB/ảnh. Không công khai trên bài đăng.</small>
-      </label>
+      <div className="of-evidence-picker">
+        <ImageUploadButton label={label} disabled={busy || files.length >= 5} onChange={select} />
+        <small>{IMAGE_FORMATS} · {files.length}/5 ảnh, tối đa 5 MB mỗi ảnh. Ảnh được lưu trong hồ sơ.</small>
+      </div>
       <Notice error>{error}</Notice>
       <ImageProcessingStatus active={processing} />
       <div className="of-files">

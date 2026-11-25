@@ -345,7 +345,7 @@ public class P2pClaimAppealService {
         String path = "/admin/reports/" + reportId + "?kind=CLAIM_APPEAL";
         if (managerId == null) {
             notifications.notifyRoles(List.of(AccountRole.MANAGER), actor, "REPORT_CREATED", title,
-                "Vụ việc cần được quản lý tiếp nhận và đối chiếu hồ sơ.", path, false);
+                "Đối chiếu hồ sơ rồi chọn giữ kết quả hoặc ghi kết luận cần xét lại người nhận.", path, false);
         } else {
             notifications.notifyUser(managerId, "REPORT_CREATED", title,
                 "Một báo cáo mới đã được bổ sung vào vụ việc bạn đang phụ trách.", path, false);

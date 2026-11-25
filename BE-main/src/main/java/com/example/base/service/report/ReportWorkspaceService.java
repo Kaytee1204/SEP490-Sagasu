@@ -40,6 +40,7 @@ public class ReportWorkspaceService {
                     case when c.claimant_id=:actor or (c.claim_type='P2P' and p.account_id=:actor) then c.claim_id
                          when chosen.claimant_id=:actor then chosen.claim_id end as participant_claim_id,
                     c.claim_type,
+                    exists (select 1 from office_handover_issue office_issue where office_issue.report_id=r.report_id) as office_handover,
                     p.account_id=:actor as post_owner,
                     follow_up.step as appeal_step, approval.appeal_until,
                     coalesce(follow_up.step='READY_TO_REOPEN' and chosen.claim_type='P2P' and p.account_id=:actor

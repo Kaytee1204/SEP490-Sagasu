@@ -29,6 +29,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -190,12 +191,14 @@ class ReportServiceTest {
     void utc292_create_claimWithOfficeHandover_kindHandoverIssue() {
         Claim c0 = claim(7L); when(em.find(Claim.class, 20L)).thenReturn(c0);
         when(c0.isOffice()).thenReturn(true);
-        when(jdbc.queryForObject(contains("office_handover"), eq(Boolean.class), any())).thenReturn(true);
+        when(jdbc.query(contains("completion_method='RECIPIENT'"), any(RowMapper.class), eq(20L), eq(7L)))
+                .thenReturn(List.of(OffsetDateTime.now().minusHours(1)));
 
-        ReportService.Detail d = service.create(submit("CLAIM", 20L, "Wrong item"), files, user);
+        var request = new ReportService.Submit("CLAIM", 20L, "Wrong item", reqId, "HANDOVER_WRONG_ITEM");
+        ReportService.Detail d = service.create(request, files, user);
 
         assertThat(d.kind()).isEqualTo("HANDOVER_ISSUE");
-        verify(jdbc).update(contains("office_handover_issue"), eq(100L), eq(20L));
+        verify(jdbc).update(contains("office_handover_issue"), eq(100L), eq(20L), eq(7L));
     }
 
     @Test

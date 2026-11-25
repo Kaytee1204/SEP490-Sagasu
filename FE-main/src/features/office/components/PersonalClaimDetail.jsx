@@ -4,8 +4,7 @@ import { Package, ArrowLeft } from 'lucide-react';
 import Badge from './Badge';
 import OfficeReturnPanel from './OfficeReturnPanel';
 import OfficeClaimTimeline from './OfficeClaimTimeline';
-import { closedAfterReturn, date } from '../officeUtils';
-import ReportButton from '../../reports/components/ReportButton';
+import { date } from '../officeUtils';
 import ClaimAppealPanel from '@/features/claims/components/ClaimAppealPanel';
 import CancelClaimDialog from '@/features/claims/components/CancelClaimDialog';
 
@@ -15,8 +14,6 @@ export default function PersonalClaimDetail({ claim, workflow, onChanged }) {
   const ended = ['COMPLETED','REJECTED','CANCELLED','CLOSED'].includes(claim.status);
   const reportDeadline = workflow.data?.reportDeadline;
   const reportExpired = Boolean(reportDeadline && Date.parse(reportDeadline) <= now);
-  const canReport = !closedAfterReturn(claim) &&
-    (claim.status !== "COMPLETED" || Boolean(workflow.data && !reportExpired));
   useEffect(() => {
     if (!reportDeadline) return;
     const refreshTime = () => setNow(Date.now());
@@ -38,11 +35,10 @@ export default function PersonalClaimDetail({ claim, workflow, onChanged }) {
       </div>
       <div className="op-item-actions">
         <Badge value={claim.status} />
-        {canReport && <ReportButton type="CLAIM" id={claim.id} label={reportDeadline ? "Báo sự cố trao trả" : "Phản ánh về yêu cầu nhận đồ"} />}
         {claim.canCancel && <button type="button" className="of-button of-danger" onClick={() => setWithdrawOpen(true)}>Rút yêu cầu</button>}
       </div>
     </header>
-    <OfficeReturnPanel claim={claim} state={workflow} mine reportExpired={reportExpired} onChanged={onChanged}/>
+    <OfficeReturnPanel claim={claim} state={workflow} mine reportExpired={reportExpired} onChanged={onChanged} onRefresh={onChanged}/>
     <ClaimAppealPanel key={claim.id} claim={claim} />
     {withdrawOpen && claim.canCancel && <CancelClaimDialog claim={claim} onClose={() => setWithdrawOpen(false)}
       onCancelled={() => { setWithdrawOpen(false); onChanged(); }} />}

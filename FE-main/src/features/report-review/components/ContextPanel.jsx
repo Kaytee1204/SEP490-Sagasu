@@ -41,6 +41,11 @@ const names = {
   verified_at: "Xác minh lúc",
   officer: "Nhân viên xác minh",
   condition_note: "Tình trạng bàn giao",
+  item_summary: "Tài sản và phụ kiện bàn giao",
+  confirmation_deadline: "Hạn xác nhận tại quầy",
+  report_deadline: "Hạn tiếp nhận phản ánh",
+  difference_note: "Giải trình chênh lệch",
+  completion_method: "Cách thức hoàn tất",
   confirmed_at: "Hoàn tất lúc",
   issue_note: "Phản ánh",
   full_name: "Họ tên",
@@ -60,6 +65,7 @@ Object.assign(names, {
   confirmed_by_name: "Người xác nhận",
   recipient_name: "Người nhận đồ",
 });
+const receiptCompletionLabels = { RECIPIENT: "Người nhận đã xác nhận", TIMEOUT: "Hết hạn, người nhận chưa xác nhận" };
 function Facts({ data }) {
   return (
     <dl className="rr-facts">
@@ -69,9 +75,9 @@ function Facts({ data }) {
           <div key={key}>
             <dt>{names[key]}</dt>
             <dd>
-              {key.endsWith("_at") || key === "response_deadline"
+              {key.endsWith("_at") || key.endsWith("_deadline")
                 ? date(value)
-                : labels[value] || String(value)}
+                : (key === "completion_method" ? receiptCompletionLabels[value] : labels[value]) || String(value)}
             </dd>
           </div>
         ))}

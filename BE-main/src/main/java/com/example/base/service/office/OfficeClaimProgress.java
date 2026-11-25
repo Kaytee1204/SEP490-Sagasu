@@ -13,12 +13,13 @@ import static com.example.base.service.office.OfficeAccess.bad;
 public class OfficeClaimProgress {
     private final JdbcTemplate jdbc;
     public record Progress(long id,String stage,OffsetDateTime scheduledAt) {}
-    private static final Set<String> STAGES=Set.of("ALL","APPOINTMENT_REVIEW","REVIEW","NEEDS_INFO","EMAIL_UNSENT","AWAITING_REPLY","REPLY_EXPIRED","COUNTER_VERIFICATION","VERIFICATION_FAILED","READY_TO_HANDOVER","OFFICE_COMPLETION","COMPLETED","DISPUTED","REJECTED","CANCELLED","CLOSED","APPEAL_WAIT","APPEAL_REVIEW","APPEAL_REASSESS","SCHEDULE_REQUIRED");
+    private static final Set<String> STAGES=Set.of("ALL","APPOINTMENT_REVIEW","REVIEW","NEEDS_INFO","EMAIL_UNSENT","AWAITING_REPLY","REPLY_EXPIRED","COUNTER_VERIFICATION","VERIFICATION_FAILED","READY_TO_HANDOVER","OFFICE_COMPLETION","AWAITING_RECEIPT","COUNTER_CONFIRMATION_EXPIRED","COMPLETED","DISPUTED","REJECTED","CANCELLED","CLOSED","APPEAL_WAIT","APPEAL_REVIEW","APPEAL_REASSESS","SCHEDULE_REQUIRED");
     private static final String BASE="""
         select c.claim_id,c.post_id,c.submission_channel,c.status,c.claimant_id,c.claimant_name,c.created_at,p.title,a.scheduled_at,
         case when h.status='DISPUTED' then 'DISPUTED'
              when c.status='COMPLETED' or h.status='COMPLETED' then 'COMPLETED'
-             when h.status='WAITING_CONFIRMATION' then 'OFFICE_COMPLETION'
+             when h.status='WAITING_CONFIRMATION' then case when exists (%s) then 'DISPUTED'
+                  when h.confirmation_deadline>now() then 'AWAITING_RECEIPT' else 'COUNTER_CONFIRMATION_EXPIRED' end
              when c.status='PENDING' then 'REVIEW'
              when c.status='NEEDS_INFO' then 'NEEDS_INFO'
              when c.status<>'APPROVED' then c.status
@@ -36,7 +37,7 @@ public class OfficeClaimProgress {
         from claim c join post p on p.post_id=c.post_id
         left join lateral (select * from appointment where claim_id=c.claim_id and status='SCHEDULED' order by appointment_id desc limit 1) a on true
         left join lateral (select * from office_claim_verification where claim_id=c.claim_id and appointment_id=a.appointment_id order by verification_id desc limit 1) v on true
-        left join office_handover h on h.claim_id=c.claim_id
+        left join office_handover h on h.claim_id=c.claim_id and h.status<>'CANCELLED'
         left join lateral (
           select round.appeal_until,bool_or(r.status in ('OPEN','IN_REVIEW')) as pending,
             bool_or(r.status='RESOLVED' and not exists (
@@ -48,7 +49,7 @@ public class OfficeClaimProgress {
           group by round.approval_id
         ) approval on c.status='APPROVED'
         where c.claim_type='OFFICE'
-        """;
+        """.formatted(OfficeReturnService.OPEN_HANDOVER_REPORT);
     public PageData<Progress> list(int page,String status,String stage,String q,Long claimantId) {
         return list(page,status,stage,q,claimantId,null,"ALL",null,false);
     }

@@ -28,7 +28,7 @@ public class ReportController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
             summary = "[13.1] Gửi báo cáo vi phạm mới (Bài đăng / Yêu cầu nhận đồ) kèm ảnh bằng chứng",
-            description = "Tạo phiếu báo cáo (status = OPEN) và tự động chụp lại Snapshot ngữ cảnh tại thời điểm gửi báo cáo."
+            description = "Lưu ngữ cảnh khi gửi báo cáo. Sự cố bàn giao tại văn phòng chỉ do người nhận gửi trong 7 ngày kể từ lúc xác nhận biên bản."
     )
     public ResponseEntity<?> create(
             @RequestPart("data") ReportService.Submit data,

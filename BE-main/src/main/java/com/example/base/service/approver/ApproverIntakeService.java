@@ -217,6 +217,7 @@ public class ApproverIntakeService {
         receipt.assignLocation(locations.resolve(request.storageLocationId(), receipt.getStorageLocation()));
         receipt.edit(activeCategory(request.categoryId()), request.title(), request.description(), request.conditionAtReceipt(),
                 request.foundLocation(), request.foundAt(), request.privateIdentifiers(), request.note());
+        if (request.itemSummary() != null) receipt.recordItems(request.itemSummary());
     }
     private void upload(long owner, List<ValidatedImage> images, List<String> keys) {
         for (ValidatedImage image : images) {

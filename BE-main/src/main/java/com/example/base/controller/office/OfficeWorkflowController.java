@@ -222,7 +222,7 @@ public class OfficeWorkflowController {
     @PostMapping(value = "/claims/{id}/handover", consumes = "multipart/form-data")
     @Operation(
             summary = "[11.15] Lập biên bản xuất kho trao trả đồ tại Văn phòng kèm ảnh minh chứng",
-            description = "Tạo bản ghi office_handover kèm ảnh chụp biên bản bàn giao tại quầy."
+            description = "Ghi nhận tài sản, phụ kiện, tình trạng và ảnh bàn giao để mở lượt xác nhận tại quầy."
     )
     public ApiResponse<Workflow> record(
             @PathVariable("id") long id,
@@ -234,13 +234,27 @@ public class OfficeWorkflowController {
 
     @PostMapping("/claims/{id}/complete")
     @Operation(
-            summary = "[11.16] Xác nhận hoàn tất trao trả đồ tại Văn phòng hoặc ghi nhận khiếu nại",
-            description = "Hoàn tất xuất kho (item_receipt = RETURNED, post = RETURNED, claim = COMPLETED)."
+            summary = "[11.16] Xác nhận đã nhận tài sản tại Văn phòng",
+            description = "Người nhận xác nhận nội dung biên bản tại quầy để hoàn tất trao trả và bắt đầu hạn phản ánh 7 ngày."
     )
     public ApiResponse<Workflow> complete(
             @PathVariable("id") long id,
             @Valid @RequestBody Confirm r,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(returns.complete(id, r, user));
+    }
+
+    @PostMapping("/claims/{id}/reopen-confirmation")
+    @Operation(summary = "Mở lại phiên xác nhận biên bản tại quầy")
+    public ApiResponse<Workflow> reopenConfirmation(@PathVariable("id") long id, @Valid @RequestBody ReopenConfirmation r,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(returns.reopenConfirmation(id, r, user));
+    }
+
+    @PostMapping("/claims/{id}/stop-handover")
+    @Operation(summary = "Dừng lượt bàn giao chưa xác nhận khi tài sản vẫn do văn phòng lưu giữ")
+    public ApiResponse<Workflow> stopHandover(@PathVariable("id") long id, @Valid @RequestBody StopHandover r,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(returns.stopHandover(id, r, user));
     }
 }

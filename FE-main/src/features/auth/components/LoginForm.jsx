@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { counterConfirmationReturn } from '@/features/office/officeRoutes';
 import { authApi } from '../api/authApi';
 
 export default function LoginForm({ initialMode = 'login' }) {
@@ -63,7 +64,10 @@ export default function LoginForm({ initialMode = 'login' }) {
     }
 
     const role = result?.account?.role;
-    if (role === 'ADMIN' || role === 'MANAGER') {
+    const officeReceipt = counterConfirmationReturn(location.state?.officeReceipt);
+    if (officeReceipt) {
+      navigate(officeReceipt, { replace: true });
+    } else if (role === 'ADMIN' || role === 'MANAGER') {
       navigate('/admin', { replace: true });
     } else {
       navigate('/', { replace: true });
@@ -121,12 +125,7 @@ export default function LoginForm({ initialMode = 'login' }) {
     setLoading(true);
     try {
       const result = await verifyOtp(pendingEmail, cleanOtp, 'LOGIN');
-      const role = result?.account?.role;
-      if (role === 'ADMIN' || role === 'MANAGER') {
-        navigate('/admin', { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
+      handleLoginResult(result);
     } catch (err) {
       setError(err.message || 'Mã OTP không chính xác hoặc đã hết hạn');
     } finally {

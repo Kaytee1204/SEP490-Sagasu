@@ -99,6 +99,12 @@ public class ReportReviewService {
   @Transactional(readOnly = true)
   public Map<String,Object> list(int page, String status, String kind, String target, String q,
       String queue, Long targetId, String assignee, Long approvalId, CustomUserDetails user) {
+    return list(page, status, kind, target, q, queue, targetId, assignee, approvalId, null, user);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String,Object> list(int page, String status, String kind, String target, String q,
+      String queue, Long targetId, String assignee, Long approvalId, Boolean officeHandover, CustomUserDetails user) {
     Account actor = access.require(user, AccountRole.MANAGER);
     if (!Set.of("ALL","READY","UNASSIGNED","MINE","WAITING","REPLIED","HISTORY").contains(queue))
       throw bad("Hàng đợi không hợp lệ.");
@@ -115,6 +121,8 @@ public class ReportReviewService {
     ) throw bad("Bộ lọc không hợp lệ.");
     if (approvalId != null && (approvalId <= 0 || targetId != null || !"CLAIM_APPEAL".equals(kind)))
       throw bad("Bộ lọc lần duyệt không hợp lệ.");
+    if (officeHandover != null && (!"HANDOVER_ISSUE".equals(kind) || targetId == null || !"CLAIM".equals(target)))
+      throw bad("Bộ lọc nhóm sự cố bàn giao không hợp lệ.");
     boolean expandedGroup = targetId != null || approvalId != null;
     // Compiling the priority expressions can take longer than reading the report queue itself.
     jdbc.execute("set local jit = off");
@@ -131,6 +139,7 @@ public class ReportReviewService {
       left join accounts subject on subject.id=coalesce(r.reported_account_id,msg.sender_id,p.created_by)
       left join p2p_claim_appeal appeal on appeal.report_id=r.report_id
       left join p2p_claim_approval approval on approval.approval_id=appeal.approval_id
+      left join office_handover_issue office_issue on office_issue.report_id=r.report_id
       """ + ReportQueueSql.CLASSIFICATION + """
       where (?='ALL' or case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end=?)
       """;
@@ -177,8 +186,11 @@ public class ReportReviewService {
       where += " and appeal.approval_id=?";
       args.add(approvalId);
     }
+    if (officeHandover != null)
+      where += officeHandover ? " and office_issue.report_id is not null" : " and office_issue.report_id is null";
     String objectKey = """
         case when appeal.report_id is not null then 'APPEAL:'||appeal.approval_id
+          when office_issue.report_id is not null then 'OFFICE_HANDOVER:'||r.claim_id
           when r.kind='HANDOVER_ISSUE' then 'HANDOVER:'||r.claim_id
           when r.post_id is not null then 'POST:'||r.post_id
           when r.claim_id is not null then 'CLAIM:'||r.claim_id
@@ -210,6 +222,7 @@ public class ReportReviewService {
     String projection = """
       select r.report_id,case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end as kind,
         appeal.approval_id, approval.custody_mode as appeal_custody_mode,
+        case when office_issue.report_id is not null then 'OFFICE' end as handover_source,
         r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.reason_code,
         case when appeal.report_id is null then r.reason_label_snapshot end as reason_label_snapshot,
         r.status,r.created_at,
@@ -317,6 +330,7 @@ public class ReportReviewService {
     var out = new LinkedHashMap<String, Object>();
     out.put("report", r);
     out.put("caseKind", kind);
+    out.put("handoverSource", current.get("handoverSource"));
     out.put("appeal", appeal);
     if (!appeal.isEmpty()) {
       out.put("approvedContext", context.withUrls(context.context(
@@ -426,6 +440,7 @@ public class ReportReviewService {
 
   static boolean isP2pReport(Map<String, Object> report, Map<String, Object> appeal, Map<String, Object> current) {
     if (!appeal.isEmpty()) return "P2P".equals(appeal.get("claim_type"));
+    if ("OFFICE".equals(current.get("handoverSource"))) return false;
     return "HANDOVER_ISSUE".equals(report.get("kind")) && current.get("claim") instanceof Map<?, ?> claim
         && "P2P".equals(claim.get("claim_type"));
   }
@@ -480,6 +495,7 @@ public class ReportReviewService {
       if (!recoveryPending) actions.add("APPEAL_KEEP");
       if (activeAppeal && Boolean.TRUE.equals(appeal.get("can_reopen_approval"))) actions.add("APPEAL_WRONG_RECIPIENT");
     } else if ("HANDOVER_ISSUE".equals(kind)) {
+      if ("OFFICE".equals(current.get("handoverSource"))) return officeHandoverActions(held, recoveryPending);
       var post = (Map<String, Object>) current.getOrDefault("post", Map.of());
       if (held && !recoveryRequested && !"BEFORE".equals(issuePhase)) actions.add("RELEASE");
       if (!held && canHold(post)) actions.add("HOLD");
@@ -497,6 +513,11 @@ public class ReportReviewService {
     if ("HANDOVER_ISSUE".equals(kind) && issuePhase != null) actions.removeIf(action -> !fitsHandoverReason(report, action));
     if (recoveryPending) actions.add("CONFIRM_ITEM_RECOVERY");
     return actions;
+  }
+
+  private static List<String> officeHandoverActions(boolean held, boolean recoveryPending) {
+    if (recoveryPending) return List.of("CONFIRM_ITEM_RECOVERY");
+    return held ? List.of("RELEASE", "RESOLVE", "DISMISS") : List.of("RESOLVE", "DISMISS");
   }
 
   private boolean hasCorrection(long reportId) {
@@ -739,6 +760,12 @@ public class ReportReviewService {
     String recordedAction = action;
     String effect = measure == null ? action : measure;
     var recovery = recovery(reportId);
+    if ("OFFICE".equals(current.get("handoverSource"))) {
+      boolean held = !context.one("select report_id from report_hold where report_id=? and released_at is null", reportId).isEmpty();
+      boolean recoveryPending = !recovery.isEmpty() && recovery.get("confirmed_at") == null;
+      if (!officeHandoverActions(held, recoveryPending).contains(effect))
+        throw bad("Thao tác không áp dụng cho sự cố bàn giao tại văn phòng.");
+    }
     if (!recovery.isEmpty() && recovery.get("confirmed_at")==null && Set.of(
         "APPEAL_KEEP","APPEAL_WRONG_RECIPIENT","RESOLVE","DISMISS","HANDOVER_COMPLETED","HANDOVER_CONTINUE",
         "HANDOVER_RETRY","HANDOVER_REOPEN","HANDOVER_UNVERIFIED","RELEASE").contains(effect))

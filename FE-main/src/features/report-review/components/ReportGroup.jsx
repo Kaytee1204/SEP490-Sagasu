@@ -75,7 +75,10 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
     ? "Sự cố bàn giao" : `Vi phạm · ${reportTargets[target]}`;
   const isAppeal = report.kind === "CLAIM_APPEAL";
   const officeAppeal = isAppeal && report.appeal_custody_mode === "OFFICE";
-  const groupScope = isAppeal ? { approvalId: report.approval_id } : { target, targetId };
+  const handoverIssue = report.kind === "HANDOVER_ISSUE";
+  const officeHandover = handoverIssue && report.handover_source === "OFFICE";
+  const groupScope = isAppeal ? { approvalId: report.approval_id }
+    : handoverIssue && target === "CLAIM" ? { target, targetId, officeHandover } : { target, targetId };
   const assignee = isAppeal
     ? report.appeal_assignee || (report.open_count > 0 ? "Chưa phân công" : report.assignee || "—")
     : multiple ? "Theo từng báo cáo" : report.assignee || "Chưa phân công";
@@ -95,7 +98,7 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
           <div className="rr-case-name">
             <div className="rr-case-tags">
               <span className="rr-case-type">{type}</span>
-              {officeAppeal && <span className="rr-case-type">Văn Phòng</span>}
+              {(officeAppeal || officeHandover) && <span className="rr-case-type">Văn phòng</span>}
             </div>
             {multiple ? <strong>{title}</strong>
               : <Link to={reportHref(report, reportPath)}>{title}</Link>}

@@ -53,9 +53,11 @@ public class ReportReviewController {
             @RequestParam(name = "assignee", defaultValue = "ALL") String assignee,
             @RequestParam(name = "targetId", required = false) Long targetId,
             @RequestParam(name = "approvalId", required = false) Long approvalId,
+            @Parameter(description = "Giới hạn nhóm sự cố bàn giao theo luồng văn phòng")
+            @RequestParam(name = "officeHandover", required = false) Boolean officeHandover,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user
     ) {
-        return ApiResponse.ok(reviews.list(page, status, kind, target, q, queue, targetId, assignee, approvalId, user));
+        return ApiResponse.ok(reviews.list(page, status, kind, target, q, queue, targetId, assignee, approvalId, officeHandover, user));
     }
 
     @GetMapping("/{id}")

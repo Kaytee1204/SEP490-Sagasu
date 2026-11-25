@@ -71,6 +71,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const isWrongRecipientDecision = action === "APPEAL_WRONG_RECIPIENT";
   const requiresRecoveryCheck = data.recoveryRequested && action === "HANDOVER_CONTINUE";
   const confirmingCorrection = ["HANDOVER_COMPLETED", "RESOLVE"].includes(action) && ["HANDOVER_WRONG_ITEM", "HANDOVER_MISSING_ITEMS"].includes(data.report.reason_code) && data.caseKind === "HANDOVER_ISSUE";
+  const officeHandover = data.handoverSource === "OFFICE";
   const requiresCustody = confirmingCorrection || requiresRecoveryCheck
     || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
     || (isKeepApproval && data.recoveryRequested);
@@ -240,7 +241,8 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
               checked={custodyVerified}
               onChange={(e) => setCustody(e.target.checked)}
             />
-            {confirmingCorrection ? (data.report.reason_code === "HANDOVER_WRONG_ITEM" ? "Đã xác minh người nhận đang giữ đúng món và đã đối chiếu việc trả lại món giao nhầm, nếu có." : "Đã đối chiếu danh sách phụ kiện và xác minh người nhận đã nhận đủ.")
+            {officeHandover && confirmingCorrection ? "Tôi đã đối chiếu biên bản với tài liệu liên quan và xác minh kết quả khắc phục với văn phòng và người nhận."
+              : confirmingCorrection ? (data.report.reason_code === "HANDOVER_WRONG_ITEM" ? "Đã xác minh người nhận đang giữ đúng món và đã đối chiếu việc trả lại món giao nhầm, nếu có." : "Đã đối chiếu danh sách phụ kiện và xác minh người nhận đã nhận đủ.")
               : action === "HANDOVER_COMPLETED" ? "Đã đối chiếu căn cứ xác nhận đúng món đồ và đúng người nhận."
               : requiresRecoveryCheck
               ? "Đã xác minh tình trạng món đồ và có đủ căn cứ áp dụng kết quả bàn giao này."

@@ -7,11 +7,12 @@ import useLoad from "../hooks/useLoad";
 import WorkflowPageFrame from "./WorkflowPageFrame";
 import Notice from "./Notice";
 import IntakeEvidencePicker from "./IntakeEvidencePicker";
+import IntakeAssetFields from "./IntakeAssetFields";
 import LoadState from "./LoadState";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { validateRequiredText } from "../officeUtils";
 
-const emptyIntake = { locationId: "", condition: "", reconciliationNote: "", physicallyReceived: false };
+const emptyIntake = { locationId: "", items: "", condition: "", reconciliationNote: "", physicallyReceived: false };
 
 export default function CounterIntakeContent({ onClose, onDone }) {
   const [query, setQuery] = useState("");
@@ -82,7 +83,7 @@ export default function CounterIntakeContent({ onClose, onDone }) {
           <button type="button" className="of-button" disabled={busy} onClick={() => guard(() => selectPost(null))}>Chọn bài khác</button>
           <Notice error>{error || locations.error}</Notice>
           <label>Vị trí lưu kho *<select required disabled={busy || locations.loading} value={form.locationId} onChange={e => change("locationId", e.target.value)}><option value="">Chọn vị trí</option>{locations.data?.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</select></label>
-          <label>Tình trạng đồ khi nhận *<textarea required maxLength={2000} disabled={busy} value={form.condition} onChange={e => change("condition", e.target.value)} placeholder="Tình trạng thực tế, phụ kiện đi kèm…" /></label>
+          <IntakeAssetFields items={form.items} condition={form.condition} onChange={change} disabled={busy} />
           {post.previousHandovers > 0 && <label>Đối chiếu lần giao đồ trước *<small>Bài đăng đã có biên bản giao đồ. Ghi rõ người giao lại và kết quả kiểm tra đồ thực tế.</small><textarea required maxLength={2000} disabled={busy} value={form.reconciliationNote} onChange={e => change("reconciliationNote", e.target.value)} /></label>}
           <IntakeEvidencePicker files={files} setFiles={setFiles} disabled={saving} onProcessing={setImagesProcessing} />
           <label className="of-check"><input type="checkbox" required disabled={busy} checked={form.physicallyReceived} onChange={e => change("physicallyReceived", e.target.checked)} /><span>Tôi đã đối chiếu người giao với tài khoản trên và trực tiếp nhận, kiểm tra đúng đồ vật.</span></label>

@@ -86,6 +86,7 @@ function ReportDetail({ id }) {
   const previousExchanges = inquiries.filter(item => !pending || item.responded_at || item.closed_at);
   const linkedClaim = report?.finder_approved_claim_id || report?.participant_claim_id;
   const office = report?.claim_type === 'OFFICE';
+  const officeHandover = report?.office_handover === true;
   const claimPath = linkedClaim && (office ? `/van-phong/claims/${linkedClaim}`
     : report?.report_subject_id ? claimDetailPath(report.report_subject_id, linkedClaim) : null);
   const correction = report?.post_measure === 'REQUEST_POST_CORRECTION' && report.post_owner;
@@ -94,7 +95,7 @@ function ReportDetail({ id }) {
   const overdue = awaitingReply.some(item => item.overdue);
   const reviewClaims = isAppeal && !office && report.approval_reopened && report.post_owner && report.report_subject_id;
   const followUpPath = reviewClaims ? postClaimsPath(report.report_subject_id, 'PENDING')
-    : claimPath && !report.needs_reopen && (handover ? `${claimPath}#handover` : claimPath);
+    : claimPath && !report.needs_reopen && (handover && !office ? `${claimPath}#handover` : claimPath);
   const followUpLabel = reviewClaims ? 'Xem yêu cầu chờ xét duyệt' : handover ? 'Theo dõi nhận đồ' : 'Xem yêu cầu nhận đồ';
 
   function afterReply() {
@@ -117,14 +118,14 @@ function ReportDetail({ id }) {
           <div className="report-detail-heading">
             <div>
               <p className="report-detail-reference">Báo cáo #{report.report_id} · {report.mine ? 'Bạn đã gửi' : 'Liên quan đến bạn'}</p>
-              <h1>{reportTitles[report.report_type] || 'Chi tiết báo cáo'}</h1>
+              <h1>{officeHandover ? 'Sự cố bàn giao tại văn phòng' : reportTitles[report.report_type] || 'Chi tiết báo cáo'}</h1>
             </div>
             <span className={`report-state report-state-${report.status}`}>{report.appeal_step ? "Tranh chấp đã có kết luận" : reportStatuses[report.status]}</span>
           </div>
           {subject.value && <p className="report-detail-subject">{subject.label} <span className="report-meta-dot">·</span> <strong>{subject.value}</strong></p>}
           <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
-          {office && report.mine && report.report_type === 'HANDOVER_ISSUE' && !concluded &&
-            <p className="report-detail-subject">Báo cáo đã gửi vẫn được xem xét sau khi hết hạn gửi sự cố.</p>}
+          {officeHandover && report.mine && !concluded &&
+            <p className="report-detail-subject">Báo cáo gửi trong thời hạn vẫn được xem xét sau khi hết hạn tiếp nhận phản ánh.</p>}
           {(submission || report.report_reason) && <section className="report-submission">
             <h2>{isAppeal ? 'Nội dung tranh chấp' : 'Nội dung báo cáo'}{evidence.length > 0 && ` · ${evidence.length} ảnh`}</h2>
             <dl className="report-detail-fields">
