@@ -1223,6 +1223,7 @@ public class ReportReviewService {
     before.put("targetAccountId", target);
     UpdateAccountRequest update = new UpdateAccountRequest();
     update.setStatus(AccountStatus.SUSPENDED);
+    update.setReason("Đình chỉ do xử lý báo cáo vi phạm");
     accounts.updateAccount(target, update);
     Account suspended = accountRepository.findById(target).orElseThrow();
     suspended.setFailedLoginCount(0);

@@ -154,6 +154,16 @@ export function useAccountDashboard() {
       }
     }
 
+    const suspending =
+      crudModal.mode === 'edit' && formData.status === 'SUSPENDED' && crudModal.data?.status !== 'SUSPENDED';
+    const trimmedReason = (formData.reason || '').trim();
+    if (suspending && !trimmedReason) {
+      const msg = 'Vui lòng nhập lý do khóa tài khoản';
+      setModalError(msg);
+      showToast(msg, 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
       if (crudModal.mode === 'create') {
@@ -184,6 +194,9 @@ export function useAccountDashboard() {
         if (trimmedPass) {
           payload.password = trimmedPass;
         }
+        if (suspending) {
+          payload.reason = trimmedReason;
+        }
         const updated = await accountApi.updateAccount(crudModal.data.id, payload);
         showToast(`Đã cập nhật tài khoản #${updated.id} (${updated.email})`);
       }
@@ -199,10 +212,13 @@ export function useAccountDashboard() {
     }
   };
 
-  const handleToggleLock = async (account) => {
+  const handleToggleLock = async (account, reason) => {
     const nextStatus = account.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
     try {
-      await accountApi.updateAccount(account.id, { status: nextStatus });
+      await accountApi.updateAccount(
+        account.id,
+        nextStatus === 'SUSPENDED' ? { status: nextStatus, reason } : { status: nextStatus }
+      );
       showToast(
         nextStatus === 'SUSPENDED'
           ? `Đã tạm khóa tài khoản #${account.id} (${account.email})`

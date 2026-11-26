@@ -541,7 +541,7 @@ class AccountManagementIntegrationTest {
     void itc037_suspendRevokesAndBlocks() throws Exception {
         login(U, PW).andExpect(status().isOk());
         assertThat(refreshTokens.findByAccount_IdAndRevokedAtIsNull(user.getId())).isNotEmpty();
-        call(put("/api/accounts/" + user.getId()), M, body("status", "SUSPENDED"))
+        call(put("/api/accounts/" + user.getId()), M, body("status", "SUSPENDED", "reason", "Vi phạm nội quy"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUSPENDED"));
         assertThat(refreshTokens.findByAccount_IdAndRevokedAtIsNull(user.getId())).isEmpty();

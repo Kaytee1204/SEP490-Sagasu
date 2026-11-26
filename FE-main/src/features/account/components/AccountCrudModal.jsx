@@ -276,6 +276,26 @@ export default function AccountCrudModal({
             </div>
           </div>
 
+          {!isCreate && formData.status === 'SUSPENDED' && crudModal.data?.status !== 'SUSPENDED' && (
+            <div>
+              <label
+                htmlFor="crud-lock-reason"
+                style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-secondary)' }}
+              >
+                Lý do khóa <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <textarea
+                id="crud-lock-reason"
+                value={formData.reason || ''}
+                maxLength={500}
+                rows={2}
+                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                placeholder="VD: Vi phạm nội quy"
+                style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.85rem', resize: 'vertical' }}
+              />
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
             <button
               type="button"
