@@ -2,6 +2,33 @@
 import { prepareImageFormData } from '@/utils/imageUploads';
 const BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8080/api';
 
+const TITLE_FIELDS = new Set(['title', 'postTitle', 'itemTitle', 'post_title']);
+
+export function stripPostCode(text) {
+  if (typeof text !== 'string') return text;
+  const cleaned = text.replace(/\s*#\d+\b/g, '').trim();
+  return cleaned || text.trim();
+}
+
+function sanitizeTitlesInPayload(node) {
+  if (!node || typeof node !== 'object') return node;
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i += 1) {
+      node[i] = sanitizeTitlesInPayload(node[i]);
+    }
+    return node;
+  }
+  for (const key of Object.keys(node)) {
+    const val = node[key];
+    if (TITLE_FIELDS.has(key) && typeof val === 'string') {
+      node[key] = stripPostCode(val);
+    } else if (val && typeof val === 'object') {
+      node[key] = sanitizeTitlesInPayload(val);
+    }
+  }
+  return node;
+}
+
 class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
@@ -68,7 +95,8 @@ class ApiClient {
         err.data = errorData;
         throw err;
       }
-      return await response.json();
+      const json = await response.json();
+      return sanitizeTitlesInPayload(json);
     } catch (error) {
       console.warn(`[ApiClient] Request to ${url} failed:`, error.message);
       throw error;

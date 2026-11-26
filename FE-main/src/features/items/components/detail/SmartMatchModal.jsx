@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ImageViewer from '@/components/common/ImageViewer';
+import { stripPostCode } from '@/services/apiClient';
 import { getSmartMatches } from '../../api/postApi';
 import SavePostButton from '../saved-posts/SavePostButton';
 import './SmartMatchModal.css';
@@ -91,18 +92,17 @@ function getItemImages(item) {
 function buildMetrics(breakdown) {
   if (!breakdown) return [];
   const metrics = [];
-  // Ưu tiên hiển thị Độ tương đồng hình ảnh & Màu sắc lên đầu tiên theo đúng trọng số AI
   if (breakdown.visual != null) {
-    metrics.push({ key: 'visual', label: 'Độ tương đồng hình ảnh (CLIP)', value: Number(breakdown.visual), primary: true });
+    metrics.push({ key: 'visual', label: 'Độ tương đồng hình ảnh', value: Number(breakdown.visual), primary: true });
   }
   if (breakdown.color != null) {
-    metrics.push({ key: 'color', label: 'Độ phù hợp màu sắc (HSV)', value: Number(breakdown.color), primary: true });
+    metrics.push({ key: 'color', label: 'Độ phù hợp màu sắc', value: Number(breakdown.color), primary: true });
   }
   if (breakdown.text != null) {
-    metrics.push({ key: 'text', label: 'Độ tương đồng mô tả (Tiếng Việt)', value: Number(breakdown.text) });
+    metrics.push({ key: 'text', label: 'Độ tương đồng mô tả', value: Number(breakdown.text) });
   }
   if (breakdown.crossModal != null && Number(breakdown.crossModal) > 0) {
-    metrics.push({ key: 'crossModal', label: 'Ảnh khớp mô tả (Cross-CLIP)', value: Number(breakdown.crossModal) });
+    metrics.push({ key: 'crossModal', label: 'Ảnh khớp mô tả', value: Number(breakdown.crossModal) });
   }
   if (breakdown.location != null) {
     metrics.push({ key: 'location', label: 'Độ phù hợp vị trí', value: Number(breakdown.location) });
@@ -200,7 +200,12 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
   }, [requestKey, post?.id]);
 
   const rankedMatches = useMemo(
-    () => state.matches.map((item, idx) => ({ ...item, rank: idx + 1 })),
+    () =>
+      state.matches.map((item, idx) => ({
+        ...item,
+        title: stripPostCode(item.title),
+        rank: idx + 1,
+      })),
     [state.matches],
   );
 
@@ -351,10 +356,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
               <Trophy size={21} />
             </div>
             <div className="sm-header-text">
-              <h3 id="sm-modal-title">Bảng xếp hạng kết quả tìm kiếm</h3>
-              <p>
-                Các bài đăng {targetTypeLabel} được sắp xếp theo mức độ tương đồng với bài đăng {sourceTypeLabel}.
-              </p>
+              <h3 id="sm-modal-title">Bảng xếp hạng kết quả</h3>
             </div>
           </div>
           <button type="button" className="sm-close-btn" onClick={onClose} aria-label="Đóng">
@@ -373,22 +375,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
               <strong className="sm-ai-target-value">{sourceDetectedItemLabel}</strong>
             </div>
           </div>
-          <span className="sm-ai-pipeline-pill">
-            YOLOv8 Smart Crop • 2x CLIP • HSV Color
-          </span>
         </div>
-
-        {/* Legend Strip */}
-        {!isLoading && !state.error && total > 0 && (
-          <div className="sm-legend-wrap">
-            <div className="sm-legend" aria-label="Chú thích thứ hạng">
-              <span className="sm-legend-item"><span className="sm-dot sm-dot-1" />Top 1 (Vàng)</span>
-              <span className="sm-legend-item"><span className="sm-dot sm-dot-2" />Top 2 (Tím)</span>
-              <span className="sm-legend-item"><span className="sm-dot sm-dot-3" />Top 3 (Cam)</span>
-              <span className="sm-legend-item"><span className="sm-dot sm-dot-4" />Top 4+</span>
-            </div>
-          </div>
-        )}
 
         {/* Body */}
         <div className="sm-body">
@@ -543,7 +530,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                             <div className="sm-breakdown-head">
                               <span className="sm-breakdown-title">
                                 <BarChart3 size={15} aria-hidden="true" />
-                                Chi tiết điểm đánh giá (Ưu tiên Hình ảnh &amp; Màu sắc)
+                                Chi tiết điểm đánh giá
                               </span>
                               {item.matchReason && (
                                 <span className="sm-breakdown-reason">{item.matchReason}</span>

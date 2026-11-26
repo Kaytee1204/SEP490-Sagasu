@@ -30,7 +30,7 @@ export default function StaffPostDetail() {
           <>
             <Header
               title={post.title}
-              description={`Bài #${post.id} · ${post.category} · ${date(post.createdAt)}`}
+              description={`${post.category} · ${date(post.createdAt)}`}
             >
               {["VISIBLE", "HIDDEN"].includes(post.moderationStatus) && (
                 <button

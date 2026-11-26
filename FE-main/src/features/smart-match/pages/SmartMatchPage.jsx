@@ -4,7 +4,6 @@ import SmartMatchCard from '../components/SmartMatchCard';
 import SmartMatchHelpCard from '../components/SmartMatchHelpCard';
 
 const POSTED_ITEM = {
-  id: 'REQ-8821',
   title: 'Ví da nam Pedro màu đen',
   type: 'lost',
   date: '18/09/2025',
@@ -63,40 +62,8 @@ export default function SmartMatchPage() {
                 <Trophy size={20} />
               </div>
               <div>
-                <h2 className="text-heading" style={{ margin: 0, fontSize: '1.2rem' }}>Bảng xếp hạng kết quả tìm kiếm</h2>
-                <div style={{ fontSize: '0.86rem', color: '#64748b', marginTop: '2px' }}>
-                  Tìm thấy <strong style={{ color: '#2563eb' }}>{AI_MATCHES.length}</strong> bài đăng FOUND phù hợp nhất được sắp xếp theo mức độ tương đồng.
-                </div>
+                <h2 className="text-heading" style={{ margin: 0, fontSize: '1.2rem' }}>Bảng xếp hạng kết quả</h2>
               </div>
-            </div>
-
-            <div
-              style={{
-                display: 'inline-flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: '16px',
-                padding: '9px 16px',
-                borderRadius: '10px',
-                background: '#f8fafc',
-                border: '1px solid #eef2f6',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: '#334155',
-              }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308' }} /> Top 1 (Vàng)
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1' }} /> Top 2 (Tím)
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f97316' }} /> Top 3 (Cam)
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8' }} /> Top 4+
-              </span>
             </div>
           </div>
 
