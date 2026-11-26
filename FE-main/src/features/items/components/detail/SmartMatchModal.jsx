@@ -14,25 +14,95 @@ import {
   Info,
   AlertCircle,
   SearchCheck,
+  Sparkles,
+  ZoomIn,
+  Images,
+  ScanSearch,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import ImageViewer from '@/components/common/ImageViewer';
 import { getSmartMatches } from '../../api/postApi';
 import SavePostButton from '../saved-posts/SavePostButton';
 import './SmartMatchModal.css';
 
 const PAGE_SIZE = 5;
 
+const LOCAL_ITEM_PATTERNS = [
+  { label: 'Balo / Túi xách', rx: /(balo|ba lô|túi xách|túi đeo|cặp sách|backpack|tuixach)/i },
+  { label: 'Ví da / Bóp tiền', rx: /(ví|bóp|wallet|vida|bopda)/i },
+  { label: 'Thẻ sinh viên / CCCD / Giấy tờ', rx: /(thẻ sinh viên|cccd|cmnd|căn cước|giấy tờ|thẻ atm|bằng lái|thesinhvien)/i },
+  { label: 'Tai nghe / Hộp sạc không dây', rx: /(tai nghe|airpod|earbuds|headphone|tainghe)/i },
+  { label: 'Điện thoại di động', rx: /(điện thoại|iphone|samsung|xiaomi|oppo|smartphone|dienthoai)/i },
+  { label: 'Laptop / Máy tính xách tay', rx: /(laptop|macbook|máy tính xách tay|thinkpad|dell|asus)/i },
+  { label: 'Củ sạc / Dây sạc / Sạc dự phòng', rx: /(sạc|adapter|dây sạc|củ sạc|cục sạc|charger)/i },
+  { label: 'Kính mắt / Kính cận / Kính râm', rx: /(kính|mắt kính|glasses|matkinh)/i },
+  { label: 'Chìa khóa / Móc khóa', rx: /(chìa khóa|chìa khoá|khóa xe|móc khóa|chiakhoa)/i },
+  { label: 'Bình giữ nhiệt / Bình nước', rx: /(bình nước|bình giữ nhiệt|ly giữ nhiệt|cốc giữ nhiệt|bottle)/i },
+  { label: 'Đồng hồ đeo tay / Smartwatch', rx: /(đồng hồ|smartwatch|apple watch|casio|dongho)/i },
+  { label: 'Mũ bảo hiểm', rx: /(mũ bảo hiểm|nón bảo hiểm|helmet)/i },
+  { label: 'Ô / Dù cầm tay', rx: /(ô dù|cây dù|umbrella)/i },
+  { label: 'Sách / Vở / Sổ tay', rx: /(sách|giáo trình|vở|sổ tay|notebook)/i },
+  { label: 'Chuột máy tính', rx: /(chuột|mouse|logitech)/i },
+  { label: 'Máy tính cầm tay', rx: /(máy tính cầm tay|máy tính bỏ túi|calculator)/i },
+];
+
+const LOCAL_COLOR_PATTERNS = [
+  { label: 'Màu đen', rx: /(màu đen|\bđen\b|baloden|mauden|black)/i },
+  { label: 'Màu trắng', rx: /(màu trắng|\btrắng\b|mautrang|white)/i },
+  { label: 'Màu nâu', rx: /(màu nâu|\bnâu\b|da bò|brown)/i },
+  { label: 'Màu xám / bạc', rx: /(màu xám|màu bạc|\bxám\b|\bbạc\b|gray|silver)/i },
+  { label: 'Màu xanh dương', rx: /(xanh dương|xanh lam|xanh navy|\bxanh\b|blue)/i },
+  { label: 'Màu xanh lá', rx: /(xanh lá|xanh rêu|green)/i },
+  { label: 'Màu đỏ', rx: /(màu đỏ|\bđỏ\b|red)/i },
+  { label: 'Màu hồng', rx: /(màu hồng|\bhồng\b|pink)/i },
+  { label: 'Màu vàng', rx: /(màu vàng|\bvàng\b|yellow|gold)/i },
+  { label: 'Màu tím', rx: /(màu tím|\btím\b|purple)/i },
+  { label: 'Màu cam', rx: /(màu cam|\bcam\b|orange)/i },
+  { label: 'Màu be / kem', rx: /(màu be|màu kem|\bbe\b|beige)/i },
+];
+
+function inferDetectedItemFallback(postObj) {
+  if (!postObj) return 'Đồ vật cá nhân';
+  const text = `${postObj.title || ''} ${postObj.description || ''}`.trim();
+  const foundItem = LOCAL_ITEM_PATTERNS.find((p) => p.rx.test(text))?.label
+    || postObj.categoryName
+    || postObj.category?.name
+    || postObj.title
+    || 'Đồ vật cá nhân';
+  const foundColor = LOCAL_COLOR_PATTERNS.find((p) => p.rx.test(text))?.label || '';
+  return foundColor ? `${foundItem} • ${foundColor}` : foundItem;
+}
+
+function getItemImages(item) {
+  const urls = [];
+  if (Array.isArray(item?.imageUrls)) {
+    for (const u of item.imageUrls) {
+      if (typeof u === 'string' && u.trim() && !urls.includes(u.trim())) {
+        urls.push(u.trim());
+      }
+    }
+  }
+  if (typeof item?.imageUrl === 'string' && item.imageUrl.trim() && !urls.includes(item.imageUrl.trim())) {
+    urls.push(item.imageUrl.trim());
+  }
+  return urls;
+}
+
 function buildMetrics(breakdown) {
   if (!breakdown) return [];
   const metrics = [];
-  if (breakdown.text != null) {
-    metrics.push({ key: 'text', label: 'Độ tương đồng nội dung', value: Number(breakdown.text) });
-  }
+  // Ưu tiên hiển thị Độ tương đồng hình ảnh & Màu sắc lên đầu tiên theo đúng trọng số AI
   if (breakdown.visual != null) {
-    metrics.push({ key: 'visual', label: 'Độ tương đồng hình ảnh', value: Number(breakdown.visual) });
+    metrics.push({ key: 'visual', label: 'Độ tương đồng hình ảnh (CLIP)', value: Number(breakdown.visual), primary: true });
   }
   if (breakdown.color != null) {
-    metrics.push({ key: 'color', label: 'Độ phù hợp màu sắc', value: Number(breakdown.color) });
+    metrics.push({ key: 'color', label: 'Độ phù hợp màu sắc (HSV)', value: Number(breakdown.color), primary: true });
+  }
+  if (breakdown.text != null) {
+    metrics.push({ key: 'text', label: 'Độ tương đồng mô tả (Tiếng Việt)', value: Number(breakdown.text) });
+  }
+  if (breakdown.crossModal != null && Number(breakdown.crossModal) > 0) {
+    metrics.push({ key: 'crossModal', label: 'Ảnh khớp mô tả (Cross-CLIP)', value: Number(breakdown.crossModal) });
   }
   if (breakdown.location != null) {
     metrics.push({ key: 'location', label: 'Độ phù hợp vị trí', value: Number(breakdown.location) });
@@ -85,6 +155,10 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [page, setPage] = useState(1);
+  // Lưu index ảnh đang chọn xem cho từng bài trong danh sách ranking (id -> index)
+  const [activeImgByPost, setActiveImgByPost] = useState({});
+  // Lightbox phóng to ảnh trực tiếp ngay trên màn hình hiện tại (không cần chuyển trang)
+  const [lightboxState, setLightboxState] = useState(null);
 
   const requestKey = isOpen && post?.id ? `${post.id}` : null;
   const isLoading = Boolean(requestKey) && (state.loading || state.loadedKey !== requestKey);
@@ -147,50 +221,112 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
     setExpandedId(activeExpandedId === id ? null : id);
   };
 
-  const renderRowHeader = (item, isExpanded) => (
-    <button
-      type="button"
-      className="sm-row-trigger"
-      aria-expanded={isExpanded}
-      onClick={() => toggleExpand(item.id)}
-    >
-      <RankBadge rank={item.rank} />
+  const openLightboxForItem = (item, startIndex = 0, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const urls = getItemImages(item);
+    if (!urls.length) return;
+    setLightboxState({
+      title: item.title || 'Ảnh bài đăng',
+      initialIndex: Math.min(startIndex, urls.length - 1),
+      images: urls.map((url, i) => ({
+        id: `${item.id}-img-${i}`,
+        url,
+        name: `${item.title || 'Ảnh bài đăng'} (${i + 1}/${urls.length})`,
+      })),
+    });
+  };
 
-      <div className="sm-thumb">
-        {item.imageUrl ? (
-          <img src={item.imageUrl} alt={item.title} loading="lazy" />
-        ) : (
-          <span className="sm-thumb-empty">Không có ảnh</span>
-        )}
-      </div>
+  const sourceDetectedItemLabel =
+    rankedMatches[0]?.sourceDetectedItem ||
+    rankedMatches[0]?.matchBreakdown?.sourceDetectedItem ||
+    inferDetectedItemFallback(post);
 
-      <div className="sm-info">
-        <h4 className="sm-title" title={item.title}>{item.title}</h4>
-        <div className="sm-meta">
-          {item.locationText && (
-            <span className="sm-meta-item">
-              <MapPin size={13} aria-hidden="true" />
-              <span>{item.locationText}</span>
-            </span>
+  const renderRowHeader = (item, isExpanded) => {
+    const itemImages = getItemImages(item);
+    const candDetected =
+      item.candDetectedItem ||
+      item.matchBreakdown?.candDetectedItem ||
+      inferDetectedItemFallback(item);
+
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        className="sm-row-trigger"
+        aria-expanded={isExpanded}
+        onClick={() => toggleExpand(item.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleExpand(item.id);
+          }
+        }}
+      >
+        <RankBadge rank={item.rank} />
+
+        <div
+          className="sm-thumb"
+          title={itemImages.length ? 'Bấm để phóng to ảnh bài đăng này' : 'Không có ảnh'}
+          onClick={(e) => {
+            if (itemImages.length) {
+              openLightboxForItem(item, 0, e);
+            }
+          }}
+        >
+          {itemImages.length > 0 ? (
+            <>
+              <img src={itemImages[0]} alt={item.title} loading="lazy" />
+              <span className="sm-thumb-zoom" aria-hidden="true">
+                <ZoomIn size={12} />
+              </span>
+              {itemImages.length > 1 && (
+                <span className="sm-thumb-count">{itemImages.length}</span>
+              )}
+            </>
+          ) : (
+            <span className="sm-thumb-empty">Không có ảnh</span>
           )}
-          {item.locationText && <span className="sm-meta-sep">|</span>}
-          <span className="sm-meta-item">
-            <Calendar size={13} aria-hidden="true" />
-            <span>{formatDate(item.eventAt)}</span>
-          </span>
         </div>
-      </div>
 
-      <div className="sm-score-box">
-        <span className="sm-score-val">{formatScore(item.matchScore)}</span>
-        <span className="sm-score-label">Độ phù hợp</span>
-      </div>
+        <div className="sm-info">
+          <div className="sm-title-row">
+            <h4 className="sm-title" title={item.title}>{item.title}</h4>
+          </div>
+          {candDetected && (
+            <div className="sm-ai-item-tag">
+              <Sparkles size={11} aria-hidden="true" />
+              <span>AI nhận diện ảnh: <strong>{candDetected}</strong></span>
+            </div>
+          )}
+          <div className="sm-meta">
+            {item.locationText && (
+              <span className="sm-meta-item">
+                <MapPin size={13} aria-hidden="true" />
+                <span>{item.locationText}</span>
+              </span>
+            )}
+            {item.locationText && <span className="sm-meta-sep">|</span>}
+            <span className="sm-meta-item">
+              <Calendar size={13} aria-hidden="true" />
+              <span>{formatDate(item.eventAt)}</span>
+            </span>
+          </div>
+        </div>
 
-      <span className="sm-chevron" aria-hidden="true">
-        {isExpanded ? <ChevronUp size={18} /> : <ChevronRight size={18} />}
-      </span>
-    </button>
-  );
+        <div className="sm-score-box">
+          <span className="sm-score-val">{formatScore(item.matchScore)}</span>
+          <span className="sm-score-label">Độ phù hợp</span>
+        </div>
+
+        <span className="sm-chevron" aria-hidden="true">
+          {isExpanded ? <ChevronUp size={18} /> : <ChevronRight size={18} />}
+        </span>
+      </div>
+    );
+  };
 
   // Split pageItems into clean standalone expanded card(s) and contiguous compact groups (matches mockup)
   const segments = [];
@@ -225,6 +361,22 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
             <X size={18} />
           </button>
         </header>
+
+        {/* AI Target Item Recognition Banner */}
+        <div className="sm-ai-target-banner">
+          <div className="sm-ai-target-left">
+            <span className="sm-ai-target-icon" aria-hidden="true">
+              <ScanSearch size={17} />
+            </span>
+            <div className="sm-ai-target-text">
+              <span className="sm-ai-target-label">AI nhận diện đồ cần tìm:</span>
+              <strong className="sm-ai-target-value">{sourceDetectedItemLabel}</strong>
+            </div>
+          </div>
+          <span className="sm-ai-pipeline-pill">
+            YOLOv8 Smart Crop • 2x CLIP • HSV Color
+          </span>
+        </div>
 
         {/* Legend Strip */}
         {!isLoading && !state.error && total > 0 && (
@@ -301,18 +453,97 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
 
                   const item = seg.item;
                   const metrics = buildMetrics(item.matchBreakdown);
+                  const itemImages = getItemImages(item);
+                  const currentImgIdx = Math.min(
+                    activeImgByPost[item.id] ?? 0,
+                    Math.max(0, itemImages.length - 1),
+                  );
+                  const currentImgUrl = itemImages[currentImgIdx] || null;
+                  const candDetected =
+                    item.candDetectedItem ||
+                    item.matchBreakdown?.candDetectedItem ||
+                    inferDetectedItemFallback(item);
 
                   return (
                     <article key={item.id} className="sm-item-card is-expanded">
                       {renderRowHeader(item, true)}
 
                       <div className="sm-detail">
+                        {/* Xem trực tiếp hình ảnh & thông tin bài đăng ngay trong danh sách Ranking */}
+                        <div className="sm-inline-preview">
+                          <div className="sm-inline-media">
+                            {currentImgUrl ? (
+                              <div className="sm-inline-stage">
+                                <img
+                                  src={currentImgUrl}
+                                  alt={item.title}
+                                  className="sm-inline-main-img"
+                                  onClick={(e) => openLightboxForItem(item, currentImgIdx, e)}
+                                />
+                                <button
+                                  type="button"
+                                  className="sm-inline-zoom-btn"
+                                  onClick={(e) => openLightboxForItem(item, currentImgIdx, e)}
+                                >
+                                  <ZoomIn size={14} />
+                                  <span>Phóng to ảnh</span>
+                                </button>
+                                {itemImages.length > 1 && (
+                                  <div className="sm-inline-thumbs">
+                                    {itemImages.map((u, idx) => (
+                                      <button
+                                        key={`${item.id}-thumb-${idx}`}
+                                        type="button"
+                                        className={`sm-inline-thumb-btn ${idx === currentImgIdx ? 'active' : ''}`}
+                                        onClick={() =>
+                                          setActiveImgByPost((prev) => ({ ...prev, [item.id]: idx }))
+                                        }
+                                        aria-label={`Xem ảnh ${idx + 1}`}
+                                      >
+                                        <img src={u} alt="" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="sm-inline-no-img">Bài đăng này không có hình ảnh</div>
+                            )}
+                          </div>
+
+                          <div className="sm-inline-meta-panel">
+                            <div className="sm-inline-ai-box">
+                              <span className="sm-inline-ai-head">
+                                <Sparkles size={14} />
+                                Kết quả AI nhận diện bài đăng này
+                              </span>
+                              <div className="sm-inline-ai-val">{candDetected}</div>
+                            </div>
+
+                            {item.description && (
+                              <div className="sm-inline-desc-box">
+                                <span className="sm-inline-desc-label">Mô tả bài đăng:</span>
+                                <p className="sm-inline-desc-text">{item.description}</p>
+                              </div>
+                            )}
+
+                            <div className="sm-inline-tags">
+                              {item.categoryName && (
+                                <span className="sm-inline-tag">Danh mục: <strong>{item.categoryName}</strong></span>
+                              )}
+                              {item.authorName && (
+                                <span className="sm-inline-tag">Người đăng: <strong>{item.authorName}</strong></span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
                         {metrics.length > 0 && (
                           <div className="sm-breakdown-box">
                             <div className="sm-breakdown-head">
                               <span className="sm-breakdown-title">
                                 <BarChart3 size={15} aria-hidden="true" />
-                                Chi tiết điểm đánh giá
+                                Chi tiết điểm đánh giá (Ưu tiên Hình ảnh &amp; Màu sắc)
                               </span>
                               {item.matchReason && (
                                 <span className="sm-breakdown-reason">{item.matchReason}</span>
@@ -349,6 +580,16 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                           </button>
 
                           <div className="sm-detail-actions">
+                            {itemImages.length > 0 && (
+                              <button
+                                type="button"
+                                className="sm-btn-outline"
+                                onClick={(e) => openLightboxForItem(item, currentImgIdx, e)}
+                              >
+                                <Images size={13} aria-hidden="true" />
+                                Xem ảnh lớn ({itemImages.length})
+                              </button>
+                            )}
                             <SavePostButton postId={item.id} />
                             <Link
                               to={`/chi-tiet/${item.id}`}
@@ -356,7 +597,7 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
                               rel="noopener noreferrer"
                               className="sm-btn-outline"
                             >
-                              Xem chi tiết
+                              Xem bài đăng (Trang riêng)
                               <ExternalLink size={13} aria-hidden="true" />
                             </Link>
                             {item.postType === 'FOUND' && (
@@ -450,6 +691,14 @@ export default function SmartMatchModal({ isOpen, onClose, post }) {
               </div>
             </div>
           </div>
+        )}
+        {lightboxState && (
+          <ImageViewer
+            images={lightboxState.images}
+            initialIndex={lightboxState.initialIndex}
+            title={lightboxState.title}
+            onClose={() => setLightboxState(null)}
+          />
         )}
       </div>
     </div>

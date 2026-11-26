@@ -38,6 +38,9 @@ public class PostCreationService {
     private final ImageValidator validator;
     private final PlatformTransactionManager transactionManager;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AiIndexSyncService aiIndexSyncService;
+
     /** UC15: a Lost post always uses P2P. */
     public CreatedPostDto createLost(CreateLostPostRequest request, List<MultipartFile> files, CustomUserDetails user) {
         PostDraft draft = new PostDraft("LOST", request.title(), request.description(), request.categoryId(),
@@ -85,7 +88,11 @@ public class PostCreationService {
                         authorId, draft.requestId(), saved.id());
                 return saved;
             });
-            if (reused[0]) deleteUploadedImages(uploadedKeys);
+            if (reused[0]) {
+                deleteUploadedImages(uploadedKeys);
+            } else if (result != null && aiIndexSyncService != null) {
+                aiIndexSyncService.syncPostByIdAsync(result.id());
+            }
             return result;
         } catch (RuntimeException ex) {
             deleteUploadedImages(uploadedKeys);

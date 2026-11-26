@@ -60,6 +60,9 @@ public class PostManagementService {
     // DaiHV integration: the office module owns physical custody transfer.
     private final com.example.base.service.office.OfficeTransferService officeTransfers;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AiIndexSyncService aiIndexSyncService;
+
     /** UC18: page IDs first, then load images/category without collection-fetch pagination. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public MyPostPageDto listMine(int page, int size, String filter, CustomUserDetails user) {
@@ -140,6 +143,9 @@ public class PostManagementService {
 
         // TransactionTemplate returns only after commit succeeds.
         deleteImagesQuietly(saved.removedImageKeys());
+        if (saved.post() != null && aiIndexSyncService != null) {
+            aiIndexSyncService.syncPostByIdAsync(saved.post().id());
+        }
         return saved.post();
     }
 
@@ -155,6 +161,9 @@ public class PostManagementService {
         }
         post.softDelete(request.reason());
         posts.flush();
+        if (aiIndexSyncService != null) {
+            aiIndexSyncService.deletePostAsync(postId);
+        }
     }
 
     /** Request only; physical receipt and Approver decisions belong to the later intake flow. */

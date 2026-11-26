@@ -80,34 +80,34 @@ public class SmartMatchService {
         // - Nếu đang đồng bộ nền còn thiếu -> kích hoạt đồng bộ nền `triggerWarmupAsync()` ĐỒNG THỜI
         //   gọi nhanh `POST /api/match` trên 60 bài ngược loại mới nhất từ DB để trả ngay Top 10 chuẩn xác!
         String oppositeType = "LOST".equalsIgnoreCase(source.getPostType()) ? "FOUND" : "LOST";
-        Long sourceAuthorId = extractAuthorId(source);
+
+        // Lấy sẵn 60 bài ngược loại mới nhất từ PostgreSQL (kèm presigned URL ảnh mới nhất)
+        // để đẩy kèm vào AI-service nhằm đảm bảo mọi bài vừa tạo xong đều có mặt 100% trong chỉ mục.
+        List<Long> quickIds = postRepository.findAllCandidateIdsForCrossMatching(
+                oppositeType, postId, null, PageRequest.of(0, 60)
+        );
+        List<Post> quickCandidates = quickIds.isEmpty()
+                ? Collections.emptyList()
+                : postRepository.findVisibleByIds(quickIds).stream()
+                        .filter(c -> !Objects.equals(c.getId(), source.getId()))
+                        .filter(c -> oppositeType.equalsIgnoreCase(c.getPostType()))
+                        .toList();
 
         try {
             boolean oppositeSynced = aiIndexSyncService != null && aiIndexSyncService.isOppositeTypeSynced(oppositeType);
             if (oppositeSynced) {
-                List<SmartMatchItemDto> indexedResults = callPythonAiSearch(source);
-                if (indexedResults != null) {
+                List<SmartMatchItemDto> indexedResults = callPythonAiSearch(source, quickCandidates);
+                if (indexedResults != null && (!indexedResults.isEmpty() || quickCandidates.isEmpty())) {
                     return indexedResults;
                 }
-            } else {
-                if (aiIndexSyncService != null) {
-                    aiIndexSyncService.triggerWarmupAsync();
-                }
-                List<Long> quickIds = postRepository.findAllCandidateIdsForCrossMatching(
-                        oppositeType, postId, sourceAuthorId, PageRequest.of(0, 60)
-                );
-                if (!quickIds.isEmpty()) {
-                    List<Post> quickCandidates = postRepository.findVisibleByIds(quickIds).stream()
-                            .filter(c -> !Objects.equals(c.getId(), source.getId()))
-                            .filter(c -> oppositeType.equalsIgnoreCase(c.getPostType()))
-                            .filter(c -> !isSameAuthor(source, c))
-                            .toList();
-                    if (!quickCandidates.isEmpty()) {
-                        List<SmartMatchItemDto> quickResults = callPythonAiService(source, quickCandidates);
-                        if (quickResults != null) {
-                            return quickResults;
-                        }
-                    }
+            } else if (aiIndexSyncService != null) {
+                aiIndexSyncService.triggerWarmupAsync();
+            }
+
+            if (!quickCandidates.isEmpty()) {
+                List<SmartMatchItemDto> quickResults = callPythonAiService(source, quickCandidates);
+                if (quickResults != null) {
+                    return quickResults;
                 }
             }
         } catch (Exception ex) {
@@ -119,7 +119,7 @@ public class SmartMatchService {
         List<Long> candidateIds = postRepository.findAllCandidateIdsForCrossMatching(
                 oppositeType,
                 postId,
-                sourceAuthorId,
+                null,
                 PageRequest.of(0, 200)
         );
 
@@ -135,7 +135,6 @@ public class SmartMatchService {
         candidates = new ArrayList<>(candidates.stream()
                 .filter(c -> !Objects.equals(c.getId(), source.getId()))
                 .filter(c -> oppositeType.equalsIgnoreCase(c.getPostType()))
-                .filter(c -> !isSameAuthor(source, c))
                 .toList());
         if (candidates.isEmpty()) {
             return Collections.emptyList();
@@ -146,19 +145,25 @@ public class SmartMatchService {
 
     /**
      * Gọi endpoint `POST /api/search` của Kiến trúc 3 lớp:
-     * Backend CHỈ gửi 1 bài gốc (`sourceItem`), không cần kéo hàng chục nghìn bài qua JSON.
+     * Gửi bài gốc (`sourceItem`) kèm danh sách bài ngược loại mới nhất (`recentCandidates`) để đồng bộ tức thì
+     * các bài vừa đăng trước khi quét toàn bộ kho chỉ mục.
      */
     @SuppressWarnings("unchecked")
-    private List<SmartMatchItemDto> callPythonAiSearch(Post source) {
+    private List<SmartMatchItemDto> callPythonAiSearch(Post source, List<Post> recentCandidates) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(30000);
         RestTemplate restTemplate = new RestTemplate(factory);
 
+        List<Map<String, Object>> recentList = recentCandidates == null
+                ? Collections.emptyList()
+                : recentCandidates.stream().map(this::toItemMap).toList();
+
         Map<String, Object> requestPayload = Map.of(
                 "sourceItem", toItemMap(source),
-                "topKPerChannel", 40,
-                "topN", 10
+                "recentCandidates", recentList,
+                "topKPerChannel", 60,
+                "topN", 20
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -173,29 +178,112 @@ public class SmartMatchService {
     @SuppressWarnings("unchecked")
     private List<SmartMatchItemDto> parseAiMatchesResponse(Map<String, Object> response) {
         if (response != null && response.get("matches") instanceof List<?> list) {
+            List<Long> matchedIds = new ArrayList<>();
+            for (Object obj : list) {
+                if (obj instanceof Map<?, ?> item) {
+                    Object idObj = item.get("id");
+                    if (idObj instanceof Number n) {
+                        matchedIds.add(n.longValue());
+                    } else if (idObj != null) {
+                        try {
+                            matchedIds.add(Long.parseLong(String.valueOf(idObj)));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                }
+            }
+
+            // Đối chiếu với PostgreSQL thực tế để lấy URL ảnh presigned R2 mới nhất và loại bỏ các ID cũ không còn tồn tại/OPEN
+            Map<Long, Post> livePostsById = new HashMap<>();
+            if (!matchedIds.isEmpty()) {
+                for (Post p : postRepository.findVisibleByIds(matchedIds)) {
+                    if (p != null && p.getId() != null) {
+                        livePostsById.put(p.getId(), p);
+                    }
+                }
+            }
+
             List<SmartMatchItemDto> dtoList = new ArrayList<>();
             for (Object obj : list) {
                 if (obj instanceof Map<?, ?> item) {
                     Map<String, Object> m = (Map<String, Object>) item;
-                    Number idNum = (Number) m.get("id");
+                    Long postId = null;
+                    Object idObj = m.get("id");
+                    if (idObj instanceof Number n) {
+                        postId = n.longValue();
+                    } else if (idObj != null) {
+                        try {
+                            postId = Long.parseLong(String.valueOf(idObj));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
                     Number scoreNum = (Number) m.getOrDefault("matchScore", 50.0);
                     Map<String, Object> breakdown = (Map<String, Object>) m.get("matchBreakdown");
                     String reason = (String) m.getOrDefault("matchReason", "Trùng khớp đặc điểm");
+                    String srcDetected = (String) m.get("sourceDetectedItem");
+                    if (srcDetected == null && breakdown != null && breakdown.get("sourceDetectedItem") instanceof String s) {
+                        srcDetected = s;
+                    }
+                    String candDetected = (String) m.get("candDetectedItem");
+                    if (candDetected == null && breakdown != null && breakdown.get("candDetectedItem") instanceof String s) {
+                        candDetected = s;
+                    }
 
-                    dtoList.add(new SmartMatchItemDto(
-                            idNum != null ? idNum.longValue() : 0L,
-                            (String) m.get("title"),
-                            (String) m.get("postType"),
-                            (String) m.get("categoryName"),
-                            (String) m.get("locationText"),
-                            (String) m.get("eventAt"),
-                            (String) m.get("imageUrl"),
-                            (String) m.get("authorName"),
-                            (String) m.get("status"),
-                            scoreNum != null ? scoreNum.doubleValue() : 50.0,
-                            breakdown,
-                            reason
-                    ));
+                    Post live = postId != null ? livePostsById.get(postId) : null;
+                    if (postId != null && !livePostsById.isEmpty() && live == null) {
+                        // Bài trong SQLite cũ không còn OPEN/VISIBLE trong PostgreSQL -> dọn khỏi AI index
+                        if (aiIndexSyncService != null) {
+                            aiIndexSyncService.deletePostAsync(postId);
+                        }
+                        continue;
+                    }
+
+                    if (live != null) {
+                        List<String> liveImages = extractAllImageUrls(live);
+                        SmartMatchItemDto dto = new SmartMatchItemDto(
+                                live.getId(),
+                                live.getTitle(),
+                                live.getPostType(),
+                                live.getCategory() != null ? live.getCategory().getName() : (String) m.get("categoryName"),
+                                live.getLocationText(),
+                                live.getEventAt() != null ? live.getEventAt().toString() : (String) m.get("eventAt"),
+                                liveImages.isEmpty() ? null : liveImages.get(0),
+                                live.getCreatedBy() != null ? live.getCreatedBy().getFullName() : (String) m.get("authorName"),
+                                live.getStatus(),
+                                scoreNum != null ? scoreNum.doubleValue() : 50.0,
+                                breakdown,
+                                reason
+                        );
+                        dto.setDescription(live.getDescription());
+                        dto.setImageUrls(liveImages);
+                        dto.setSourceDetectedItem(srcDetected);
+                        dto.setCandDetectedItem(candDetected);
+                        dtoList.add(dto);
+                    } else {
+                        SmartMatchItemDto dto = new SmartMatchItemDto(
+                                postId != null ? postId : 0L,
+                                (String) m.get("title"),
+                                (String) m.get("postType"),
+                                (String) m.get("categoryName"),
+                                (String) m.get("locationText"),
+                                (String) m.get("eventAt"),
+                                (String) m.get("imageUrl"),
+                                (String) m.get("authorName"),
+                                (String) m.get("status"),
+                                scoreNum != null ? scoreNum.doubleValue() : 50.0,
+                                breakdown,
+                                reason
+                        );
+                        dto.setDescription((String) m.get("description"));
+                        if (m.get("imageUrls") instanceof List<?> rawImgs) {
+                            dto.setImageUrls(rawImgs.stream().filter(String.class::isInstance).map(String.class::cast).toList());
+                        } else if (dto.getImageUrl() != null) {
+                            dto.setImageUrls(List.of(dto.getImageUrl()));
+                        }
+                        dto.setSourceDetectedItem(srcDetected);
+                        dto.setCandDetectedItem(candDetected);
+                        dtoList.add(dto);
+                    }
                 }
             }
             return dtoList.size() > 10 ? dtoList.subList(0, 10) : dtoList;
@@ -239,7 +327,7 @@ public class SmartMatchService {
         String srcImg = extractFirstImageUrl(source);
 
         for (Post cand : candidates) {
-            if (isSameAuthor(source, cand)) {
+            if (Objects.equals(source.getId(), cand.getId())) {
                 continue;
             }
             String candText = (cand.getTitle() + " " + cand.getDescription()).toLowerCase();
@@ -316,7 +404,8 @@ public class SmartMatchService {
                     "spatioTemporal", Math.round(stSim * 1000.0) / 10.0
             );
 
-            list.add(new SmartMatchItemDto(
+            List<String> candImages = extractAllImageUrls(cand);
+            SmartMatchItemDto fallbackDto = new SmartMatchItemDto(
                     cand.getId(),
                     cand.getTitle(),
                     cand.getPostType(),
@@ -329,7 +418,12 @@ public class SmartMatchService {
                     finalScore,
                     breakdown,
                     reasonStr
-            ));
+            );
+            fallbackDto.setDescription(cand.getDescription());
+            fallbackDto.setImageUrls(candImages);
+            fallbackDto.setSourceDetectedItem(!srcCat.isBlank() ? srcCat : source.getTitle());
+            fallbackDto.setCandDetectedItem(!candCat.isBlank() ? candCat : cand.getTitle());
+            list.add(fallbackDto);
         }
 
         list.sort((a, b) -> Double.compare(b.getMatchScore(), a.getMatchScore()));
