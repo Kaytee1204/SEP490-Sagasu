@@ -42,30 +42,39 @@ class HSVColorExtractor:
             dist_sq = ((yy - cy) / 64.0) ** 2 + ((xx - cx) / 64.0) ** 2
             spatial_weights = np.exp(-1.2 * dist_sq).astype(np.float32)
 
-            # 3. Tách pixel Có sắc (Chromatic) và Vô sắc (Achromatic: đen, xám, trắng)
-            chrom_mask = (s > 0.16) & (v > 0.14) & (v < 0.96)
-            achrom_mask = ~chrom_mask
+            # 3. Trọng số chuyển tiếp mềm (Smooth Chromatic / Achromatic Blending):
+            #    Tránh lỗi đứt gãy ngưỡng cứng tại s = 0.16 (khi cùng 1 món đồ màu đen/trắng/xám chụp dưới
+            #    ánh đèn hơi ngả vàng khiến 1 ảnh rơi vào nhánh có sắc, 1 ảnh rơi vào nhánh vô sắc -> điểm = 0).
+            valid_tone = (v > 0.10) & (v < 0.97)
+            chrom_weight = np.where(
+                valid_tone,
+                np.clip((s - 0.08) / 0.18, 0.0, 1.0),
+                0.0,
+            ).astype(np.float32)
+            achrom_weight = np.clip((0.34 - s) / 0.24, 0.15, 1.0).astype(np.float32)
 
-            # 4. Tính Histogram 2D cho nhánh Có sắc (144 bins)
+            # 4. Tính Histogram 2D cho nhánh Có sắc (144 bins: Hue x Saturation)
+            chrom_mask = chrom_weight > 0.01
             if np.any(chrom_mask):
                 hist_hs, _, _ = np.histogram2d(
                     h[chrom_mask],
                     s[chrom_mask],
                     bins=[self.h_bins, self.s_bins],
                     range=[[0, 180], [0, 1]],
-                    weights=spatial_weights[chrom_mask],
+                    weights=(spatial_weights * chrom_weight)[chrom_mask],
                 )
             else:
                 hist_hs = np.zeros((self.h_bins, self.s_bins), dtype=np.float32)
 
-            # 5. Tính Histogram 2D cho nhánh Vô sắc (32 bins)
+            # 5. Tính Histogram 2D cho nhánh Vô sắc & Độ sáng tổng thể (32 bins: Saturation x Value)
+            achrom_mask = s <= 0.45
             if np.any(achrom_mask):
                 hist_sv, _, _ = np.histogram2d(
                     s[achrom_mask],
                     v[achrom_mask],
                     bins=[self.achrom_s_bins, self.achrom_v_bins],
-                    range=[[0, 0.25], [0, 1]],
-                    weights=spatial_weights[achrom_mask],
+                    range=[[0, 0.45], [0, 1]],
+                    weights=(spatial_weights * achrom_weight)[achrom_mask],
                 )
             else:
                 hist_sv = np.zeros((self.achrom_s_bins, self.achrom_v_bins), dtype=np.float32)

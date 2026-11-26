@@ -31,25 +31,78 @@ VI_BOILERPLATE_STOPWORDS: Set[str] = {
     "căng", "tin", "canteen", "thư", "viện", "alpha", "beta", "gamma", "delta", "lab", "sảnh",
 }
 
-# Các nhóm đồng nghĩa cốt lõi của đồ vật thất lạc (để "bóp" khớp "ví", "airpods" khớp "tai nghe", "ba lô" khớp "balo"...)
+# Các nhóm đồng nghĩa cốt lõi của đồ vật thất lạc (sắp xếp từ cụ thể -> tổng quát để "tai nghe hộp sạc" khớp __earphone__ trước __charger__)
 ITEM_SYNONYM_GROUPS: List[Tuple[str, Set[str]]] = [
-    ("__wallet__", {"ví", "bóp", "wallet"}),
-    ("__backpack__", {"balo", "ba lô", "túi xách", "túi đeo", "cặp sách", "backpack"}),
-    ("__earphone__", {"tai nghe", "airpod", "airpods", "earbuds", "headphone", "bluetooth"}),
-    ("__phone__", {"điện thoại", "iphone", "samsung", "xiaomi", "oppo", "smartphone", "phone"}),
-    ("__laptop__", {"laptop", "macbook", "máy tính xách tay", "thinkpad", "asus", "dell"}),
-    ("__charger__", {"sạc", "adapter", "dây sạc", "củ sạc", "type-c", "charger"}),
-    ("__glasses__", {"kính", "mắt kính", "kính cận", "kính râm", "glasses"}),
-    ("__key__", {"chìa khóa", "chìa khoá", "khóa xe", "khoá xe", "key", "keys"}),
-    ("__card__", {"thẻ sinh viên", "cccd", "cmnd", "căn cước", "giấy tờ", "thẻ atm", "thẻ xe", "bằng lái"}),
-    ("__bottle__", {"bình nước", "bình giữ nhiệt", "ly giữ nhiệt", "cốc giữ nhiệt", "bottle"}),
-    ("__watch__", {"đồng hồ", "smartwatch", "apple watch", "casio", "watch"}),
-    ("__helmet__", {"mũ bảo hiểm", "nón bảo hiểm", "helmet"}),
-    ("__umbrella__", {"ô dù", "cây dù", "cây ô", "umbrella"}),
-    ("__book__", {"sách", "giáo trình", "vở", "sổ tay", "notebook"}),
-    ("__mouse__", {"chuột", "mouse", "logitech"}),
-    ("__calculator__", {"máy tính cầm tay", "máy tính bỏ túi", "casio fx", "calculator"}),
+    ("__earphone__", {"tai nghe", "hộp sạc tai nghe", "airpod", "airpods", "earbuds", "headphone", "bluetooth", "tainghe"}),
+    ("__wallet__", {"ví", "bóp", "wallet", "vida", "bopda", "vitien"}),
+    ("__backpack__", {"balo", "ba lô", "túi xách", "túi đeo", "cặp sách", "backpack", "tuixach", "capsach"}),
+    ("__phone__", {"điện thoại", "iphone", "samsung", "xiaomi", "oppo", "smartphone", "phone", "dienthoai"}),
+    ("__laptop__", {"laptop", "macbook", "máy tính xách tay", "thinkpad", "asus", "dell", "maytinhxachtay"}),
+    ("__glasses__", {"kính", "mắt kính", "kính cận", "kính râm", "glasses", "matkinh", "kinhcan", "kinhmat"}),
+    ("__key__", {"chìa khóa", "chìa khoá", "khóa xe", "khoá xe", "key", "keys", "chiakhoa", "mockhoa"}),
+    ("__card__", {"thẻ sinh viên", "cccd", "cmnd", "căn cước", "giấy tờ", "thẻ atm", "thẻ xe", "bằng lái", "thesinhvien", "cancuoc"}),
+    ("__bottle__", {"bình nước", "bình giữ nhiệt", "ly giữ nhiệt", "cốc giữ nhiệt", "bottle", "binhnuoc", "binhgiunhiet"}),
+    ("__watch__", {"đồng hồ", "smartwatch", "apple watch", "casio", "watch", "dongho"}),
+    ("__helmet__", {"mũ bảo hiểm", "nón bảo hiểm", "helmet", "mubaohiem", "nonbaohiem"}),
+    ("__umbrella__", {"ô dù", "cây dù", "cây ô", "umbrella", "caydu"}),
+    ("__book__", {"sách", "giáo trình", "vở", "sổ tay", "notebook", "giaotrinh", "sotay"}),
+    ("__mouse__", {"chuột", "mouse", "logitech", "chuotmaytinh"}),
+    ("__calculator__", {"máy tính cầm tay", "máy tính bỏ túi", "casio fx", "calculator", "maytinhcamtay"}),
+    ("__charger__", {"sạc laptop", "sạc dự phòng", "củ sạc", "cục sạc", "dây sạc", "bộ sạc", "adapter", "type-c", "charger", "cusac", "daysac", "sacduphong"}),
 ]
+
+# Các nhóm màu sắc tiếng Việt & tiếng Anh để kết hợp chặt chẽ với histogram màu HSV từ ảnh
+COLOR_SYNONYM_GROUPS: List[Tuple[str, Set[str]]] = [
+    ("__color_black__", {"màu đen", "đen", "black", "mauden", "baloden", "viden"}),
+    ("__color_white__", {"màu trắng", "trắng", "white", "mautrang"}),
+    ("__color_brown__", {"màu nâu", "nâu", "da bò", "brown", "maunau"}),
+    ("__color_gray__", {"màu xám", "màu bạc", "xám", "bạc", "ghi", "gray", "grey", "silver", "mauxam", "maubac"}),
+    ("__color_blue__", {"màu xanh dương", "xanh dương", "xanh navy", "xanh lam", "xanh da trời", "blue", "navy", "xanhduong"}),
+    ("__color_green__", {"màu xanh lá", "xanh lá", "xanh rêu", "green", "xanhla"}),
+    ("__color_red__", {"màu đỏ", "đỏ", "đỏ đô", "red", "maudo"}),
+    ("__color_pink__", {"màu hồng", "hồng", "pink", "mauhong"}),
+    ("__color_yellow__", {"màu vàng", "vàng", "gold", "yellow", "mauvang"}),
+    ("__color_purple__", {"màu tím", "tím", "purple", "mautim"}),
+    ("__color_orange__", {"màu cam", "cam", "orange", "maucam"}),
+    ("__color_beige__", {"màu be", "màu kem", "be", "kem", "beige", "cream", "maube"}),
+]
+
+# Bảng mẫu Zero-Shot CLIP ViT-B/16 để AI tự nhận diện đồ vật trực tiếp từ hình ảnh (kể cả khi người dùng chỉ gõ "a", "aa")
+VISUAL_PROTOTYPE_SPECS: List[Tuple[str, str, str]] = [
+    ("__backpack__", "Balo / Túi xách", "a close-up photo of a backpack school bag handbag"),
+    ("__wallet__", "Ví da / Bóp tiền", "a close-up photo of a leather wallet bifold purse"),
+    ("__card__", "Thẻ sinh viên / CCCD / Giấy tờ", "a close-up photo of an id card student card plastic card"),
+    ("__earphone__", "Tai nghe / Hộp sạc không dây", "a close-up photo of wireless earbuds airpods charging case headphones"),
+    ("__phone__", "Điện thoại di động", "a close-up photo of a smartphone mobile phone"),
+    ("__laptop__", "Laptop / Máy tính xách tay", "a close-up photo of a laptop computer"),
+    ("__charger__", "Củ sạc / Dây sạc / Sạc dự phòng", "a close-up photo of a power adapter charger cable power bank"),
+    ("__glasses__", "Kính mắt / Kính cận / Kính râm", "a close-up photo of eyeglasses sunglasses"),
+    ("__key__", "Chìa khóa / Móc khóa", "a close-up photo of keys keychain motorbike key"),
+    ("__bottle__", "Bình giữ nhiệt / Bình nước", "a close-up photo of a water bottle insulated thermos tumbler"),
+    ("__watch__", "Đồng hồ đeo tay / Smartwatch", "a close-up photo of a wristwatch smartwatch"),
+    ("__helmet__", "Mũ bảo hiểm", "a close-up photo of a motorcycle helmet"),
+    ("__umbrella__", "Ô / Dù cầm tay", "a close-up photo of an umbrella"),
+    ("__book__", "Sách / Vở / Sổ tay", "a close-up photo of a book notebook textbook"),
+    ("__mouse__", "Chuột máy tính", "a close-up photo of a computer mouse"),
+    ("__calculator__", "Máy tính cầm tay", "a close-up photo of a scientific pocket calculator"),
+]
+
+CONCEPT_VI_LABELS: Dict[str, str] = {k: label for k, label, _ in VISUAL_PROTOTYPE_SPECS}
+
+COLOR_VI_LABELS: Dict[str, str] = {
+    "__color_black__": "Màu đen",
+    "__color_white__": "Màu trắng",
+    "__color_brown__": "Màu nâu",
+    "__color_gray__": "Màu xám / bạc",
+    "__color_blue__": "Màu xanh dương",
+    "__color_green__": "Màu xanh lá",
+    "__color_red__": "Màu đỏ",
+    "__color_pink__": "Màu hồng",
+    "__color_yellow__": "Màu vàng",
+    "__color_purple__": "Màu tím",
+    "__color_orange__": "Màu cam",
+    "__color_beige__": "Màu be / kem",
+}
 
 
 class SmartMatcher:
@@ -71,6 +124,9 @@ class SmartMatcher:
         self.index = MultimodalVectorIndex(store=self.store)
         # RAM cache cho vector mô tả từ Text Encoder của chính ViT-B/16 (dùng cho so sánh Ảnh <-> Mô tả cùng hệ trục)
         self._cross_text_cache: Dict[str, np.ndarray] = {}
+        # Ma trận vector mẫu Zero-Shot CLIP (16 loại đồ vật x 512 chiều) dùng để nhận diện đồ vật từ ảnh
+        self._proto_matrix: Optional[np.ndarray] = None
+        self._proto_keys: List[str] = []
 
     @staticmethod
     def _canonical_url(url: Optional[str]) -> Optional[str]:
@@ -144,20 +200,23 @@ class SmartMatcher:
     @staticmethod
     def _calibrate_visual_cosine(raw_vis: float) -> float:
         """
-        Hiệu chuẩn điểm Cosine thô giữa 2 ảnh của CLIP ViT-B/16 dựa trên phân bố thực tế của tập ảnh đồ thất lạc:
-        - Đo thực nghiệm trên dữ liệu thật:
-          + Median (50% các cặp ngẫu nhiên khác đồ): raw_vis ~= 0.668
-          + Top 10% (cùng loại đồ vật): raw_vis >= 0.808
-          + Top 5%  (rất giống / cùng món đồ): raw_vis >= 0.840
-          + Top 1%  (gần như giống hệt): raw_vis >= 0.887
-        - Công thức ánh xạ sắc nét về [0.0 .. 0.99]:
-          + Nếu raw_vis >= 0.68: min(0.99, 0.45 + ((raw_vis - 0.68) / 0.24) * 0.54)
-            (vd: 0.68 -> 45.0%, 0.74 -> 58.5%, 0.80 -> 72.0%, 0.86 -> 85.5%, 0.92 -> 99.0%)
-          + Nếu raw_vis < 0.68 : (raw_vis / 0.68) * 0.45 (luôn < 45%, bị loại nếu mô tả cũng không khớp)
+        Hiệu chuẩn điểm Cosine thô giữa 2 ảnh của CLIP ViT-B/16 với độ phân giải cao ở vùng đỉnh [0.88 .. 1.00]:
+        - Khắc phục triệt để lỗi bão hòa sớm ở 0.92 (trước đây mọi ảnh >= 0.92 đều bị gán 99.0% bằng với ảnh giống hệt 0.996):
+          + raw_vis >= 0.985 (Ảnh giống hệt / cùng 1 bức ảnh): 95.0% .. 99.8%
+          + 0.94 <= raw_vis < 0.985 (Ảnh rất giống): 84.0% .. 95.0% (vd 0.94 -> 84.0%)
+          + 0.85 <= raw_vis < 0.94  (Cùng loại đồ vật): 66.0% .. 84.0% (vd 0.90 -> 76.0%, 0.92 -> 80.0%)
+          + 0.68 <= raw_vis < 0.85  (Tương đồng trung bình): 38.0% .. 66.0%
+          + raw_vis < 0.68          (Khác biệt): 0.0% .. 38.0%
         """
+        if raw_vis >= 0.985:
+            return float(min(0.998, 0.95 + ((raw_vis - 0.985) / 0.015) * 0.048))
+        if raw_vis >= 0.94:
+            return float(0.84 + ((raw_vis - 0.94) / 0.045) * 0.11)
+        if raw_vis >= 0.85:
+            return float(0.66 + ((raw_vis - 0.85) / 0.09) * 0.18)
         if raw_vis >= 0.68:
-            return float(min(0.99, 0.45 + ((raw_vis - 0.68) / 0.24) * 0.54))
-        return float(max(0.0, (raw_vis / 0.68) * 0.45))
+            return float(0.38 + ((raw_vis - 0.68) / 0.17) * 0.28)
+        return float(max(0.0, (raw_vis / 0.68) * 0.38))
 
     @staticmethod
     def _extract_item_keywords(text: str) -> Set[str]:
@@ -182,6 +241,41 @@ class SmartMatcher:
         return {canonical for canonical, phrases in ITEM_SYNONYM_GROUPS if any(p in lowered for p in phrases)}
 
     @staticmethod
+    def _extract_item_concepts_ordered(text: str) -> List[str]:
+        """Trích xuất danh sách loại vật thể cốt lõi theo đúng thứ tự ưu tiên xuất hiện."""
+        if not text:
+            return []
+        lowered = text.lower()
+        return [canonical for canonical, phrases in ITEM_SYNONYM_GROUPS if any(p in lowered for p in phrases)]
+
+    @staticmethod
+    def _extract_color_concepts_ordered(text: str) -> List[str]:
+        """Trích xuất danh sách màu sắc theo đúng thứ tự ưu tiên xuất hiện trong mô tả."""
+        if not text:
+            return []
+        lowered = text.lower()
+        return [canonical for canonical, phrases in COLOR_SYNONYM_GROUPS if any(p in lowered for p in phrases)]
+
+    @staticmethod
+    def _extract_color_concepts(text: str) -> Set[str]:
+        return set(SmartMatcher._extract_color_concepts_ordered(text))
+
+    @staticmethod
+    def _fuse_hsv_and_text_color(hsv_sim: float, src_text: str, cand_text: str) -> float:
+        """
+        Kết hợp độ tương đồng màu sắc từ ảnh (HSV 176-dim) với màu sắc được mô tả bằng chữ tiếng Việt:
+        - Nếu cả 2 bài cùng nêu trùng màu (vd cùng ghi "màu đen") -> cộng thưởng vào điểm màu HSV.
+        - Nếu cả 2 bài nêu rõ 2 màu hoàn toàn khác nhau -> giảm điểm màu để loại trừ đồ khác màu.
+        """
+        c1 = SmartMatcher._extract_color_concepts(src_text)
+        c2 = SmartMatcher._extract_color_concepts(cand_text)
+        if not c1 or not c2:
+            return hsv_sim
+        if c1.intersection(c2):
+            return float(min(0.99, 0.72 * hsv_sim + 0.28))
+        return float(max(0.0, hsv_sim * 0.58))
+
+    @staticmethod
     def _compute_hybrid_text_similarity(
         src_title: str,
         src_text: str,
@@ -190,14 +284,14 @@ class SmartMatcher:
         raw_sem_cosine: Optional[float],
     ) -> float:
         """
-        Tính độ tương đồng Mô tả <-> Mô tả bằng kiến trúc Hybrid 3 tầng:
+        Tính độ tương đồng Mô tả <-> Mô tả bằng kiến trúc Hybrid 3 tầng (đọc hiểu tiếng Việt):
         1. `concept_sim` (Khớp loại vật thể cốt lõi trên Tiêu đề & Mô tả):
            - Nếu 2 bài nhắc cùng 1 vật thể cốt lõi (vd cùng là 'balo', cùng là 'ví/bóp', cùng là 'tai nghe')
-             -> concept_sim = 0.85..1.0!
+             -> điểm nền cao (0.62..0.99).
            - Nếu 2 bài nhắc 2 vật thể HOÀN TOÀN KHÁC NHAU (vd 'balo' vs 'ví', 'tai nghe' vs 'kính mắt')
-             -> concept_sim = 0.0 (và giảm mạnh điểm text để không ghép nhầm khác vật!).
-        2. `kw_sim` (Độ trùng từ khóa chi tiết trên tiêu đề + mô tả, không bị pha loãng bởi câu dài).
-        3. `sem_sim` (Ngữ nghĩa Multilingual CLIP đã co giãn tương phản từ [0.78 .. 0.98] -> [0.0 .. 1.0]).
+             -> phạt mạnh xuống <= 0.15 để không ghép nhầm khác loại đồ.
+        2. `kw_sim` (Độ trùng từ khóa tiếng Việt + màu sắc chi tiết trên tiêu đề + mô tả).
+        3. `sem_sim` (Ngữ nghĩa Multilingual CLIP ViT-B/32 đọc tiếng Việt, co giãn từ [0.55 .. 0.95] -> [0.0 .. 1.0]).
         """
         c1_title = SmartMatcher._extract_item_concepts(src_title)
         c2_title = SmartMatcher._extract_item_concepts(cand_title)
@@ -207,8 +301,8 @@ class SmartMatcher:
         title_concept_overlap = len(c1_title.intersection(c2_title))
         all_concept_overlap = len(c1_all.intersection(c2_all))
 
-        k1 = SmartMatcher._extract_item_keywords(src_text)
-        k2 = SmartMatcher._extract_item_keywords(cand_text)
+        k1 = SmartMatcher._extract_item_keywords(src_text) | SmartMatcher._extract_color_concepts(src_text)
+        k2 = SmartMatcher._extract_item_keywords(cand_text) | SmartMatcher._extract_color_concepts(cand_text)
         if k1 and k2:
             overlap = len(k1.intersection(k2))
             cover = overlap / min(len(k1), len(k2))
@@ -218,7 +312,7 @@ class SmartMatcher:
             kw_sim = 0.0
 
         sem_sim = (
-            max(0.0, min(1.0, (raw_sem_cosine - 0.78) / 0.20))
+            max(0.0, min(1.0, (raw_sem_cosine - 0.55) / 0.40))
             if raw_sem_cosine is not None
             else kw_sim
         )
@@ -229,14 +323,19 @@ class SmartMatcher:
 
         # Trường hợp 2: Khớp vật thể cốt lõi trong phần mô tả (vd: Balo đựng sạc laptop <-> Tìm sạc laptop)
         if all_concept_overlap > 0:
-            return float(min(0.95, 0.45 + 0.30 * kw_sim + 0.20 * sem_sim))
+            return float(min(0.95, 0.48 + 0.30 * kw_sim + 0.20 * sem_sim))
 
-        # Trường hợp 3: Cả 2 tiêu đề đều nêu rõ 2 loại vật thể KHÁC HẲN NHAU (vd: Balo vs Ví, Tai nghe vs Kính mắt)
-        if c1_title and c2_title and all_concept_overlap == 0:
-            return float(min(0.20, 0.15 * sem_sim + 0.10 * kw_sim))
+        # Trường hợp 3: Cả 2 bài đều nêu rõ tên loại vật thể nhưng KHÁC HẲN NHAU (vd: Balo vs Ví, Tai nghe vs Kính mắt)
+        if c1_all and c2_all and all_concept_overlap == 0:
+            return float(min(0.15, 0.10 * sem_sim + 0.05 * kw_sim))
 
-        # Trường hợp 4: 1 trong 2 bài mô tả chung chung (vd: "Tìm đồ dùng cá nhân thất lạc") -> dùng hybrid chuẩn
-        return float(max(0.0, min(0.95, 0.55 * kw_sim + 0.45 * sem_sim)))
+        # Trường hợp 4: 1 trong 2 bài chỉ nhập chữ rất ngắn/chung chung khi test ảnh (vd: "a", "aa", "Tìm đồ")
+        # -> Giữ mức trung tính tối thiểu 0.35 để không làm rớt các cặp có hình ảnh & màu sắc giống nhau
+        if not k1 or not k2 or len(src_text.strip()) <= 4 or len(cand_text.strip()) <= 4:
+            return float(max(0.35, min(0.90, 0.50 * sem_sim + 0.50 * kw_sim)))
+
+        # Trường hợp 5: Mô tả tự do không nằm trong 16 nhóm từ điển cố định -> kết hợp từ khóa & Multilingual CLIP
+        return float(max(0.25, min(0.95, 0.50 * kw_sim + 0.50 * sem_sim)))
 
     @staticmethod
     def _calibrate_cross_modal_cosine(raw_cross: float) -> float:
@@ -390,6 +489,147 @@ class SmartMatcher:
             return None
         return self._cross_text_cache.get(self.store.hash_text(norm))
 
+    def _ensure_visual_prototypes(self) -> None:
+        """Khởi tạo 1 lần duy nhất ma trận 16 vector mẫu Zero-Shot CLIP ViT-B/16 trong RAM."""
+        if self._proto_matrix is not None or self.clip.vision_model is None or self.clip.vision_processor is None:
+            return
+        try:
+            import torch
+            prompts = [spec[2] for spec in VISUAL_PROTOTYPE_SPECS]
+            keys = [spec[0] for spec in VISUAL_PROTOTYPE_SPECS]
+            inputs = self.clip.vision_processor(
+                text=prompts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=77,
+            )
+            if self.clip.device != "cpu":
+                inputs = {k: v.to(self.clip.device) for k, v in inputs.items()}
+            with torch.no_grad():
+                outputs = self.clip.vision_model.get_text_features(**inputs)
+                if hasattr(outputs, "pooler_output"):
+                    mat = outputs.pooler_output.cpu().numpy()
+                elif isinstance(outputs, torch.Tensor):
+                    mat = outputs.cpu().numpy()
+                else:
+                    mat = outputs[0].cpu().numpy()
+            norms = np.linalg.norm(mat, axis=1, keepdims=True)
+            norms = np.where(norms > 0, norms, 1.0)
+            self._proto_matrix = (mat / norms).astype(np.float32)
+            self._proto_keys = keys
+        except Exception as ex:
+            logger.debug(f"Could not build visual prototypes: {ex}")
+
+    def _classify_visual_concept(
+        self, visuals: List[Tuple[bool, np.ndarray, np.ndarray]]
+    ) -> Tuple[Optional[str], float]:
+        """
+        Dùng Zero-Shot CLIP ViT-B/16 nhận diện trực tiếp loại đồ vật trong ảnh:
+        Trả về (canonical_concept_key, confidence_score).
+        """
+        if not visuals:
+            return None, 0.0
+        self._ensure_visual_prototypes()
+        if self._proto_matrix is None or not self._proto_keys:
+            return None, 0.0
+        best_key = None
+        best_score = -1.0
+        for _, v_vec, _ in visuals:
+            if v_vec is None:
+                continue
+            scores = self._proto_matrix @ np.asarray(v_vec, dtype=np.float32)
+            idx = int(np.argmax(scores))
+            sc = float(scores[idx])
+            if sc > best_score:
+                best_score = sc
+                best_key = self._proto_keys[idx]
+        return best_key, best_score
+
+    @staticmethod
+    def _identify_hsv_color_label(
+        visuals: List[Tuple[bool, np.ndarray, np.ndarray]], text: str
+    ) -> str:
+        """
+        Nhận diện màu sắc chủ đạo của món đồ từ mô tả tiếng Việt kết hợp histogram màu HSV 176 chiều của ảnh.
+        """
+        text_colors = SmartMatcher._extract_color_concepts_ordered(text)
+        if text_colors:
+            labels = [COLOR_VI_LABELS[c] for c in text_colors if c in COLOR_VI_LABELS]
+            if labels:
+                return labels[0]
+
+        if not visuals:
+            return ""
+        _, _, hsv_hist = visuals[0]
+        if hsv_hist is None or len(hsv_hist) < 176:
+            return ""
+
+        chrom = hsv_hist[:144].reshape(18, 8)
+        achrom = hsv_hist[144:].reshape(4, 8)
+        chrom_sum = float(np.sum(chrom))
+        achrom_sum = float(np.sum(achrom))
+
+        # Nếu thành phần vô sắc chiếm ưu thế (đen / xám / bạc / trắng)
+        if achrom_sum >= chrom_sum * 0.85:
+            val_profile = np.sum(achrom, axis=0)  # 8 bins theo độ sáng Value [0..1]
+            dark_mass = float(np.sum(val_profile[:3]))
+            mid_mass = float(np.sum(val_profile[3:6]))
+            bright_mass = float(np.sum(val_profile[6:]))
+            if dark_mass >= mid_mass and dark_mass >= bright_mass:
+                return "Màu đen / tối"
+            if bright_mass >= dark_mass and bright_mass >= mid_mass:
+                return "Màu trắng / sáng"
+            return "Màu xám / bạc"
+
+        # Nếu thành phần có sắc chiếm ưu thế -> tìm tông màu Hue chủ đạo (18 bins, mỗi bin 10 độ trong [0..180])
+        hue_profile = np.sum(chrom, axis=1)
+        dom_h = int(np.argmax(hue_profile))
+        if dom_h in (0, 17):
+            return "Màu đỏ"
+        if dom_h in (1, 2):
+            return "Màu nâu / cam"
+        if dom_h in (3, 4):
+            return "Màu vàng / be"
+        if 5 <= dom_h <= 8:
+            return "Màu xanh lá"
+        if 9 <= dom_h <= 13:
+            return "Màu xanh dương"
+        if dom_h in (14, 15):
+            return "Màu tím"
+        return "Màu hồng / đỏ"
+
+    def identify_item_summary(
+        self,
+        item: Dict[str, Any],
+        visuals: List[Tuple[bool, np.ndarray, np.ndarray]],
+    ) -> str:
+        """
+        Sinh nhãn kết luận rõ ràng cho người dùng biết AI đang nhận diện món đồ cần tìm là gì
+        (kết hợp CLIP Vision Zero-Shot từ ảnh + Khái niệm tiếng Việt từ mô tả + Màu sắc HSV).
+        Ví dụ: "Balo / Túi xách • Màu đen (Nhận diện từ Ảnh CLIP & Mô tả)"
+        """
+        title = (item.get("title") or "").strip()
+        desc = (item.get("description") or "").strip()
+        full_text = f"{title} {desc}".strip()
+
+        text_concepts = self._extract_item_concepts_ordered(title) or self._extract_item_concepts_ordered(full_text)
+        vis_concept, vis_conf = self._classify_visual_concept(visuals)
+
+        item_label = ""
+        if text_concepts:
+            item_label = CONCEPT_VI_LABELS.get(text_concepts[0], "")
+        elif vis_concept:
+            item_label = CONCEPT_VI_LABELS.get(vis_concept, "")
+        else:
+            cat_name = (item.get("categoryName") or "").strip()
+            item_label = cat_name if cat_name else "Đồ vật cá nhân"
+
+        color_label = self._identify_hsv_color_label(visuals, full_text)
+        if color_label:
+            return f"{item_label} • {color_label}"
+        return item_label
+
     def _get_visual_list(self, urls: List[str]) -> List[Tuple[bool, np.ndarray, np.ndarray]]:
         """Lấy toàn bộ danh sách đặc trưng (is_blurry, vis_vec_512, hsv_hist_176) của các ảnh thuộc 1 bài đăng."""
         feats: List[Tuple[bool, np.ndarray, np.ndarray]] = []
@@ -431,8 +671,6 @@ class SmartMatcher:
                 continue
             if not self._is_opposite_post_type(src_type, cand.get("postType")):
                 continue
-            if self._is_same_author(source_item, cand):
-                continue
             eligible_candidates.append(cand)
 
         if not eligible_candidates:
@@ -462,6 +700,8 @@ class SmartMatcher:
         src_has_img = len(src_visuals) > 0
         src_text_vec = self.store.get_text(src_text)
         src_cross_text_vec = self._get_cross_text(src_text)
+        src_vis_concept, src_vis_conf = self._classify_visual_concept(src_visuals)
+        src_detected_label = self.identify_item_summary(source_item, src_visuals)
 
         results = []
         for idx, cand in enumerate(eligible_candidates):
@@ -470,6 +710,8 @@ class SmartMatcher:
             cand_text = cand_texts[idx]
             cand_text_vec = self.store.get_text(cand_text)
             cand_cross_text_vec = self._get_cross_text(cand_text)
+            cand_vis_concept, cand_vis_conf = self._classify_visual_concept(cand_visuals)
+            cand_detected_label = self.identify_item_summary(cand, cand_visuals)
 
             # ── BƯỚC 3A: SO SÁNH ẢNH <-> ẢNH (TOÀN BỘ TẤT CẢ CÁC ẢNH CỦA 2 BÀI VỚI NHAU) ──
             # Nếu bài gốc có M ảnh và ứng viên có N ảnh -> so sánh đủ M x N cặp ảnh,
@@ -480,16 +722,29 @@ class SmartMatcher:
             best_pair_cand_blurry = False
 
             if src_has_img and cand_has_img:
-                best_raw_vis = -1.0
+                best_pair_rank = -1.0
+                best_raw_vis = 0.0
+                best_hsv_sim = 0.50
                 for s_blur, s_vec, s_hsv in src_visuals:
                     for c_blur, c_vec, c_hsv in cand_visuals:
                         raw_v = self.clip.cosine_similarity(s_vec, c_vec)
-                        if raw_v > best_raw_vis:
+                        pair_hsv = self.hsv.compare_histograms(s_hsv, c_hsv)
+                        # Chọn cặp ảnh vừa tương đồng nhất về hình thái CLIP (82%) vừa đồng nhất về màu HSV (18%)
+                        pair_rank = 0.82 * raw_v + 0.18 * pair_hsv
+                        if pair_rank > best_pair_rank:
+                            best_pair_rank = pair_rank
                             best_raw_vis = raw_v
+                            best_hsv_sim = pair_hsv
                             best_pair_src_blurry = s_blur
                             best_pair_cand_blurry = c_blur
-                            color_sim = self.hsv.compare_histograms(s_hsv, c_hsv)
                 vis_sim = self._calibrate_visual_cosine(max(0.0, best_raw_vis))
+                # Kiểm tra chéo loại vật thể nhận diện từ ảnh (Zero-Shot CLIP) để chống nhận nhầm hình ảnh khác loại có cùng màu nền:
+                if best_raw_vis < 0.975 and src_vis_concept and cand_vis_concept:
+                    if src_vis_concept == cand_vis_concept:
+                        vis_sim = float(min(0.99, vis_sim + 0.03))
+                    elif src_vis_conf >= 0.245 and cand_vis_conf >= 0.245:
+                        vis_sim = float(vis_sim * 0.78)
+                color_sim = self._fuse_hsv_and_text_color(best_hsv_sim, src_text, cand_text)
             else:
                 best_pair_src_blurry = all(v[0] for v in src_visuals) if src_visuals else False
                 best_pair_cand_blurry = all(v[0] for v in cand_visuals) if cand_visuals else False
@@ -564,13 +819,21 @@ class SmartMatcher:
 
             reason_str = " • ".join(reasons) if reasons else "Có nhiều đặc điểm tương đồng"
 
+            breakdown_with_ai = {
+                **gated["breakdown"],
+                "sourceDetectedItem": src_detected_label,
+                "candDetectedItem": cand_detected_label,
+            }
+
             results.append({
                 **cand,
                 "isRejected": is_rejected,
                 "matchScore": gated["matchScore"],
-                "matchBreakdown": gated["breakdown"],
+                "matchBreakdown": breakdown_with_ai,
                 "matchWeights": gated["weights"],
                 "matchReason": reason_str,
+                "sourceDetectedItem": src_detected_label,
+                "candDetectedItem": cand_detected_label,
             })
 
         # Sắp xếp danh sách kết quả theo matchScore giảm dần và chỉ giữ tối đa Top N (mặc định Top 10)
@@ -628,20 +891,26 @@ class SmartMatcher:
     def search_indexed(
         self,
         source_item: Dict[str, Any],
-        top_k_per_channel: int = 40,
+        top_k_per_channel: int = 60,
         top_n: int = 10,
         include_rejected: bool = False,
+        recent_candidates: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
         TÌM KIẾM 2 TẦNG TRÊN TOÀN BỘ KHO CHỈ MỤC (Hỗ trợ 50.000+ bài với độ trễ < 50ms):
-        - Bước 1: Đảm bảo bài gốc (source_item) đã có vector ảnh & mô tả trong cache.
-        - Bước 2 (Lớp 2 - Multi-Channel Recall): Quét TOÀN BỘ kho chỉ mục qua 3 kênh song song
-                  (Ảnh-Ảnh, Mô tả-Mô tả, Ảnh-Mô tả 2 chiều), lọc cứng khác người đăng & ngược loại LOST <-> FOUND,
+        - Bước 1: Đồng bộ tức thì các bài mới nhất (`recent_candidates`) và bài gốc (`source_item`) vào cache/index
+                  để các bài vừa đăng xong vài giây trước luôn có mặt 100% khi đối sánh.
+        - Bước 2 (Lớp 2 - Multi-Channel Recall): Quét TOÀN BỘ kho chỉ mục qua 4 kênh song song
+                  (Ảnh-Ảnh, Mô tả-Mô tả, Ảnh-Mô tả, Từ khóa đồ vật), lọc cứng khác người đăng & ngược loại LOST <-> FOUND,
                   KHÔNG giới hạn category -> rút gọn hàng chục nghìn bài xuống ~100-150 bài sáng giá nhất.
         - Bước 3 (Lớp 3 - Fine Re-ranking): Chạy thuật toán chấm điểm đầy đủ `self.match()`
                   (HSV + Spatio-Temporal + Visual Gating 4 Rule) trên ~100-150 bài đó -> trả Top N kết quả.
         """
         t0 = time.perf_counter()
+
+        # Nếu Backend gửi kèm danh sách bài ngược loại mới nhất từ DB, lập chỉ mục ngay những bài chưa có trong cache
+        if recent_candidates:
+            self.index_posts(recent_candidates)
 
         # Đảm bảo bài gốc đã có vector (chỉ tốn công cho duy nhất 1 bài gốc nếu chưa có trong cache)
         src_urls = self._extract_image_urls(source_item)

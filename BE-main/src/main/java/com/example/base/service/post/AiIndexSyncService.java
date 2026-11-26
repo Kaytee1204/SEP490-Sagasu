@@ -96,7 +96,11 @@ public class AiIndexSyncService {
                     ? indexedFoundCount.get()
                     : indexedLostCount.get();
         }
-        return cachedIndexed >= Math.max(1L, (long) Math.floor(dbCount * 0.90));
+        // Nếu số lượng bài trong AI Index lệch so với DB (có bài mới đăng hoặc bài vừa đóng), kích hoạt đồng bộ nền ngay
+        if (cachedIndexed != dbCount) {
+            triggerWarmupAsync();
+        }
+        return cachedIndexed >= Math.max(1L, (long) Math.floor(dbCount * 0.85));
     }
 
     @SuppressWarnings("unchecked")
@@ -113,6 +117,25 @@ public class AiIndexSyncService {
             }
         } catch (Exception ignored) {
             // Keep existing counts if health check fails transiently
+        }
+    }
+
+    /**
+     * Đồng bộ bất đồng bộ 1 bài đăng theo ID sau khi transaction tạo/sửa bài đã commit thành công.
+     */
+    @Async
+    @Transactional(readOnly = true)
+    public void syncPostByIdAsync(Long postId) {
+        if (postId == null) return;
+        try {
+            List<Post> found = postRepository.findVisibleByIds(List.of(postId));
+            if (found.isEmpty()) {
+                deletePostAsync(postId);
+                return;
+            }
+            syncPostAsync(found.get(0));
+        } catch (Exception ex) {
+            log.debug("Async AI index sync by id skipped for post {}: {}", postId, ex.getMessage());
         }
     }
 
