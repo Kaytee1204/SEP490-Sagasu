@@ -88,7 +88,6 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
     "stop-handover": { variant: "warning", title: "Dừng lượt bàn giao này?", description: "Biên bản được lưu trong lịch sử. Khi đủ điều kiện, nhân viên có thể lập biên bản mới.", confirmLabel: "Dừng bàn giao" },
   }[action] || { variant: "warning", title: "Bạn có chắc chắn?", description: "Xác nhận thực hiện thao tác xử lý hồ sơ này.", confirmLabel: "Xác nhận" };
   return <Dialog title={titles[action]} busy={busy} onClose={onClose}>
-    {({ guard }) => <>
     <form className="of-form" onSubmit={handleFormSubmit}>
       <Notice error>{error}</Notice>
       <p className="of-muted">Hồ sơ #{claim.id} · {claim.postTitle}</p>
@@ -132,7 +131,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
           "reopen-confirmation": "Tôi xác nhận người nhận đang có mặt tại quầy để xác nhận biên bản.",
           "stop-handover": "Tôi xác nhận tài sản và phụ kiện vẫn do văn phòng lưu giữ." }[action]}</span>
       </label>}
-      <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard()}>Quay lại</button><button className="of-button of-primary" disabled={busy}>{busy ? "Đang lưu…" : (action === "handover" ? "Kiểm tra và lưu" : titles[action])}</button></div>
+      <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Quay lại</button><button className="of-button of-primary" disabled={busy}>{busy ? "Đang lưu…" : (action === "handover" ? "Kiểm tra và lưu" : titles[action])}</button></div>
     </form>
     <ConfirmActionPopup
       open={confirmOpen}
@@ -145,6 +144,5 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
       onConfirm={executeSubmit}
       onClose={() => setConfirmOpen(false)}
     />
-    </>}
   </Dialog>;
 }

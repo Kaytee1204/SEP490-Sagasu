@@ -53,7 +53,7 @@ function ClaimForm({ postId, retryId, onRetry }) {
         let problem = !canSubmitPostClaim(post) ? 'Bài đăng hiện không tiếp nhận yêu cầu nhận đồ mới.' : '';
         if (post.isOwner || post.canEditOwnPost) problem = 'Bạn không thể gửi yêu cầu nhận đồ trên bài đăng của chính mình.';
         if (old && (String(old.postId) !== postId || !old.canRetry)) problem = 'Hồ sơ này chưa được phép gửi lại, hoặc bài không còn tiếp nhận yêu cầu nhận đồ.';
-        if (old?.resubmissionBlocked) problem = 'Bạn không thể gửi lại yêu cầu trên bài đăng này theo kết luận xử lý tranh chấp.';
+        if (old?.resubmissionBlocked) problem = 'Bạn không thể gửi lại yêu cầu trên bài đăng này theo kết luận của quản lý.';
         setLoaded({ post, old, questionnaire, problem });
       });
     }

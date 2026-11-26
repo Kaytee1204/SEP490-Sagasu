@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CheckCircle2, CalendarClock, ShieldCheck, PackageCheck } from "lucide-react";
+import useDeadlineCountdown from "@/hooks/useDeadlineCountdown";
 import { claimActivityReason, date } from "../officeUtils";
 import LoadState from "./LoadState";
 import Notice from "./Notice";
@@ -23,6 +24,7 @@ export default function OfficeReturnPanel({ claim, state, mine, reportExpired, o
   const [action, setAction] = useState(null);
   const workflow = state.data;
   const { hash } = useLocation();
+  const timeLeft = useDeadlineCountdown(workflow?.appealState === "OPEN" ? workflow.appealDeadline : null);
   const filedAppeal = !mine ? workflow?.filedAppeal : null;
   const appealOpen = ["OPEN", "IN_REVIEW"].includes(filedAppeal?.status);
   const h = workflow?.handover;
@@ -105,7 +107,8 @@ export default function OfficeReturnPanel({ claim, state, mine, reportExpired, o
         </>}
         {(!appealOpen || claim.status !== "PENDING") && <p>{workflow.nextStep}</p>}
         {!mine && workflow.verificationDeadline && <p>Hạn đến quầy xác minh <strong>{date(workflow.verificationDeadline)}</strong>.</p>}
-        {workflow.appealDeadline && new Date(workflow.appealDeadline)>new Date() &&
+        {timeLeft ? <p><strong>Còn {timeLeft} để gửi tranh chấp.</strong> Hạn kết thúc lúc {date(workflow.appealDeadline)}.</p>
+          : workflow.appealDeadline && new Date(workflow.appealDeadline)>new Date() &&
           <p>Hạn gửi tranh chấp <strong>{date(workflow.appealDeadline)}</strong>.</p>}
       </div>}
       {mine && h && (workflow.reportDeadline || workflow.openHandoverReportId) && <div className="of-callout of-receipt-response">

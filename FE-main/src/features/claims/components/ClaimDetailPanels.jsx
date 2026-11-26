@@ -133,7 +133,7 @@ export function ClaimStatusPanel({ claim, isClaimant = false }) {
         <strong>{title}</strong>
       </>}
       <p>{description}</p>
-      {claim.resubmissionBlocked && <p>Bạn không thể gửi lại yêu cầu trên bài đăng này theo kết luận xử lý tranh chấp.</p>}
+      {claim.resubmissionBlocked && <p>Bạn không thể gửi lại yêu cầu trên bài đăng này theo kết luận của quản lý.</p>}
       {claim.canRetry && <Link className="btn btn-primary" to={`/xac-minh/${claim.postId}?retryOf=${claim.id}`}>Gửi yêu cầu mới<ArrowUpRight size={16} aria-hidden="true" /></Link>}
     </div>
   </section>;

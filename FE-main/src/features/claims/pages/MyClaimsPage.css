@@ -129,6 +129,7 @@
 
 /* ── Modern Clean Table (inspired by reference design) ── */
 .claim-modern-table-card {
+  --claim-list-columns: minmax(260px, 1fr) 125px 135px 165px 155px;
   background: #ffffff;
   border: 1px solid #e6eee9;
   border-radius: 20px;
@@ -136,9 +137,13 @@
   box-shadow: 0 6px 24px rgba(17, 45, 38, 0.04);
 }
 
+.claim-modern-table-card.without-summary {
+  --claim-list-columns: minmax(0, 1fr) 135px 165px 155px;
+}
+
 .claim-modern-table-head {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 125px 135px 165px 155px;
+  grid-template-columns: var(--claim-list-columns);
   align-items: center;
   gap: 16px;
   padding: 14px 22px;
@@ -160,7 +165,7 @@
 
 .claim-modern-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 125px 135px 165px 155px;
+  grid-template-columns: var(--claim-list-columns);
   align-items: center;
   gap: 16px;
   padding: 16px 22px;

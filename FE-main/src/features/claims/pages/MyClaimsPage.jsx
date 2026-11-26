@@ -212,6 +212,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     HISTORY: 'Lịch sử',
   };
   const isReceiving = status === 'APPROVED';
+  const showSummary = incoming || status !== 'PENDING';
   const summaryLabel = isReceiving
     ? (incoming ? 'Người được chấp thuận' : 'Người giao đồ')
     : status === 'HISTORY' ? 'Hồ sơ đã kết thúc' : 'Yêu cầu đang chờ';
@@ -307,10 +308,10 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
           
 
           {processed.items.length ? (
-            <div className="claim-modern-table-card">
+            <div className={`claim-modern-table-card${showSummary ? '' : ' without-summary'}`}>
               <div className="claim-modern-table-head" role="row">
                 <span className="col-left">Món đồ</span>
-                <span className="col-center">{summaryLabel}</span>
+                {showSummary && <span className="col-center">{summaryLabel}</span>}
                 <span className="col-center">{incoming ? 'Ngày gần nhất' : 'Ngày gửi'}</span>
                 <span className="col-center">Trạng thái</span>
                 <span className="col-center">Thao tác</span>
@@ -336,10 +337,6 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
                   const navState = incoming
                     ? { fromClaimsList: location.pathname + location.search }
                     : { claimListReturn: location.pathname + location.search };
-                  const summary = isReceiving
-                    ? (incoming ? primaryClaim.claimantName : primaryClaim.finderName) || 'Thành viên'
-                    : `${group.claims.filter(claim => matchesClaimStatus(claim, listStatus)).length} yêu cầu`;
-
                   return (
                     <Link
                       key={`${group.postId}:${status}`}
@@ -355,9 +352,13 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
                         </div>
                       </div>
 
-                      <div className="claim-modern-count-cell col-center" data-label={summaryLabel}>
-                        {summary}
-                      </div>
+                      {showSummary && (
+                        <div className="claim-modern-count-cell col-center" data-label={summaryLabel}>
+                          {isReceiving
+                            ? (incoming ? primaryClaim.claimantName : primaryClaim.finderName) || 'Thành viên'
+                            : `${group.claims.filter(claim => matchesClaimStatus(claim, listStatus)).length} yêu cầu`}
+                        </div>
+                      )}
 
                       <div className="claim-modern-date-cell col-center" data-label={incoming ? 'Ngày gần nhất' : 'Ngày gửi'}>
                         {group.displayDate ? claimShortDate(group.displayDate) : '—'}

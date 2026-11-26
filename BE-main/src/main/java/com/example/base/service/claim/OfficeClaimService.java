@@ -9,6 +9,7 @@ import com.example.base.exception.*;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.office.*;
+import com.example.base.service.report.SubmissionRestrictions;
 import com.example.base.storage.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -31,6 +32,7 @@ import static com.example.base.entity.AccountRole.APPROVER;
 public class OfficeClaimService {
     private final ClaimRepository claims;
     private final ClaimDailyLimit dailyLimit;
+    private final SubmissionRestrictions restrictions;
     private final ClaimQuestionnaireService questionnaires;
     private final OfficeClaimProgress progress;
     private final PostRepository posts;
@@ -192,8 +194,10 @@ public class OfficeClaimService {
         eligible(p);
         if(!"OPEN".equals(p.getStatus())||!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
         Account claimant = counter ? counterClaimant(r) : actor;
-        if (claims.hasDisputeRejection(p.getId(), claimant.getId()))
+        if (claims.hasResubmissionBlock(p.getId(), claimant.getId()))
             throw new AppException(ErrorCode.CLAIM_RESUBMISSION_BLOCKED);
+        if (lock) restrictions.requireAvailableForSubmission(claimant.getId(), SubmissionRestrictions.Action.CLAIM);
+        else restrictions.checkAvailable(claimant.getId(), SubmissionRestrictions.Action.CLAIM);
         if(claims.hasFailedOfficeVerification(p.getId(),claimant.getId()))
             throw bad("Người nhận đã không đạt xác minh tại quầy và không được yêu cầu nhận lại món đồ này.");
         if (claimant != null && (Objects.equals(p.getAccount().getId(), claimant.getId()) || (p.getCreatedBy() != null && Objects.equals(p.getCreatedBy().getId(), claimant.getId())))) {

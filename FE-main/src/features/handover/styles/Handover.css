@@ -7,9 +7,6 @@
 .handover-record-dialog header button { display:grid; place-items:center; min-width:44px; min-height:44px; }
 .handover-record-dialog form { display:flex; flex-direction:column; gap:16px; padding:20px; overflow-wrap:anywhere; }
 .handover-record-context { padding:12px; background:#f2f8f7; border-radius:10px; }
-.handover-issue-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px 16px; margin:10px 0 0; }
-.handover-issue-fields dt { font-size:.85rem; color:#50696a; }
-.handover-issue-fields dd { margin:2px 0 0; overflow-wrap:anywhere; }
 .handover-record-field { display:grid; gap:8px; }
 .handover-record-dialog textarea { min-height:100px; padding:12px; border:1px solid #b9cfd2; border-radius:10px; resize:vertical; }
 .handover-record-confirm { display:flex; align-items:flex-start; gap:10px; padding:12px; border:1px solid #b9cfd2; border-radius:10px; }
@@ -21,7 +18,6 @@
 .handover-photo-previews li { overflow: hidden; border: 1px solid #cce4e0; border-radius: 10px; }
 .handover-photo-previews img { display: block; width: 100%; height: 96px; object-fit: contain; background: #f2f8f7; }
 .handover-photo-previews button { width: 100%; min-height: 44px; color: #1e6b6b; font-size: .85rem; }
-.handover-record-discard { display:grid; gap:12px; padding:14px; background:#fff7ed; border-radius:10px; }
 .handover-record-dialog :focus-visible { outline:2px solid #1e6b6b; outline-offset:3px; }
 .handover-record-dialog button:disabled { opacity:.55; cursor:not-allowed; }
 @media(max-width:480px) { .handover-record-dialog footer { flex-direction:column-reverse; } .handover-record-dialog footer .btn { width:100%; } }
@@ -40,6 +36,9 @@
 .handover-next-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .handover-next-actions .btn { display: inline-flex; justify-content: center; font-size: .82rem; }
 .handover-panel .handover-issue-button { border-color: #dfc5a6; background: #fffcf8; color: #a37948; }
+.handover-issue-deadline { display: grid; gap: 2px; margin: 0; color: #395e5b; font-size: .84rem; }
+.handover-issue-deadline small { color: #50696a; font-size: .8rem; }
+.handover-next-actions .handover-issue-deadline { flex-basis: 100%; }
 .handover-current-step.is-completed { background: #eef8ee; border-color: #c5dec5; }
 .handover-current-step.is-paused { background: #fffaf0; border-color: #e6d8b7; }
 .handover-current-step.is-paused > svg { color: #b6985e; }
@@ -57,6 +56,11 @@
 .handover-issue-summary { margin-top: 20px; padding: 16px; border: 1px solid #e9d8be; border-radius: 12px; background: #fffbf4; }
 .handover-panel .handover-issue-summary h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: #9d7b49; font-size: .9rem; }
 .handover-issue-summary > p { margin: 7px 0; color: #9b8a69; font-size: .8rem; }
+.handover-issue-result { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; padding: 12px 14px; border: 1px solid #d6e5dd; border-radius: 10px; background: #f5faf7; color: #326351; font-size: .82rem; }
+.handover-issue-result > span, .handover-issue-result > a { display: inline-flex; align-items: center; gap: 7px; }
+.handover-issue-result svg { flex-shrink: 0; }
+.handover-issue-result > a { color: #176b58; font-weight: 650; }
+.handover-issue-result > a:hover { text-decoration: underline; }
 @media(max-width:600px) {
   .handover-heading { align-items: flex-start; }
   .handover-current-step { padding: 14px; gap: 10px; }

@@ -43,6 +43,7 @@ public class ReportReviewService {
   private final ClaimService claims;
   private final P2pClaimAppealService claimAppeals;
   private final ReportReviewCalendar calendar;
+  private final SubmissionRestrictions restrictions;
 
   public enum AppealFinding { INSUFFICIENT_EVIDENCE, INVALID_CLAIM }
 
@@ -226,6 +227,7 @@ public class ReportReviewService {
         r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.reason_code,
         case when appeal.report_id is null then r.reason_label_snapshot end as reason_label_snapshot,
         r.status,r.created_at,
+        exists (select 1 from report_decision d where d.report_id=r.report_id and d.action='HANDOVER_WITHDRAWN') as withdrawn,
         a.full_name as reporter,m.full_name as assignee,
         coalesce(nullif(p.title,''),case when r.reported_account_id is not null then nullif(subject.full_name,'') end) as subject_title,
         nullif(subject.full_name,'') as subject_name,
@@ -335,6 +337,9 @@ public class ReportReviewService {
     if (!appeal.isEmpty()) {
       out.put("approvedContext", context.withUrls(context.context(
           Map.of("claim_id", appeal.get("approved_claim_id"), "report_id", reportId, "kind", kind))));
+      if ("REJECTED".equals(r.get("status")) && Boolean.TRUE.equals(appeal.get("active"))) {
+        out.put("approvalWindow", claimAppeals.handoverWindow(id(appeal, "post_id"), id(appeal, "approved_claim_id")));
+      }
     }
     out.put("recoveryRequested", recoveryRequested);
     out.put("recovery", recovery);
@@ -380,13 +385,18 @@ public class ReportReviewService {
         reportId
       )
     );
-    out.put(
-      "decisions",
-      jdbc.queryForList(
-        "select d.decision_id,d.action,d.conclusion,d.basis,d.created_at,d.after_state->>'appliedMeasure' as applied_measure,a.full_name as actor from report_decision d join accounts a on a.id=d.actor_id where report_id=? order by decision_id",
+    var decisions = jdbc.queryForList(
+        """
+        select d.decision_id,d.action,d.conclusion,d.basis,d.created_at,
+            d.after_state->>'appliedMeasure' as applied_measure,
+            d.after_state->>'restrictionUntil' as restriction_until,a.full_name as actor
+        from report_decision d join accounts a on a.id=d.actor_id
+        where report_id=? order by decision_id
+        """,
         reportId
-      )
     );
+    out.put("decisions", decisions);
+    out.put("withdrawn", decisions.stream().anyMatch(item -> "HANDOVER_WITHDRAWN".equals(item.get("action"))));
     out.put("inquiries", inquiries(reportId));
     if ("HANDOVER_ISSUE".equals(kind) && issuePhase != null) out.put("verificationOptions", HandoverVerification.options(r, current));
     out.put("hold", hold);
@@ -397,6 +407,7 @@ public class ReportReviewService {
         """
         select x.report_id,case when sibling.report_id is not null then 'CLAIM_APPEAL' else x.kind end as kind,
           x.status,x.version,x.assigned_to,x.reason_code,x.reason_label_snapshot,x.description,x.post_id,x.claim_id,
+          exists (select 1 from report_decision d where d.report_id=x.report_id and d.action='HANDOVER_WITHDRAWN') as withdrawn,
           x.message_id,x.reported_account_id,x.resolution_note,x.created_at,
           coalesce(sibling.approval_id=cast(? as bigint),false) as same_approval
         from report x left join p2p_claim_appeal sibling on sibling.report_id=x.report_id
@@ -540,18 +551,24 @@ public class ReportReviewService {
     var claim = (Map<String, Object>) current.getOrDefault("claim", Map.of());
     var account = (Map<String, Object>) current.getOrDefault("account", Map.of());
     var measures = new ArrayList<String>();
-    if (report.get("post_id") != null && post.get("deleted_at") == null && "VISIBLE".equals(post.get("moderation_status"))) {
-      if (post.get("account_id") != null) measures.add("REQUEST_POST_CORRECTION");
-      measures.add("HIDE_POST");
+    if (report.get("post_id") != null) {
+      if (post.get("deleted_at") == null && "VISIBLE".equals(post.get("moderation_status"))) measures.add("HIDE_POST");
+      Long author = id(post, "account_id");
+      if (author != null && !author.equals(id(report, "reporter_id"))) measures.add("BAN_POST_7_DAYS");
+    }
+    if (report.get("claim_id") != null && isReportAgainstClaimant(report, claim)) {
+      if (Set.of("PENDING", "NEEDS_INFO").contains(Objects.toString(claim.get("status"), ""))
+          && Set.of("OPEN", "RESERVED").contains(Objects.toString(post.get("status"), ""))
+          && post.get("deleted_at") == null && "VISIBLE".equals(post.get("moderation_status"))) {
+        measures.add("CLAIM_VIOLATION_BLOCK");
+      }
+      measures.add("BAN_CLAIM_7_DAYS");
     }
     if (report.get("reported_account_id") != null && "ACTIVE".equals(account.get("status"))
         && isSanctionableRole(account.get("role"))) {
       measures.add("WARN_ACCOUNT");
       measures.add("SUSPEND_ACCOUNT");
     }
-    if (report.get("claim_id") != null && "P2P".equals(claim.get("claim_type"))
-        && "PENDING".equals(claim.get("status")) && "OPEN".equals(post.get("status"))
-        && isReportAgainstClaimant(report, claim)) measures.add("CLAIM_VIOLATION_REJECT");
     return measures;
   }
 
@@ -754,11 +771,15 @@ public class ReportReviewService {
     String measure = request.measure();
     boolean violationFinding = VIOLATION_FINDINGS.contains(action);
     if (violationFinding) requireKind(kind, "GENERAL");
+    if ("VIOLATION".equals(action) && measure == null && (r.get("post_id") != null || r.get("claim_id") != null))
+      throw bad("Chọn biện pháp xử lý vi phạm trước khi lưu kết luận.");
     if (measure != null && (!"VIOLATION".equals(action) || !violationMeasures(r, current).contains(measure)))
       throw bad("Biện pháp không phù hợp với kết luận hoặc đối tượng được báo cáo.");
     String next = violationFinding ? ("VIOLATION".equals(action) ? "RESOLVED" : "REJECTED") : status;
     String recordedAction = action;
     String effect = measure == null ? action : measure;
+    OffsetDateTime restrictionUntil = null;
+    Long restrictedAccount = null;
     var recovery = recovery(reportId);
     if ("OFFICE".equals(current.get("handoverSource"))) {
       boolean held = !context.one("select report_id from report_hold where report_id=? and released_at is null", reportId).isEmpty();
@@ -798,6 +819,15 @@ public class ReportReviewService {
         if (r.get("post_id") == null) throw bad("Chỉ có thể ẩn bài đăng được báo cáo.");
         hidePost(current, conclusion, user, before);
       }
+      case "BAN_POST_7_DAYS", "BAN_CLAIM_7_DAYS" -> {
+        if (measure == null) throw bad("Cần ghi kết luận vi phạm trước khi áp dụng lệnh cấm.");
+        boolean posting = "BAN_POST_7_DAYS".equals(effect);
+        Map<?, ?> target = (Map<?, ?>) current.get(posting ? "post" : "claim");
+        restrictedAccount = ((Number) target.get(posting ? "account_id" : "claimant_id")).longValue();
+        restrictionUntil = restrictions.restrictForSevenDays(restrictedAccount,
+            posting ? SubmissionRestrictions.Action.POST : SubmissionRestrictions.Action.CLAIM, reportId);
+        next = "RESOLVED";
+      }
       case "REQUEST_POST_CORRECTION" -> {
         if (measure == null) throw bad("Cần ghi kết luận vi phạm trước khi yêu cầu chỉnh sửa bài đăng.");
         @SuppressWarnings("unchecked")
@@ -819,14 +849,18 @@ public class ReportReviewService {
             "WARN_ACCOUNT".equals(effect) ? "REPORT_ACCOUNT_WARNING" : "REPORT_ACCOUNT_SUSPENDED",
             "WARN_ACCOUNT".equals(effect) ? "Cảnh báo tài khoản" : "Tài khoản đã bị đình chỉ", conclusion);
       }
-      case "CLAIM_VIOLATION_REJECT" -> {
+      case "CLAIM_VIOLATION_REJECT", "CLAIM_VIOLATION_BLOCK" -> {
         requireKind(kind, "GENERAL");
         Long claimId = id(r, "claim_id");
         @SuppressWarnings("unchecked")
         var claim = (Map<String, Object>) current.getOrDefault("claim", Map.of());
         if (claimId == null || !isReportAgainstClaimant(r, claim))
           throw bad("Chỉ có thể bác yêu cầu nhận đồ đang bị báo cáo vi phạm.");
-        claims.rejectReportedClaim(claimId, claimNote(reportId, conclusion), user);
+        boolean blocksRetry = "CLAIM_VIOLATION_BLOCK".equals(effect);
+        if (blocksRetry && measure == null) throw bad("Cần ghi kết luận vi phạm trước khi chặn gửi lại.");
+        String note = claimNote(reportId, conclusion);
+        claims.rejectReportedClaim(claimId, blocksRetry ? note + " Bạn không thể gửi lại yêu cầu trên bài đăng này." : note, user);
+        if (blocksRetry) claimAppeals.releaseWindowIfUncontested(id(claim, "post_id"));
         next = "RESOLVED";
       }
       case "REQUEST_ITEM_RECOVERY" -> {
@@ -985,6 +1019,12 @@ public class ReportReviewService {
     boolean officeAppeal = "OFFICE".equals(appeal.get("claim_type"));
     if ("APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal) afterState.put("approvalReopened", true);
     if (measure != null) afterState.put("appliedMeasure", measure);
+    if ("CLAIM_VIOLATION_BLOCK".equals(effect)) afterState.put("claimResubmissionBlocked", true);
+    if (restrictionUntil != null) {
+      afterState.put("appliedMeasure", effect);
+      afterState.put("restrictionUntil", restrictionUntil.toString());
+      afterState.put("restrictedAccountId", restrictedAccount);
+    }
     context.retainAssets(reportId, current, "DECISION");
     context.retainAssets(reportId, after, "DECISION");
     jdbc.update(
@@ -1023,6 +1063,7 @@ public class ReportReviewService {
         claims.finishOfficeAppealReview(id(appeal, "post_id"));
       }
       Set<Long> recipients = participantsFor(r);
+      if (restrictedAccount != null) recipients.add(restrictedAccount);
       Long finderToReview = "APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal ? id(appeal, "finder_id") : null;
       if (finderToReview != null) recipients.add(finderToReview);
       for (Long recipient : recipients) {
@@ -1031,6 +1072,9 @@ public class ReportReviewService {
         String title = needsReview ? "Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt" : "Báo cáo #" + reportId + " đã có kết quả";
         String reviewMessage = "Hồ sơ đã chấp thuận đã về chờ duyệt. Hãy đối chiếu các hồ sơ và chọn người nhận.";
         String message = needsReview ? reviewMessage : conclusion;
+        if (Objects.equals(recipient, restrictedAccount) && restrictionUntil != null)
+          message += " Tạm cấm " + ("BAN_POST_7_DAYS".equals(effect) ? "đăng tin" : "gửi yêu cầu nhận đồ mới")
+              + " đến " + NotificationService.formatVietnamDeadline(restrictionUntil) + ".";
         String path = needsReview ? "/bai-dang/" + id(appeal, "post_id") + "/claims?claimStatus=PENDING"
             : "/bao-cao/" + reportId + "#ket-qua";
         if (emailP2pOutcome && !Objects.equals(recipient, recipientWithClaimEmail)) {

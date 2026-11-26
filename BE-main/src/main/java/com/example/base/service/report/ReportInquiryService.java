@@ -7,6 +7,7 @@ import com.example.base.entity.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.notification.NotificationService;
 import com.example.base.service.office.OfficeAccess;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -69,6 +70,12 @@ public class ReportInquiryService {
     @Size(max = 5000) String question,
     String verificationKind
   ) {}
+
+  public record Question(@NotNull @Positive Long recipientId, @Size(max = 5000) String question,
+      String verificationKind) {}
+
+  public record AskBoth(@NotNull @PositiveOrZero Long version,
+      @NotNull @Size(min = 2, max = 2) List<@NotNull @Valid Question> questions) {}
 
   public record CustodyCheck(@NotNull @PositiveOrZero Long version, @NotBlank String result,
       @NotBlank @Size(max=500) String source, @NotBlank @Size(max=5000) String basis) {}
@@ -149,13 +156,43 @@ public class ReportInquiryService {
     Ask request,
     CustomUserDetails user
   ) {
+    return askQuestions(report, request.version(),
+        List.of(new Question(request.recipientId(), request.question(), request.verificationKind())), user);
+  }
+
+  @Transactional
+  public Map<String, Object> askBoth(long report, AskBoth request, CustomUserDetails user) {
+    var questions = request.questions();
+    if (questions.stream().anyMatch(question -> question.verificationKind() == null)
+        || questions.stream().map(Question::recipientId).distinct().count() != 2) {
+      throw bad("Hãy chọn nội dung xác minh riêng cho hai người liên quan.");
+    }
+    return askQuestions(report, request.version(), questions, user);
+  }
+
+  private Map<String, Object> askQuestions(long report, Long version, List<Question> questions, CustomUserDetails user) {
     Account actor = access.require(user, AccountRole.MANAGER);
     var r = reviews.lock(report);
-    if (reviews.canFollowUpRecovery(r)) reviews.requireAssignee(r, actor, request.version());
-    else reviews.processing(r, actor, request.version());
+    if (reviews.canFollowUpRecovery(r)) reviews.requireAssignee(r, actor, version);
+    else reviews.processing(r, actor, version);
     var appeal = reviews.appeal(report);
     var current = context.context(r);
-    String question = Objects.toString(request.question(), "").strip();
+    var normalized = questions.stream().map(question -> new Question(
+        question.recipientId(), Objects.toString(question.question(), "").strip(), question.verificationKind())).toList();
+    for (var question : normalized) {
+      validateQuestion(report, r, appeal, current, question);
+    }
+    OffsetDateTime deadline = reviews.inquiryResponseDue();
+    boolean p2pReport = ReportReviewService.isP2pReport(r, appeal, current);
+    for (var question : normalized) {
+      sendQuestion(report, actor.getId(), (String) r.get("status"), p2pReport, deadline, question);
+    }
+    jdbc.update("update report set version=version+1,updated_at=now() where report_id=?", report);
+    return reviews.detail(report, user);
+  }
+
+  private void validateQuestion(long report, Map<String, Object> r, Map<String, Object> appeal,
+      Map<String, Object> current, Question request) {
     String kind = request.verificationKind();
     if ("P2P".equals(appeal.get("claim_type")) && reviews.open(r)) {
       if (!Boolean.TRUE.equals(appeal.get("active"))) throw bad("Lần chấp thuận này đã kết thúc.");
@@ -170,7 +207,7 @@ public class ReportInquiryService {
           option.kind().equals(kind) && request.recipientId().equals(option.recipientId())))
         throw bad("Hãy chọn việc xác minh phù hợp với người giao hoặc người nhận.");
     } else if (kind != null) throw bad("Yêu cầu xác minh này chỉ dành cho tranh chấp P2P đang xử lý.");
-    if (question.isBlank()) throw bad("Hãy ghi rõ chi tiết cần xác minh.");
+    if (request.question().isBlank()) throw bad("Hãy ghi rõ chi tiết cần xác minh.");
     if (
       !reviews.participants(current).contains(request.recipientId())
     ) throw bad("Người được hỏi phải liên quan đến vụ việc.");
@@ -184,47 +221,47 @@ public class ReportInquiryService {
         )
       )
     ) throw bad("Người này đang có câu hỏi chưa phản hồi.");
-    OffsetDateTime deadline = reviews.inquiryResponseDue();
+  }
+
+  private void sendQuestion(long report, long actorId, String status, boolean p2pReport,
+      OffsetDateTime deadline, Question request) {
+    String question = request.question();
     jdbc.update(
       "insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at,verification_kind) values(?,?,?,?,?,?)",
       report,
       request.recipientId(),
-      actor.getId(),
+      actorId,
       question,
       deadline,
-      kind
-    );
-    jdbc.update(
-      "update report set version=version+1,updated_at=now() where report_id=?",
-      report
+      request.verificationKind()
     );
     reviews.history(
       report,
-      actor.getId(),
+      actorId,
       "ASK_INFORMATION",
-      (String) r.get("status"),
-      (String) r.get("status"),
+      status,
+      status,
       "Đang đối chiếu thêm thông tin với người liên quan.",
       question
     );
     String title = "Cần bổ sung thông tin cho báo cáo #" + report;
     String replyPath = "/bao-cao/" + report + "#phan-hoi";
-    if (ReportReviewService.isP2pReport(r, appeal, current)) {
+    if (p2pReport) {
       notifications.notifyUserWithEmail(request.recipientId(), "REPORT_INFORMATION", title, question, replyPath,
           "Quản lý cần bạn xác minh thông tin. Vui lòng mở hồ sơ và phản hồi trước "
               + NotificationService.formatVietnamDeadline(deadline) + ".");
     } else {
       notifications.notifyUser(request.recipientId(), "REPORT_INFORMATION", title, question, replyPath, false);
     }
-    return reviews.detail(report, user);
   }
 
   @Transactional(readOnly = true)
   public List<Map<String, Object>> mine(CustomUserDetails user) {
     long actor = access.require(user).getId();
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.verification_kind, i.verified_custody, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
-          (i.responded_at is null and i.closed_at is null and i.response_due_at <= now()) as overdue, %s
+        select i.inquiry_id, i.verification_kind, i.verified_custody, i.question, i.created_at,
+          coalesce(i.response_due_at, i.created_at + interval '3 days') as response_due_at, i.response, i.responded_at, i.closed_at,
+          (i.responded_at is null and i.closed_at is null and coalesce(i.response_due_at, i.created_at + interval '3 days') <= now()) as overdue, %s
         from report_inquiry i join report r using (report_id)
         %s
         where i.recipient_id = ?
@@ -237,8 +274,9 @@ public class ReportInquiryService {
 
   List<Map<String, Object>> forReport(long reportId, long recipientId) {
     var rows = jdbc.queryForList("""
-        select i.inquiry_id, i.verification_kind, i.verified_custody, i.question, i.created_at, i.response_due_at, i.response, i.responded_at, i.closed_at,
-          (i.responded_at is null and i.closed_at is null and i.response_due_at <= now()) as overdue, r.status
+        select i.inquiry_id, i.verification_kind, i.verified_custody, i.question, i.created_at,
+          coalesce(i.response_due_at, i.created_at + interval '3 days') as response_due_at, i.response, i.responded_at, i.closed_at,
+          (i.responded_at is null and i.closed_at is null and coalesce(i.response_due_at, i.created_at + interval '3 days') <= now()) as overdue, r.status
         from report_inquiry i join report r using (report_id)
         where i.report_id = ? and i.recipient_id = ?
         order by i.created_at desc, i.inquiry_id desc
@@ -275,13 +313,18 @@ public class ReportInquiryService {
   ) {
     long actor = access.require(user).getId();
     var initial = context.one(
-      "select * from report_inquiry where inquiry_id=? and recipient_id=?",
+      """
+      select *, (responded_at is null and closed_at is null
+        and coalesce(response_due_at, created_at + interval '3 days') <= clock_timestamp()) as overdue
+      from report_inquiry where inquiry_id=? and recipient_id=?
+      """,
       inquiry,
       actor
     );
     if (initial.isEmpty()) throw bad(
       "Không tìm thấy yêu cầu bổ sung dành cho bạn."
     );
+    if (Boolean.TRUE.equals(initial.get("overdue"))) throw bad("Đã quá hạn phản hồi yêu cầu bổ sung.");
     if ("CUSTODY".equals(initial.get("verification_kind"))
         && !Set.of("Tôi vẫn giữ đồ", "Tôi đã giao đồ").contains(request.response().strip()))
       throw bad("Chọn tình trạng giữ đồ thực tế.");
@@ -300,11 +343,15 @@ public class ReportInquiryService {
         if (i.get("responded_at") != null) throw bad(
           "Phản hồi đã được ghi nhận và giữ nguyên. Hãy tải lại."
         );
-        jdbc.update(
-          "update report_inquiry set response=?,responded_at=now() where inquiry_id=?",
+        int saved = jdbc.update(
+          """
+          update report_inquiry set response=?,responded_at=statement_timestamp() where inquiry_id=?
+            and statement_timestamp() < coalesce(response_due_at, created_at + interval '3 days')
+          """,
           request.response().strip(),
           inquiry
         );
+        if (saved == 0) throw bad("Đã quá hạn phản hồi yêu cầu bổ sung.");
         for (var image : uploaded)
           jdbc.update(
             "insert into report_reply_evidence(inquiry_id,storage_key,original_name,content_hash) values(?,?,?,?)",

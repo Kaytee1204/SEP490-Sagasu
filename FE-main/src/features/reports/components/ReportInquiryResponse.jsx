@@ -8,9 +8,9 @@ import { verificationLabels } from "@/features/report-review/format";
 import { Send, ShieldCheck } from "lucide-react";
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
-export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved }) {
+export default function ReportInquiryResponse({ inquiry: i, canReply, overdue = i.overdue, onSaved }) {
   const custody = i.verification_kind === "CUSTODY";
-  const replyOpen = canReply && !i.responded_at && !i.closed_at;
+  const replyOpen = canReply && !overdue && !i.responded_at && !i.closed_at;
   const [sent, setSent] = useState(false);
   const [response, setResponse] = useState(""),
     [files, setFiles] = useState([]),
@@ -20,7 +20,7 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
   const busy = submitting || processing;
   async function submit(e) {
     e.preventDefault();
-    if (busy || sent) return;
+    if (busy || sent || !replyOpen) return;
     setBusy(true);
     setError("");
     try {
@@ -53,8 +53,8 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
         <h3>{verificationLabels[i.verification_kind] || "Yêu cầu từ quản lý"}</h3>
         <time dateTime={i.created_at}>{formatReportDate(i.created_at)}</time>
         <p>{i.question}</p>
-        {i.response_due_at && replyOpen && <p>
-          {i.overdue ? "Đã quá hạn phản hồi" : "Hạn phản hồi"} · {formatReportDate(i.response_due_at)}
+        {i.response_due_at && (overdue || replyOpen) && <p>
+          {overdue ? "Đã quá hạn phản hồi" : "Hạn phản hồi"} · {formatReportDate(i.response_due_at)}
         </p>}
       </div>
       {i.responded_at ? (
@@ -68,7 +68,7 @@ export default function ReportInquiryResponse({ inquiry: i, canReply, onSaved })
             </a>)}
           </div>}
         </>
-      ) : sent ? <p role="status">Đã gửi phản hồi.</p> : replyOpen ? (
+      ) : sent ? <p role="status">Đã gửi phản hồi.</p> : overdue ? null : replyOpen ? (
         <form className="report-reply-form" onSubmit={submit}>
           {custody ? <fieldset className="report-custody-choices">
             <legend>Tình trạng món đồ</legend>

@@ -151,8 +151,12 @@ public class P2pClaimAppealService {
     }
 
     public HandoverWindow handoverWindow(Claim selected) {
-        Approval approval = activeApproval(selected.getPost().getId());
-        if (approval == null || approval.selectedClaimId() != selected.getId()) return null;
+        return handoverWindow(selected.getPost().getId(), selected.getId());
+    }
+
+    public HandoverWindow handoverWindow(long postId, long selectedClaimId) {
+        Approval approval = activeApproval(postId);
+        if (approval == null || approval.selectedClaimId() != selectedClaimId) return null;
         return new HandoverWindow(approval.deadline(), approval.stateAt(OffsetDateTime.now()));
     }
 

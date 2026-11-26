@@ -46,9 +46,15 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
             join report_decision d on d.report_id = appeal.report_id
             where c.post_id = :postId and c.claimant_id = :claimantId
               and (d.action = 'APPEAL_REJECT_CLAIM' or (approval.custody_mode='P2P' and d.action='APPEAL_KEEP'))
+            union all
+            select 1 from claim c
+            join report r on r.claim_id=c.claim_id
+            join report_decision d on d.report_id=r.report_id
+            where c.post_id=:postId and c.claimant_id=:claimantId
+              and d.after_state->>'claimResubmissionBlocked'='true'
         )
         """, nativeQuery = true)
-    boolean hasDisputeRejection(@Param("postId") long postId, @Param("claimantId") long claimantId);
+    boolean hasResubmissionBlock(@Param("postId") long postId, @Param("claimantId") long claimantId);
 
     @Query(value = """
         select distinct on (appeal.appellant_claim_id) appeal.appellant_claim_id, d.action

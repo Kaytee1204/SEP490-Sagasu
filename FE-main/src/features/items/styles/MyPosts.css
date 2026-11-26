@@ -113,7 +113,6 @@
 .my-post-hide-form footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding-top: 18px; margin-top: 20px; border-top: 1px solid #e5ecdf; }
 .my-post-hide-form footer .btn { min-height: 44px; font-size: .82rem; }
 .my-post-hide-error { margin-top: 10px; color: #b15f49; font-size: .8rem; }
-.my-post-hide-discard > p { margin-top: 14px; color: #8d784d; font-size: .82rem; }
 @media(max-width:700px) {
   .my-posts-page.my-posts-dashboard { padding-block: 22px 36px; }
   .my-post-card-main { grid-template-columns: 72px minmax(0, 1fr); align-items: start; gap: 10px 14px; padding: 16px; }

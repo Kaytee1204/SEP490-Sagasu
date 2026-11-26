@@ -88,6 +88,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ClaimServiceTest {
     @Mock private ClaimDailyLimit dailyLimit;
+    @Mock private com.example.base.service.report.SubmissionRestrictions restrictions;
 
     @Test
     void dailyLimitRejectsBeforeSavingP2pDossier() {
@@ -339,13 +340,24 @@ class ClaimServiceTest {
 
     @Test
     void disputeRejectionBlocksBothNewSubmissionAndRetryFromOlderClaim() {
-        when(claims.hasDisputeRejection(100L, 20L)).thenReturn(true);
+        when(claims.hasResubmissionBlock(100L, 20L)).thenReturn(true);
         when(claims.findById(499L)).thenReturn(Optional.of(p2pClaim(499L, "REJECTED", 0L)));
 
         assertEquals(ErrorCode.CLAIM_RESUBMISSION_BLOCKED,
                 code(() -> service.submit(100L, validSubmitReq(), List.of(), claimantUser)));
         assertEquals(ErrorCode.CLAIM_RESUBMISSION_BLOCKED,
                 code(() -> service.retry(499L, validSubmitReq(), List.of(), claimantUser)));
+    }
+
+    @Test
+    void newClaimRestrictionBlocksNewSubmissionAndRetry() {
+        when(claims.findById(499L)).thenReturn(Optional.of(p2pClaim(499L, "REJECTED", 0L)));
+        doThrow(new AppException(ErrorCode.FORBIDDEN)).when(restrictions).checkAvailable(20L,
+                com.example.base.service.report.SubmissionRestrictions.Action.CLAIM);
+
+        assertEquals(ErrorCode.FORBIDDEN, code(() -> service.submit(100L, validSubmitReq(), List.of(), claimantUser)));
+        assertEquals(ErrorCode.FORBIDDEN, code(() -> service.retry(499L, validSubmitReq(), List.of(), claimantUser)));
+        verify(claims, never()).saveAndFlush(any());
     }
 
     @Test
@@ -608,7 +620,7 @@ class ClaimServiceTest {
     @Test
     void detailShowsWhyAClaimRejectedAfterDisputeCannotBeRetried() {
         stubRejectedDetail();
-        when(claims.hasDisputeRejection(100L, 20L)).thenReturn(true);
+        when(claims.hasResubmissionBlock(100L, 20L)).thenReturn(true);
 
         var detail = service.detail(542L, claimantUser);
 

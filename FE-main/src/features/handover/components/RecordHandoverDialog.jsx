@@ -22,7 +22,6 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   const busy = submitting || processing;
   const canSubmit = confirmed && files.length > 0 && !busy;
   const [error, setError] = useState('');
-  const [discard, setDiscard] = useState(false);
 
   useEffect(() => {
     const element = dialog.current;
@@ -38,9 +37,7 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
   }, []);
 
   function close() {
-    if (sending.current || processing) return;
-    if (note.trim() || files.length || confirmed) setDiscard(true);
-    else onClose();
+    if (!sending.current && !processing) onClose();
   }
 
   async function pickImages(event) {
@@ -52,7 +49,6 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
       return;
     }
     setError('');
-    setDiscard(false);
     try {
       const prepared = await prepare(selected);
       if (prepared) { setFiles(current => [...current, ...prepared]); request.current = null; }
@@ -105,16 +101,13 @@ export default function RecordHandoverDialog({ claim, onClose, onRecorded }) {
         }}>Bỏ ảnh</button></li>)}</ul>}
       <label className="handover-record-field">Ghi chú (tùy chọn)
         <textarea maxLength={2000} value={note} disabled={busy} placeholder="Ví dụ: Đã giao kèm các phụ kiện…"
-          onChange={event => { setNote(event.target.value); request.current = null; setDiscard(false); }} /></label>
+          onChange={event => { setNote(event.target.value); request.current = null; }} /></label>
       <label className="handover-record-confirm"><input type="checkbox" checked={confirmed} disabled={busy} required
-        onChange={event => { setConfirmed(event.target.checked); setDiscard(false); }} />
+        onChange={event => setConfirmed(event.target.checked)} />
         Tôi xác nhận đã giao đồ thực tế cho người nhận.</label>
       {error && <p role="alert" className="claim-alert">{error}</p>}
-      {discard ? <div className="handover-record-discard" role="alert"><p>Bỏ ghi chú và ảnh đang chọn để đóng?</p>
-        <footer><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></footer></div>
-        : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
-          <button type="submit" className="btn btn-accent" disabled={!canSubmit}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>}
+      <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
+        <button type="submit" className="btn btn-accent" disabled={!canSubmit}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang ghi nhận…' : 'Xác nhận đã giao đồ'}</button></footer>
     </form>
     <ConfirmActionPopup
       open={confirmOpen}

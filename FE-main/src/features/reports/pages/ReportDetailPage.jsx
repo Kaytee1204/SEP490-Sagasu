@@ -4,6 +4,9 @@ import { ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import ClaimEvidencePreview from '@/features/claims/components/ClaimEvidencePreview';
+import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
+import useDeadlineCountdown from '@/hooks/useDeadlineCountdown';
+import { withdrawHandoverIssue } from '@/features/handover/api/handoverApi';
 import { claimDetailPath, postClaimsPath } from '@/features/claims/utils/claimUtils';
 import useReportResource from '../hooks/useReportResource';
 import { getReportWorkspaceDetail } from '../api/reportApi';
@@ -35,6 +38,13 @@ const outcomeLabels = {
   CLAIM_REJECTED: 'Hủy bàn giao và mở lại xét duyệt',
 };
 
+const measureLabels = {
+  HIDE_POST: 'Đã ẩn bài đăng',
+  BAN_POST_7_DAYS: 'Cấm đăng tin trong 7 ngày',
+  CLAIM_VIOLATION_BLOCK: 'Đã bác yêu cầu và chặn gửi lại trên bài này',
+  BAN_CLAIM_7_DAYS: 'Cấm gửi yêu cầu nhận đồ mới trong 7 ngày',
+};
+
 export default function ReportDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -52,6 +62,9 @@ function ReportDetail({ id }) {
   const { data, error, loading, reload } = useReportResource(id, () => getReportWorkspaceDetail(id));
   const [image, setImage] = useState(null);
   const [replySaved, setReplySaved] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
 
   const lastTarget = useRef(null);
   useEffect(() => {
@@ -81,9 +94,20 @@ function ReportDetail({ id }) {
   const subject = report && reportSubject(report);
   const isAppeal = report?.report_type === 'CLAIM_APPEAL';
   const concluded = report && ['RESOLVED', 'REJECTED'].includes(report.status);
-  const pending = report?.needs_reply === true;
-  const awaitingReply = inquiries.filter(item => pending && !item.responded_at && !item.closed_at);
-  const previousExchanges = inquiries.filter(item => !pending || item.responded_at || item.closed_at);
+  const displayStatus = report?.withdrawn ? 'WITHDRAWN' : report?.status;
+  const canWithdraw = report?.can_withdraw === true && Boolean(submission?.targetId);
+  const timedInquiries = inquiries.filter(item => !item.responded_at && !item.closed_at);
+  const nextDeadline = timedInquiries.reduce((soonest, item) => {
+    const deadline = Date.parse(item.response_due_at);
+    return deadline > Date.now() ? Math.min(soonest, deadline) : soonest;
+  }, Infinity);
+  useDeadlineCountdown(Number.isFinite(nextDeadline) ? new Date(nextDeadline).toISOString() : null);
+  const isOverdue = item => item.overdue || Date.parse(item.response_due_at) <= Date.now();
+  const awaitingReply = timedInquiries.filter(item => report?.needs_reply && !isOverdue(item));
+  const overdueInquiries = timedInquiries.filter(isOverdue);
+  const previousExchanges = inquiries.filter(item => !awaitingReply.includes(item) && !overdueInquiries.includes(item));
+  const pending = awaitingReply.length > 0;
+  const overdue = !concluded && overdueInquiries.length > 0;
   const linkedClaim = report?.finder_approved_claim_id || report?.participant_claim_id;
   const office = report?.claim_type === 'OFFICE';
   const officeHandover = report?.office_handover === true;
@@ -92,7 +116,6 @@ function ReportDetail({ id }) {
   const correction = report?.post_measure === 'REQUEST_POST_CORRECTION' && report.post_owner;
   const recoveryPending = Boolean(report?.recovery_note && !report.recovery_confirmed_at && (!concluded || report.appeal_step));
   const handover = isAppeal || report?.report_type === 'HANDOVER_ISSUE';
-  const overdue = awaitingReply.some(item => item.overdue);
   const reviewClaims = isAppeal && !office && report.approval_reopened && report.post_owner && report.report_subject_id;
   const followUpPath = reviewClaims ? postClaimsPath(report.report_subject_id, 'PENDING')
     : claimPath && !report.needs_reopen && (handover && !office ? `${claimPath}#handover` : claimPath);
@@ -104,6 +127,24 @@ function ReportDetail({ id }) {
     reload();
   }
 
+  async function withdraw() {
+    if (!canWithdraw || withdrawing) return;
+    setWithdrawing(true);
+    setWithdrawError('');
+    try {
+      await withdrawHandoverIssue(submission.targetId, report.report_id);
+      setWithdrawOpen(false);
+      await reload();
+      window.dispatchEvent(new Event('sagasu-counts-changed'));
+    } catch (problem) {
+      setWithdrawOpen(false);
+      setWithdrawError(problem.message || 'Chưa thể rút báo cáo. Vui lòng thử lại.');
+      if (problem.status === 409) await reload();
+    } finally {
+      setWithdrawing(false);
+    }
+  }
+
   return (
     <main className="container reports-page report-detail-page">
       <BackLink to={returnTo} />
@@ -113,15 +154,20 @@ function ReportDetail({ id }) {
         <button type="button" className="btn btn-ghost" onClick={reload}>Thử tải lại</button>
       </div>}
       {report && <>
-        <ReportProgress status={report.status} appeal={isAppeal} />
+        <ReportProgress status={displayStatus} appeal={isAppeal} />
         <header className="report-card report-detail-overview">
           <div className="report-detail-heading">
             <div>
               <p className="report-detail-reference">Báo cáo #{report.report_id} · {report.mine ? 'Bạn đã gửi' : 'Liên quan đến bạn'}</p>
               <h1>{officeHandover ? 'Sự cố bàn giao tại văn phòng' : reportTitles[report.report_type] || 'Chi tiết báo cáo'}</h1>
             </div>
-            <span className={`report-state report-state-${report.status}`}>{report.appeal_step ? "Tranh chấp đã có kết luận" : reportStatuses[report.status]}</span>
+            <div className="report-detail-controls">
+              <span className={`report-state report-state-${displayStatus}`}>{report.appeal_step ? "Tranh chấp đã có kết luận" : reportStatuses[displayStatus]}</span>
+              {canWithdraw && <button type="button" className="btn btn-ghost report-withdraw-button" disabled={withdrawing}
+                onClick={() => { setWithdrawError(''); setWithdrawOpen(true); }}>Rút báo cáo</button>}
+            </div>
           </div>
+          {withdrawError && <p className="report-error" role="alert">{withdrawError}</p>}
           {subject.value && <p className="report-detail-subject">{subject.label} <span className="report-meta-dot">·</span> <strong>{subject.value}</strong></p>}
           <time dateTime={report.created_at}>Gửi lúc {formatReportDate(report.created_at)}</time>
           {officeHandover && report.mine && !concluded &&
@@ -141,20 +187,20 @@ function ReportDetail({ id }) {
         </header>
         <section id="buoc-tiep-theo" tabIndex={-1} className={`report-card report-detail-section report-next-step${pending ? ' report-next-step-pending' : ''}`}>
           <div className="report-next-copy">
-            <h2>{pending ? (overdue ? 'Đã quá hạn phản hồi' : 'Bạn cần phản hồi') : recoveryPending ? 'Chờ xác nhận thu hồi món đồ' : appealSteps[report.appeal_step] || (concluded ? 'Kết quả xử lý' : 'Bước tiếp theo')}</h2>
-            {pending && <p>{overdue
-              ? 'Bạn vẫn có thể gửi thông tin trước khi quản lý kết luận.'
-              : 'Quản lý cần thêm thông tin để xử lý báo cáo này.'}</p>}
-            {recoveryPending && !pending && <p>Người giữ đồ phản hồi trong hồ sơ của mình. Quản lý đối chiếu bằng chứng và xác nhận việc thu hồi.</p>}
+            <h2>{report.withdrawn ? 'Đã rút báo cáo' : pending ? 'Bạn cần phản hồi' : overdue ? 'Đã quá hạn phản hồi' : recoveryPending ? 'Chờ xác nhận thu hồi món đồ' : appealSteps[report.appeal_step] || (concluded ? 'Kết quả xử lý' : 'Bước tiếp theo')}</h2>
+            {pending && <p>Quản lý cần thêm thông tin để xử lý báo cáo này.</p>}
+            {overdue && <p>Yêu cầu đã hết hạn. Quản lý sẽ xử lý hồ sơ dựa trên thông tin hiện có.</p>}
+            {recoveryPending && !pending && !overdue && <p>Người giữ đồ phản hồi trong hồ sơ của mình. Quản lý đối chiếu bằng chứng và xác nhận việc thu hồi.</p>}
             {report.appeal_step && !report.needs_reopen && <p>{appealInstruction(report.appeal_step, office)}</p>}
             {report.needs_reopen && claimPath && <FinderAppealAction report={report} claimPath={claimPath} />}
-            {!pending && !recoveryPending && !report.appeal_step && !concluded && <p>{report.status === 'OPEN'
+            {!pending && !overdue && !recoveryPending && !report.appeal_step && !concluded && <p>{report.status === 'OPEN'
               ? 'Chờ quản lý nhận hồ sơ. Bạn sẽ nhận thông báo khi cần bổ sung thông tin hoặc khi có kết quả.'
               : 'Quản lý đang đối chiếu hồ sơ. Bạn sẽ nhận thông báo nếu cần bổ sung thông tin.'}</p>}
             {concluded && <div id="ket-qua" tabIndex={-1} className="report-note">
-              <strong>{outcomeLabels[report.outcome] || reportStatuses[report.status]}</strong>
+              {!report.withdrawn && <strong>{measureLabels[report.applied_measure] || outcomeLabels[report.outcome] || reportStatuses[displayStatus]}</strong>}
               <p>{report.resolution_note || submission?.resolutionNote || 'Chưa có ghi chú kết luận.'}</p>
-              {report.resolved_at && <time dateTime={report.resolved_at}>Kết luận lúc {formatReportDate(report.resolved_at)}</time>}
+              {report.restriction_until && <p>Hết hạn lúc {formatReportDate(report.restriction_until)}</p>}
+              {report.resolved_at && <time dateTime={report.resolved_at}>{report.withdrawn ? 'Đã rút lúc' : 'Kết luận lúc'} {formatReportDate(report.resolved_at)}</time>}
             </div>}
             {concluded && report.outcome === 'HANDOVER_RETRY' && <p>Người nhặt hẹn giao lại với người đã được chấp thuận, sau đó ghi nhận lượt giao mới trong yêu cầu nhận đồ.</p>}
             {concluded && report.outcome === 'APPEAL_KEEP' && report.mine && !office && <p>Yêu cầu của bạn đã kết thúc. Bạn không thể gửi lại yêu cầu hoặc tranh chấp trên bài đăng này.</p>}
@@ -186,12 +232,17 @@ function ReportDetail({ id }) {
           </div>
           {replySaved && <p className="report-reply-success" role="status">Đã gửi thông tin bổ sung.</p>}
           {awaitingReply.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} canReply onSaved={afterReply} />)}
+          {overdueInquiries.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} overdue />)}
           {previousExchanges.length > 0 && <details className="report-exchange-archive">
             <summary>Trao đổi trước đây ({previousExchanges.length})</summary>
             {previousExchanges.map(inquiry => <ReportInquiryResponse key={inquiry.inquiry_id} inquiry={inquiry} canReply={false} onSaved={afterReply} />)}
           </details>}
         </section>}
         {image !== null && <ClaimEvidencePreview images={evidence} initialIndex={image} onClose={() => setImage(null)} />}
+        <ConfirmActionPopup open={withdrawOpen && canWithdraw} title="Rút báo cáo sự cố bàn giao?"
+          description="Báo cáo sẽ được đóng và lưu trong lịch sử. Nếu đang tạm dừng vì báo cáo này, bàn giao có thể tiếp tục."
+          confirmLabel="Rút báo cáo" cancelLabel="Giữ báo cáo" busy={withdrawing}
+          onConfirm={withdraw} onClose={() => setWithdrawOpen(false)} />
       </>}
     </main>
   );

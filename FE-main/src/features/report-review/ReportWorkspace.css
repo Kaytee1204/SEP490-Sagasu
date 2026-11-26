@@ -989,6 +989,13 @@
 .rr-inquiry-entry dd { margin: 0; white-space: pre-wrap; }
 .rr-inquiry-entry [data-state="waiting"] { background: #fff4d7; color: #775017; }
 .rr-inquiry-entry [data-state="late"] { background: #ffede8; color: #9e3220; }
+.rr-verification-form { gap: 12px; }
+.rr-verification-options { display: grid; gap: 8px; }
+.rr-verification-option { border: 1px solid #d5e4e2; border-radius: 10px; }
+.rr-verification-option[data-selected="true"] { border-color: #79b6ae; background: #f3faf8; }
+.rr-verification-option > .rr-check { gap: 10px; padding: 11px 12px; cursor: pointer; }
+.rr-verification-option .rr-check > input { margin-top: 2px; accent-color: #087d79; }
+.rr-verification-question { padding: 0 12px 12px 40px; }
 .rr-evidence-comparison > button { margin-top: 10px; }
 
 .rr .rr-post-summary {

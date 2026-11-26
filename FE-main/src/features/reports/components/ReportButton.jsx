@@ -40,7 +40,6 @@ function ReportForm({ type, id, targetLabel, officeHandover, close, done }) {
   const [submitting, setBusy] = useState(false);
   const { prepare, processing } = useImageUploads();
   const busy = submitting || processing;
-  const [discard, setDiscard] = useState(false);
   const selected = options?.reasons.find(reason => reason.code === reasonCode);
   const canSend = selected && (!selected.requiresDescription || description.trim());
 
@@ -59,14 +58,11 @@ function ReportForm({ type, id, targetLabel, officeHandover, close, done }) {
 
   function changed() {
     retry.current = null;
-    setDiscard(false);
     setError('');
   }
 
   function requestClose() {
-    if (sending.current || processing) return;
-    if (reasonCode || description.trim() || files.length) setDiscard(true);
-    else close();
+    if (!sending.current && !processing) close();
   }
 
   async function pickImages(event) {
@@ -78,7 +74,6 @@ function ReportForm({ type, id, targetLabel, officeHandover, close, done }) {
       return;
     }
     setError('');
-    setDiscard(false);
     try {
       const prepared = await prepare(picked);
       if (prepared) { setFiles(current => [...current, ...prepared]); retry.current = null; }
@@ -138,13 +133,10 @@ function ReportForm({ type, id, targetLabel, officeHandover, close, done }) {
         }}>Bỏ ảnh</button></li>)}</ul>}
       {error && <p className="report-error" role="alert">{error}</p>}
       </div>
-      {discard ? <div className="report-discard" role="alert"><p>Bỏ nội dung báo cáo đang nhập?</p><footer>
-        <button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-        <button type="button" className="btn btn-ghost" onClick={close}>Bỏ nội dung và đóng</button>
-      </footer></div> : <footer>
+      <footer>
         <button className="btn btn-ghost" type="button" disabled={busy} onClick={requestClose}>Hủy</button>
         <button type="submit" className="btn btn-accent" disabled={busy || !canSend}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang gửi…' : 'Gửi báo cáo'}</button>
-      </footer>}
+      </footer>
     </form>
   </dialog>;
 }

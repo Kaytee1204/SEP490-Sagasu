@@ -15,7 +15,6 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState('');
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reason = [preset === 'OTHER' ? '' : preset, detail.trim()].filter(Boolean).join(' — ');
 
   useEffect(() => {
@@ -32,9 +31,7 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
   }, []);
 
   function close() {
-    if (sending.current) return;
-    if (preset || detail.trim()) setConfirmDiscard(true);
-    else onClose();
+    if (!sending.current) onClose();
   }
 
   function handleFormSubmit(event) {
@@ -73,24 +70,20 @@ export default function RejectClaimDialog({ claim, onClose, onRejected }) {
       <fieldset disabled={busy}><legend>Lý do từ chối *</legend>
         {[...REASONS, 'OTHER'].map(value => <label className="claim-reject-option" key={value}>
           <input type="radio" name="rejectReason" value={value} checked={preset === value}
-            onChange={() => { setPreset(value); setConfirmDiscard(false); }} />
+            onChange={() => setPreset(value)} />
           {value === 'OTHER' ? 'Lý do khác' : value}
         </label>)}
       </fieldset>
       <label className="claim-reject-detail">{preset && preset !== 'OTHER' ? 'Bổ sung chi tiết (tùy chọn)' : 'Nhập lý do *'}
         <textarea autoComplete="off" required={!preset || preset === 'OTHER'} disabled={busy} maxLength={1800}
-          value={detail} onChange={event => { setDetail(event.target.value); setConfirmDiscard(false); }}
+          value={detail} onChange={event => setDetail(event.target.value)}
           placeholder="Giải thích cụ thể để người yêu cầu hiểu lý do…" /></label>
       {error && <p role="alert" className="claim-alert">{error}</p>}
-      {confirmDiscard ? <div className="claim-reject-discard" role="alert">
-        <p>Đóng và bỏ lý do đang nhập?</p><div className="claim-actions">
-          <button type="button" className="btn btn-primary" onClick={() => setConfirmDiscard(false)}>Tiếp tục nhập</button>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button>
-        </div></div> : <footer>
+      <footer>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại hồ sơ</button>
         <button type="submit" className="btn claim-reject-submit" disabled={busy || !reason}>
           {busy ? 'Đang gửi…' : 'Xác nhận từ chối'}</button>
-      </footer>}
+      </footer>
     </form>
     <ConfirmActionPopup
       open={confirmOpen}

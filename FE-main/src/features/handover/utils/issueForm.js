@@ -11,3 +11,12 @@ export const handoverStatusLabels = {
   DISPUTED: 'Có sự cố đang được xem xét',
   CANCELLED: 'Đã kết thúc bàn giao',
 };
+
+export function handoverIssueDeadline(handover) {
+  if (!handover || handover.issueDeadline !== undefined) return handover?.issueDeadline;
+  if (handover.status !== 'COMPLETED') return null;
+
+  // Older API responses include the confirmation time but no reporting deadline.
+  const confirmedAt = Date.parse(handover.confirmedAt);
+  return Number.isFinite(confirmedAt) ? new Date(confirmedAt + 7 * 24 * 60 * 60 * 1000).toISOString() : null;
+}

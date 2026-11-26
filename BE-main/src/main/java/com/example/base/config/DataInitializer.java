@@ -103,7 +103,8 @@ public class DataInitializer {
             "db/migrations/40_office_pickup_response_window.sql",
             "db/migrations/41_office_intake_deadline.sql",
             "db/migrations/42_p2p_receipt_reminder.sql",
-            "db/migrations/43_office_intake_and_handover.sql"
+            "db/migrations/43_office_intake_and_handover.sql",
+            "db/migrations/44_report_submission_restrictions.sql"
     );
 
     @Bean

@@ -16,4 +16,4 @@ export const reportTitles = {
   CLAIM_APPEAL: 'Tranh chấp kết quả nhận đồ',
 };
 
-export const reportStatuses = {OPEN:'Chờ xử lý',IN_REVIEW:'Đang xem xét',RESOLVED:'Đã giải quyết',REJECTED:'Đã bác bỏ'};
+export const reportStatuses = {OPEN:'Chờ xử lý',IN_REVIEW:'Đang xem xét',RESOLVED:'Đã giải quyết',REJECTED:'Đã bác bỏ',WITHDRAWN:'Đã rút'};
