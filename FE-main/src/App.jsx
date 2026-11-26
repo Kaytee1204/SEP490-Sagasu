@@ -25,7 +25,6 @@ import OfficeClaimList from '@/features/office/pages/OfficeClaimList';
 import OfficeClaimForm from '@/features/office/pages/OfficeClaimForm';
 import OfficeClaimDetail from '@/features/office/pages/OfficeClaimDetail';
 import { counterConfirmationReturn } from '@/features/office/officeRoutes';
-import InvitationPage from '@/features/office/pages/InvitationPage';
 // DaiHV integration: office custody requests share the existing protected layouts.
 import OfficeTransfers from '@/features/office/pages/OfficeTransfers';
 import OfficeTransferDetailPage from '@/features/office/pages/OfficeTransferDetailPage';
@@ -91,7 +90,7 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/van-phong/lich-hen" element={<InvitationPage />} />
+      <Route path="/van-phong/lich-hen" element={<Navigate to="/van-phong/claims" replace />} />
       <Route path="/van-phong/hen-giao-do" element={<Navigate to="/van-phong/chuyen-giao" replace />} />
       {/* ── AUTH ROUTES (Dành cho tất cả các Role) ── */}
       <Route

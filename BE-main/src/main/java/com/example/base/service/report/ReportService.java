@@ -67,11 +67,7 @@ public class ReportService {
         boolean[] inserted={false};
         try {
             Detail result=tx.execute(status->{
-                // Serialize office incident submission with the recipient's confirmation.
-                if ("CLAIM".equals(request.targetType())) jdbc.queryForList("""
-                    select p.post_id from post p join claim c using(post_id)
-                    where c.claim_id=? for update of p
-                    """,Long.class,request.targetId());
+                lockReportTarget(request.targetType(),request.targetId());
                 em.find(Account.class,actor,LockModeType.PESSIMISTIC_WRITE);
                 actors.actor(user);
                 Detail duplicate=retry(actor,request.clientRequestId(),prepared.hash());
@@ -88,9 +84,14 @@ public class ReportService {
                 String notificationTitle = officeHandover ? "Sự cố bàn giao tại văn phòng" : "Báo cáo vi phạm mới";
                 String notificationText = officeHandover ? "Người nhận đã gửi báo cáo về việc bàn giao tài sản của yêu cầu #" + request.targetId() + "."
                     : "Người dùng vừa gửi báo cáo đối với " + request.targetType() + " #" + request.targetId() + ": " + created.getDescription();
-                notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",
-                    notificationTitle + " (#" + created.getId() + ")",notificationText,
-                    "/admin/reports/" + created.getId() + "?kind=" + created.getKind(),false);
+                String title = notificationTitle + " (#" + created.getId() + ")";
+                String path = "/admin/reports/" + created.getId() + "?kind=" + created.getKind();
+                if (created.getAssignedTo() == null) {
+                    notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",title,notificationText,path,false);
+                } else {
+                    notifications.notifyUser(created.getAssignedTo(),"REPORT_CREATED",title,
+                        "Có báo cáo mới trong nhóm bạn đang phụ trách.",path,false);
+                }
                 return detail(created);
             });
             // A concurrent identical request won after our upload. Delete only our unused objects.
@@ -108,7 +109,20 @@ public class ReportService {
     public Report insert(long actor,String kind,String type,long target,String text,String reasonCode,UUID request,String hash,List<WorkflowImages.Image> uploaded) {
         String group="HANDOVER_ISSUE".equals(kind)?"HANDOVER_ISSUE":type;
         var reason=reasons.require(group,reasonCode,text);
+        if ("GENERAL".equals(kind)) lockReportTarget(type,target);
         return persist(actor,kind,type,target,text,reason,request,hash,uploaded,"HANDOVER_ISSUE".equals(group));
+    }
+
+    private void lockReportTarget(String type, long targetId) {
+        // Coordinate with review and, for office incidents, with confirmation of receipt.
+        switch (type) {
+            case "POST" -> jdbc.queryForList("select post_id from post where post_id=? for update", Long.class, targetId);
+            case "CLAIM" -> jdbc.queryForList("""
+                select p.post_id from post p join claim c using(post_id)
+                where c.claim_id=? for update of p
+                """, Long.class, targetId);
+            default -> ViolationReportGroup.forTarget(type, targetId).lock(jdbc);
+        }
     }
     @Transactional(propagation=Propagation.MANDATORY)
     public Report insertAppeal(long actor,long claimId,String text,String reasonCode,UUID request,String hash,List<WorkflowImages.Image> uploaded) {
@@ -123,9 +137,15 @@ public class ReportService {
         if(summary.length()>5000)throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
         Report report=new Report(actor,kind,type,target,summary,request,hash);
         report.selectReason(reason.code(),reason.label());
+        Long assignee = "GENERAL".equals(kind) ? ViolationReportGroup.forTarget(type, target).ownerForNewReport(jdbc, actor) : null;
+        if (assignee != null) report.inheritAssignment(assignee);
         report=reports.saveAndFlush(report);
         for(var image:uploaded)jdbc.update("insert into report_evidence(report_id,storage_key,original_name,mime_type,size_bytes,content_hash,sort_order) values(?,?,?,?,?,?,?)",report.getId(),image.key(),image.name(),image.mime(),image.size(),image.hash(),image.order());
         jdbc.update("insert into report_activity(report_id,actor_id,action,to_status) values(?,?,'CREATE','OPEN')",report.getId(),actor);
+        if (assignee != null) jdbc.update("""
+            insert into report_activity(report_id,actor_id,action,from_status,to_status,public_note)
+            values (?,?,'TAKE','OPEN','IN_REVIEW','Hệ thống đã phân công cho quản lý đang phụ trách nhóm báo cáo.')
+            """, report.getId(), assignee);
         if("CLAIM".equals(type) && linkOfficeHandover)
             jdbc.update("""
                 insert into office_handover_issue(report_id,handover_id)
@@ -279,7 +299,7 @@ public class ReportService {
               and completion_method='RECIPIENT' and confirmed_at<=clock_timestamp()
             """,(row,index)->row.getObject("confirmed_at",OffsetDateTime.class),claimId,recipientId)
                 .stream().findFirst().orElseThrow(() -> new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE,
-                        "Quý vị có thể gửi phản ánh sau khi xác nhận biên bản bàn giao."));
+                        "Bạn có thể gửi phản ánh sau khi xác nhận biên bản bàn giao."));
         if (!OffsetDateTime.now().isBefore(officeHandoverReportDeadline(confirmed)))
             throw new AppException(ErrorCode.REPORT_HANDOVER_EXPIRED);
     }

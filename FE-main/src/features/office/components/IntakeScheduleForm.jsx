@@ -1,5 +1,5 @@
-import { earliestAppointment, validateRequiredText } from "../officeUtils";
-import { useState } from "react";
+import { earliestAppointment, intakeScheduleError, intakeScheduleHint, validateRequiredText } from "../officeUtils";
+import { useId, useState } from "react";
 import Notice from "./Notice";
 import { workflowApi } from "../api/workflowApi";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
@@ -9,10 +9,13 @@ export default function IntakeScheduleForm({ transfer, onClose, onDone, onBusyCh
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
+  const scheduleHintId = useId();
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   function handleFormSubmit(e) {
     e.preventDefault(); if (busy) return;
-    setError("");
+    const scheduleError = intakeScheduleError(form.scheduledAt);
+    setError(scheduleError);
+    if (scheduleError) return;
     if (validateRequiredText(e.currentTarget)) setConfirmOpen(true);
   }
   async function executeSubmit() {
@@ -24,9 +27,14 @@ export default function IntakeScheduleForm({ transfer, onClose, onDone, onBusyCh
   }
   return <form className="of-form of-intake-form" onSubmit={handleFormSubmit}>
     <h3>{transfer.appointment ? "Hẹn lại ngày mang đồ đến" : "Hẹn người giao mang đồ đến"}</h3>
-    <p className="of-muted">Người giao sẽ nhận giờ hẹn và hạn tiếp nhận. Yêu cầu tự hủy nếu văn phòng chưa nhận đồ sau giờ hẹn 72 giờ.</p>
+    <p className="of-muted">Người giao sẽ nhận thông báo về giờ hẹn và hạn tiếp nhận. Yêu cầu sẽ tự hủy nếu văn phòng chưa tiếp nhận tài sản trong vòng 72 giờ kể từ giờ hẹn.</p>
     <Notice error>{error}</Notice>
-    <label>Ngày và giờ (UTC+7) *<input type="datetime-local" min={earliestAppointment()} required disabled={busy} value={form.scheduledAt} onChange={(e) => change("scheduledAt", e.target.value)} /><small>Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút.</small></label>
+    <label>Ngày và giờ (UTC+7) *
+      <input type="datetime-local" min={earliestAppointment()} required disabled={busy} value={form.scheduledAt}
+        aria-describedby={scheduleHintId}
+        onChange={(e) => { change("scheduledAt", e.target.value); setError(""); }} />
+      <small id={scheduleHintId}>{intakeScheduleHint} Vui lòng đặt lịch trước ít nhất 12 giờ và 1 phút.</small>
+    </label>
     <label>Địa điểm tiếp nhận *<input required maxLength={1000} disabled={busy} value={form.location} onChange={(e) => change("location", e.target.value)} placeholder="Văn phòng, tòa nhà, số phòng…" /></label>
     <label>Lời nhắn<textarea maxLength={2000} disabled={busy} value={form.note} onChange={(e) => change("note", e.target.value)} placeholder="Hướng dẫn liên hệ hoặc đồ cần mang kèm…" /></label>
     {needsReason && <label>Lý do văn phòng đổi lịch *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} /></label>}

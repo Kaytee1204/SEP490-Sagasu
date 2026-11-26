@@ -26,7 +26,7 @@ export default function OfficeReceiptConfirmation({ claimId, handover, onConfirm
     <form className="of-form of-receipt-confirmation" onSubmit={submit}>
       <h3>Xác nhận biên bản tại quầy</h3>
       <p>Vui lòng kiểm tra tài sản và phụ kiện theo biên bản trên trước khi xác nhận.</p>
-      <p>Quý vị có thể gửi phản ánh về kết quả trao trả trong vòng <strong>7 ngày kể từ khi xác nhận</strong>.</p>
+      <p>Bạn có thể gửi phản ánh về kết quả trao trả trong vòng <strong>7 ngày kể từ khi xác nhận</strong>.</p>
       <label className="of-check">
         <input type="checkbox" required checked={acknowledged} disabled={saving} onChange={(event) => setAcknowledged(event.target.checked)} />
         <span>Tôi đã kiểm tra, xác nhận nhận đúng và đủ tài sản, phụ kiện theo biên bản, đồng thời đồng ý với thời hạn tiếp nhận phản ánh nêu trên.</span>

@@ -9,10 +9,8 @@ const statuses = {
 };
 const guidance = {
   APPOINTMENT_REVIEW: 'Lịch hẹn đã qua. Vui lòng liên hệ văn phòng để hẹn lại.',
-  EMAIL_UNSENT: 'Văn phòng đang chuẩn bị lời mời nhận đồ.',
-  REPLY_EXPIRED: 'Đã hết hạn phản hồi lịch hẹn.',
-  AWAITING_REPLY: 'Quý vị có lịch hẹn cần phản hồi.',
-  REVIEW: 'Văn phòng đang xem xét yêu cầu của Quý vị.',
+  COUNTER_VERIFICATION: 'Văn phòng đã lập lịch xác minh. Vui lòng xem giờ hẹn và hạn đến quầy.',
+  REVIEW: 'Văn phòng đang xem xét yêu cầu của bạn.',
   AWAITING_RECEIPT: 'Vui lòng đối chiếu tài sản và xác nhận biên bản ngay tại quầy.',
   COUNTER_CONFIRMATION_EXPIRED: 'Đã hết hạn xác nhận. Vui lòng đề nghị nhân viên tại quầy mở lại biên bản.',
   COMPLETED: 'Việc nhận lại đồ đã hoàn tất.',
@@ -22,7 +20,7 @@ const guidance = {
 export default function PersonalClaimCards({ claims }) {
   return <div className="op-claim-list">{claims.map(claim => {
     const confirming = claim.stage === 'AWAITING_RECEIPT';
-    const appointmentReply = claim.stage === 'AWAITING_REPLY';
+    const hasAppointment = claim.stage === 'COUNTER_VERIFICATION';
     const path = confirming ? counterConfirmationPath(claim.id) : `/van-phong/claims/${claim.id}`;
     const label = confirming ? 'Chờ xác nhận tại quầy' : statuses[claim.status] || 'Đang xử lý';
     return <article className="op-claim-card" key={claim.id}>
@@ -32,8 +30,8 @@ export default function PersonalClaimCards({ claims }) {
       <p className="op-next-step">{guidance[claim.stage] || 'Xem tiến trình và thông tin mới nhất từ văn phòng.'}</p>
       <p className="op-date"><CalendarDays size={15} aria-hidden="true"/>Gửi lúc {date(claim.createdAt)}</p>
     </div>
-    <Link className={`of-button ${confirming || appointmentReply ? 'of-primary' : ''}`} to={path}>
-      {confirming ? 'Xác nhận tại quầy' : appointmentReply ? 'Phản hồi lịch hẹn' : 'Xem yêu cầu'}<ArrowRight size={16} aria-hidden="true"/>
+    <Link className={`of-button ${confirming || hasAppointment ? 'of-primary' : ''}`} to={path}>
+      {confirming ? 'Xác nhận tại quầy' : hasAppointment ? 'Xem lịch xác minh' : 'Xem yêu cầu'}<ArrowRight size={16} aria-hidden="true"/>
     </Link>
   </article>;
   })}</div>;

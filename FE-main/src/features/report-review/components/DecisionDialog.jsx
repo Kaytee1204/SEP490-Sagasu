@@ -35,6 +35,7 @@ const findings = {
   VIOLATION: "Có vi phạm",
   NO_VIOLATION: labels.NO_VIOLATION,
 };
+const officeFindings = ["OFFICE_ISSUE_CONFIRMED", "OFFICE_ISSUE_DISMISSED"];
 const appealFindings = {
   INSUFFICIENT_EVIDENCE: "Chưa đủ căn cứ để thay đổi người nhận",
   INVALID_CLAIM: "Đã xác minh yêu cầu nhận đồ của người gửi tranh chấp là sai",
@@ -51,7 +52,11 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selected, setSelected] = useState([]);
   const [sameIncident, setSameIncident] = useState(false);
-  const structured = action === "CONCLUDE_VIOLATION";
+  const officeConclusion = action === "CONCLUDE_OFFICE_ISSUE";
+  const structured = action === "CONCLUDE_VIOLATION" || officeConclusion;
+  const choices = officeConclusion
+    ? officeFindings.filter(value => data.actions.includes(value)).map(value => [value, labels[value]])
+    : Object.entries(findings);
   const [finding, setFinding] = useState("");
   const [measure, setMeasure] = useState("");
   const requiresMeasure = structured && finding === "VIOLATION"
@@ -99,7 +104,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   function submit(event) {
     event.preventDefault();
     if (cannotSubmit) return;
-    if (isHandoverConclusion || isWrongRecipientDecision || isKeepApproval) {
+    if (officeConclusion || isHandoverConclusion || isWrongRecipientDecision || isKeepApproval) {
       void executeSubmit();
       return;
     }
@@ -164,7 +169,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   }
 
   return (
-    <Dialog title={outcome ? "Xử lý sự cố bàn giao" : structured ? "Ghi kết luận vi phạm" : data.caseKind === "HANDOVER_ISSUE" ? handoverActionLabel(action, data) : labels[action]} busy={busy} onClose={onClose}>
+    <Dialog title={officeConclusion ? "Kết luận sự cố bàn giao" : outcome ? "Xử lý sự cố bàn giao" : structured ? "Ghi kết luận vi phạm" : data.caseKind === "HANDOVER_ISSUE" ? handoverActionLabel(action, data) : labels[action]} busy={busy} onClose={onClose}>
       <form onSubmit={submit} className="rr-stack rr-decision-form">
         {outcome && <label>
           Chọn cách xử lý *
@@ -186,7 +191,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
         {structured && <>
           <fieldset className="rr-decision-choice" disabled={busy}>
             <legend>Kết luận *</legend>
-            {Object.entries(findings).map(([value, label]) => <label key={value}>
+            {choices.map(([value, label]) => <label key={value}>
               <input type="radio" name="finding" value={value} required checked={finding === value}
                 onChange={() => { changeDecision(setFinding, value); setMeasure(""); }} />
               {label}
@@ -238,7 +243,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
           </select>
         </label>}
         <label>
-          {action === "HANDOVER_VERIFY_HOLDER" ? "Việc quản lý phụ trách cần xác minh" : "Nội dung gửi cho người liên quan"}{" "}
+          {officeConclusion ? "Lời nhắn gửi người báo cáo" : action === "HANDOVER_VERIFY_HOLDER" ? "Việc quản lý phụ trách cần xác minh" : "Nội dung gửi cho người liên quan"}{" "}
           *
           <textarea
             autoFocus={!structured && !outcome && !isKeepApproval}
@@ -247,8 +252,9 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             rows={3}
             value={conclusion}
             onChange={(e) => setConclusion(e.target.value)}
-            placeholder="Nêu kết quả rõ ràng, không đưa thông tin riêng tư của người khác vào kết luận."
+            placeholder={officeConclusion ? "Vui lòng nêu kết quả xác minh và hướng xử lý nếu có." : "Nêu kết quả rõ ràng, không đưa thông tin riêng tư của người khác vào kết luận."}
           />
+          {finding === "OFFICE_ISSUE_CONFIRMED" && <small>Sagasu sẽ gửi lời nhắn qua email nếu người báo cáo đã bật thông báo email.</small>}
         </label>
         {isWrongRecipientDecision && <label className="rr-check">
           <input
@@ -275,7 +281,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
               : "Đã xác minh đồ đang ở người giữ và có thể tiến hành theo quyết định này."}
           </label>
         )}
-        {(batchActions.includes(decision) || [
+        {(officeConclusion || batchActions.includes(decision) || [
           "HANDOVER_UNVERIFIED",
           "HANDOVER_COMPLETED",
           "HANDOVER_CONTINUE",

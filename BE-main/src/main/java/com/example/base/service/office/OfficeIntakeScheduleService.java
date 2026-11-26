@@ -25,14 +25,14 @@ public class OfficeIntakeScheduleService {
     private final PlatformTransactionManager transactions;
     private final AppointmentEmailService email;
     private final com.example.base.service.notification.NotificationService notifications;
+    private final OfficeAppointmentSchedule appointmentSchedule;
 
     public String schedule(long id,IntakeSchedule request,CustomUserDetails user) {
         new TransactionTemplate(transactions).executeWithoutResult(tx->{
             Account actor=access.require(user,APPROVER);Map<String,Object> t=lock(id);
             if(!"PENDING".equals(t.get("status")) || number(t,"version")!=request.expectedVersion()) throw bad("Yêu cầu đã thay đổi. Hãy tải lại.");
             if(number(t,"requested_by")==actor.getId())throw bad("Nhờ nhân viên khác sắp lịch tiếp nhận đồ của bạn.");
-            if (!request.scheduledAt().isAfter(OffsetDateTime.now().plusHours(12).plusMinutes(1)))
-                throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút.");
+            appointmentSchedule.validateIntake(request.scheduledAt(), OffsetDateTime.now());
             var previous=active(id);
             if (previous!=null) {
                 requireBeforeDeadline(previous);

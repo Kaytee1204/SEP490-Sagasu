@@ -27,12 +27,9 @@ public class OfficeClaimProgress {
              when approval.upheld then 'APPEAL_REASSESS'
              when approval.appeal_until>now() then 'APPEAL_WAIT'
              when a.appointment_id is null then 'SCHEDULE_REQUIRED'
-             when a.response_status in ('LEGACY','UNSENT') and a.scheduled_at<=now() then 'APPOINTMENT_REVIEW'
-             when a.response_status in ('UNSENT','LEGACY') then 'EMAIL_UNSENT'
-             when a.response_status='PENDING' and a.response_deadline<=now() then 'REPLY_EXPIRED'
-             when a.response_status<>'CONFIRMED' then 'AWAITING_REPLY'
              when v.result='FAILED' then 'VERIFICATION_FAILED'
              when v.result='PASSED' then 'READY_TO_HANDOVER'
+             when a.scheduled_at + interval '24 hours'<=now() then 'APPOINTMENT_REVIEW'
              else 'COUNTER_VERIFICATION' end as stage
         from claim c join post p on p.post_id=c.post_id
         left join lateral (select * from appointment where claim_id=c.claim_id and status='SCHEDULED' order by appointment_id desc limit 1) a on true

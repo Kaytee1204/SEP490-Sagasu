@@ -1,6 +1,7 @@
 package com.example.base.dto.office;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -9,22 +10,28 @@ import java.util.UUID;
 public final class OfficeWorkflowDtos {
     private OfficeWorkflowDtos() {}
     public record CounterPerson(long id,String name,String email) {}
-    public record CounterPost(long id,String title,String description,List<String> images,long previousHandovers) {}
+    public record IntakePostImage(long id, String url) {}
+    public record IntakePost(String title, String description, Long categoryId, String categoryName,
+            OffsetDateTime updatedAt, List<IntakePostImage> images) {}
+    public record IntakePostUpdate(@NotNull OffsetDateTime expectedUpdatedAt,
+            @NotBlank @Size(max=200) String title, @NotBlank @Size(max=10000) String description,
+            @NotNull @Positive Long categoryId, @NotNull @Size(max=5) List<@NotNull @Positive Long> keptImageIds) {}
+    public record CounterPost(long id,String title,String description,List<String> images,long previousHandovers,
+            IntakePost post, IntakePost originalPost) {}
     public record CounterIntake(@NotNull @Positive Long accountId,@NotNull @Positive Long postId,
             @NotNull @Positive Long locationId,@NotBlank @Size(max=2000) String condition,
             @Size(max=2000) String reconciliationNote,@AssertTrue boolean physicallyReceived,
-            @NotBlank(message="Vui lòng ghi danh sách tài sản và phụ kiện tiếp nhận.") @Size(max=2000) String items) {}
-    public record AppointmentResponse(@NotNull @Positive Long appointmentId,
-            @NotBlank @Pattern(regexp="CONFIRM|DECLINE") String decision,@Size(max=2000) String reason) {}
+            @NotBlank(message="Vui lòng ghi danh sách tài sản và phụ kiện tiếp nhận.") @Size(max=2000) String items,
+            @Valid IntakePostUpdate postUpdate) {}
     public record TransferDecision(@NotNull @PositiveOrZero Long expectedVersion,
             @NotBlank @Pattern(regexp="RECEIVED|REJECTED|CANCELLED") String decision,
             Long locationId, @Size(max=2000) String condition, @Size(max=2000) String reason,
-            @Size(max=2000) String reconciliationNote, @Size(max=2000) String items) {}
+            @Size(max=2000) String reconciliationNote, @Size(max=2000) String items, @Valid IntakePostUpdate postUpdate) {}
     public record TransferView(long id, long postId, String title, String description, String finder,
             String status, OffsetDateTime requestedAt, OffsetDateTime processedAt,
             String reason, String reconciliationNote, Long receiptId, long version,
             long activeClaims, long previousHandovers, List<String> images, IntakeAppointment appointment, long requestedBy,
-            List<String> receiptEvidence, String receiptItems, String receiptCondition) {}
+            List<String> receiptEvidence, String receiptItems, String receiptCondition, IntakePost currentPost, IntakePost originalPost) {}
     public record IntakeAppointment(long id, OffsetDateTime scheduledAt, String location, String note,
             String status, String emailStatus, OffsetDateTime intakeDeadline, String cancellationReason) {}
     public record IntakeSchedule(@NotNull @PositiveOrZero Long expectedVersion,

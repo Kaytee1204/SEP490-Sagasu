@@ -106,23 +106,20 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
               <CalendarDays size={20} />
               <strong>Hẹn người nhận đến văn phòng</strong>
               <p className="of-muted">
-                Email có nút đồng ý hoặc từ chối lịch hẹn, không cần đăng nhập.
-                Người nhận có thể phản hồi trên hệ thống ngay khi lưu lịch. Sau
-                12 giờ không phản hồi, yêu cầu sẽ tự động bị từ chối.
+                Lịch xác minh có hiệu lực ngay khi lưu. Hệ thống sẽ thông báo giờ hẹn, địa điểm và hạn đến quầy cho người nhận.
               </p>
             </div>
             <label>
               Ngày và giờ hẹn (UTC+7) *
               <input
                 required
-                type="datetime-local" min={earliestAppointment()}
+                type="datetime-local" min={earliestAppointment(1)}
                 disabled={busy}
                 value={form.scheduledAt}
                 onChange={(e) => change("scheduledAt", e.target.value)}
               />
               <small>{pickupScheduleHint}<br />
-                Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để người nhận có đủ
-                thời gian phản hồi.
+                Vui lòng chọn giờ hẹn sau thời điểm hiện tại.
               </small>
             </label>
             <label>

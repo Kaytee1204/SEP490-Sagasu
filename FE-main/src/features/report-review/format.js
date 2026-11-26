@@ -71,6 +71,8 @@ export const labels = {
   SUSPEND_ACCOUNT: "Đình chỉ tài khoản",
   DISMISS: "Bác bỏ báo cáo",
   RESOLVE: "Giải quyết báo cáo",
+  OFFICE_ISSUE_CONFIRMED: "Có vi phạm",
+  OFFICE_ISSUE_DISMISSED: "Không phát hiện vi phạm",
   VIOLATION: "Kết luận có vi phạm",
   NO_VIOLATION: "Không phát hiện vi phạm",
   INSUFFICIENT_EVIDENCE: "Chưa đủ căn cứ",

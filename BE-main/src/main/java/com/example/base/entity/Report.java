@@ -18,6 +18,8 @@ public class Report {
     @Column(name="reason_code",length=64,updatable=false) private String reasonCode;
     @Column(name="reason_label_snapshot",length=200,updatable=false) private String reasonLabelSnapshot;
     @Column(nullable=false,length=16) private String status="OPEN";
+    @Column(name="assigned_to") private Long assignedTo;
+    @Column(name="assigned_at") private OffsetDateTime assignedAt;
     @Column(name="resolution_note",columnDefinition="text") private String resolutionNote;
     @Column(name="resolved_at") private OffsetDateTime resolvedAt;
     @Column(name="client_request_id",nullable=false) private UUID clientRequestId;
@@ -36,6 +38,11 @@ public class Report {
     public void selectReason(String code, String label) {
         reasonCode = code;
         reasonLabelSnapshot = label;
+    }
+    public void inheritAssignment(long managerId) {
+        assignedTo = managerId;
+        assignedAt = OffsetDateTime.now();
+        status = "IN_REVIEW";
     }
     public String additionalDescription() {
         // Keep the stored summary readable by the existing review workflow.

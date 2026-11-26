@@ -52,6 +52,24 @@ public class OfficeClaimController {
         return ApiResponse.ok(service.questionnaire(postId,counter,user));
     }
 
+    @GetMapping("/counter/items")
+    @PreAuthorize("hasRole('APPROVER')")
+    @Operation(summary = "Tìm tài sản còn nhận yêu cầu tại quầy theo tên hoặc mã phiếu tiếp nhận")
+    public ApiResponse<List<CounterItemOption>> counterItems(
+            @RequestParam(name = "q") String keyword,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(service.findCounterItems(keyword, user));
+    }
+
+    @GetMapping("/counter/items/{postId}")
+    @PreAuthorize("hasRole('APPROVER')")
+    @Operation(summary = "Xem trước tài sản được chọn khi lập yêu cầu nhận đồ tại quầy")
+    public ApiResponse<CounterItemPreview> counterItem(
+            @PathVariable("postId") long postId,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        return ApiResponse.ok(service.counterItem(postId, user));
+    }
+
     @GetMapping("/claimants")
     @PreAuthorize("hasRole('APPROVER')")
     @Operation(

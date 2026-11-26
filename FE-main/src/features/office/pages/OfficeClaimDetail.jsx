@@ -53,11 +53,9 @@ export default function OfficeClaimDetail({ mine = false }) {
       setNotice({
         error: r.emailStatus !== "SENT",
         text:
-          r.emailStatus === "EXPIRED"
-            ? "Đã hết hạn phản hồi. Yêu cầu bị từ chối và lịch hẹn đã hủy."
-            : r.emailStatus === "SENT"
-            ? "Đã gửi lại thư lịch hẹn."
-            : "Chưa gửi được thư. Người nhận vẫn có thể phản hồi trên hệ thống.",
+          r.emailStatus === "SENT"
+            ? "Đã gửi lại thông báo lịch hẹn."
+            : "Chưa gửi được email. Người nhận vẫn xem được lịch trên Sagasu.",
       });
       state.reload();
     } catch (err) {
@@ -152,7 +150,7 @@ export default function OfficeClaimDetail({ mine = false }) {
               </div>
               <aside className="of-sticky">
                 <OfficeReturnPanel claim={claim} state={workflow} onRefresh={state.reload} onChanged={(result) => {
-                  setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã lưu lịch. Email chưa gửi được, người nhận vẫn có thể phản hồi trên hệ thống." : "Đã cập nhật tiến trình trao trả." });
+                  setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã lưu lịch. Email chưa gửi được, người nhận vẫn xem được lịch trên Sagasu." : "Đã cập nhật tiến trình trao trả." });
                   state.reload();
                 }} />
                 {claim.appointment && !(mine && claim.status === "APPROVED") && (
@@ -163,35 +161,10 @@ export default function OfficeClaimDetail({ mine = false }) {
                       <div><dt>Thời gian hẹn</dt><dd>{date(claim.appointment.scheduledAt)}</dd></div>
                       <div><dt>Địa điểm nhận đồ</dt><dd className="of-prose">{claim.appointment.location}</dd></div>
                     </dl>
-                    <Notice
-                      error={["EXPIRED", "DECLINED"].includes(
-                        claim.appointment.responseStatus,
-                      )}
-                    >
-                      {claim.appointment.status === "COMPLETED" ? "Lịch hẹn đã hoàn tất." : claim.appointment.status === "CANCELLED" ? "Lịch hẹn đã hủy." :
-                        {
-                          UNSENT:
-                            "Lịch cũ chưa mở để phản hồi. Hãy gửi lại lời mời hoặc đổi lịch.",
-                          LEGACY: "Lịch cũ chưa áp dụng phản hồi qua email.",
-                          PENDING:
-                            "Đang chờ người nhận phản hồi trên hệ thống hoặc qua email.",
-                          CONFIRMED: "Người nhận đã đồng ý lịch hẹn.",
-                          DECLINED: "Người nhận đã từ chối lịch hẹn.",
-                          EXPIRED:
-                            "Không phản hồi trong 12 giờ; yêu cầu bị từ chối và lịch hẹn đã hủy.",
-                        }[claim.appointment.responseStatus]
-                      }
-                    </Notice>
-                    {claim.appointment.status === "SCHEDULED" && claim.appointment.responseStatus === "PENDING" && claim.appointment.responseDeadline && (
-                      <p>
-                        Hạn phản hồi:{" "}
-                        <strong>
-                          {date(claim.appointment.responseDeadline)}
-                        </strong>
-                      </p>
-                    )}
-                    {claim.appointment.status === "SCHEDULED" && claim.appointment.responseStatus === "PENDING" && !claim.appointment.emailSentAt && (
-                      <p className="of-muted">Email chưa được gửi thành công. Lịch đã mở để phản hồi trên hệ thống.</p>
+                    <Notice>{claim.appointment.status === "COMPLETED" ? "Lịch xác minh đã hoàn tất." :
+                      claim.appointment.status === "CANCELLED" ? "Lịch xác minh đã hủy." : "Lịch xác minh đang có hiệu lực."}</Notice>
+                    {claim.appointment.status === "SCHEDULED" && !claim.appointment.emailSentAt && (
+                      <p className="of-muted">Email chưa được gửi thành công. Lịch đã hiển thị trên Sagasu.</p>
                     )}
                     {claim.appointment.cancellationReason && (
                       <p className="of-prose">
@@ -207,7 +180,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                     </p>}
                     {!mine &&
                       claim.appointment.status === "SCHEDULED" &&
-                      claim.appointment.responseStatus !== "CONFIRMED" && (
+                      !workflow.data?.handover && (
                         <button
                           type="button"
                           className="of-button"
@@ -215,7 +188,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                           onClick={resend}
                         >
                           <Mail size={16} />
-                          {busy ? "Đang gửi…" : "Gửi lại thư lịch hẹn"}
+                          {busy ? "Đang gửi…" : "Gửi lại email lịch hẹn"}
                         </button>
                       )}
                   </section>
@@ -236,7 +209,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                         error: r.emailStatus === "FAILED",
                         text:
                           r.emailStatus === "FAILED"
-                            ? "Đã duyệt và lưu lịch. Email chưa gửi được, người nhận vẫn có thể phản hồi trên hệ thống."
+                            ? "Đã duyệt và lưu lịch. Email chưa gửi được, người nhận vẫn xem được lịch trên Sagasu."
                             : r.emailStatus === "SENT"
                               ? "Đã duyệt yêu cầu, lưu lịch hẹn và gửi thư cho người nhận."
                               : r.emailStatus === "APPEAL_WINDOW"

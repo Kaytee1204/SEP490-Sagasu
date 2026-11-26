@@ -17,7 +17,7 @@ import Badge from "../components/Badge";
 import Header from "../components/Header";
 import Notice from "../components/Notice";
 import LoadState from "../components/LoadState";
-import SearchBox from "../components/SearchBox";
+import CounterClaimItemPicker from "../components/CounterClaimItemPicker";
 import ClaimQuestionnaireFields from "@/features/claims/components/ClaimQuestionnaireFields";
 import { serializeQuestionnaireAnswers } from "@/features/claims/utils/questionnaireUtils";
 import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
@@ -32,17 +32,8 @@ export default function OfficeClaimForm({ counter = false }) {
   const [postId, setPostId] = useState(
     counter ? params.get("postId") || "" : id,
   );
-  const [query, setQuery] = useState("");
-  const stored = useLoad(
-    () =>
-      counter ? officeApi.stored({ q: query, page: 1 }) : Promise.resolve(null),
-    `stored:${query}:${counter}`,
-  );
   const selected = useLoad(
-    () =>
-      postId
-        ? getPostDetail(postId)
-        : Promise.resolve(null),
+    () => postId ? (counter ? officeApi.counterItem(postId) : getPostDetail(postId)) : Promise.resolve(null),
     `post:${postId}:${counter}`,
   );
   const [form, setForm] = useState({
@@ -52,7 +43,8 @@ export default function OfficeClaimForm({ counter = false }) {
     description: "",
     evidenceNote: "",
   });
-  const questionnaire = useLoad(() => postId ? officeApi.questionnaire(postId,counter) : Promise.resolve(null), `questionnaire:${postId}:${counter}`);
+  const questionnairePostId = counter ? selected.data?.postId : postId;
+  const questionnaire = useLoad(() => questionnairePostId ? officeApi.questionnaire(questionnairePostId,counter) : Promise.resolve(null), `questionnaire:${questionnairePostId}:${counter}`);
   const [answers,setAnswers] = useState({});
   const [pendingPostId, setPendingPostId] = useState(null);
   function selectPost(value) {
@@ -109,12 +101,10 @@ export default function OfficeClaimForm({ counter = false }) {
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const back = counter ? "/approver/office-claims" : "/van-phong/claims";
   const isOwner = Boolean(selected.data?.isOwner || selected.data?.canEditOwnPost);
-  const valid =
-    selected.data &&
-    selected.data.status === "OPEN" &&
-    selected.data.moderationStatus === "VISIBLE" &&
-    selected.data.custodyMode === "OFFICE" &&
-    (counter || !isOwner);
+  const valid = selected.data && (counter || (
+    selected.data.status === "OPEN" && selected.data.moderationStatus === "VISIBLE"
+    && selected.data.custodyMode === "OFFICE" && !isOwner
+  ));
   async function submit(e) {
     e.preventDefault();
     if (busy || !valid || !questionnaire.data || phoneInvalid) return;
@@ -177,35 +167,7 @@ export default function OfficeClaimForm({ counter = false }) {
             <div className="of-step">
               <span>1</span>Đồ vật cần nhận
             </div>
-            {counter && (
-              <>
-                <SearchBox
-                  value={query}
-                  onChange={setQuery}
-                  placeholder="Tìm tên đồ vật hoặc mã hồ sơ tiếp nhận…"
-                />
-                <LoadState state={stored}>
-                  {stored.data && (
-                    <div className="of-list-choice" style={{ marginTop: 12 }}>
-                      {stored.data.content.map((r) => (
-                        <button
-                          className={`of-button ${String(r.postId) === String(postId) ? "of-primary" : ""}`}
-                          type="button"
-                          disabled={busy}
-                          key={r.id}
-                          onClick={() => selectPost(r.postId)}
-                        >
-                          {r.code} · {r.title}
-                        </button>
-                      ))}
-                      {!stored.data.content.length && (
-                        <p className="of-muted">Không tìm thấy đồ trong kho.</p>
-                      )}
-                    </div>
-                  )}
-                </LoadState>
-              </>
-            )}
+            {counter ? <CounterClaimItemPicker selected={selected} postId={postId} onSelect={selectPost} disabled={busy} /> : (
             <LoadState state={selected}>
               {selected.data && (
                 <div className="of-callout">
@@ -214,12 +176,12 @@ export default function OfficeClaimForm({ counter = false }) {
                     Bài #{postId} · <Badge value={selected.data.status} />
                   </p>
                   {!valid && (
-                    <Notice error>{!counter && isOwner ? "Bạn là người đăng bài này nên không thể tự gửi yêu cầu nhận lại đồ." : "Bài này không còn nhận thêm yêu cầu. Vui lòng chọn đồ khác hoặc kiểm tra hồ sơ đã có."}</Notice>
+                    <Notice error>{isOwner ? "Bạn là người đăng bài này nên không thể tự gửi yêu cầu nhận lại đồ." : "Bài này không còn nhận thêm yêu cầu. Vui lòng chọn đồ khác hoặc kiểm tra hồ sơ đã có."}</Notice>
                   )}
-                  
                 </div>
               )}
             </LoadState>
+            )}
           </section>
           <section className="of-panel of-form">
             <div className="of-step">

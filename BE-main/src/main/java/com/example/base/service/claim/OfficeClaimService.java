@@ -17,6 +17,7 @@ import jakarta.validation.Validator;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.*;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +51,30 @@ public class OfficeClaimService {
     private final EntityManager em;
     private final com.example.base.service.notification.NotificationService notifications;
     private final P2pClaimAppealService appeals;
+
+    @Transactional(readOnly = true)
+    public List<CounterItemOption> findCounterItems(String q, CustomUserDetails user) {
+        access.require(user, APPROVER);
+        String keyword = q.strip().toLowerCase(Locale.ROOT);
+        if (keyword.length() < 2) return List.of();
+        if (keyword.length() > 200) throw bad("Từ khóa tối đa 200 ký tự.");
+        return receipts.searchCounterClaimItems(keyword, PageRequest.of(0, 10)).stream()
+                .map(item -> new CounterItemOption(item.getPostId(), item.getCode(), item.getTitle()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CounterItemPreview counterItem(long postId, CustomUserDetails user) {
+        access.require(user, APPROVER);
+        Post post = posts.findById(postId).orElseThrow(() -> bad("Không tìm thấy bài đăng."));
+        ItemReceipt receipt = requireAcceptingClaims(post);
+        String cover = post.getImages().stream().findFirst()
+                .map(photo -> storage.readUrl(photo.getStorageKey(), photo.getImageUrl())).orElse(null);
+        return new CounterItemPreview(post.getId(), receipt.getReceiptCode(), post.getTitle(),
+                post.getCategory().getName(), post.getDescription(), post.getLocationText(), post.getEventAt(),
+                receipt.getStorageLocation() == null ? null : receipt.getStorageLocation().getName(),
+                receipt.getReceivedAt(), cover);
+    }
 
     @Transactional(readOnly=true)
     public List<ClaimantOption> findClaimants(String q, CustomUserDetails user) {
@@ -191,8 +216,7 @@ public class OfficeClaimService {
         if(counter) counterClaimant(r);
         Post p=(lock?posts.findForClaimUpdate(r.postId()):posts.findById(r.postId())).orElseThrow(()->bad("Không tìm thấy bài đăng."));
         if(lock) em.refresh(p,LockModeType.PESSIMISTIC_WRITE);
-        eligible(p);
-        if(!"OPEN".equals(p.getStatus())||!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
+        requireAcceptingClaims(p);
         Account claimant = counter ? counterClaimant(r) : actor;
         if (claims.hasResubmissionBlock(p.getId(), claimant.getId()))
             throw new AppException(ErrorCode.CLAIM_RESUBMISSION_BLOCKED);
@@ -205,12 +229,20 @@ public class OfficeClaimService {
         }
         return p;
     }
-    private void eligible(Post p) {
+    private ItemReceipt requireAcceptingClaims(Post post) {
+        ItemReceipt receipt = eligible(post);
+        if (!"OPEN".equals(post.getStatus()) || !"VISIBLE".equals(post.getModerationStatus()))
+            throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
+        return receipt;
+    }
+
+    private ItemReceipt eligible(Post p) {
         if(p.getDeletedAt()!=null||!"FOUND".equals(p.getPostType())||!"OFFICE".equals(p.getCustodyMode())
             ||!Set.of("OPEN","RESERVED").contains(p.getStatus())) throw bad("Đồ vật không còn thuộc luồng xử lý tại văn phòng.");
         ItemReceipt r=receipts.findByPostId(p.getId()).orElseThrow(()->bad("Chưa có hồ sơ tiếp nhận."));
         if(!"IN_STORAGE".equals(r.getStatus())||!"ACCEPTED".equals(r.getReviewStatus())||r.getReceivedAt()==null)
             throw bad("Văn phòng chưa tiếp nhận hoặc đã trao trả đồ vật.");
+        return r;
     }
     private record Committed(Long id,String status,boolean sendInvitation,boolean appealWindow) {}
     private record EmailCheck(@NotBlank @Email String email) {}
@@ -245,7 +277,7 @@ public class OfficeClaimService {
                         throw bad("Cần email hợp lệ của người nhận để gửi lịch hẹn.");
                     c.contactEmail(recipient.toLowerCase(Locale.ROOT));
                     a=appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),
-                        request.location().strip(),clean(request.appointmentNote()),now));
+                        request.location().strip(),clean(request.appointmentNote())));
                 }
             }
             c.review(request.decision());
@@ -261,7 +293,7 @@ public class OfficeClaimService {
                 } else if("APPROVED".equals(request.decision())) {
                     notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_SCHEDULED",
                         "Yêu cầu nhận đồ #" + c.getId() + " được duyệt & có lịch hẹn mới",
-                        "Văn phòng đã lập lịch tại " + a.getLocation() + ". Hãy phản hồi trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối.",
+                        "Văn phòng đã lập lịch xác minh tại " + a.getLocation() + ". Bạn vui lòng xem thời gian và hạn đến quầy trên Sagasu.",
                         "/van-phong/claims/" + c.getId(),false);
                 } else if("REJECTED".equals(request.decision())) {
                     notifications.notifyUser(c.getClaimant().getId(),"CLAIM_REJECTED",
@@ -290,8 +322,7 @@ public class OfficeClaimService {
         new TransactionTemplate(transactions).executeWithoutResult(tx->{
             access.require(user,APPROVER); Claim c=locked(id); eligible(c.getPost());
             if(!"APPROVED".equals(c.getStatus())) throw bad("Yêu cầu chưa được duyệt.");
-            Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(id,"SCHEDULED").orElseThrow(()->bad("Chưa có lịch hẹn."));
-            if(!a.responseExpired(OffsetDateTime.now()) && !a.getScheduledAt().isAfter(OffsetDateTime.now())) throw bad("Lịch hẹn đã qua, không gửi lại email cũ.");
+            appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(id,"SCHEDULED").orElseThrow(()->bad("Chưa có lịch hẹn."));
         });
         return invitations.sendWithResult(id);
     }

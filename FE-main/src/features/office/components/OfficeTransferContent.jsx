@@ -5,11 +5,12 @@ import { useAuth } from "@/context/AuthContext";
 import { officeApi } from "../api/officeApi";
 import { workflowApi } from "../api/workflowApi";
 import useLoad from "../hooks/useLoad";
-import { date, validateRequiredText } from "../officeUtils";
+import { date, preparePostUpdate, validateRequiredText } from "../officeUtils";
 import WorkflowPageFrame from "./WorkflowPageFrame";
 import LoadState from "./LoadState";
 import Notice from "./Notice";
 import IntakeEvidencePicker from "./IntakeEvidencePicker";
+import IntakePostEditor from "./IntakePostEditor";
 import IntakeAssetFields from "./IntakeAssetFields";
 import IntakeScheduleForm from "./IntakeScheduleForm";
 import TransferStage from "./TransferStage";
@@ -22,10 +23,15 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
   const state = useLoad(() => workflowApi.transfer(id), id);
   const locations = useLoad(() => !mine && user?.role === "APPROVER" ? officeApi.locations() : Promise.resolve([]), "locations");
   const [selectedMode, setMode] = useState(openSchedule ? "schedule" : null);
+  const [postDraft, setPostDraft] = useState(null);
+  const [publicImages, setPublicImages] = useState([]);
+  const [processingPublic, setProcessingPublic] = useState(false);
   const [form, setForm] = useState({ locationId: "", items: "", condition: "", reason: "", reconciliationNote: "" });
   const [checked, setChecked] = useState(false);
   const [files,setFiles] = useState([]);
-  const [busy, setBusy] = useState(false);
+  const [saving, setBusy] = useState(false);
+  const [processingReceipt, setProcessingReceipt] = useState(false);
+  const busy = saving || processingPublic || processingReceipt;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(null);
@@ -40,6 +46,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
   const receiving = mode === "receive";
   const change = (key, value) => setForm((old) => ({ ...old, [key]: value }));
   function updated(result) {
+    setPostDraft(null); setPublicImages([]);
     setMode(null); setError("");setChecked(false);setFiles([]);setConfirmOpen(false);
     setNotice(result === "FAILED" ? { error: true, text: "Lịch đã hiện trên hệ thống. Email chưa gửi được, bạn có thể gửi lại." } : result === "SENT" ? { text: "Đã gửi thông tin lịch và hạn tiếp nhận qua email." } : { text: "Đã cập nhật yêu cầu." });
     state.reload();onDone();
@@ -48,16 +55,17 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
     if (busy) return;setBusy(true);setError("");
     try { updated(await workflowApi.resendIntake(id)); } catch (failure) { setError(failure.message); } finally { setBusy(false); }
   }
+  const tooManyPublicImages = postDraft && postDraft.keptImageIds.length + publicImages.length > 5;
   function handleFormSubmit(event) {
     event.preventDefault();
-    if (busy || (receiving && (!files.length || !checked))) return;
+    if (busy || (receiving && (!files.length || !checked || tooManyPublicImages))) return;
     setError("");
     if (validateRequiredText(event.currentTarget)) setConfirmOpen(true);
   }
   async function executeSubmit() {
-    if (busy || (receiving && (!files.length || !checked))) return;
+    if (busy || (receiving && (!files.length || !checked || tooManyPublicImages))) return;
     setBusy(true);setError("");
-    try { await workflowApi.decide(id, { ...form, decision: receiving ? "RECEIVED" : mine ? "CANCELLED" : "REJECTED", locationId: form.locationId ? Number(form.locationId) : null, expectedVersion: transfer.version },files);updated(); }
+    try { await workflowApi.decide(id, { ...form, decision: receiving ? "RECEIVED" : mine ? "CANCELLED" : "REJECTED", locationId: form.locationId ? Number(form.locationId) : null, expectedVersion: transfer.version, postUpdate: receiving ? postDraft : null },files,publicImages);updated(); }
     catch (failure) {setError(failure.message); setConfirmOpen(false);}finally {setBusy(false);}
   }
   const Frame=WorkflowPageFrame;
@@ -120,7 +128,7 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
         {self && <Notice>Nhờ một nhân viên khác xử lý yêu cầu tiếp nhận của bạn.</Notice>}
         {!mode && (officer && !self) && <div className={`of-actions of-actions-wrap${mine ? "" : " of-transfer-taskbar"}`}>
           {needsSchedule && <button type="button" className="of-button of-primary" onClick={() => setMode("schedule")}>{a ? "Sắp xếp lịch mới" : "Hẹn mang đồ đến"}</button>}
-          <button type="button" className={`of-button${needsSchedule ? "" : " of-primary"}`} onClick={() => setMode("receive")}>Tiếp nhận tại quầy</button>
+          <button type="button" className={`of-button${needsSchedule ? "" : " of-primary"}`} onClick={() => { setPostDraft(preparePostUpdate(transfer.currentPost)); setPublicImages([]); setMode("receive"); }}>Tiếp nhận tại quầy</button>
         </div>}
         {!mode && (mine || officer && !self) && <details className="of-secondary-actions"><summary>{mine ? "Hủy yêu cầu tiếp nhận" : "Điều chỉnh yêu cầu"}</summary><div className="of-actions of-actions-wrap">
           {mine ? <><p>Chỉ hủy nếu bạn không còn muốn gửi đồ cho văn phòng.</p><button className="of-button of-danger" disabled={busy} onClick={() => setMode("withdraw")}>Hủy yêu cầu</button></> : <>
@@ -132,23 +140,26 @@ export default function OfficeTransferContent({ id, mine, openSchedule, onClose,
         {mode === "schedule" && <IntakeScheduleForm transfer={transfer} onBusyChange={setBusy} onClose={() => guard(() => setMode(null))} onDone={updated} />}
         {["receive", "reject", "withdraw"].includes(mode) && <form className="of-form of-intake-form" onSubmit={handleFormSubmit}>
           <h3>{receiving ? "Ghi nhận đồ đã nhận" : mine ? "Hủy yêu cầu tiếp nhận" : "Từ chối yêu cầu tiếp nhận"}</h3>
-          {receiving && <p className="of-callout">Chỉ xác nhận khi người giao đã mang đồ đến và bạn đã kiểm tra thực tế. Việc hẹn lịch chưa chuyển trách nhiệm giữ đồ.</p>}
+          {receiving && <p className="of-callout">Vui lòng kiểm tra tài sản thực tế tại quầy trước khi xác nhận. Văn phòng tiếp nhận quyền lưu giữ sau khi lưu hồ sơ.</p>}
           {receiving ? <>
+            {postDraft && <IntakePostEditor post={transfer.currentPost} original={transfer.originalPost}
+              draft={postDraft} setDraft={setPostDraft} files={publicImages} setFiles={setPublicImages}
+              disabled={busy} onProcessing={setProcessingPublic} />}
             <label>Vị trí lưu kho *<select required value={form.locationId} disabled={busy || locations.loading} onChange={(e) => change("locationId", e.target.value)}><option value="">Chọn vị trí</option>{(locations.data || []).filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</select></label>
             <Notice error>{locations.error}</Notice>
             <IntakeAssetFields items={form.items} condition={form.condition} onChange={change} disabled={busy} />
             {transfer.previousHandovers > 0 && <label>Đối chiếu việc giao lại đồ *<small>Đã có biên bản giao đồ trước đó. Ghi rõ người giao lại và tình trạng đồ thực tế.</small><textarea required maxLength={2000} value={form.reconciliationNote} disabled={busy} onChange={(e) => change("reconciliationNote", e.target.value)} /></label>}
-            <IntakeEvidencePicker files={files} setFiles={setFiles} disabled={busy} />
+            <IntakeEvidencePicker files={files} setFiles={setFiles} disabled={busy} onProcessing={setProcessingReceipt} />
           <label className="of-check"><input type="checkbox" required checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} /><span>Tôi đã trực tiếp nhận và kiểm tra đúng đồ.</span></label>
           </> : <label>Lý do *<textarea required maxLength={2000} disabled={busy} value={form.reason} onChange={(e) => change("reason", e.target.value)} placeholder={mine ? "Vì sao bạn muốn hủy yêu cầu?" : "Giải thích ngắn gọn để người giao biết…"} /></label>}
-          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard(() => setMode(null))}>Quay lại</button><button className={`of-button ${receiving ? "of-primary" : "of-danger"}`} disabled={busy || (receiving && (!files.length || !checked))}>{busy ? "Đang lưu…" : receiving ? "Xác nhận đã nhận đồ" : mine ? "Xác nhận hủy yêu cầu" : "Từ chối yêu cầu"}</button></div>
+          <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={() => guard(() => setMode(null))}>Quay lại</button><button className={`of-button ${receiving ? "of-primary" : "of-danger"}`} disabled={busy || (receiving && (!files.length || !checked || tooManyPublicImages))}>{busy ? "Đang lưu…" : receiving ? "Xác nhận tiếp nhận và cập nhật bài đăng" : mine ? "Xác nhận hủy yêu cầu" : "Từ chối yêu cầu"}</button></div>
         </form>}
         <ConfirmActionPopup
           open={confirmOpen}
           variant={receiving ? "success" : "danger"}
           title={receiving ? "Xác nhận đã tiếp nhận đồ?" : mine ? "Bạn có chắc chắn hủy yêu cầu?" : "Từ chối yêu cầu tiếp nhận?"}
-          description={receiving ? `Ghi nhận văn phòng đã trực tiếp nhận món đồ "${transfer.title}" vào kho và tạo hồ sơ tiếp nhận.` : mine ? "Yêu cầu gửi đồ về văn phòng sẽ bị hủy. Bạn có thể gửi lại sau nếu vẫn giữ đồ." : `Yêu cầu tiếp nhận "${transfer.title}" sẽ bị từ chối. Hành động này không thể hoàn tác.`}
-          confirmLabel={receiving ? "Đồng ý tiếp nhận" : mine ? "Xác nhận hủy" : "Xác nhận từ chối"}
+          description={receiving ? "Hệ thống sẽ lưu phiếu tiếp nhận, cập nhật nội dung công khai và chuyển quyền lưu giữ tài sản cho văn phòng." : mine ? "Yêu cầu gửi đồ về văn phòng sẽ bị hủy. Bạn có thể gửi lại sau nếu vẫn giữ đồ." : `Yêu cầu tiếp nhận "${transfer.title}" sẽ bị từ chối. Hành động này không thể hoàn tác.`}
+          confirmLabel={receiving ? "Xác nhận tiếp nhận" : mine ? "Xác nhận hủy" : "Xác nhận từ chối"}
           cancelLabel="Quay lại"
           busy={busy}
           onConfirm={executeSubmit}

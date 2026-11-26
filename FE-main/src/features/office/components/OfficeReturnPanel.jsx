@@ -6,7 +6,7 @@ import { claimActivityReason, date } from "../officeUtils";
 import LoadState from "./LoadState";
 import Notice from "./Notice";
 import ReturnActionDialog from "./ReturnActionDialog";
-import AppointmentReply from "./AppointmentReply";
+import OfficePickupAppointment from "./OfficePickupAppointment";
 import OfficeReceiptConfirmation from "./OfficeReceiptConfirmation";
 import OfficeCounterSession from "./OfficeCounterSession";
 import ReportButton from "@/features/reports/components/ReportButton";
@@ -36,15 +36,15 @@ export default function OfficeReturnPanel({ claim, state, mine, reportExpired, o
   const canReopen = workflow?.canReopenConfirmation;
   const confirmationOpen = workflow?.counterConfirmationOpen;
   const confirmedByRecipient = h?.status === "COMPLETED" && h.completionMethod === "RECIPIENT";
-  const approachingCounter = mine && !handoverId && claim.status === "APPROVED" && claim.appointment?.responseStatus === "CONFIRMED";
+  const approachingCounter = mine && !handoverId && claim.status === "APPROVED" && claim.appointment?.status === "SCHEDULED";
+  const verificationDeadline = workflow?.verificationDeadline;
   const latest = workflow?.verifications[0];
   const currentVerification = latest?.appointmentId === claim.appointment?.id ? latest : null;
   const verified = currentVerification?.result === "PASSED";
   const ended = ["REJECTED", "CANCELLED", "CLOSED", "COMPLETED"].includes(claim.status);
-  const needsNewSchedule = claim.appointment && ["LEGACY", "UNSENT"].includes(claim.appointment.responseStatus) && new Date(claim.appointment.scheduledAt) <= new Date();
   const lastReason = [...(claim.activities || [])].reverse().find(a => a.reason && ["REJECT", "CANCEL", "OFFICE_CANCEL", "AUTO_CLOSE"].includes(a.action));
   const steps = [
-    [CalendarClock, "Đồng ý lịch hẹn", claim.appointment?.responseStatus === "CONFIRMED" || !!h],
+    [CalendarClock, "Đã lập lịch xác minh", claim.appointment?.status === "SCHEDULED" || !!h],
     [ShieldCheck, "Xác minh tại quầy", verified || !!h],
     [PackageCheck, "Xác nhận đã nhận tài sản", h?.status === "COMPLETED"],
   ];
@@ -59,7 +59,8 @@ export default function OfficeReturnPanel({ claim, state, mine, reportExpired, o
       try {
         const next = await workflowApi.detail(claim.id);
         if (!stopped && (next.handover?.id !== handoverId || next.handover?.version !== handoverVersion ||
-          next.handover?.status !== handoverStatus || (waiting && (next.counterConfirmationOpen !== confirmationOpen ||
+          next.handover?.status !== handoverStatus || next.verificationDeadline !== verificationDeadline ||
+          (waiting && (next.counterConfirmationOpen !== confirmationOpen ||
             next.canConfirmReceipt !== canConfirm || next.canReopenConfirmation !== canReopen)))) {
           stopped = true;
           onRefresh();
@@ -77,7 +78,7 @@ export default function OfficeReturnPanel({ claim, state, mine, reportExpired, o
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [action, approachingCounter, canConfirm, canReopen, claim.id, confirmationOpen, handoverId, handoverStatus, handoverVersion, onRefresh, waiting]);
+  }, [action, approachingCounter, canConfirm, canReopen, claim.id, confirmationOpen, handoverId, handoverStatus, handoverVersion, onRefresh, verificationDeadline, waiting]);
 
   useEffect(() => {
     if (mine && handoverId && hash === `#${counterConfirmationAnchor}`) {
@@ -90,8 +91,8 @@ export default function OfficeReturnPanel({ claim, state, mine, reportExpired, o
   return <section className="of-panel of-return-panel" id={mine ? "ket-qua-ban-giao" : undefined}>
     <h2>{mine && ended ? "Kết quả yêu cầu" : "Tiến trình trao trả"}</h2>
     <LoadState state={state}>{workflow && <>
-      {mine && claim.status === "APPROVED" && claim.appointment && !h && <AppointmentReply key={claim.appointment.id} appointment={claim.appointment} verificationDeadline={workflow.verificationDeadline} id={claim.id} onChanged={() => onChanged({})} />}
-      {!(mine && (ended || needsNewSchedule)) && <ol className="of-return-steps">{steps.map(([Icon, label, complete], i) => <li key={label} className={complete ? "is-complete" : ""}><span><Icon size={18} /></span><div><small>Bước {i + 1}</small><strong>{label}</strong></div>{complete && <CheckCircle2 size={16} aria-label="Hoàn tất" />}</li>)}</ol>}
+      {mine && claim.status === "APPROVED" && claim.appointment && !h && <OfficePickupAppointment appointment={claim.appointment} verificationDeadline={workflow.verificationDeadline} />}
+      {!(mine && ended) && <ol className="of-return-steps">{steps.map(([Icon, label, complete], i) => <li key={label} className={complete ? "is-complete" : ""}><span><Icon size={18} /></span><div><small>Bước {i + 1}</small><strong>{label}</strong></div>{complete && <CheckCircle2 size={16} aria-label="Hoàn tất" />}</li>)}</ol>}
       {mine && ended && <p className="op-result-title">{{COMPLETED:h?.completionMethod === "TIMEOUT" ? "Đã kết thúc bàn giao" : "Đã nhận lại đồ",REJECTED:"Yêu cầu đã bị từ chối",CANCELLED:"Yêu cầu đã hủy",CLOSED:"Yêu cầu đã đóng"}[claim.status]}</p>}
       {mine && ended && lastReason && <p className="of-prose"><strong>Lý do: </strong>{claimActivityReason(lastReason, true)}</p>}
       {currentVerification && (
@@ -114,7 +115,7 @@ export default function OfficeReturnPanel({ claim, state, mine, reportExpired, o
       {mine && h && (workflow.reportDeadline || workflow.openHandoverReportId) && <div className="of-callout of-receipt-response">
         {workflow.reportDeadline && (reportExpired
           ? <p>Thời hạn tiếp nhận phản ánh về kết quả trao trả đã kết thúc.</p>
-          : <p className="of-report-deadline">Nếu có khiếu nại về kết quả trao trả, Quý vị vui lòng gửi phản ánh trên Sagasu trước <strong>{date(workflow.reportDeadline)}</strong>.</p>)}
+          : <p className="of-report-deadline">Nếu có khiếu nại về kết quả trao trả, bạn vui lòng gửi phản ánh trên Sagasu trước <strong>{date(workflow.reportDeadline)}</strong>.</p>)}
         {workflow.openHandoverReportId
           ? <Link className="of-button" to={`/bao-cao/${workflow.openHandoverReportId}`}>Theo dõi phản ánh đã gửi</Link>
           : workflow.reportDeadline && !reportExpired && <ReportButton type="CLAIM" id={claim.id} targetLabel={claim.postTitle}

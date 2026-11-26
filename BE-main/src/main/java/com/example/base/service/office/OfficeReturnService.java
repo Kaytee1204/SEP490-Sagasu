@@ -59,11 +59,11 @@ public class OfficeReturnService {
             OffsetDateTime now=OffsetDateTime.now();
             invitations.validatePickupSchedule(request.scheduledAt(),now);
             c.contactEmail(request.email().strip().toLowerCase(Locale.ROOT));
-            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
+            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note()));
             c.touchWorkflow();
             claims.flush();
             if (c.getClaimant()!=null) notifications.notifyUser(c.getClaimant().getId(), "APPOINTMENT_SCHEDULED",
-                "Văn phòng đã lập lịch nhận tài sản", "Hãy phản hồi lịch của yêu cầu #" + id + " trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối.",
+                "Văn phòng đã lập lịch nhận tài sản", pickupNotice(c, request.scheduledAt(), request.location()),
                 "/van-phong/claims/" + id, false);
         });
         return sendInvitation(id);
@@ -80,19 +80,24 @@ public class OfficeReturnService {
             requireVerificationWindow(old);
             old.cancelByOffice(request.reason().strip());
             appointments.flush();
-            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
+            appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note()));
             c.touchWorkflow();
             activities.save(new ClaimActivity(c,actor,"RESCHEDULE","APPROVED",request.reason().strip()));
             claims.flush();
             if(c.getClaimant()!=null) {
                 notifications.notifyUser(c.getClaimant().getId(),"APPOINTMENT_RESCHEDULED",
                     "Văn phòng đã đổi lịch hẹn nhận đồ #" + c.getId(),
-                    "Lịch hẹn mới cho \"" + c.getPost().getTitle() + "\" tại " + request.location().strip()
-                        + ". Hãy phản hồi trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối. Lý do đổi lịch: " + request.reason().strip(),
+                    pickupNotice(c, request.scheduledAt(), request.location()) + " Lý do điều chỉnh: " + request.reason().strip(),
                     "/van-phong/claims/" + c.getId(),false);
             }
         });
         return sendInvitation(id);
+    }
+
+    private String pickupNotice(Claim claim, OffsetDateTime time, String location) {
+        return "Bạn vui lòng đến " + location.strip() + " vào " + AppointmentEmailService.date(time)
+            + " để xác minh yêu cầu #" + claim.getId() + ". Hạn đến quầy: "
+            + AppointmentEmailService.date(OfficeAppointmentSchedule.verificationDeadline(time)) + ".";
     }
 
     private ReviewResult sendInvitation(long id) {
@@ -106,7 +111,7 @@ public class OfficeReturnService {
         OffsetDateTime cutoff = OffsetDateTime.now().minusHours(24);
         var due = jdbc.queryForList("""
             select a.claim_id from appointment a join claim c using (claim_id) join post p using (post_id)
-            where a.status='SCHEDULED' and a.response_status='CONFIRMED' and a.scheduled_at<=?
+            where a.status='SCHEDULED' and a.scheduled_at<=?
               and c.claim_type='OFFICE' and c.status='APPROVED'
               and p.custody_mode='OFFICE' and p.status='RESERVED'
               and not exists (
@@ -133,8 +138,7 @@ public class OfficeReturnService {
         Appointment appointment = activeAppointment(id);
         if (appointment == null) return;
         em.refresh(appointment,LockModeType.PESSIMISTIC_WRITE);
-        if (!"CONFIRMED".equals(appointment.getResponseStatus())
-                || !verificationExpired(appointment)
+        if (!verificationExpired(appointment)
                 || verifications(id).stream().anyMatch(v -> v.appointmentId()==appointment.getId())
                 || handover(id)!=null) return;
 
@@ -149,11 +153,11 @@ public class OfficeReturnService {
     }
 
     private boolean verificationExpired(Appointment appointment) {
-        return !OffsetDateTime.now().isBefore(OfficePickupSchedule.verificationDeadline(appointment.getScheduledAt()));
+        return !OffsetDateTime.now().isBefore(OfficeAppointmentSchedule.verificationDeadline(appointment.getScheduledAt()));
     }
 
     private void requireVerificationWindow(Appointment appointment) {
-        if ("CONFIRMED".equals(appointment.getResponseStatus()) && verificationExpired(appointment))
+        if (verificationExpired(appointment))
             throw bad("Đã hết hạn đến quầy xác minh.");
     }
 
@@ -243,7 +247,6 @@ public class OfficeReturnService {
         Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
         requireAvailable(c);
         Appointment a=scheduled(c);
-        if(!"CONFIRMED".equals(a.getResponseStatus())) throw bad("Người nhận cần đồng ý lịch hẹn trước khi xác minh tại quầy.");
         requireVerificationWindow(a);
         jdbc.update("insert into office_claim_verification(claim_id,appointment_id,verified_by,result,note) values(?,?,?,?,?)",
                 id,a.getId(),actor.getId(),request.result(),request.note().strip());
@@ -348,6 +351,10 @@ public class OfficeReturnService {
         c.touchWorkflow();
         activities.save(new ClaimActivity(c,actor,"HANDOVER","APPROVED","Văn phòng đã dừng lượt bàn giao. Lý do: "+request.reason().strip()));
         claims.flush();
+        notifications.notifyUser(c.getClaimant().getId(), "OFFICE_HANDOVER_STOPPED",
+            "Văn phòng đã dừng lượt bàn giao",
+            "Tài sản vẫn được văn phòng lưu giữ. Lý do: " + request.reason().strip(),
+            "/van-phong/claims/" + id, false);
         return view(c,actor);
     }
 
@@ -355,7 +362,7 @@ public class OfficeReturnService {
         c.touchWorkflow();
         activities.save(new ClaimActivity(c,actor,"HANDOVER","APPROVED",reason));
         notifications.notifyUser(c.getClaimant().getId(),"HANDOVER_RECORDED",
-            "Kính mời Quý vị xác nhận tại quầy",
+            "Xác nhận biên bản tại quầy",
             "Vui lòng kiểm tra tài sản, phụ kiện và xác nhận biên bản bàn giao trên Sagasu ngay tại quầy.",
             "/van-phong/claims/"+c.getId()+"#xac-nhan-tai-quay",false);
     }
@@ -393,6 +400,10 @@ public class OfficeReturnService {
             if(!other.getId().equals(c.getId()) && Set.of("PENDING","NEEDS_INFO").contains(other.getStatus())) {
                 String previous=other.getStatus();other.closeAfterReturn();
                 activities.save(new ClaimActivity(other,actor,"AUTO_CLOSE",previous,"Đồ đã được văn phòng trao trả."));
+                if (other.getClaimant()!=null) notifications.notifyUser(other.getClaimant().getId(), "OFFICE_CLAIM_CLOSED",
+                    "Yêu cầu nhận đồ #" + other.getId() + " đã kết thúc",
+                    "Văn phòng đã trao trả tài sản. Yêu cầu nhận đồ của bạn đã được đóng.",
+                    "/van-phong/claims/" + other.getId(), false);
             }
         }
     }
@@ -413,8 +424,8 @@ public class OfficeReturnService {
             throw bad("Vui lòng ghi rõ chênh lệch so với phiếu tiếp nhận và lý do.");
         if(c.getClaimant()==null)throw bad("Cần liên kết tài khoản người nhận trước khi trao trả.");
         Appointment a=scheduled(c);var verification=verifications(c.getId());
-        if(!"CONFIRMED".equals(a.getResponseStatus()) || verification.isEmpty() || verification.getFirst().appointmentId()!=a.getId() || !"PASSED".equals(verification.getFirst().result()))
-            throw bad("Cần lịch hẹn đã xác nhận và kết quả xác minh đạt cho lịch hẹn hiện tại.");
+        if(verification.isEmpty() || verification.getFirst().appointmentId()!=a.getId() || !"PASSED".equals(verification.getFirst().result()))
+            throw bad("Cần kết quả xác minh đạt cho lịch hẹn hiện tại.");
         return null;
     }
     private void manageable(Claim c,Account actor) {
@@ -507,9 +518,8 @@ public class OfficeReturnService {
         boolean blocked=window!=null&&window.blocksHandover();
         boolean onHold=approved&&reportHolds.held(c.getPost().getId());
         boolean preparing=officer && approved && h==null && a!=null && inStorage && !blocked && !onHold;
-        boolean confirmed=a!=null&&"CONFIRMED".equals(a.getResponseStatus());
-        boolean verified=confirmed&&!history.isEmpty()&&history.getFirst().appointmentId()==a.getId()&&"PASSED".equals(history.getFirst().result());
-        boolean missed=confirmed&&!verified&&verificationExpired(a);
+        boolean verified=a!=null&&!history.isEmpty()&&history.getFirst().appointmentId()==a.getId()&&"PASSED".equals(history.getFirst().result());
+        boolean missed=a!=null&&!verified&&verificationExpired(a);
         boolean waiting = h!=null && waitingForReceipt(c,h);
         boolean counterOpen = waiting && confirmationOpen(h);
         var openReport = h==null ? null : openHandoverReport(h,actor.getId());
@@ -526,9 +536,9 @@ public class OfficeReturnService {
                 if (openReport!=null || onHold) yield "Văn phòng đã ghi nhận phản ánh. Vui lòng theo dõi kết quả xử lý.";
                 if (!counterOpen) yield officer
                     ? "Lượt xác nhận đã hết hiệu lực. Vui lòng đối chiếu tại quầy trước khi tiếp tục."
-                    : "Lượt xác nhận đã hết hiệu lực. Quý vị vui lòng liên hệ nhân viên tại quầy.";
+                    : "Lượt xác nhận đã hết hiệu lực. Bạn vui lòng liên hệ nhân viên tại quầy.";
                 yield officer ? "Đã ghi nhận bàn giao. Đang chờ người nhận xác nhận tại quầy."
-                    : "Kính mời Quý vị đối chiếu tài sản và xác nhận biên bản ngay tại quầy.";
+                    : "Bạn vui lòng đối chiếu tài sản và xác nhận biên bản ngay tại quầy.";
             }
         }
                 :rejectedAtCounter?"Không đạt xác minh tại quầy. Yêu cầu đã bị từ chối, lịch hẹn đã hủy; tài khoản này không được yêu cầu lại món đồ này."
@@ -539,16 +549,16 @@ public class OfficeReturnService {
                     case REVIEW_REQUIRED -> "Kết luận tranh chấp yêu cầu xét duyệt lại.";
                     case CLEARED -> throw new IllegalStateException();
                 }:onHold?"Hồ sơ đang tạm dừng để xử lý báo cáo."
-                :a==null?"Đủ điều kiện lập lịch nhận tài sản.":!confirmed?OfficeAppointmentGuidance.pendingMessage(a,OffsetDateTime.now()):missed?"Đã hết hạn đến quầy xác minh.":!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy."
+                :a==null?"Đủ điều kiện lập lịch nhận tài sản.":missed?"Đã hết hạn đến quầy xác minh.":!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy."
                 :c.getClaimant()==null?"Hồ sơ cũ chưa liên kết tài khoản người nhận. Cần xác định tài khoản trước khi lập biên bản.":"Đã xác minh. Có thể lập biên bản bàn giao.";
-        return new Workflow(history,h,preparing&&confirmed&&!verificationExpired(a),preparing&&verified&&c.getClaimant()!=null,preparing&&!verified&&!missed,preparing&&!verified,
+        return new Workflow(history,h,preparing&&!verificationExpired(a),preparing&&verified&&c.getClaimant()!=null,preparing&&!verified&&!missed,preparing&&!verified,
             next,officer&&approved&&h==null&&a==null&&inStorage&&!blocked&&!onHold,
             officer&&approved&&h==null&&!verified&&inStorage&&!onHold
                 && (window==null||window.state()==P2pClaimAppealService.State.OPEN||window.state()==P2pClaimAppealService.State.CLEARED),
             officer&&"PENDING".equals(c.getStatus())&&appeals.hasCompetitors(c),blocked?window.deadline():null,
             window==null?null:window.state().name(),
             filedAppeal==null?null:new FiledAppeal(filedAppeal.reportId(),filedAppeal.reportStatus()),
-            a==null||verified?null:OfficePickupSchedule.verificationDeadline(a.getScheduledAt()),
+            a==null||verified?null:OfficeAppointmentSchedule.verificationDeadline(a.getScheduledAt()),
             h!=null&&"RECIPIENT".equals(h.completionMethod())&&h.confirmedAt()!=null
                 ? ReportService.officeHandoverReportDeadline(h.confirmedAt()) : null,
             canRespond && counterOpen,canRespond && counterOpen && isRecipient(c,actor),officer && canRespond && !counterOpen,officer && canRespond,
