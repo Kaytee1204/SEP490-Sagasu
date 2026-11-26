@@ -64,8 +64,21 @@ export const accountApi = {
     return res.data;
   },
 
-  getTemplateDownloadUrl() {
-    return `${apiClient.getBaseUrl()}/accounts/import/template`;
+  // Template requires login (ACC-DE08), so it is fetched with the token instead of a plain link.
+  async downloadTemplate() {
+    const res = await fetch(`${apiClient.getBaseUrl()}/accounts/import/template`, {
+      headers: apiClient.getHeaders({}, true),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `Lỗi HTTP ${res.status}`);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'accounts_import_template.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
   },
 };
 

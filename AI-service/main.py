@@ -67,7 +67,8 @@ class PruneIndexRequest(BaseModel):
 class SearchRequest(BaseModel):
     """Payload tìm kiếm 2 tầng trên toàn bộ kho chỉ mục (Lớp 2 Recall -> Lớp 3 Re-rank, tối đa Top 10)."""
     sourceItem: ItemData
-    topKPerChannel: int = 40
+    recentCandidates: List[ItemData] = Field(default_factory=list)
+    topKPerChannel: int = 60
     topN: int = 10
     includeRejected: bool = False
 
@@ -193,11 +194,13 @@ def search_indexed_items(req: SearchRequest):
     """
     try:
         source_dict = req.sourceItem.model_dump()
+        recent_list = [c.model_dump() for c in req.recentCandidates] if req.recentCandidates else []
         ranked_results, telemetry = matcher.search_indexed(
             source_item=source_dict,
             top_k_per_channel=req.topKPerChannel,
             top_n=req.topN,
             include_rejected=req.includeRejected,
+            recent_candidates=recent_list,
         )
         return MatchResponse(
             code=200,

@@ -31,6 +31,11 @@ export const reviewApi = {
     window.dispatchEvent(new Event("report-review-changed"));
     return result;
   },
+  askBoth: async (id, body) => {
+    const result = (await api.post(`${root}/${id}/inquiries/batch`, body)).data;
+    window.dispatchEvent(new Event("report-review-changed"));
+    return result;
+  },
   verifyCustody: async (id, inquiry, body) => {
     const result = (await api.post(`${root}/${id}/inquiries/${inquiry}/custody`, body)).data;
     window.dispatchEvent(new Event("report-review-changed"));

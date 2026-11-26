@@ -76,14 +76,25 @@ class YOLOCropper:
         resized.thumbnail((max_side, max_side), Image.Resampling.BILINEAR)
         return resized
 
-    def _crop_from_result(self, image: Image.Image, result) -> Image.Image:
-        """Tách bounding box có salience_score cao nhất từ 1 kết quả YOLOv8 và cắt ảnh kèm 6% padding."""
-        w, h = image.size
-        if w <= 0 or h <= 0 or result is None:
-            return image
+    def _crop_from_result(self, orig_image: Image.Image, infer_image: Image.Image, result) -> Image.Image:
+        """
+        Tách bounding box của vật thể thuộc danh sách nhãn đồ vật cá nhân (PORTABLE_ITEM_CLASSES).
+        QUY TẮC CỐT LÕI:
+        - Chỉ cắt khi phát hiện đúng nhãn nằm trong PORTABLE_ITEM_CLASSES (conf >= 0.30, diện tích >= 2%).
+        - Nếu vật thể trong ảnh nằm NGOÀI các nhãn được gắn nhãn (vd: ví da, thẻ sinh viên, chìa khóa,
+          tai nghe, kính mắt...) hoặc YOLO chỉ thấy nền/bàn ghế/người -> GIỮ NGUYÊN 100% ẢNH GỐC (orig_image).
+        """
+        if orig_image is None or infer_image is None or result is None:
+            return orig_image
+
+        orig_w, orig_h = orig_image.size
+        w, h = infer_image.size
+        if w <= 0 or h <= 0 or orig_w <= 0 or orig_h <= 0:
+            return orig_image
+
         boxes = result.boxes
         if boxes is None or len(boxes) == 0:
-            return image
+            return orig_image
 
         img_area = float(w * h)
         best_box = None
@@ -91,16 +102,21 @@ class YOLOCropper:
 
         for box in boxes:
             xyxy = box.xyxy[0].tolist()
-            conf = float(box.conf[0].item()) if box.conf is not None else 0.5
+            conf = float(box.conf[0].item()) if box.conf is not None else 0.0
             cls_id = int(box.cls[0].item()) if box.cls is not None else -1
+
+            # QUAN TRỌNG: Nếu ngoài các nhãn đồ vật được gắn nhãn (PORTABLE_ITEM_CLASSES) -> bỏ qua!
+            # Tuyệt đối không cắt vào nền (bàn, ghế, người) hoặc nhãn ngoài danh sách.
+            if cls_id not in PORTABLE_ITEM_CLASSES or conf < 0.30:
+                continue
 
             # Tính tỷ lệ diện tích của bounding box so với toàn bộ ảnh
             bw = max(1.0, xyxy[2] - xyxy[0])
             bh = max(1.0, xyxy[3] - xyxy[1])
             area_ratio = (bw * bh) / img_area
 
-            # Bỏ qua các vật thể quá nhỏ (< 2% diện tích ảnh) vì dễ là nhiễu
-            if area_ratio < 0.02:
+            # Bỏ qua các vật thể quá nhỏ (< 2% diện tích ảnh) hoặc đã chiếm trọn khung hình (> 95%)
+            if area_ratio < 0.02 or area_ratio > 0.95:
                 continue
 
             # Tính trọng số gần tâm ảnh: vật thể càng gần tâm (0.5, 0.5) trọng số càng tiến tới 1.0
@@ -109,53 +125,55 @@ class YOLOCropper:
             dist_center = math.hypot(cx - 0.5, cy - 0.5)
             center_weight = max(0.5, 1.0 - 0.6 * dist_center)
 
-            # Gán hệ số ưu tiên theo nhóm lớp COCO
-            if cls_id in PORTABLE_ITEM_CLASSES:
-                cls_priority = 2.2
-            elif cls_id in BACKGROUND_NOISE_CLASSES:
-                cls_priority = 0.15
-            else:
-                cls_priority = 1.0
-
-            # Công thức tổng hợp điểm nổi bật của vật thể
-            salience_score = cls_priority * conf * math.sqrt(area_ratio) * center_weight
+            # Công thức tổng hợp điểm nổi bật (Smart Crop Salience Score) cho nhãn hợp lệ
+            salience_score = 2.2 * conf * math.sqrt(area_ratio) * center_weight
             if salience_score > best_score:
                 best_score = salience_score
                 best_box = xyxy
 
+        # Ánh xạ tọa độ bounding box kèm 6% padding về lại kích thước ảnh gốc (orig_image)
         if best_box is not None:
-            pad_x = (best_box[2] - best_box[0]) * 0.06
-            pad_y = (best_box[3] - best_box[1]) * 0.06
-            x1 = max(0, int(best_box[0] - pad_x))
-            y1 = max(0, int(best_box[1] - pad_y))
-            x2 = min(w, int(best_box[2] + pad_x))
-            y2 = min(h, int(best_box[3] + pad_y))
-            if x2 > x1 + 24 and y2 > y1 + 24:
-                return image.crop((x1, y1, x2, y2))
+            scale_x = orig_w / float(w)
+            scale_y = orig_h / float(h)
+            bx1 = best_box[0] * scale_x
+            by1 = best_box[1] * scale_y
+            bx2 = best_box[2] * scale_x
+            by2 = best_box[3] * scale_y
 
-        return image
+            pad_x = (bx2 - bx1) * 0.06
+            pad_y = (by2 - by1) * 0.06
+            x1 = max(0, int(bx1 - pad_x))
+            y1 = max(0, int(by1 - pad_y))
+            x2 = min(orig_w, int(bx2 + pad_x))
+            y2 = min(orig_h, int(by2 + pad_y))
+            if x2 > x1 + 24 and y2 > y1 + 24:
+                return orig_image.crop((x1, y1, x2, y2))
+
+        # Nếu ngoài nhãn được gắn nhãn -> giữ nguyên ảnh gốc 100%
+        return orig_image
 
     def crop_salient_object(self, image: Image.Image) -> Image.Image:
-        """Cắt vật thể nổi bật cho 1 ảnh đơn lẻ."""
+        """Cắt vật thể nổi bật cho 1 ảnh đơn lẻ; giữ nguyên ảnh gốc nếu ngoài nhãn."""
         if self.model is None or image is None:
             return image
         return self.crop_salient_objects_batch([image])[0]
 
     def crop_salient_objects_batch(self, images: list) -> list:
         """
-        Cắt vật thể nổi bật hàng loạt theo lô (batch inference) để tăng tốc mạnh trên CPU:
-        - Thu nhỏ mỗi ảnh về tối đa 640px trước khi chạy YOLO.
-        - Chạy 1 lần `self.model(resized_list, imgsz=384, verbose=False)` cho cả lô ảnh.
+        Cắt vật thể nổi bật hàng loạt theo lô (batch inference):
+        - Chạy YOLOv8 trên bản thu nhỏ <= 640px để tăng tốc suy luận.
+        - Nếu phát hiện nhãn thuộc PORTABLE_ITEM_CLASSES -> cắt trên ảnh gốc chất lượng cao.
+        - Nếu ngoài nhãn được gắn nhãn -> trả về nguyên bản ảnh gốc (giữ nguyên 100%).
         """
         if self.model is None or not images:
             return images
 
         try:
             resized_list = [self._downscale_for_inference(img, max_side=640) for img in images]
-            results = self.model(resized_list, imgsz=384, verbose=False)
+            results = self.model(resized_list, imgsz=640, verbose=False)
             cropped = []
-            for img_small, res in zip(resized_list, results):
-                cropped.append(self._crop_from_result(img_small, res))
+            for orig_img, img_small, res in zip(images, resized_list, results):
+                cropped.append(self._crop_from_result(orig_img, img_small, res))
             return cropped
         except Exception as ex:
             logger.debug(f"Error during batch YOLO crop: {ex}")

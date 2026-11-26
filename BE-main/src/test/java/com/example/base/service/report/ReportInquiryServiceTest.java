@@ -70,6 +70,7 @@ class ReportInquiryServiceTest {
         when(images.upload(anyString(), any())).thenReturn(uploaded);
         when(context.one(contains("recipient_id=?"), any(Object[].class))).thenReturn(row("inquiry_id", 2L, "report_id", 5L));
         when(context.one(contains("for update"), any(Object[].class))).thenReturn(row("inquiry_id", 2L, "responded_at", null));
+        when(jdbc.update(contains("update report_inquiry set response=?"), anyString(), eq(2L))).thenReturn(1);
         SqlStub.defaults(jdbc);
     }
 
@@ -148,6 +149,42 @@ class ReportInquiryServiceTest {
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser), "chọn");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "?", "OWNERSHIP"), managerUser), "vai trò");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "?", null), managerUser), "chọn");
+    }
+
+    @Test
+    void askBothSendsSeparateQuestionsWithTheSameDeadlineAndUpdatesReportOnce() {
+        report.put("reporter_id", 7L);
+        when(reviews.appeal(5L)).thenReturn(row("claim_type", "P2P", "active", true, "approved_recipient_id", 8L));
+        var deadline = OffsetDateTime.parse("2026-11-24T09:00:00Z");
+        when(reviews.inquiryResponseDue()).thenReturn(deadline);
+        var request = new ReportInquiryService.AskBoth(3L, List.of(
+                new ReportInquiryService.Question(7L, "Bạn có ảnh chứng minh sở hữu không?", "OWNERSHIP"),
+                new ReportInquiryService.Question(8L, "Vết xước nằm ở đâu?", "DISCREPANCY")));
+
+        assertThat(service.askBoth(5L, request, managerUser)).containsEntry("ok", true);
+
+        verify(reviews).processing(report, manager, 3L);
+        verify(jdbc).update(contains("insert into report_inquiry"), eq(5L), eq(7L), eq(1L),
+                eq("Bạn có ảnh chứng minh sở hữu không?"), eq(deadline), eq("OWNERSHIP"));
+        verify(jdbc).update(contains("insert into report_inquiry"), eq(5L), eq(8L), eq(1L),
+                eq("Vết xước nằm ở đâu?"), eq(deadline), eq("DISCREPANCY"));
+        verify(jdbc).update(contains("update report set version=version+1"), eq(5L));
+        verify(notifications, times(2)).notifyUserWithEmail(anyLong(), eq("REPORT_INFORMATION"),
+                anyString(), anyString(), eq("/bao-cao/5#phan-hoi"), anyString());
+    }
+
+    @Test
+    void askBothDoesNotCreateEitherQuestionWhenOneTargetIsInvalid() {
+        report.put("reporter_id", 7L);
+        when(reviews.appeal(5L)).thenReturn(row("claim_type", "P2P", "active", true, "approved_recipient_id", 8L));
+        var request = new ReportInquiryService.AskBoth(3L, List.of(
+                new ReportInquiryService.Question(7L, "Bạn có ảnh chứng minh sở hữu không?", "OWNERSHIP"),
+                new ReportInquiryService.Question(9L, "Vết xước nằm ở đâu?", "DISCREPANCY")));
+
+        assertBad(() -> service.askBoth(5L, request, managerUser), "vai trò");
+
+        verify(jdbc, never()).update(contains("insert into report_inquiry"), any(Object[].class));
+        verifyNoInteractions(notifications);
     }
 
     @Test
@@ -242,6 +279,22 @@ class ReportInquiryServiceTest {
         when(context.one(contains("recipient_id=?"), any(Object[].class))).thenReturn(new LinkedHashMap<>());
         assertBad(() -> service.reply(2L, new ReportInquiryService.Reply("ok"), files, claimantUser), "Không tìm thấy");
         verify(images, never()).upload(anyString(), any());
+    }
+
+    @Test
+    void reply_afterDeadlineIsRejectedBeforeUploads() {
+        when(context.one(contains("recipient_id=?"), any(Object[].class)))
+                .thenReturn(row("inquiry_id", 2L, "report_id", 5L, "overdue", true));
+        assertBad(() -> service.reply(2L, new ReportInquiryService.Reply("Late reply"), files, claimantUser), "quá hạn");
+        verify(images, never()).upload(anyString(), any());
+    }
+
+    @Test
+    void reply_expiringAfterUploadIsRejectedAndImagesAreCleaned() {
+        when(jdbc.update(contains("statement_timestamp() <"), anyString(), eq(2L))).thenReturn(0);
+        assertBad(() -> service.reply(2L, new ReportInquiryService.Reply("Late reply"), files, claimantUser), "quá hạn");
+        verify(images).cleanup(uploaded);
+        verifyNoInteractions(notifications);
     }
 
     @Test

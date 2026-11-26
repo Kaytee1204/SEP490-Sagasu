@@ -91,6 +91,71 @@
   color: #0f172a;
 }
 
+/* ── AI Target Item Recognition Banner ── */
+.sm-ai-target-banner {
+  margin: 0 26px 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+  border: 1px solid #bfdbfe;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.sm-ai-target-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sm-ai-target-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: #2563eb;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.sm-ai-target-text {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.84rem;
+}
+
+.sm-ai-target-label {
+  color: #334155;
+  font-weight: 600;
+}
+
+.sm-ai-target-value {
+  color: #1d4ed8;
+  font-weight: 750;
+  background: #ffffff;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+}
+
+.sm-ai-pipeline-pill {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: #4f46e5;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #ddd6fe;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 /* ── Rank Legend Strip ── */
 .sm-legend-wrap {
   padding: 0 26px 16px;
@@ -353,8 +418,9 @@
   margin: 0 auto;
 }
 
-/* ── Thumbnail (full image visible) ── */
+/* ── Thumbnail (full image visible + zoom trigger) ── */
 .sm-thumb {
+  position: relative;
   width: 58px;
   height: 58px;
   border-radius: 10px;
@@ -365,6 +431,64 @@
   display: grid;
   place-items: center;
   box-sizing: border-box;
+  cursor: zoom-in;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.sm-thumb:hover {
+  border-color: #2563eb;
+  transform: scale(1.03);
+}
+
+.sm-thumb-zoom {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.68);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.sm-thumb:hover .sm-thumb-zoom {
+  opacity: 1;
+}
+
+.sm-thumb-count {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.9);
+  color: #ffffff;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sm-ai-item-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  color: #1e40af;
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.sm-ai-item-tag strong {
+  font-weight: 700;
 }
 
 .sm-thumb img {
@@ -451,6 +575,182 @@
 /* ── Expanded Detail Drawer ── */
 .sm-detail {
   padding: 0 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Inline Image & Post Preview inside Ranking Card ── */
+.sm-inline-preview {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.sm-inline-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sm-inline-main-img {
+  width: 100%;
+  height: 185px;
+  object-fit: contain;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: zoom-in;
+  display: block;
+}
+
+.sm-inline-zoom-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.15s;
+}
+
+.sm-inline-zoom-btn:hover {
+  background: rgba(37, 99, 235, 0.92);
+}
+
+.sm-inline-thumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.sm-inline-thumb-btn {
+  width: 42px;
+  height: 42px;
+  padding: 2px;
+  border-radius: 7px;
+  border: 2px solid #cbd5e1;
+  background: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sm-inline-thumb-btn.active {
+  border-color: #2563eb;
+}
+
+.sm-inline-thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+}
+
+.sm-inline-no-img {
+  height: 160px;
+  border-radius: 10px;
+  border: 1px dashed #cbd5e1;
+  background: #ffffff;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  display: grid;
+  place-items: center;
+}
+
+.sm-inline-meta-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sm-inline-ai-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.sm-inline-ai-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.sm-inline-ai-val {
+  margin-top: 4px;
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: #0f172a;
+}
+
+.sm-inline-desc-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  flex: 1;
+}
+
+.sm-inline-desc-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.sm-inline-desc-text {
+  margin: 0;
+  font-size: 0.83rem;
+  color: #1e293b;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 88px;
+  overflow-y: auto;
+}
+
+.sm-inline-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sm-inline-tag {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  font-size: 0.76rem;
+  color: #475569;
+}
+
+.sm-inline-tag strong {
+  color: #0f172a;
 }
 
 .sm-breakdown-box {
@@ -704,6 +1004,8 @@
 
 @media (max-width: 680px) {
   .sm-header, .sm-legend-wrap, .sm-body, .sm-footer { padding-inline: 16px; }
+  .sm-ai-target-banner { margin-inline: 16px; }
+  .sm-inline-preview { grid-template-columns: 1fr; }
   .sm-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .sm-legend-item { border-right: 0; justify-content: flex-start; }
   .sm-row-trigger {

@@ -223,10 +223,22 @@ class MultimodalVectorIndex:
                         to_delete.append((pid_str,))
                     continue
 
-                # Nếu bài đăng đã tồn tại với nội dung y hệt -> bỏ qua, không đánh dấu _dirty để tránh rebuild ma trận
+                # Nếu bài đăng đã tồn tại với cùng nội dung & canonical URL ảnh -> chỉ cập nhật URL presigned mới,
+                # không cần ghi lại SQLite hay rebuild ma trận RAM
                 existing = self.posts.get(pid_str)
-                if existing is not None and existing == item:
-                    continue
+                if existing is not None:
+                    same_core = (
+                        existing.get("title") == item.get("title")
+                        and existing.get("description") == item.get("description")
+                        and (existing.get("postType") or "").strip().upper() == post_type
+                        and (existing.get("status") or "OPEN").strip().upper() == status
+                        and self._extract_author_key(existing) == self._extract_author_key(item)
+                        and [self._canonical_url(u) for u in self._extract_image_urls(existing)]
+                        == [self._canonical_url(u) for u in self._extract_image_urls(item)]
+                    )
+                    if same_core:
+                        self.posts[pid_str] = item
+                        continue
 
                 author_key = self._extract_author_key(item)
                 self.posts[pid_str] = item
@@ -363,8 +375,6 @@ class MultimodalVectorIndex:
             return []
 
         mask = (post_types == opposite_type)
-        if src_author_key:
-            mask = mask & (author_keys != src_author_key)
 
         valid_indices = np.flatnonzero(mask)
         if len(valid_indices) == 0:
@@ -419,16 +429,17 @@ class MultimodalVectorIndex:
 
         recalled_ids: Set[str] = set()
 
-        # ── KÊNH 1: ẢNH <-> ẢNH (quét toàn bộ ảnh trong kho) ──
+        # ── KÊNH 1: ẢNH <-> ẢNH (quét toàn bộ ảnh trong kho, ưu tiên số lượng cao hơn để không sót ảnh đúng) ──
+        vis_top_k = max(top_k_per_channel * 2, 100)
         for v_vec in src_vis_vecs:
             recalled_ids.update(
                 self._top_k_post_ids(
                     self._img_matrix, self._img_post_ids, self._img_post_types, self._img_author_keys,
-                    v_vec, opposite_type, src_author_key, src_id_str, top_k_per_channel,
+                    v_vec, opposite_type, src_author_key, src_id_str, vis_top_k,
                 )
             )
 
-        # ── KÊNH 2: MÔ TẢ <-> MÔ TẢ ──
+        # ── KÊNH 2: MÔ TẢ <-> MÔ TẢ (Multilingual CLIP đọc tiếng Việt) ──
         if src_text_vec is not None:
             recalled_ids.update(
                 self._top_k_post_ids(
@@ -438,13 +449,12 @@ class MultimodalVectorIndex:
             )
 
         # ── KÊNH 3: ẢNH <-> MÔ TẢ CÙNG KHÔNG GIAN ViT-B/16 (Cross-Modal Recall) ──
-        # Dùng vector chữ từ Text Encoder của chính ViT-B/16 để nhân với ma trận ảnh ViT-B/16
-        cross_q = src_cross_text_vec if src_cross_text_vec is not None else src_text_vec
-        if cross_q is not None:
+        # Chỉ chạy khi trích xuất được vector chữ tiếng Anh chuẩn trong không gian ViT-B/16
+        if src_cross_text_vec is not None:
             recalled_ids.update(
                 self._top_k_post_ids(
                     self._img_matrix, self._img_post_ids, self._img_post_types, self._img_author_keys,
-                    cross_q, opposite_type, src_author_key, src_id_str, top_k_per_channel,
+                    src_cross_text_vec, opposite_type, src_author_key, src_id_str, top_k_per_channel,
                 )
             )
 
@@ -461,8 +471,6 @@ class MultimodalVectorIndex:
                     if not cand_meta:
                         continue
                     if (cand_meta.get("postType") or "").strip().upper() != opposite_type:
-                        continue
-                    if src_author_key and self._extract_author_key(cand_meta) == src_author_key:
                         continue
                     hit_counter[pid] += 1
             for pid, _ in hit_counter.most_common(top_k_per_channel):

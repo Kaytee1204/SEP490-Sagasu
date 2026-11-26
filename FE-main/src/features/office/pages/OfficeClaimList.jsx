@@ -178,8 +178,8 @@ export default function OfficeClaimList({ mine = false }) {
     <div className="sw-page">
       <header className="sw-heading">
         {postId && <Link className="of-back" to={base}>← Danh sách bài đăng</Link>}
-        <h1>{postId ? displayedContent[0]?.postTitle || `Yêu cầu của bài đăng #${postId}` : "Xét duyệt và trao trả tài sản"}</h1>
-        <p>{postId ? `Bài đăng #${postId} · Yêu cầu nhận tài sản` : "Theo dõi và xử lý các yêu cầu nhận tài sản theo bài đăng."}</p>
+        <h1>{postId ? displayedContent[0]?.postTitle || "Yêu cầu của bài đăng" : "Xét duyệt và trao trả tài sản"}</h1>
+        <p>{postId ? "Yêu cầu nhận tài sản của bài đăng" : "Theo dõi và xử lý các yêu cầu nhận tài sản theo bài đăng."}</p>
       </header>
 
       {/* Card 1: Filter Controls */}

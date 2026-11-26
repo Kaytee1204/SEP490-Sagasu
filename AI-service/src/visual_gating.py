@@ -40,12 +40,14 @@ class VisualGatingLayer:
             return True
         try:
             w, h = image.size
-            if w < 100 or h < 100:
+            if w < 80 or h < 80:
                 return True
             gray = np.array(image.convert("L"), dtype=np.float32)
             gx, gy = np.gradient(gray)
             grad_var = np.var(gx) + np.var(gy)
-            return bool(grad_var < 18.0)
+            # Chỉ đánh dấu mờ khi phương sai gradient cực thấp (< 5.0);
+            # tránh đánh dấu nhầm ảnh chụp sản phẩm rõ nét trên nền trắng/đơn sắc (grad_var ~ 6..17).
+            return bool(grad_var < 5.0)
         except Exception:
             return False
 
@@ -83,42 +85,72 @@ class VisualGatingLayer:
         if has_both_images:
             if not has_blurry_img:
                 # ── RULE 1: Cả 2 bài đều có ảnh rõ nét ──
-                # 45% Ảnh-Ảnh (ViT-B/16) + 25% Mô tả-Mô tả (Hybrid Keyword + M-CLIP)
-                # + 12% Màu HSV + 10% Ảnh-Mô tả (ViT-B/16) + 8% Thời gian & Địa điểm
-                w_vis = 0.45
-                w_text = 0.25
-                w_color = 0.12
+                # Điểm hình ảnh (w_vis = 56%) luôn cao hơn toàn bộ các tiêu chí khác cộng lại theo đúng yêu cầu:
+                # Ảnh-Ảnh 56% + Màu HSV 16% + Mô tả tiếng Việt 16% + Ảnh-Mô tả 7% + Không/Thời gian 5%
+                w_vis = 0.56
+                w_color = 0.16
+                w_text = 0.16
+                w_cross = 0.07
+                w_st = 0.05
+
+                # Nếu 1 trong 2 bài không trích xuất được prompt cross-modal (vd mô tả chỉ gõ "a", "aa"),
+                # chuyển trọng số w_cross sang cho Ảnh-Ảnh và Màu HSV để không bị mất điểm oan
+                if cross_modal_sim <= 0.01:
+                    w_vis += 0.05
+                    w_color += 0.02
+                    w_cross = 0.0
+
+                # Nếu 2 bức ảnh giống hệt hoặc gần như trùng khớp hoàn toàn (visual >= 94% & color >= 85%):
+                # Đẩy trọng số Ảnh + Màu lên 92% (74% Ảnh + 18% Màu) để ĐẢM BẢO 100% ảnh giống hệt luôn đứng Top 1!
+                if visual_sim >= 0.94 and color_sim >= 0.85:
+                    w_vis = 0.74
+                    w_color = 0.18
+                    w_text = 0.04
+                    w_cross = 0.02 if cross_modal_sim > 0.01 else 0.0
+                    w_st = 0.02
+
+                # Hard Cutoff 1 (Chặn ảnh khác biệt nhau hoàn toàn):
+                if visual_sim < 0.46 and text_sim < 0.55 and cross_modal_sim < 0.55:
+                    is_rejected = True
+                    reject_reason = "Hình ảnh và mô tả đều không tương đồng"
+                # Hard Cutoff 2: Ảnh quá khác nhau (< 38%) -> LOẠI NGAY dù mô tả giống
+                elif visual_sim < 0.38:
+                    is_rejected = True
+                    reject_reason = "Hình ảnh quá khác biệt (< 38%)"
+                # Hard Cutoff 3 (Lệch màu rất mạnh khi ảnh chưa đủ giống):
+                elif color_sim < 0.22 and visual_sim < 0.80:
+                    is_rejected = True
+                    reject_reason = "Màu sắc quá khác biệt (< 22%)"
+                # Hard Cutoff 4 (Chặn bài không khớp loại đồ vật trong mô tả trừ khi ảnh & màu trùng khớp >= 90%):
+                elif text_sim < 0.46 and not (visual_sim >= 0.90 and color_sim >= 0.75):
+                    is_rejected = True
+                    reject_reason = "Mô tả đồ vật không khớp loại"
+            else:
+                # ── RULE 2: Có ảnh bị mờ, vỡ, thiếu sáng -> Ảnh vẫn giữ trọng số cao nhất (42%) ──
+                w_vis = 0.42
+                w_color = 0.14
+                w_text = 0.26
                 w_cross = 0.10
                 w_st = 0.08
 
-                # Hard Cutoff 1 (Chặn ảnh khác biệt nhau hoàn toàn):
-                # Nếu ảnh < 50% (raw_vis < 0.70) VÀ mô tả cũng không khớp rõ (< 55%) -> LOẠI NGAY
-                if visual_sim < 0.50 and text_sim < 0.55:
-                    is_rejected = True
-                    reject_reason = "Hình ảnh và mô tả đều không tương đồng"
-                # Hard Cutoff 2: Ảnh quá khác nhau (< 42%, tức raw_vis < 0.64) -> LOẠI NGAY dù mô tả giống
-                elif visual_sim < 0.42:
-                    is_rejected = True
-                    reject_reason = "Hình ảnh quá khác biệt (< 42%)"
-                # Hard Cutoff 3 (Lệch màu cực mạnh khi ảnh chưa rất giống):
-                elif color_sim < 0.25 and visual_sim < 0.75:
-                    is_rejected = True
-                    reject_reason = "Màu sắc quá khác biệt (< 25%)"
-                # Hard Cutoff 4 (Chặn 2 bài gọi tên rõ ràng 2 loại đồ vật hoàn toàn trái ngược nhau, vd: Balo vs Ví da):
-                elif text_sim < 0.12:
-                    is_rejected = True
-                    reject_reason = "Tên và mô tả đồ vật hoàn toàn khác loại"
-            else:
-                # ── RULE 2: Có ảnh bị mờ, vỡ, thiếu sáng -> giảm trọng số ảnh, tăng Mô tả & Ảnh-Mô tả ──
-                w_vis = 0.25
-                w_color = 0.10
-                w_text = 0.35
-                w_cross = 0.18
-                w_st = 0.12
+                if cross_modal_sim <= 0.01:
+                    w_vis += 0.06
+                    w_text += 0.04
+                    w_cross = 0.0
 
-                if visual_sim < 0.38 and text_sim < 0.50:
+                if visual_sim >= 0.93 and color_sim >= 0.82:
+                    w_vis = 0.72
+                    w_color = 0.18
+                    w_text = 0.06
+                    w_cross = 0.02 if cross_modal_sim > 0.01 else 0.0
+                    w_st = 0.02
+
+                if visual_sim < 0.40 and text_sim < 0.52:
                     is_rejected = True
                     reject_reason = "Ảnh mờ và mô tả đều không tương đồng"
+                elif text_sim < 0.46 and not (visual_sim >= 0.90 and color_sim >= 0.75):
+                    is_rejected = True
+                    reject_reason = "Mô tả đồ vật không khớp loại"
         elif has_source_img or has_cand_img:
             # ── RULE 3: 1 bên có ảnh, 1 bên chỉ có mô tả -> đẩy mạnh Mô tả & Ảnh-Mô tả ──
             w_vis = 0.00

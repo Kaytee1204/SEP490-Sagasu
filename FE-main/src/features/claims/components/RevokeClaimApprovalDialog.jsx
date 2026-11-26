@@ -15,7 +15,6 @@ export default function RevokeClaimApprovalDialog({
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState('');
-  const [discard, setDiscard] = useState(false);
 
   useEffect(() => {
     const element = dialog.current;
@@ -31,9 +30,7 @@ export default function RevokeClaimApprovalDialog({
   }, []);
 
   function close() {
-    if (sending.current) return;
-    if (reason.trim() && reason.trim() !== initialReason.trim()) setDiscard(true);
-    else onClose();
+    if (!sending.current) onClose();
   }
 
   function handleFormSubmit(event) {
@@ -78,15 +75,12 @@ export default function RevokeClaimApprovalDialog({
       </label>
       <label className="claim-reject-detail">Lý do thu hồi *
         <textarea required maxLength={2000} value={reason} disabled={busy} placeholder="Nêu lý do cần xét duyệt lại, không tiết lộ đặc điểm bí mật của món đồ…"
-          onChange={event => { setReason(event.target.value); setDiscard(false); }} /></label>
+          onChange={event => setReason(event.target.value)} /></label>
       {error && <p role="alert" className="claim-alert">{error}</p>}
-      {discard ? <div className="claim-reject-discard" role="alert"><p>Bỏ lý do đang nhập và quay lại hồ sơ?</p>
-        <div className="claim-actions"><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></div></div>
-        : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>{cancelLabel}</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !custodyConfirmed}>
-            {busy ? 'Đang lưu…' : continueReview ? 'Mở lại xét duyệt' : 'Xác nhận thu hồi'}
-          </button></footer>}
+      <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>{cancelLabel}</button>
+        <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !custodyConfirmed}>
+          {busy ? 'Đang lưu…' : continueReview ? 'Mở lại xét duyệt' : 'Xác nhận thu hồi'}
+        </button></footer>
     </form>
     <ConfirmActionPopup
       open={confirmOpen}

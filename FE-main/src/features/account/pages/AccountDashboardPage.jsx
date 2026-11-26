@@ -14,6 +14,9 @@ export default function AccountDashboardPage() {
   const { user } = useAuth();
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [lockReason, setLockReason] = useState('');
+  const [lockReasonError, setLockReasonError] = useState('');
+  const isLocking = confirmTarget?.type === 'lock' && confirmTarget?.account?.status !== 'SUSPENDED';
   const {
     accounts,
     loading,
@@ -332,20 +335,54 @@ export default function AccountDashboardPage() {
         busy={actionBusy}
         onConfirm={async () => {
           if (!confirmTarget || actionBusy) return;
+          if (isLocking && !lockReason.trim()) {
+            setLockReasonError('Vui lòng nhập lý do khóa tài khoản');
+            return;
+          }
           setActionBusy(true);
           try {
             if (confirmTarget.type === 'delete') {
               await handleSoftDelete(confirmTarget.account);
             } else {
-              await handleToggleLock(confirmTarget.account);
+              await handleToggleLock(confirmTarget.account, lockReason.trim());
             }
           } finally {
             setActionBusy(false);
             setConfirmTarget(null);
+            setLockReason('');
+            setLockReasonError('');
           }
         }}
-        onClose={() => !actionBusy && setConfirmTarget(null)}
-      />
+        onClose={() => {
+          if (actionBusy) return;
+          setConfirmTarget(null);
+          setLockReason('');
+          setLockReasonError('');
+        }}
+      >
+        {isLocking && (
+          <div>
+            <label htmlFor="lock-reason" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px' }}>
+              Lý do khóa <span style={{ color: '#dc2626' }}>*</span>
+            </label>
+            <textarea
+              id="lock-reason"
+              value={lockReason}
+              maxLength={500}
+              rows={3}
+              onChange={(e) => {
+                setLockReason(e.target.value);
+                if (lockReasonError) setLockReasonError('');
+              }}
+              placeholder="VD: Vi phạm nội quy"
+              style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.85rem', resize: 'vertical' }}
+            />
+            {lockReasonError && (
+              <p role="alert" style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '4px' }}>{lockReasonError}</p>
+            )}
+          </div>
+        )}
+      </ConfirmActionPopup>
     </div>
   );
 }

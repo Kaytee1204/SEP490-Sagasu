@@ -36,10 +36,12 @@ export default function OfficeClaimDetail({ mine = false }) {
     const timer = remaining > 0 ? window.setTimeout(refresh, remaining + 150) : null;
     const interval = window.setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
+    window.addEventListener("report-workspace-updated", refresh);
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(interval);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("report-workspace-updated", refresh);
     };
   }, [appealDeadline, refreshWorkflow]);
   if (mine) return <main className="office-page office-personal"><Notice error={notice?.error}>{notice?.text}</Notice><LoadState state={state}>{claim && <PersonalClaimDetail claim={claim} workflow={workflow} onChanged={state.reload}/>}</LoadState></main>;

@@ -151,8 +151,12 @@ public class P2pClaimAppealService {
     }
 
     public HandoverWindow handoverWindow(Claim selected) {
-        Approval approval = activeApproval(selected.getPost().getId());
-        if (approval == null || approval.selectedClaimId() != selected.getId()) return null;
+        return handoverWindow(selected.getPost().getId(), selected.getId());
+    }
+
+    public HandoverWindow handoverWindow(long postId, long selectedClaimId) {
+        Approval approval = activeApproval(postId);
+        if (approval == null || approval.selectedClaimId() != selectedClaimId) return null;
         return new HandoverWindow(approval.deadline(), approval.stateAt(OffsetDateTime.now()));
     }
 
@@ -255,7 +259,7 @@ public class P2pClaimAppealService {
                 Long managerId = inheritAppealAssignment(request.approvalId(), report.getId(), actor);
                 used[0] = true;
                 if (!claim.isOffice()) chat.notifyAppealChanged(report.getId());
-                notifyAppeal(post, actor, report.getId(), managerId, request.approvalId());
+                notifyAppeal(post, actor, report.getId(), request.approvalId(), managerId);
                 return new Submitted(report.getId());
             });
             if (!used[0]) images.cleanup(uploaded);
@@ -340,7 +344,7 @@ public class P2pClaimAppealService {
         return owner;
     }
 
-    private void notifyAppeal(Post post, long actor, long reportId, Long managerId, long approvalId) {
+    private void notifyAppeal(Post post, long actor, long reportId, long approvalId, Long managerId) {
         String title = "Có tranh chấp kết quả nhận đồ (#" + reportId + ")";
         String path = "/admin/reports/" + reportId + "?kind=CLAIM_APPEAL";
         if (managerId == null) {

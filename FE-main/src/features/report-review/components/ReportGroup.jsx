@@ -121,7 +121,7 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
       <td role="cell" className="rr-case-status">
         <span className="rr-case-mobile-label">Trạng thái</span>
         {report.status === "RESOLVED" && report.work_state !== "HISTORY" && report.kind === "CLAIM_APPEAL"
-          ? <span className="rr-badge">Còn bước sau kết luận</span> : <Badge value={report.status} />}
+          ? <span className="rr-badge">Còn bước sau kết luận</span> : <Badge value={report.withdrawn ? "WITHDRAWN" : report.status} />}
         {report.carried_over && <small>Tồn từ ngày làm việc trước</small>}
         {ready && (report.has_new_reply || report.group_has_new_reply) &&
           <ReplyBadge reason={report.priority_reason} />}
@@ -173,7 +173,7 @@ function Reports({ filters, reportPath, revision }) {
         </div>
         <div className="rr-case-child-status">
           {report.status === "RESOLVED" && report.work_state !== "HISTORY" && report.kind === "CLAIM_APPEAL"
-          ? <span className="rr-badge">Còn bước sau kết luận</span> : <Badge value={report.status} />}
+          ? <span className="rr-badge">Còn bước sau kết luận</span> : <Badge value={report.withdrawn ? "WITHDRAWN" : report.status} />}
           {report.work_state === "READY" && report.has_new_reply && <ReplyBadge reason={report.priority_reason} />}
         </div>
         <OpenReport report={report} reportPath={reportPath} />

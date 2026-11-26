@@ -72,4 +72,14 @@ public class P2pHandoverController {
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(service.issue(claimId, data, images, user)));
     }
+
+    @PostMapping("/issues/{reportId}/withdraw")
+    @Operation(summary = "[8.5] Người gửi rút báo cáo sự cố bàn giao P2P trước khi quản lý nhận xử lý")
+    public ResponseEntity<?> withdrawIssue(
+            @PathVariable long claimId,
+            @PathVariable long reportId,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
+        service.withdrawIssue(claimId, reportId, user);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(null));
+    }
 }

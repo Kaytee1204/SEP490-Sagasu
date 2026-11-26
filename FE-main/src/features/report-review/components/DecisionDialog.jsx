@@ -1,4 +1,3 @@
-import ConfirmActionPopup from "@/components/common/ConfirmActionPopup";
 import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox } from "./Shared";
@@ -6,6 +5,8 @@ import { appealActionHelp, handoverActionLabel, labels, officeAppealActionHelp }
 const warnings = {
   REQUEST_POST_CORRECTION: "Người đăng sẽ nhận yêu cầu chỉnh sửa và có thể xem hướng dẫn trong hồ sơ.",
   HIDE_POST: "Bài đăng sẽ được ẩn khỏi tìm kiếm công khai.",
+  BAN_POST_7_DAYS: "Người đăng bị chặn tạo bài đăng mới trong 7 ngày kể từ khi lưu kết luận.",
+  BAN_CLAIM_7_DAYS: "Người yêu cầu bị chặn gửi hồ sơ nhận đồ mới trong 7 ngày, kể cả hồ sơ qua văn phòng.",
   WARN_ACCOUNT: "Gửi cảnh báo và lưu lý do vào lịch sử xử lý của báo cáo.",
   SUSPEND_ACCOUNT:
     "Tài khoản được chọn sẽ bị đình chỉ truy cập. Quản lý chỉ xử lý tài khoản người dùng hoặc nhân viên tiếp nhận.",
@@ -22,6 +23,7 @@ const warnings = {
   HANDOVER_RETRY: "Hủy lượt giao hiện tại và giữ nguyên người đã được chấp thuận. Người nhặt có thể ghi nhận lượt giao mới.",
   HANDOVER_REOPEN: "Thu hồi chấp thuận, đưa hồ sơ về chờ xét duyệt và mở lại việc chọn người nhận.",
   CLAIM_VIOLATION_REJECT: "Bác hồ sơ được báo cáo và gửi lý do cho người yêu cầu.",
+  CLAIM_VIOLATION_BLOCK: "Yêu cầu này bị bác. Người gửi không thể gửi yêu cầu khác trên cùng bài đăng.",
   REQUEST_ITEM_RECOVERY: "Gửi hướng dẫn thu hồi cho các bên. Bàn giao tiếp tục tạm dừng trong khi quản lý xác minh kết quả.",
   CONFIRM_ITEM_RECOVERY: "Ghi nhận món đồ đã về người giữ sau khi đối chiếu bằng chứng.",
   RESOLVE:
@@ -32,7 +34,6 @@ const warnings = {
 const findings = {
   VIOLATION: "Có vi phạm",
   NO_VIOLATION: labels.NO_VIOLATION,
-  INSUFFICIENT_EVIDENCE: labels.INSUFFICIENT_EVIDENCE,
 };
 const appealFindings = {
   INSUFFICIENT_EVIDENCE: "Chưa đủ căn cứ để thay đổi người nhận",
@@ -46,12 +47,15 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
   const action = outcome ? choice : initialAction;
   const measures = ["HANDOVER_CORRECTION", "REQUEST_ITEM_RECOVERY", "CONFIRM_ITEM_RECOVERY", "HANDOVER_VERIFY_HOLDER", "HOLD", "RELEASE"];
   const outcomes = ["HANDOVER_COMPLETED", "HANDOVER_CONTINUE", "HANDOVER_RETRY", "HANDOVER_REOPEN", "RESOLVE", "DISMISS", "HANDOVER_UNVERIFIED"];
+  const isHandoverConclusion = data.caseKind === "HANDOVER_ISSUE" && outcomes.includes(action);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selected, setSelected] = useState([]);
   const [sameIncident, setSameIncident] = useState(false);
   const structured = action === "CONCLUDE_VIOLATION";
   const [finding, setFinding] = useState("");
   const [measure, setMeasure] = useState("");
+  const requiresMeasure = structured && finding === "VIOLATION"
+    && (data.report.post_id != null || data.report.claim_id != null);
   const decision = structured ? finding : action;
   const effect = measure || decision;
   const candidates = data.caseKind !== "HANDOVER_ISSUE" && !measure && batchActions.includes(decision) ? (data.related || []).filter(r =>
@@ -76,7 +80,9 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
     || ["HANDOVER_COMPLETED", "HANDOVER_RETRY", "HANDOVER_REOPEN", "CONFIRM_ITEM_RECOVERY"].includes(action)
     || (isKeepApproval && data.recoveryRequested);
   const officeAppeal = data.appeal?.claim_type === "OFFICE";
-  const warning = (data.caseKind === "CLAIM_APPEAL" && (officeAppeal ? officeAppealActionHelp : appealActionHelp)[effect]) || warnings[effect];
+  const warning = effect === "HANDOVER_CONTINUE" && data.issuePhase === "BEFORE"
+    ? "Đóng sự cố để hai bên tiếp tục hẹn giao. Người nhặt ghi nhận giao đồ sau khi đã trao đồ thực tế."
+    : (data.caseKind === "CLAIM_APPEAL" && (officeAppeal ? officeAppealActionHelp : appealActionHelp)[effect]) || warnings[effect];
   const unresolvedInquiries = data.inquiries.filter(item => !item.responded_at && !item.closed_at);
   const overdue = unresolvedInquiries.some(item => item.overdue);
   function changeDecision(setValue, value) {
@@ -85,18 +91,20 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
     setSameIncident(false);
   }
 
-  const cannotSubmit = busy || !decision || !conclusion.trim()
+  const cannotSubmit = busy || !decision || !conclusion.trim() || (requiresMeasure && !measure)
     || (isRecoveryRequest && !holder) || (requiresCustody && !custodyVerified)
     || (isKeepApproval && !appealFinding)
     || (isWrongRecipientDecision && !wrongRecipientVerified) || (selected.length > 0 && !sameIncident);
 
   function submit(event) {
     event.preventDefault();
-    if (!cannotSubmit) {
-      setError("");
-      if (isWrongRecipientDecision || isKeepApproval) void executeSubmit();
-      else setConfirmOpen(true);
+    if (cannotSubmit) return;
+    if (isHandoverConclusion || isWrongRecipientDecision || isKeepApproval) {
+      void executeSubmit();
+      return;
     }
+    setError("");
+    setConfirmOpen(true);
   }
 
   async function executeSubmit() {
@@ -138,7 +146,24 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
       setBusy(false);
     }
   }
-  return (<>
+  if (confirmOpen) {
+    const back = () => setConfirmOpen(false);
+    return (
+      <Dialog title="Xác nhận thực hiện quyết định?" busy={busy} onClose={back}>
+        <p className="rr-callout">{warning || conclusion.trim()}</p>
+        <footer className="rr-actions">
+          <button type="button" autoFocus disabled={busy} onClick={back}>
+            Quay lại
+          </button>
+          <button type="button" className="rr-primary" disabled={busy} onClick={executeSubmit}>
+            {busy ? "Đang lưu…" : "Xác nhận thực hiện"}
+          </button>
+        </footer>
+      </Dialog>
+    );
+  }
+
+  return (
     <Dialog title={outcome ? "Xử lý sự cố bàn giao" : structured ? "Ghi kết luận vi phạm" : data.caseKind === "HANDOVER_ISSUE" ? handoverActionLabel(action, data) : labels[action]} busy={busy} onClose={onClose}>
       <form onSubmit={submit} className="rr-stack rr-decision-form">
         {outcome && <label>
@@ -168,11 +193,12 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             </label>)}
           </fieldset>
           {finding === "VIOLATION" && <label>
-            Biện pháp áp dụng
-            <select value={measure} disabled={busy} onChange={event => changeDecision(setMeasure, event.target.value)}>
-              <option value="">Ghi nhận vi phạm</option>
+            Biện pháp áp dụng{requiresMeasure && " *"}
+            <select required={requiresMeasure} value={measure} disabled={busy} onChange={event => changeDecision(setMeasure, event.target.value)}>
+              <option value="" disabled={requiresMeasure}>{requiresMeasure ? "Chọn biện pháp" : "Ghi nhận vi phạm"}</option>
               {(data.availableMeasures || []).map(value => <option key={value} value={value}>{labels[value]}</option>)}
             </select>
+            {requiresMeasure && !data.availableMeasures?.length && <small>Hiện không có biện pháp áp dụng cho hồ sơ này.</small>}
           </label>}
         </>}
         {isKeepApproval && <>
@@ -260,7 +286,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
         ].includes(decision)) && unresolvedInquiries.length > 0 && (
             <p className="rr-callout">
               {overdue ? "Đã quá hạn bổ sung thông tin. Hãy kết luận dựa trên căn cứ hiện có."
-                : "Vẫn còn yêu cầu bổ sung chưa được trả lời. Nếu đã đủ căn cứ, ghi rõ lý do kết luận ở trên."}
+                : "Còn yêu cầu bổ sung đang chờ phản hồi. Bạn có thể lưu kết luận dựa trên căn cứ hiện có nếu đã đủ thông tin."}
             </p>
           )}
         <ErrorBox>{error}</ErrorBox>
@@ -269,6 +295,7 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
             Quay lại
           </button>
           <button
+            type="submit"
             className="rr-primary"
             disabled={cannotSubmit}
           >
@@ -279,11 +306,5 @@ export default function DecisionDialog({ action: initialAction, data, onClose, o
         </footer>
       </form>
     </Dialog>
-    <ConfirmActionPopup open={confirmOpen}
-      variant={["HIDE_POST", "SUSPEND_ACCOUNT", "CLAIM_VIOLATION_REJECT"].includes(effect) ? "danger" : ["HANDOVER_COMPLETED", "RESOLVE"].includes(effect) ? "success" : "warning"}
-      title="Xác nhận thực hiện quyết định?"
-      description={warning || conclusion.trim()}
-      confirmLabel="Xác nhận thực hiện" cancelLabel="Quay lại"
-      busy={busy} onConfirm={executeSubmit} onClose={() => setConfirmOpen(false)} />
-  </>);
+  );
 }

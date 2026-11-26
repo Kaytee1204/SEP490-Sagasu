@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Camera, CheckCheck, FileText, Flag, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, X } from 'lucide-react';
+import { Camera, CheckCheck, FileText, Image as ImageIcon, MapPin, Paperclip, SendHorizontal, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/features/chat/hooks/useChat';
 import { getMessages, sendMessage, sendAttachments, markChatRead, getReadReceipts } from '../api/chatApi';
@@ -18,7 +18,7 @@ const merge = (old, incoming) => {
 };
 const receiptTime = value => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 
-export default function ChatThread({ chat, onReportMessage, pauseMessage }) {
+export default function ChatThread({ chat, pauseMessage }) {
   const { user } = useAuth();
   const { revision, refresh, limits } = useChat();
   const [rows, setRows] = useState([]);
@@ -195,9 +195,6 @@ export default function ChatThread({ chat, onReportMessage, pauseMessage }) {
         {row.location && <ChatLocation location={row.location} />}
         {!!row.attachments?.length && <ChatAttachments chatId={chat.id} message={row} />}
         <div className="chat-message-footer">
-          {row.body && onReportMessage && <button type="button" className="chat-message-report"
-            aria-label="Báo sự cố trao trả từ tin nhắn này" title="Báo sự cố trao trả"
-            onClick={() => onReportMessage(row)}><Flag size={15} aria-hidden="true" /></button>}
           <small>{new Date(row.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</small>
           {String(row.senderId) === String(user.id) && (row.readAt || row.sequence <= chat.otherReadSequence)
             && <small className="chat-read-receipt"><CheckCheck size={14} aria-hidden="true" />{row.readAt ? `Đã xem lúc ${receiptTime(row.readAt)}` : 'Đã xem'}</small>}

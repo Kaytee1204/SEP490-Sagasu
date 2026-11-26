@@ -98,6 +98,15 @@ public class ReportReviewController {
         return ApiResponse.ok(inquiries.ask(id, request, user));
     }
 
+    @PostMapping("/{id}/inquiries/batch")
+    public ApiResponse<?> askBoth(
+            @PathVariable("id") long id,
+            @Valid @RequestBody ReportInquiryService.AskBoth request,
+            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user
+    ) {
+        return ApiResponse.ok(inquiries.askBoth(id, request, user));
+    }
+
     @PostMapping("/{id}/inquiries/{inquiryId}/custody")
     public ApiResponse<?> verifyCustody(@PathVariable("id") long id, @PathVariable("inquiryId") long inquiryId,
             @Valid @RequestBody ReportInquiryService.CustodyCheck request,

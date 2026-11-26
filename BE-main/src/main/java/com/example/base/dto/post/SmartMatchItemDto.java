@@ -1,20 +1,25 @@
 package com.example.base.dto.post;
 
+import java.util.List;
 import java.util.Map;
 
 public class SmartMatchItemDto {
     private Long id;
     private String title;
+    private String description;
     private String postType;
     private String categoryName;
     private String locationText;
     private String eventAt;
     private String imageUrl;
+    private List<String> imageUrls;
     private String authorName;
     private String status;
     private double matchScore;
     private Map<String, Object> matchBreakdown;
     private String matchReason;
+    private String sourceDetectedItem;
+    private String candDetectedItem;
 
     public SmartMatchItemDto() {}
 
@@ -71,4 +76,16 @@ public class SmartMatchItemDto {
 
     public String getMatchReason() { return matchReason; }
     public void setMatchReason(String matchReason) { this.matchReason = matchReason; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public List<String> getImageUrls() { return imageUrls; }
+    public void setImageUrls(List<String> imageUrls) { this.imageUrls = imageUrls; }
+
+    public String getSourceDetectedItem() { return sourceDetectedItem; }
+    public void setSourceDetectedItem(String sourceDetectedItem) { this.sourceDetectedItem = sourceDetectedItem; }
+
+    public String getCandDetectedItem() { return candDetectedItem; }
+    public void setCandDetectedItem(String candDetectedItem) { this.candDetectedItem = candDetectedItem; }
 }

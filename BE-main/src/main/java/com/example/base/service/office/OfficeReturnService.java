@@ -546,6 +546,7 @@ public class OfficeReturnService {
             officer&&approved&&h==null&&!verified&&inStorage&&!onHold
                 && (window==null||window.state()==P2pClaimAppealService.State.OPEN||window.state()==P2pClaimAppealService.State.CLEARED),
             officer&&"PENDING".equals(c.getStatus())&&appeals.hasCompetitors(c),blocked?window.deadline():null,
+            window==null?null:window.state().name(),
             filedAppeal==null?null:new FiledAppeal(filedAppeal.reportId(),filedAppeal.reportStatus()),
             a==null||verified?null:OfficePickupSchedule.verificationDeadline(a.getScheduledAt()),
             h!=null&&"RECIPIENT".equals(h.completionMethod())&&h.confirmedAt()!=null

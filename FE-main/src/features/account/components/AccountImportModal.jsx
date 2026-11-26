@@ -11,8 +11,18 @@ export default function AccountImportModal({
   importResult,
 }) {
   const [selectedFile, setSelectedFile] = useState(null);
+  const [templateError, setTemplateError] = useState('');
 
   if (!isOpen) return null;
+
+  const handleDownloadTemplate = async () => {
+    setTemplateError('');
+    try {
+      await accountApi.downloadTemplate();
+    } catch (err) {
+      setTemplateError(err.message || 'Không tải được file mẫu');
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -92,10 +102,12 @@ export default function AccountImportModal({
           <span style={{ fontSize: '0.8rem', color: '#0f766e', fontWeight: 500 }}>
             Chưa có file mẫu? Tải file Excel mẫu có sẵn cột email & password:
           </span>
-          <a
-            href={accountApi.getTemplateDownloadUrl()}
-            download="accounts_import_template.xlsx"
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
             style={{
+              border: 'none',
+              cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
@@ -109,7 +121,10 @@ export default function AccountImportModal({
             }}
           >
             <Download size={14} /> Tải file mẫu
-          </a>
+          </button>
+          {templateError && (
+            <span role="alert" style={{ width: '100%', fontSize: '0.78rem', color: '#dc2626' }}>{templateError}</span>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

@@ -1,11 +1,7 @@
 package com.example.base.service.auth;
 
-import com.example.base.dto.account.AccountDto;
-import com.example.base.dto.auth.ChangePasswordConfirmRequest;
-import com.example.base.dto.auth.ForgotPasswordRequest;
 import com.example.base.dto.auth.LoginRequest;
 import com.example.base.dto.auth.LoginResponse;
-import com.example.base.dto.auth.RequestChangePasswordOtpRequest;
 import com.example.base.dto.auth.ResetPasswordRequest;
 import com.example.base.dto.auth.SendOtpRequest;
 import com.example.base.dto.auth.VerifyOtpRequest;
@@ -44,7 +40,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -204,10 +199,6 @@ class AuthServiceTest {
         assertNotNull(service.login(loginReq(EMAIL, "Valid@123")).getAccessToken());
     }
 
-    // ---------------------------------------------------------------- requestChangePasswordOtp
-
-    // ---------------------------------------------------------------- confirmChangePassword
-
     // ---------------------------------------------------------------- sendOtp
 
     @Test
@@ -283,7 +274,6 @@ class AuthServiceTest {
         service.sendOtp(sendOtpReq(EMAIL, OtpPurpose.LOGIN));
         verify(emailService).sendOtpEmail(eq(EMAIL), otp.capture(), eq(OtpPurpose.LOGIN));
         assertTrue(otp.getValue().matches("\\d{6}"));
-        assertEquals("000042", String.format("%06d", 42));
     }
 
     // ---------------------------------------------------------------- verifyOtp / verifyResetPasswordOtp
@@ -369,7 +359,7 @@ class AuthServiceTest {
         assertNotNull(ch.getRevokedAt());
     }
 
-    // ---------------------------------------------------------------- forgotPassword / resetPassword / sha256Hex
+    // ---------------------------------------------------------------- resetPassword
 
     @Test
     void utc034_resetPassword_unlocksSuspendedAccountAndRevokesTokens() {
@@ -449,21 +439,6 @@ class AuthServiceTest {
         return req;
     }
 
-    private static RequestChangePasswordOtpRequest changeOtpReq(String email, String currentPassword) {
-        RequestChangePasswordOtpRequest req = new RequestChangePasswordOtpRequest();
-        req.setEmail(email);
-        req.setCurrentPassword(currentPassword);
-        return req;
-    }
-
-    private static ChangePasswordConfirmRequest confirmReq(String email, String otp) {
-        ChangePasswordConfirmRequest req = new ChangePasswordConfirmRequest();
-        req.setEmail(email);
-        req.setOtp(otp);
-        req.setNewPassword("New@1234");
-        return req;
-    }
-
     private static SendOtpRequest sendOtpReq(String email, OtpPurpose purpose) {
         SendOtpRequest req = new SendOtpRequest();
         req.setEmail(email);
@@ -476,12 +451,6 @@ class AuthServiceTest {
         req.setEmail(email);
         req.setOtp(otp);
         req.setPurpose(purpose);
-        return req;
-    }
-
-    private static ForgotPasswordRequest forgotReq(String email) {
-        ForgotPasswordRequest req = new ForgotPasswordRequest();
-        req.setEmail(email);
         return req;
     }
 

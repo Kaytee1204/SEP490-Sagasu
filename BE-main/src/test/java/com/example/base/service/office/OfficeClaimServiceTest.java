@@ -40,6 +40,7 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OfficeClaimServiceTest {
     @Mock com.example.base.service.claim.ClaimDailyLimit dailyLimit;
+    @Mock com.example.base.service.report.SubmissionRestrictions restrictions;
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
@@ -61,6 +62,8 @@ class OfficeClaimServiceTest {
         var req = new Submission(10L, counter ? 7L : null, null, null, null, "My item", null);
         var error = assertThrows(AppException.class, () -> service.submit(req, List.of(), counter, user));
         assertEquals(ErrorCode.CLAIM_DAILY_LIMIT, error.getErrorCode());
+        verify(restrictions).requireAvailableForSubmission(7L,
+                com.example.base.service.report.SubmissionRestrictions.Action.CLAIM);
         verify(claims, never()).saveAndFlush(any());
     }
 
@@ -785,28 +788,29 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc240_review_needsInfo_setsActivityRequestInfo() {
+    void utc240_review_needsInfoDecision_rejectedAsInvalid() {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+        Decision req = new Decision("NEEDS_INFO", "Send receipt photo", 0L, null, null, null, null);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(activities.save(any())).thenReturn(null);
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-        })) {
-            Decision req = new Decision("NEEDS_INFO", "Send receipt photo", 0L, null, null, null, null);
-            assertDoesNotThrow(() -> service.review(30L, req, ud));
-        }
+        AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
+        assertThat(ex.getMessage()).contains("Quyết định xét duyệt không hợp lệ");
+        verifyNoInteractions(activities);
     }
 
     @Test
-    void utc241_review_claimNeedsInfoApproveDecision_throwsBadRequest() {
+    void utc241_review_legacyNeedsInfoClaimApproveDecision_throwsAlreadyProcessed() {
+        assertLegacyNeedsInfoClaimRefused(new Decision("APPROVED", "OK", 0L,
+                OffsetDateTime.now().plusHours(13), "Room 101", null, null));
+    }
+
+    @Test
+    void utc242_review_legacyNeedsInfoClaimRejectDecision_throwsAlreadyProcessed() {
+        assertLegacyNeedsInfoClaimRefused(new Decision("REJECTED", "Evidence mismatch", 0L, null, null, null, null));
+    }
+
+    private void assertLegacyNeedsInfoClaimRefused(Decision req) {
         Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
         CustomUserDetails ud = userDetails(approver);
         Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
@@ -816,37 +820,14 @@ class OfficeClaimServiceTest {
             when(mock.execute(any())).thenAnswer(inv -> {
                 when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
                 setupLockedClaimForReview(30L, "NEEDS_INFO", claimant, approver, post, 0L);
-                // NEEDS_INFO + not REJECTED => throw
-                throw new AppException(ErrorCode.BAD_REQUEST, "Chờ bổ sung thông tin trước khi duyệt.");
+                TransactionCallback<?> action = inv.getArgument(0);
+                return action.doInTransaction(mock(TransactionStatus.class));
             });
         })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "Room 101", null, null);
-
             AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
             assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("bổ sung thông tin");
-        }
-    }
-
-    @Test
-    void utc242_review_claimNeedsInfoRejectDecision_allowed() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "NEEDS_INFO", claimant, approver, post, 0L);
-                when(activities.save(any())).thenReturn(null);
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-        })) {
-            Decision req = new Decision("REJECTED", "Evidence mismatch", 0L, null, null, null, null);
-            assertDoesNotThrow(() -> service.review(30L, req, ud));
+            assertThat(ex.getMessage()).contains("đã được xử lý");
+            verifyNoInteractions(activities);
         }
     }
 

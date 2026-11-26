@@ -9,6 +9,7 @@ import DecisionDialog from "./DecisionDialog";
 import Inquiries from "./Inquiries";
 import ChatContext from "./ChatContext";
 import { ItemPostSummary } from "@/features/chat/components/ChatItemPanel";
+import useDeadlineCountdown from "@/hooks/useDeadlineCountdown";
 import AppealEvidenceComparison from "./AppealEvidenceComparison";
 import OfficeHandoverEvidence from "./OfficeHandoverEvidence";
 import useReportResource from "@/features/reports/hooks/useReportResource";
@@ -65,7 +66,7 @@ function RelatedInformation({ data, onRelated }) {
       <div className="rr-related-list">
         {relatedReports.map(item => <button type="button" className="rr-related" key={item.report_id} onClick={() => onRelated(item.report_id)}>
           <span><strong>#{item.report_id} · {item.reason_label_snapshot || labels[item.kind]}</strong><small>{date(item.created_at)}</small></span>
-          <Badge value={item.status} /><ArrowRight size={16} aria-hidden="true" />
+          <Badge value={item.withdrawn ? "WITHDRAWN" : item.status} /><ArrowRight size={16} aria-hidden="true" />
         </button>)}
       </div>
     </section>}
@@ -134,6 +135,13 @@ const handoverInstructions = {
   P2P_HANDOVER_THREAT: "Xem bằng chứng, hỏi riêng người báo và bên được phản ánh. Tạm dừng giao nhận nếu việc gặp trực tiếp có rủi ro.",
 };
 
+const completedHandoverInstructions = {
+  HANDOVER_NOT_RECEIVED: "Kiểm tra ai đã xác nhận hoàn tất và ai thực tế nhận đồ hoặc nhận hộ. Nếu chưa xác định được, xác minh người đang giữ món đồ.",
+  HANDOVER_CONFIRMATION_ERROR: "Đối chiếu ai đã xác nhận, thông tin ghi nhận nhầm và người đang giữ đồ. Ghi rõ kết quả xác minh trong hồ sơ sự cố.",
+  P2P_HANDOVER_PAYMENT: "Hỏi riêng hai bên về thời điểm, khoản tiền hoặc tài sản bị đòi và việc giao nhận thực tế. Ghi kết luận dựa trên căn cứ đối chiếu.",
+  P2P_HANDOVER_THREAT: "Đối chiếu bằng chứng và hỏi riêng hai bên về hành vi được báo. Ghi rõ phần đã xác minh và tránh yêu cầu hai bên gặp lại nếu có nguy cơ mất an toàn.",
+};
+
 const officeHandoverInstructions = {
   HANDOVER_WRONG_ITEM: "Đối chiếu đặc điểm tài sản trên phiếu tiếp nhận, biên bản bàn giao và ảnh người nhận cung cấp. Ghi nhận kết quả đổi đúng tài sản nếu xác minh có nhầm lẫn.",
   HANDOVER_MISSING_ITEMS: "Đối chiếu danh sách phụ kiện và giải trình chênh lệch. Xác minh với nhân viên bàn giao và người nhận về phần còn thiếu.",
@@ -141,9 +149,10 @@ const officeHandoverInstructions = {
 };
 
 function FollowUp({ data }) {
-  const { caseKind, report, appeal, recoveryRequested, decisions } = data;
+  const { caseKind, report, appeal, approvalWindow, recoveryRequested, decisions } = data;
   const appealCase = caseKind === "CLAIM_APPEAL";
   const officeHandover = data.handoverSource === "OFFICE";
+  const timeLeft = useDeadlineCountdown(approvalWindow?.state === "OPEN" ? approvalWindow.deadline : null);
   const assigned = data.assigneeName || "Quản lý phụ trách";
   const lastDecision = decisions?.at(-1)?.action;
   const needsReview = appealCase && report.status === "RESOLVED" && appeal?.active;
@@ -163,6 +172,10 @@ function FollowUp({ data }) {
   } else if (appeal?.follow_up) {
     text = appealInstruction(appeal.follow_up, appeal.claim_type === "OFFICE");
     if (appeal.follow_up === "READY_TO_REOPEN" && appeal.claim_type !== "OFFICE") owner = "Người nhặt";
+  } else if (timeLeft) {
+    text = `Còn ${timeLeft} để các hồ sơ khác gửi tranh chấp. Hạn kết thúc lúc ${date(approvalWindow.deadline)}.`;
+  } else if (approvalWindow?.state === "UNDER_REVIEW") {
+    text = "Lượt duyệt này còn tranh chấp khác đang được xử lý.";
   } else if (lastDecision === "HANDOVER_VERIFY_HOLDER" && !questions.some(i => Date.parse(i.created_at) > Date.parse(decisions.at(-1).created_at))) {
     text = "Cần xác minh người giữ đồ. " + decisions.at(-1).conclusion;
   } else if (questions.length && ["OPEN","IN_REVIEW"].includes(report.status)) {
@@ -207,10 +220,11 @@ function FollowUp({ data }) {
     owner = "Người đang giữ món đồ";
   }
 
+  const completedInstruction = data.issuePhase === "AFTER" ? completedHandoverInstructions[report.reason_code] : null;
   if (!text && data.canProcess) text = caseKind === "CLAIM_APPEAL"
     ? "Đối chiếu câu trả lời và ảnh của hai người trước khi ghi kết luận."
     : officeHandover ? officeHandoverInstructions[report.reason_code] || "Đối chiếu phiếu tiếp nhận, biên bản bàn giao và tài liệu người nhận cung cấp trước khi ghi kết luận."
-    : caseKind === "HANDOVER_ISSUE" ? (handoverInstructions[report.reason_code] || "Đối chiếu ảnh bàn giao và xác minh ai đang giữ món đồ trước khi ghi kết luận.")
+    : caseKind === "HANDOVER_ISSUE" ? (completedInstruction || handoverInstructions[report.reason_code] || "Đối chiếu ảnh bàn giao và xác minh ai đang giữ món đồ trước khi ghi kết luận.")
       : "Đối chiếu nội dung bị báo cáo, ghi kết luận và chọn biện pháp nếu xác định có vi phạm.";
   return text && <div className="rr-callout rr-follow-up">
     <strong>{recovery?.holder_name && !recovery.confirmed_at ? "Thu hồi món đồ" : appealSteps[appeal?.follow_up] || "Bước tiếp theo"}</strong>
@@ -266,9 +280,10 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
       </div>
     </div>
     {isClosed && <div className="rr-public-result">
-      <strong>{conclusion ? labels[conclusion.action] : "Kết luận đã gửi cho người liên quan"}</strong>
+      <strong>{data.withdrawn ? labels.WITHDRAWN : conclusion ? labels[conclusion.action] : "Kết luận đã gửi cho người liên quan"}</strong>
       <p>{report.resolution_note || labels[report.status]}</p>
       {conclusion?.applied_measure && <small>Biện pháp · {labels[conclusion.applied_measure]}</small>}
+      {conclusion?.restriction_until && <small>Hết hạn lúc {date(conclusion.restriction_until)}</small>}
     </div>}
     {hold?.reason && <div className="rr-callout">
       <strong>Đang tạm dừng giao nhận</strong><p>{hold.reason}</p>
@@ -385,7 +400,7 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
             <small>Gửi lúc <time dateTime={report.created_at}>{date(report.created_at)}</time></small>
           </div>
         </div>
-        {appealSteps[data.appeal?.follow_up] ? <span className="rr-badge">Tranh chấp đã có kết luận</span> : <Badge value={report.status} />}
+        {appealSteps[data.appeal?.follow_up] ? <span className="rr-badge">Tranh chấp đã có kết luận</span> : <Badge value={data.withdrawn ? "WITHDRAWN" : report.status} />}
       </header>
       <div className="rr-detail-sections">
           {!isViolation && <div className="rr-detail-nav" role="group" aria-label="Thông tin báo cáo">

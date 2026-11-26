@@ -166,7 +166,7 @@ function PostClaimsContent({ postId }) {
   const onlyArchived = status === 'PENDING' && statusCounts.PENDING === 0
     && statusCounts.APPROVED === 0 && statusCounts.HISTORY > 0;
 
-  const displayTitle = group?.postTitle || post?.title || `Bài đăng #${postId}`;
+  const displayTitle = group?.postTitle || post?.title || 'Chi tiết bài đăng';
   const displayThumb = group?.postThumbnailUrl || post?.images?.[0]?.url || post?.images?.[0]?.imageUrl || null;
   const postStatusLabel = post?.status ? (POST_STATUS_LABELS[post.status] || post.status) : null;
 

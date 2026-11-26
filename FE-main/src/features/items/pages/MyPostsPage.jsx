@@ -161,13 +161,12 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const inFlight = useRef(false);
   const dialog = useRef(null);
-  const [discard, setDiscard] = useState(false);
   useEffect(() => {
     const element = dialog.current, focus = document.activeElement, overflow = document.body.style.overflow;
     element.showModal(); document.body.style.overflow = 'hidden';
     return () => { element.close(); document.body.style.overflow = overflow; if (focus?.isConnected) focus.focus(); };
   }, []);
-  const close = () => { if (inFlight.current) return; if (reason.trim()) setDiscard(true); else onCancel(); };
+  const close = () => { if (!inFlight.current) onCancel(); };
   function handleFormSubmit(event) {
     event.preventDefault();
     if (inFlight.current) return;
@@ -192,13 +191,10 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
         <label htmlFor="deletion-reason" className="input-label">Lý do ẩn bài *</label>
         <textarea id="deletion-reason" className="input" required maxLength={1000} rows={4}
           placeholder="Nhập lý do bạn muốn ẩn bài đăng…"
-          value={reason} disabled={busy} onChange={e => { setReason(e.target.value); setDiscard(false); }} />
+          value={reason} disabled={busy} onChange={e => setReason(e.target.value)} />
         {error && <p className="my-post-hide-error" role="alert">{error}</p>}
-        {discard ? <div className="my-post-hide-discard" role="alert"><p>Bỏ lý do đang nhập và giữ bài đăng?</p><footer>
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>Bỏ nội dung và đóng</button>
-          <button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button></footer></div> :
         <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ bài đăng</button>
-          <button className="btn btn-primary" disabled={busy}><EyeOff size={16} aria-hidden="true" />{busy ? 'Đang ẩn…' : 'Ẩn bài đăng'}</button></footer>}
+          <button className="btn btn-primary" disabled={busy}><EyeOff size={16} aria-hidden="true" />{busy ? 'Đang ẩn…' : 'Ẩn bài đăng'}</button></footer>
       </form>
       <ConfirmActionPopup
         open={confirmOpen}

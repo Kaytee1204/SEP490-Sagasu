@@ -12,7 +12,6 @@ export default function CancelClaimDialog({ claim, onClose, onCancelled }) {
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState('');
-  const [discard, setDiscard] = useState(false);
 
   useEffect(() => {
     const element = dialog.current;
@@ -28,9 +27,7 @@ export default function CancelClaimDialog({ claim, onClose, onCancelled }) {
   }, []);
 
   function close() {
-    if (sending.current) return;
-    if (reason.trim()) setDiscard(true);
-    else onClose();
+    if (!sending.current) onClose();
   }
 
   function handleFormSubmit(event) {
@@ -70,13 +67,10 @@ export default function CancelClaimDialog({ claim, onClose, onCancelled }) {
       {claim.status === 'APPROVED' && <p className="claim-notice">Sau khi hủy, cuộc trò chuyện chỉ còn xem lịch sử. Bạn không thể tiếp tục bàn giao với hồ sơ này.</p>}
       <label className="claim-reject-detail">Lý do hủy (tùy chọn)
         <textarea maxLength={2000} value={reason} disabled={busy} placeholder="Ví dụ: Tôi đã tìm lại được đồ…"
-          onChange={event => { setReason(event.target.value); setDiscard(false); }} /></label>
+          onChange={event => setReason(event.target.value)} /></label>
       {error && <p role="alert" className="claim-alert">{error}</p>}
-      {discard ? <div className="claim-reject-discard" role="alert"><p>Bỏ lý do đang nhập và giữ yêu cầu nhận đồ?</p>
-        <div className="claim-actions"><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></div></div>
-        : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ yêu cầu</button>
-          <button type="submit" className="btn claim-reject-submit" disabled={busy}>{busy ? 'Đang hủy…' : 'Xác nhận hủy yêu cầu'}</button></footer>}
+      <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ yêu cầu</button>
+        <button type="submit" className="btn claim-reject-submit" disabled={busy}>{busy ? 'Đang hủy…' : 'Xác nhận hủy yêu cầu'}</button></footer>
     </form>
     <ConfirmActionPopup
       open={confirmOpen}
