@@ -26,8 +26,12 @@ export default function ReceiptInfo({ receipt }) {
             <dd>{date(receipt.receivedAt)}</dd>
           </div>
           <div>
-            <dt>Tình trạng đồ</dt>
-            <dd>{receipt.condition || "—"}</dd>
+            <dt>Tài sản và phụ kiện tiếp nhận</dt>
+            <dd className="of-prose">{receipt.items || "Chưa ghi nhận riêng"}</dd>
+          </div>
+          <div>
+            <dt>Tình trạng tài sản khi tiếp nhận</dt>
+            <dd className="of-prose">{receipt.condition || "—"}</dd>
           </div>
           <div>
             <dt>Người giao đồ</dt>

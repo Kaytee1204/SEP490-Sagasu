@@ -40,6 +40,7 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OfficeClaimServiceTest {
     @Mock com.example.base.service.claim.ClaimDailyLimit dailyLimit;
+    @Mock com.example.base.service.report.SubmissionRestrictions restrictions;
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
@@ -61,6 +62,8 @@ class OfficeClaimServiceTest {
         var req = new Submission(10L, counter ? 7L : null, null, null, null, "My item", null);
         var error = assertThrows(AppException.class, () -> service.submit(req, List.of(), counter, user));
         assertEquals(ErrorCode.CLAIM_DAILY_LIMIT, error.getErrorCode());
+        verify(restrictions).requireAvailableForSubmission(7L,
+                com.example.base.service.report.SubmissionRestrictions.Action.CLAIM);
         verify(claims, never()).saveAndFlush(any());
     }
 

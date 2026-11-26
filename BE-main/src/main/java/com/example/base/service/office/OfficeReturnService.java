@@ -6,6 +6,7 @@ import com.example.base.entity.*;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.claim.P2pClaimAppealService;
+import com.example.base.service.report.ReportService;
 import com.example.base.service.report.WorkflowImages;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -23,6 +24,12 @@ import static com.example.base.service.office.OfficeAccess.bad;
 
 @Service @RequiredArgsConstructor
 public class OfficeReturnService {
+    private static final String NO_SHOW_REASON = "Không đến xác minh trong thời hạn.";
+    private static final int COUNTER_CONFIRMATION_MINUTES = 15;
+    static final String OPEN_HANDOVER_REPORT = """
+        select r.report_id,r.reporter_id from office_handover_issue i join report r using(report_id)
+        where i.handover_id=h.handover_id and r.status in ('OPEN', 'IN_REVIEW')
+        """;
     // DaiHV integration: investigation holds apply to physical handover, not to reading the dossier.
     private final com.example.base.service.report.ReportHoldGuard reportHolds;
     private final OfficeAccess access;
@@ -50,8 +57,7 @@ public class OfficeReturnService {
             requireAvailable(c);
             if (activeAppointment(id)!=null) throw bad("Yêu cầu đã có lịch hẹn. Hãy tải lại hồ sơ.");
             OffsetDateTime now=OffsetDateTime.now();
-            if (!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
-                throw bad("Giờ hẹn cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
+            invitations.validatePickupSchedule(request.scheduledAt(),now);
             c.contactEmail(request.email().strip().toLowerCase(Locale.ROOT));
             appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
             c.touchWorkflow();
@@ -68,9 +74,10 @@ public class OfficeReturnService {
             Account actor=approver(user); Claim c=lock(id); expected(c,request.expectedVersion()); manageable(c,actor);
             requireAvailable(c);
             OffsetDateTime now=OffsetDateTime.now();
-            if(!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1))) throw bad("Lịch mới cần cách hiện tại hơn 12 giờ để người nhận phản hồi.");
+            invitations.validatePickupSchedule(request.scheduledAt(),now);
             Appointment old=scheduled(c);
             requireNotVerified(c,old);
+            requireVerificationWindow(old);
             old.cancelByOffice(request.reason().strip());
             appointments.flush();
             appointments.save(Appointment.schedule(c,actor,request.scheduledAt(),request.location().strip(),request.note(),now));
@@ -93,6 +100,61 @@ public class OfficeReturnService {
         try { delivery=invitations.send(id)?"SENT":"FAILED"; }
         catch(RuntimeException failure) { delivery="FAILED"; }
         return new ReviewResult(id,"APPROVED",delivery);
+    }
+
+    public void expireMissedPickups() {
+        OffsetDateTime cutoff = OffsetDateTime.now().minusHours(24);
+        var due = jdbc.queryForList("""
+            select a.claim_id from appointment a join claim c using (claim_id) join post p using (post_id)
+            where a.status='SCHEDULED' and a.response_status='CONFIRMED' and a.scheduled_at<=?
+              and c.claim_type='OFFICE' and c.status='APPROVED'
+              and p.custody_mode='OFFICE' and p.status='RESERVED'
+              and not exists (
+                  select 1 from office_claim_verification v where v.appointment_id=a.appointment_id
+              )
+              and not exists (select 1 from office_handover h where h.claim_id=c.claim_id and h.status<>'CANCELLED')
+            order by a.scheduled_at, a.appointment_id limit 100
+            """, Long.class,cutoff);
+        var tx = new TransactionTemplate(transactions);
+        for (long id : due) {
+            try {
+                tx.executeWithoutResult(ignored -> expireMissedPickup(id));
+            } catch (RuntimeException failure) {
+                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Could not expire office pickup for claim {}",id,failure);
+            }
+        }
+    }
+
+    private void expireMissedPickup(long id) {
+        Claim claim = lock(id);
+        if (!"APPROVED".equals(claim.getStatus())
+                || !"OFFICE".equals(claim.getPost().getCustodyMode())
+                || !"RESERVED".equals(claim.getPost().getStatus())) return;
+        Appointment appointment = activeAppointment(id);
+        if (appointment == null) return;
+        em.refresh(appointment,LockModeType.PESSIMISTIC_WRITE);
+        if (!"CONFIRMED".equals(appointment.getResponseStatus())
+                || !verificationExpired(appointment)
+                || verifications(id).stream().anyMatch(v -> v.appointmentId()==appointment.getId())
+                || handover(id)!=null) return;
+
+        appointment.cancelByOffice(NO_SHOW_REASON);
+        claim.cancel();
+        claim.getPost().reopenAfterClaimCancellation();
+        activities.save(new ClaimActivity(claim,appointment.getCreatedBy(),"CANCEL","APPROVED",NO_SHOW_REASON));
+        claims.flush();
+        appeals.reopen(claim);
+        if (claim.getClaimant()!=null) notifications.notifyUser(claim.getClaimant().getId(),"CLAIM_CANCELLED",
+            "Đã hủy yêu cầu nhận đồ #"+id,NO_SHOW_REASON,"/van-phong/claims/"+id,false);
+    }
+
+    private boolean verificationExpired(Appointment appointment) {
+        return !OffsetDateTime.now().isBefore(OfficePickupSchedule.verificationDeadline(appointment.getScheduledAt()));
+    }
+
+    private void requireVerificationWindow(Appointment appointment) {
+        if ("CONFIRMED".equals(appointment.getResponseStatus()) && verificationExpired(appointment))
+            throw bad("Đã hết hạn đến quầy xác minh.");
     }
 
     @Transactional
@@ -182,6 +244,7 @@ public class OfficeReturnService {
         requireAvailable(c);
         Appointment a=scheduled(c);
         if(!"CONFIRMED".equals(a.getResponseStatus())) throw bad("Người nhận cần đồng ý lịch hẹn trước khi xác minh tại quầy.");
+        requireVerificationWindow(a);
         jdbc.update("insert into office_claim_verification(claim_id,appointment_id,verified_by,result,note) values(?,?,?,?,?)",
                 id,a.getId(),actor.getId(),request.result(),request.note().strip());
         if("FAILED".equals(request.result())) {
@@ -202,8 +265,13 @@ public class OfficeReturnService {
     public Workflow record(long id,RecordHandover request,List<MultipartFile> files,CustomUserDetails user) {
         Account actor=approver(user);
         // Reuse the team's image validation/storage API; no change to its P2P behavior.
-        var prepared=images.prepare("OFFICE:"+id+":"+request.condition().strip(),files);
-        if(prepared.images().isEmpty()) throw bad("Thêm ít nhất một ảnh chứng minh việc giao đồ.");
+        String items = request.items().strip();
+        String condition = request.condition().strip();
+        String difference = request.differenceNote()==null || request.differenceNote().isBlank()
+            ? null : request.differenceNote().strip();
+        var prepared=images.prepare("OFFICE:"+id+":"+items.length()+":"+items+":"+condition.length()+":"+condition
+            + ":"+Objects.toString(difference,""),files);
+        if(prepared.images().isEmpty()) throw bad("Vui lòng đính kèm ít nhất một ảnh bàn giao.");
         var tx=new TransactionTemplate(transactions);
         Workflow retry=tx.execute(status->{Claim c=lock(id); return recordCheck(c,actor,request,prepared.hash());});
         if(retry!=null)return retry;
@@ -213,17 +281,18 @@ public class OfficeReturnService {
             Workflow result=tx.execute(status->{
                 Account current=approver(user); Claim c=lock(id);
                 Workflow existing=recordCheck(c,current,request,prepared.hash());if(existing!=null)return existing;
-                Appointment appointment=scheduled(c);
                 Verification verification=verifications(id).getFirst();
+                OffsetDateTime recordedAt = OffsetDateTime.now();
+                OffsetDateTime deadline = recordedAt.plusMinutes(COUNTER_CONFIRMATION_MINUTES);
                 Long handoverId=jdbc.queryForObject("""
-                    insert into office_handover(claim_id,item_receipt_id,verification_id,recorded_by,recipient_id,condition_note,client_request_id,request_hash)
-                    values(?,?,?,?,?,?,?,?) returning handover_id
-                    """,Long.class,id,c.getReceipt().getId(),verification.id(),current.getId(),c.getClaimant().getId(),request.condition().strip(),request.clientRequestId(),prepared.hash());
+                    insert into office_handover(claim_id,item_receipt_id,verification_id,recorded_by,recipient_id,
+                        condition_note,client_request_id,request_hash,item_summary,difference_note,recorded_at,confirmation_deadline)
+                    values(?,?,?,?,?,?,?,?,?,?,?,?) returning handover_id
+                    """,Long.class,id,c.getReceipt().getId(),verification.id(),current.getId(),c.getClaimant().getId(),
+                    condition,request.clientRequestId(),prepared.hash(),items,difference,recordedAt,deadline);
                 for(var image:uploaded) jdbc.update("insert into office_handover_evidence(handover_id,storage_key,original_name,mime_type,size_bytes,content_hash,sort_order) values(?,?,?,?,?,?,?)",
                         handoverId,image.key(),image.name(),image.mime(),image.size(),image.hash(),image.order());
-                c.getReceipt().returnedByOffice(); appointment.completeAtOffice(); c.touchWorkflow();
-                activities.save(new ClaimActivity(c,current,"HANDOVER","APPROVED","Văn phòng đã giao đủ đồ và ghi nhận biên bản trao trả."));
-                finish(c,current);
+                counterSessionOpened(c,current,"Văn phòng đã ghi nhận bàn giao và mở lượt xác nhận tại quầy.");
                 claims.flush();inserted[0]=true;return view(c,current);
             });
             if(!inserted[0]) images.cleanup(uploaded);
@@ -231,29 +300,95 @@ public class OfficeReturnService {
         } catch(RuntimeException failure) {images.cleanup(uploaded);throw failure;}
     }
 
-    /** Office-only completion for records created under the previous waiting-confirmation flow. */
     @Transactional
     public Workflow complete(long id,Confirm request,CustomUserDetails user) {
-        Account actor=approver(user); Claim c=lock(id);
-        if(c.getClaimant()!=null&&c.getClaimant().getId().equals(actor.getId()))throw bad("Nhờ nhân viên khác xử lý yêu cầu của bạn.");
+        Account actor=access.require(user); Claim c=lock(id);
+        recipient(c,actor);
         Handover h=handover(id);
-        if(h==null)throw bad("Chưa có biên bản giao đồ.");
-        if("COMPLETED".equals(h.status()))return view(c,actor);
-        responseCheck(c,h,request.expectedVersion());
-        finish(c,actor);claims.flush();return view(c,actor);
+        if (h==null || h.id()!=request.handoverId()) throw bad("Biên bản đã thay đổi. Vui lòng tải lại hồ sơ.");
+        if (!request.acknowledged()) throw bad("Vui lòng xác nhận nội dung biên bản.");
+        if ("RECIPIENT".equals(h.completionMethod())) {
+            return view(c,actor);
+        }
+        responseCheck(c,h,request.handoverId(),request.expectedVersion());
+        if (!confirmationOpen(h)) throw bad("Lượt xác nhận đã hết hiệu lực. Vui lòng liên hệ nhân viên tại quầy.");
+        finish(c,h,actor);
+        return view(c,actor);
     }
-    private void finish(Claim c,Account actor) {
+
+    @Transactional
+    public Workflow reopenConfirmation(long id,ReopenConfirmation request,CustomUserDetails user) {
+        Account actor=approver(user); Claim c=lock(id);
+        Handover h=handover(id);
+        requireStaffPendingHandover(c, h, actor, request.handoverId(), request.expectedVersion());
+        if (!request.recipientPresent() || confirmationOpen(h)) throw bad("Chỉ mở lại lượt đã hết hạn khi người nhận có mặt tại quầy.");
+        jdbc.update("update office_handover set confirmation_deadline=?,version=version+1 where handover_id=?",
+            OffsetDateTime.now().plusMinutes(COUNTER_CONFIRMATION_MINUTES),h.id());
+        counterSessionOpened(c,actor,"Văn phòng đã mở lại lượt xác nhận tại quầy.");
+        claims.flush();
+        return view(c,actor);
+    }
+
+    @Transactional
+    public Workflow stopHandover(long id,StopHandover request,CustomUserDetails user) {
+        Account actor=approver(user); Claim c=lock(id);
+        Handover h=handover(id);
+        requireStaffPendingHandover(c, h, actor, request.handoverId(), request.expectedVersion());
+        if (!request.itemAtOffice()) throw bad("Chỉ dừng lượt bàn giao khi tài sản vẫn do văn phòng lưu giữ.");
+        jdbc.update("update office_handover set status='CANCELLED',version=version+1 where handover_id=?",h.id());
+        if ("RETURNED".equals(c.getReceipt().getStatus())) {
+            // Older waiting records exited storage before the recipient responded.
+            c.getReceipt().restoreToOfficeStorage();
+            Long appointmentId=jdbc.queryForObject("""
+                select v.appointment_id from office_handover h join office_claim_verification v using(verification_id)
+                where h.handover_id=?
+                """,Long.class,h.id());
+            appointments.findById(appointmentId).orElseThrow().restoreAfterOfficeHandover();
+        }
+        c.touchWorkflow();
+        activities.save(new ClaimActivity(c,actor,"HANDOVER","APPROVED","Văn phòng đã dừng lượt bàn giao. Lý do: "+request.reason().strip()));
+        claims.flush();
+        return view(c,actor);
+    }
+
+    private void counterSessionOpened(Claim c,Account actor,String reason) {
+        c.touchWorkflow();
+        activities.save(new ClaimActivity(c,actor,"HANDOVER","APPROVED",reason));
+        notifications.notifyUser(c.getClaimant().getId(),"HANDOVER_RECORDED",
+            "Kính mời Quý vị xác nhận tại quầy",
+            "Vui lòng kiểm tra tài sản, phụ kiện và xác nhận biên bản bàn giao trên Sagasu ngay tại quầy.",
+            "/van-phong/claims/"+c.getId()+"#xac-nhan-tai-quay",false);
+    }
+
+    private void requireStaffPendingHandover(Claim c,Handover h,Account actor,long handoverId,long version) {
+        if (isRecipient(c,actor)) throw bad("Vui lòng đề nghị một nhân viên khác xử lý yêu cầu này.");
+        responseCheck(c,h,handoverId,version);
+        requireUnblockedHandover(c,h,actor);
+    }
+
+    private void requireUnblockedHandover(Claim c,Handover h,Account actor) {
         requireAvailable(c);
-        jdbc.update("update office_handover set status='COMPLETED',confirmed_at=now(),version=version+1 where claim_id=?",c.getId());
+        if (openHandoverReport(h,actor.getId())!=null)
+            throw bad("Phản ánh về biên bản đang được xem xét. Vui lòng theo dõi kết quả xử lý.");
+    }
+
+    private void finish(Claim c,Handover h,Account actor) {
+        requireUnblockedHandover(c,h,actor);
+        if ("IN_STORAGE".equals(c.getReceipt().getStatus())) {
+            scheduled(c).completeAtOffice();
+            c.getReceipt().returnedByOffice();
+        }
+        jdbc.update("update office_handover set status='COMPLETED',confirmed_at=clock_timestamp(),completion_method='RECIPIENT',version=version+1 where handover_id=?",h.id());
         c.completeReceipt(); c.getPost().markReturnedFromOffice();
         appeals.close(c);
-        activities.save(new ClaimActivity(c,actor,"CONFIRM_RECEIPT","APPROVED","Văn phòng xác nhận đã giao đủ đồ cho người nhận. Hoàn tất trao trả."));
+        String summary = "Người nhận đã xác nhận nhận đúng và đủ tài sản theo biên bản bàn giao.";
+        activities.save(new ClaimActivity(c,actor,"CONFIRM_RECEIPT","APPROVED",summary));
         if(c.getClaimant()!=null) {
             notifications.notifyUser(c.getClaimant().getId(),"HANDOVER_COMPLETED",
-                "Hoàn tất bàn giao đồ vật tại văn phòng (#" + c.getId() + ")",
-                "Văn phòng xác nhận đã bàn giao thành công đồ vật \"" + c.getPost().getTitle() + "\" cho bạn.",
+                "Cập nhật kết quả bàn giao tài sản (#" + c.getId() + ")", summary,
                 "/van-phong/claims/" + c.getId(),true);
         }
+        claims.flush();
         for(Claim other:claims.findAllForOfficeTransfer(c.getPost().getId())) {
             if(!other.getId().equals(c.getId()) && Set.of("PENDING","NEEDS_INFO").contains(other.getStatus())) {
                 String previous=other.getStatus();other.closeAfterReturn();
@@ -265,12 +400,17 @@ public class OfficeReturnService {
     private Workflow recordCheck(Claim c,Account actor,RecordHandover request,String hash) {
         Handover existing=handover(c.getId());
         if(existing!=null) {
-            Boolean same=jdbc.queryForObject("select exists(select 1 from office_handover where claim_id=? and recorded_by=? and client_request_id=? and request_hash=?)",Boolean.class,c.getId(),actor.getId(),request.clientRequestId(),hash);
+            Boolean same=jdbc.queryForObject("select exists(select 1 from office_handover where handover_id=? and recorded_by=? and client_request_id=? and request_hash=?)",Boolean.class,existing.id(),actor.getId(),request.clientRequestId(),hash);
             if(Boolean.TRUE.equals(same))return view(c,actor);
             throw bad("Đồ đã được ghi nhận giao. Hãy tải lại hồ sơ.");
         }
         expected(c,request.expectedVersion());manageable(c,actor);
         requireAvailable(c);
+        ItemReceipt receipt=c.getReceipt();
+        boolean itemsChanged=receipt.getItemSummary()!=null && !sameText(receipt.getItemSummary(),request.items());
+        boolean conditionChanged=receipt.getConditionAtReceipt()!=null && !sameText(receipt.getConditionAtReceipt(),request.condition());
+        if ((itemsChanged || conditionChanged) && (request.differenceNote()==null || request.differenceNote().isBlank()))
+            throw bad("Vui lòng ghi rõ chênh lệch so với phiếu tiếp nhận và lý do.");
         if(c.getClaimant()==null)throw bad("Cần liên kết tài khoản người nhận trước khi trao trả.");
         Appointment a=scheduled(c);var verification=verifications(c.getId());
         if(!"CONFIRMED".equals(a.getResponseStatus()) || verification.isEmpty() || verification.getFirst().appointmentId()!=a.getId() || !"PASSED".equals(verification.getFirst().result()))
@@ -283,8 +423,18 @@ public class OfficeReturnService {
                 || c.getPost().getDeletedAt()!=null || c.getReceipt()==null || !"IN_STORAGE".equals(c.getReceipt().getStatus()) || handover(c.getId())!=null)
             throw bad("Hồ sơ không còn ở bước chuẩn bị trao trả. Hãy tải lại.");
     }
-    private void responseCheck(Claim c,Handover h,long version) {
-        if(!"WAITING_CONFIRMATION".equals(h.status()) || h.version()!=version || !"APPROVED".equals(c.getStatus()) || !"RESERVED".equals(c.getPost().getStatus()))throw bad("Biên bản đã thay đổi hoặc đang chờ xử lý phản ánh. Hãy tải lại.");
+    private static boolean sameText(String left,String right) {
+        return Objects.toString(left,"").strip().replaceAll("(?U)\\s+"," ").equals(right.strip().replaceAll("(?U)\\s+"," "));
+    }
+    private void responseCheck(Claim c,Handover h,long handoverId,long version) {
+        if(h==null || h.id()!=handoverId || !waitingForReceipt(c,h) || h.version()!=version)
+            throw bad("Biên bản đã thay đổi. Vui lòng tải lại hồ sơ.");
+    }
+    private boolean confirmationOpen(Handover h) {
+        return h.confirmationDeadline()!=null && OffsetDateTime.now().isBefore(h.confirmationDeadline());
+    }
+    private boolean waitingForReceipt(Claim c,Handover h) {
+        return "WAITING_CONFIRMATION".equals(h.status()) && "APPROVED".equals(c.getStatus()) && "RESERVED".equals(c.getPost().getStatus());
     }
     private Appointment scheduled(Claim c) {
         Appointment a=Optional.ofNullable(activeAppointment(c.getId())).orElseThrow(()->bad("Không có lịch hẹn đang hiệu lực."));
@@ -314,14 +464,34 @@ public class OfficeReturnService {
     }
     private void expected(Claim c,long version) {if(c.getVersion()!=version)throw bad("Hồ sơ đã thay đổi. Hãy tải lại trước khi thao tác.");}
     private void participant(Claim c,Account actor) {if(actor.getRole()!=APPROVER)recipient(c,actor);}
-    private void recipient(Claim c,Account actor) {if(c.getClaimant()==null||!c.getClaimant().getId().equals(actor.getId()))throw bad("Chỉ người khai nhận được thực hiện thao tác này.");}
+    private boolean isRecipient(Claim c,Account actor) {
+        return c.getClaimant()!=null && c.getClaimant().getId().equals(actor.getId());
+    }
+    private void recipient(Claim c,Account actor) {
+        if(!isRecipient(c,actor))throw bad("Chỉ người nhận được thực hiện thao tác này.");
+    }
     private List<Verification> verifications(long id) {
         return jdbc.query("select v.*,a.full_name from office_claim_verification v join accounts a on a.id=v.verified_by where claim_id=? order by verification_id desc",
                 (rs,n)->new Verification(rs.getLong("verification_id"),rs.getLong("appointment_id"),rs.getString("result"),rs.getString("note"),rs.getString("full_name"),rs.getObject("verified_at",OffsetDateTime.class)),id);
     }
     private Handover handover(long id) {
-        return jdbc.query("select h.*,a.full_name as officer,b.full_name as recipient from office_handover h join accounts a on a.id=h.recorded_by join accounts b on b.id=h.recipient_id where claim_id=?",
-                (rs,n)->new Handover(rs.getLong("handover_id"),rs.getString("status"),rs.getString("condition_note"),rs.getString("officer"),rs.getString("recipient"),rs.getObject("recorded_at",OffsetDateTime.class),rs.getObject("confirmed_at",OffsetDateTime.class),rs.getString("issue_note"),rs.getLong("version"),evidence(rs.getLong("handover_id"))),id).stream().findFirst().orElse(null);
+        return jdbc.query("""
+            select h.*,a.full_name as officer,b.full_name as recipient from office_handover h
+            join accounts a on a.id=h.recorded_by join accounts b on b.id=h.recipient_id
+            where claim_id=? and h.status<>'CANCELLED'
+            """, (rs,n)->new Handover(rs.getLong("handover_id"),rs.getString("status"),rs.getString("condition_note"),
+                rs.getString("officer"),rs.getString("recipient"),rs.getObject("recorded_at",OffsetDateTime.class),
+                rs.getObject("confirmed_at",OffsetDateTime.class),rs.getString("issue_note"),rs.getLong("version"),
+                evidence(rs.getLong("handover_id")),rs.getString("item_summary"),rs.getString("difference_note"),
+                rs.getObject("confirmation_deadline",OffsetDateTime.class),rs.getString("completion_method")),id)
+            .stream().findFirst().orElse(null);
+    }
+    private record ActiveHandoverReport(long id,long reporterId) {}
+    private ActiveHandoverReport openHandoverReport(Handover h,long viewerId) {
+        return jdbc.query("select active.* from office_handover h cross join lateral (" + OPEN_HANDOVER_REPORT
+            + ") active where h.handover_id=? order by (active.reporter_id=?) desc,active.report_id desc limit 1",
+            (rs,n)->new ActiveHandoverReport(rs.getLong("report_id"),rs.getLong("reporter_id")),h.id(),viewerId)
+            .stream().findFirst().orElse(null);
     }
     private List<Evidence> evidence(long id) {
         return jdbc.query("select * from office_handover_evidence where handover_id=? order by sort_order",(rs,n)->new Evidence(rs.getLong("evidence_id"),images.read(rs.getString("storage_key")),rs.getString("original_name")),id);
@@ -339,9 +509,28 @@ public class OfficeReturnService {
         boolean preparing=officer && approved && h==null && a!=null && inStorage && !blocked && !onHold;
         boolean confirmed=a!=null&&"CONFIRMED".equals(a.getResponseStatus());
         boolean verified=confirmed&&!history.isEmpty()&&history.getFirst().appointmentId()==a.getId()&&"PASSED".equals(history.getFirst().result());
-        boolean canComplete=officer&&h!=null&&approved&&"WAITING_CONFIRMATION".equals(h.status());
+        boolean missed=confirmed&&!verified&&verificationExpired(a);
+        boolean waiting = h!=null && waitingForReceipt(c,h);
+        boolean counterOpen = waiting && confirmationOpen(h);
+        var openReport = h==null ? null : openHandoverReport(h,actor.getId());
+        boolean canRespond = waiting && openReport==null && !blocked && !onHold;
         boolean rejectedAtCounter="REJECTED".equals(c.getStatus())&&!history.isEmpty()&&"FAILED".equals(history.getFirst().result());
-        String next=h!=null?switch(h.status()) {case "COMPLETED"->"Đã hoàn tất trao trả.";case "DISPUTED"->"Đã ghi nhận phản ánh. Vui lòng liên hệ văn phòng.";default->"Đã có biên bản giao đồ. Nhân viên văn phòng cần xác nhận hoàn tất.";}
+        String next=h!=null?switch(h.status()) {
+            case "COMPLETED" -> switch (Objects.toString(h.completionMethod(),"LEGACY")) {
+                case "RECIPIENT" -> "Người nhận đã xác nhận nhận đúng và đủ tài sản. Việc trao trả đã hoàn tất.";
+                case "TIMEOUT" -> "Quy trình đã kết thúc. Người nhận chưa gửi xác nhận.";
+                default -> "Đã hoàn tất trao trả.";
+            };
+            case "DISPUTED" -> "Phản ánh đã được ghi nhận. Vui lòng theo dõi kết quả xử lý.";
+            default -> {
+                if (openReport!=null || onHold) yield "Văn phòng đã ghi nhận phản ánh. Vui lòng theo dõi kết quả xử lý.";
+                if (!counterOpen) yield officer
+                    ? "Lượt xác nhận đã hết hiệu lực. Vui lòng đối chiếu tại quầy trước khi tiếp tục."
+                    : "Lượt xác nhận đã hết hiệu lực. Quý vị vui lòng liên hệ nhân viên tại quầy.";
+                yield officer ? "Đã ghi nhận bàn giao. Đang chờ người nhận xác nhận tại quầy."
+                    : "Kính mời Quý vị đối chiếu tài sản và xác nhận biên bản ngay tại quầy.";
+            }
+        }
                 :rejectedAtCounter?"Không đạt xác minh tại quầy. Yêu cầu đã bị từ chối, lịch hẹn đã hủy; tài khoản này không được yêu cầu lại món đồ này."
                 :Set.of("REJECTED","CANCELLED","CLOSED").contains(c.getStatus())?"Hồ sơ đã kết thúc. Xem lý do trong lịch sử xử lý.":!approved?"Hồ sơ cần được duyệt trước khi thực hiện trao trả."
                 :blocked?switch(window.state()) {
@@ -350,12 +539,19 @@ public class OfficeReturnService {
                     case REVIEW_REQUIRED -> "Kết luận tranh chấp yêu cầu xét duyệt lại.";
                     case CLEARED -> throw new IllegalStateException();
                 }:onHold?"Hồ sơ đang tạm dừng để xử lý báo cáo."
-                :a==null?"Đủ điều kiện lập lịch nhận tài sản.":!confirmed?OfficeAppointmentGuidance.pendingMessage(a,OffsetDateTime.now()):!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy.":"Đã xác minh. Có thể ghi nhận giao đồ.";
-        return new Workflow(history,h,preparing&&confirmed,preparing&&verified,preparing&&!verified,preparing&&!verified,
-            canComplete&&!blocked&&!onHold,next,officer&&approved&&h==null&&a==null&&inStorage&&!blocked&&!onHold,
+                :a==null?"Đủ điều kiện lập lịch nhận tài sản.":!confirmed?OfficeAppointmentGuidance.pendingMessage(a,OffsetDateTime.now()):missed?"Đã hết hạn đến quầy xác minh.":!verified?"Đối chiếu danh tính và căn cứ sở hữu tại quầy."
+                :c.getClaimant()==null?"Hồ sơ cũ chưa liên kết tài khoản người nhận. Cần xác định tài khoản trước khi lập biên bản.":"Đã xác minh. Có thể lập biên bản bàn giao.";
+        return new Workflow(history,h,preparing&&confirmed&&!verificationExpired(a),preparing&&verified&&c.getClaimant()!=null,preparing&&!verified&&!missed,preparing&&!verified,
+            next,officer&&approved&&h==null&&a==null&&inStorage&&!blocked&&!onHold,
             officer&&approved&&h==null&&!verified&&inStorage&&!onHold
                 && (window==null||window.state()==P2pClaimAppealService.State.OPEN||window.state()==P2pClaimAppealService.State.CLEARED),
             officer&&"PENDING".equals(c.getStatus())&&appeals.hasCompetitors(c),blocked?window.deadline():null,
-            filedAppeal==null?null:new FiledAppeal(filedAppeal.reportId(),filedAppeal.reportStatus()));
+            window==null?null:window.state().name(),
+            filedAppeal==null?null:new FiledAppeal(filedAppeal.reportId(),filedAppeal.reportStatus()),
+            a==null||verified?null:OfficePickupSchedule.verificationDeadline(a.getScheduledAt()),
+            h!=null&&"RECIPIENT".equals(h.completionMethod())&&h.confirmedAt()!=null
+                ? ReportService.officeHandoverReportDeadline(h.confirmedAt()) : null,
+            canRespond && counterOpen,canRespond && counterOpen && isRecipient(c,actor),officer && canRespond && !counterOpen,officer && canRespond,
+            openReport!=null && openReport.reporterId()==actor.getId() ? openReport.id() : null);
     }
 }

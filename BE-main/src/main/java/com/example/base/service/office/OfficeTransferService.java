@@ -74,7 +74,8 @@ public class OfficeTransferService {
         if(!request.physicallyReceived())throw bad("Cần xác nhận đã trực tiếp nhận và kiểm tra đồ.");
         if(!Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from post p where p.post_id=? and "+ELIGIBLE+")",Boolean.class,post.getId())))throw bad("Bài đăng không còn đủ điều kiện tiếp nhận. Hãy tải lại danh sách.");
         expireDueForPost(post);
-        TransferDecision decision=new TransferDecision(0L,"RECEIVED",request.locationId(),request.condition(),null,request.reconciliationNote());
+        TransferDecision decision=new TransferDecision(0L,"RECEIVED",request.locationId(),request.condition(),null,
+            request.reconciliationNote(),request.items());
         Long receiptId=receive(post,actor,decision,files);
         jdbc.update("update item_receipt set note=? where item_receipt_id=?","Tiếp nhận trực tiếp tại quầy từ bài đăng có sẵn."+(request.reconciliationNote()==null?"":" Đối chiếu: "+request.reconciliationNote()),receiptId);
         List<Long> pendingIds=jdbc.queryForList("select transfer_id from office_transfer where post_id=? and status='PENDING' for update",Long.class,post.getId());
@@ -190,7 +191,8 @@ public class OfficeTransferService {
             reportHolds.requireAvailable(post.getId());
             if (actor.getId().equals(post.getAccount().getId())) throw bad("Người giao không được tự xác nhận tiếp nhận đồ của mình.");
             if (post.getDeletedAt()!=null || !Set.of("OPEN","RESERVED").contains(post.getStatus()) || receipts.existsByPostId(post.getId())) throw bad("Đồ vật đã được xử lý hoặc không còn có thể tiếp nhận.");
-            String condition=required(request.condition(),"Ghi tình trạng đồ khi nhận.");
+            String items=required(request.items(),"Vui lòng ghi danh sách tài sản và phụ kiện tiếp nhận.");
+            String condition=required(request.condition(),"Vui lòng ghi tình trạng tài sản khi tiếp nhận.");
             var dossiers=claims.findAllForOfficeTransfer(post.getId());
             for(Claim claim:dossiers) em.refresh(claim,LockModeType.PESSIMISTIC_WRITE);
             if(dossiers.stream().anyMatch(c->"COMPLETED".equals(c.getStatus()))) throw bad("Đồ đã hoàn tất trao trả, không thể chuyển giao.");
@@ -199,7 +201,7 @@ public class OfficeTransferService {
             StorageLocation location=locations.findById(Objects.requireNonNullElse(request.locationId(),-1L)).orElseThrow(()->bad("Chọn vị trí lưu kho."));
             em.refresh(location,LockModeType.PESSIMISTIC_WRITE);
             if(!location.isActive()) throw bad("Vị trí lưu kho đã ngừng sử dụng.");
-            ItemReceipt receipt=ItemReceipt.transferred("VP-"+UUID.randomUUID().toString().substring(0,18),actor,post,condition,location);
+            ItemReceipt receipt=ItemReceipt.transferred("VP-"+UUID.randomUUID().toString().substring(0,18),actor,post,items,condition,location);
             attachReceiptEvidence(receipt,files);
             receipts.saveAndFlush(receipt);
             Long receiptId=receipt.getId();
@@ -252,14 +254,17 @@ public class OfficeTransferService {
     private long handoverCount(long postId) { return jdbc.queryForObject("select count(*) from p2p_handover h join claim c on c.claim_id=h.claim_id where c.post_id=?",Long.class,postId); }
     private TransferView view(long id) {
         Map<String,Object> t=row(id); Post p=posts.findById(number(t,"post_id")).orElseThrow();
+        Long receiptId=t.get("item_receipt_id")==null ? null : number(t,"item_receipt_id");
+        ItemReceipt receipt=receiptId==null ? null : receipts.findById(receiptId).orElse(null);
         return new TransferView(id,p.getId(),p.getTitle(),p.getDescription(),p.getAccount().getFullName(),(String)t.get("status"),
                 time(t.get("requested_at")),time(t.get("processed_at")),(String)t.get("reason"),(String)t.get("reconciliation_note"),
-                t.get("item_receipt_id")==null?null:number(t,"item_receipt_id"),number(t,"version"),
+                receiptId,number(t,"version"),
                 jdbc.queryForObject("select count(*) from claim where post_id=? and status in ('PENDING','NEEDS_INFO','APPROVED')",Long.class,p.getId()),
                 handoverCount(p.getId()),p.getImages().stream().map(i->images.readUrl(i.getStorageKey(),i.getImageUrl())).toList(),intakeAppointment(id),number(t,"requested_by"),
-                t.get("item_receipt_id")==null ? List.of() : receipts.findById(number(t,"item_receipt_id"))
-                    .map(r->r.getImages().stream().filter(i->i.getStorageKey()!=null && i.getStorageKey().startsWith("receipts/intake/"))
-                        .map(i->images.readUrl(i.getStorageKey(),i.getImageUrl())).toList()).orElse(List.of()));
+                receipt==null ? List.of() : receipt.getImages().stream()
+                    .filter(i->i.getStorageKey()!=null && i.getStorageKey().startsWith("receipts/intake/"))
+                    .map(i->images.readUrl(i.getStorageKey(),i.getImageUrl())).toList(),
+                receipt==null?null:receipt.getItemSummary(),receipt==null?null:receipt.getConditionAtReceipt());
     }
     private IntakeAppointment intakeAppointment(long id) {
         return jdbc.query("select * from office_intake_appointment where transfer_id=? order by appointment_id desc limit 1",(rs,n)->

@@ -6,6 +6,7 @@ import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
+import com.example.base.service.report.SubmissionRestrictions;
 import com.example.base.storage.ImageStorage;
 import com.example.base.storage.ImageValidator;
 import jakarta.persistence.EntityManager;
@@ -31,6 +32,7 @@ public class ClaimService {
     private final ClaimRepository claims;
     private final P2pClaimAppealService appeals;
     private final ClaimDailyLimit dailyLimit;
+    private final SubmissionRestrictions restrictions;
     private final ClaimActivityRepository activities;
     private final PostRepository posts;
     private final AccountRepository accounts;
@@ -69,6 +71,7 @@ public class ClaimService {
             Account actor = activeActor(user);
             Post post = post(postId);
             validateNewClaim(post, actor.getId(), previousId);
+            restrictions.checkAvailable(actor.getId(), SubmissionRestrictions.Action.CLAIM);
             questionnaires.validateAndSnapshot(post, request);
             return actor.getId();
         });
@@ -85,6 +88,7 @@ public class ClaimService {
                 Account actor = activeActor(user);
                 ItemReceipt receipt = routing.lockReceipt(post);
                 validateNewClaim(post, actor.getId(), previousId);
+                restrictions.requireAvailableForSubmission(actor.getId(), SubmissionRestrictions.Action.CLAIM);
                 dailyLimit.requireAvailable(actor.getId());
                 Claim claim = Claim.submit(post, actor, request.description(), request.evidenceNote(), receipt);
                 questionnaires.validateAndSnapshot(post, request).forEach(claim::addAnswer);
@@ -120,6 +124,7 @@ public class ClaimService {
         Account actor = activeActor(user);
         Post post = post(postId);
         validateNewClaim(post, actor.getId(), null);
+        restrictions.checkAvailable(actor.getId(), SubmissionRestrictions.Action.CLAIM);
         return questionnaires.forCategory(post.getCategory());
     }
 
@@ -178,6 +183,16 @@ public class ClaimService {
         return page(claims.findReceived(actor.getId(), filter(status), pageable(page, size)), page, size);
     }
 
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public long pendingReviewCount(CustomUserDetails user) {
+        var pendingIds = claims.findPendingReviewIds(activeActor(user).getId());
+        if (pendingIds.isEmpty()) return 0;
+        long endedByDispute = claims.findLatestDisputeOutcomes(pendingIds).stream()
+                .filter(outcome -> ClaimRepository.disputeEndsReview((String) outcome[1]))
+                .count();
+        return pendingIds.size() - endedByDispute;
+    }
+
     @Transactional(readOnly = true)
     public ClaimPageDto office(int page, int size, String status, CustomUserDetails user) {
         Account actor = activeActor(user);
@@ -223,7 +238,7 @@ public class ClaimService {
         boolean open = routing.matches(claim, Set.of("OPEN"));
         String disputeOutcome = claim.isOffice() ? null : claims.findLatestDisputeOutcome(id);
         boolean resubmissionBlocked = claimant && RETRYABLE_STATUSES.contains(claim.getStatus())
-                && claims.hasDisputeRejection(post.getId(), actor.getId());
+                && claims.hasResubmissionBlock(post.getId(), actor.getId());
         boolean retry = claimant && RETRYABLE_STATUSES.contains(claim.getStatus()) && open
                 && !resubmissionBlocked
                 && !claims.existsByPost_IdAndClaimant_IdAndStatusIn(post.getId(), actor.getId(), ACTIVE_STATUSES);
@@ -297,13 +312,13 @@ public class ClaimService {
                     true
             );
         } else {
-            notifications.notifyUser(
+            notifications.notifyUserWithEmail(
                     claim.getClaimant().getId(),
                     "CLAIM_REJECTED",
                     "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối",
                     "Chủ bài đăng \"" + post.getTitle() + "\" đã từ chối yêu cầu nhận đồ của bạn. Lý do: " + request.reason(),
                     "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
-                    true
+                    "Yêu cầu nhận đồ của bạn đã bị từ chối. Mở hồ sơ để xem kết quả và lý do."
             );
         }
         return result(claim);
@@ -353,8 +368,9 @@ public class ClaimService {
         Account manager = activeManager(user);
         Post post = lockPost(claimPostId(claimId));
         routing.lockReceipt(post);
-        Claim claim = lockClaim(claimId);
-        if (!routing.matches(claim, Set.of("OPEN")) || !"PENDING".equals(claim.getStatus())) throw stateChanged();
+        Claim claim = lockClaimForWorkflow(claimId);
+        if (claim.getClaimant() == null || !routing.matches(claim, Set.of("OPEN", "RESERVED"))
+                || !Set.of("PENDING", "NEEDS_INFO").contains(claim.getStatus())) throw stateChanged();
         rejectClaim(claim, manager, reason);
     }
 
@@ -369,13 +385,19 @@ public class ClaimService {
     }
 
     private void rejectClaim(Claim claim, Account manager, String reason) {
+        String previousStatus = claim.getStatus();
         claim.review("REJECTED");
-        activities.save(new ClaimActivity(claim, manager, "REJECT", "PENDING", reason));
+        activities.save(new ClaimActivity(claim, manager, "REJECT", previousStatus, reason));
         claims.flush();
-        notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_REJECTED",
-                "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối", reason,
-                claim.isOffice() ? "/van-phong/claims/" + claim.getId()
-                        : "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId(), true);
+        String title = "Yêu cầu nhận đồ #" + claim.getId() + " bị từ chối";
+        if (claim.isOffice()) {
+            notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_REJECTED", title, reason,
+                    "/van-phong/claims/" + claim.getId(), true);
+        } else {
+            notifications.notifyUserWithEmail(claim.getClaimant().getId(), "CLAIM_REJECTED", title, reason,
+                    "/bai-dang/" + claim.getPost().getId() + "/claims/" + claim.getId(),
+                    "Yêu cầu nhận đồ của bạn đã bị từ chối. Mở hồ sơ để xem kết quả và lý do.");
+        }
     }
 
     private void reopenApproval(Claim claim, Post post, Account actor, String reason) {
@@ -385,11 +407,12 @@ public class ClaimService {
         claims.flush();
         appeals.reopen(claim);
         chatConversations.notifyChanged(claim);
-        notifications.notifyUser(claim.getClaimant().getId(), "CLAIM_APPROVAL_REVOKED",
+        notifications.notifyUserWithEmail(claim.getClaimant().getId(), "CLAIM_APPROVAL_REVOKED",
                 "Đã thu hồi chấp thuận yêu cầu nhận đồ #" + claim.getId(),
                 "Yêu cầu cho bài đăng " + post.getTitle() + " được đưa về chờ xét duyệt. Lý do: "
                         + reason.strip() + ". Cuộc trò chuyện được giữ để xem lịch sử.",
-                "/bai-dang/" + post.getId() + "/claims/" + claim.getId(), true);
+                "/bai-dang/" + post.getId() + "/claims/" + claim.getId(),
+                "Chấp thuận đã được thu hồi và hồ sơ của bạn đã quay về chờ xét duyệt. Mở hồ sơ để xem lý do.");
     }
 
     private boolean revocable(Claim claim) {
@@ -457,7 +480,7 @@ public class ClaimService {
         if (Objects.equals(post.getAccount().getId(), actorId) || (post.getCreatedBy() != null && Objects.equals(post.getCreatedBy().getId(), actorId))) {
             throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
         }
-        if (claims.hasDisputeRejection(post.getId(), actorId))
+        if (claims.hasResubmissionBlock(post.getId(), actorId))
             throw new AppException(ErrorCode.CLAIM_RESUBMISSION_BLOCKED);
         if (!routing.canSubmit(post)) throw new AppException(ErrorCode.CLAIM_POST_UNAVAILABLE);
         if (previousId != null) {

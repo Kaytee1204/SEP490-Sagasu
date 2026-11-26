@@ -32,9 +32,12 @@ public class AppointmentEmailService {
         String url=frontendUrl+"/van-phong/lich-hen#token="+token;
         String confirm=url+"&decision=CONFIRM", decline=url+"&decision=DECLINE";
         String limit=date(deadline)+" (UTC+7)";
+        String verificationLimit=date(OfficePickupSchedule.verificationDeadline(mail.time()))+" (UTC+7)";
+        String verificationRule="Nếu đã đồng ý lịch và chưa đến xác minh trước hạn, yêu cầu nhận đồ sẽ tự động bị hủy.";
         String plain="Xin chào "+mail.name()+",\n\nVăn phòng mời bạn đến nhận đồ.\nHồ sơ: #"+mail.claimId()
             +"\nĐồ vật: "+mail.title()+"\nThời gian: "+date(mail.time())+" (UTC+7)\nĐịa điểm: "+mail.location()
-            +"\nHạn phản hồi: "+limit+"\n\nĐồng ý lịch hẹn: "+confirm+"\nTừ chối lịch hẹn: "+decline
+            +"\nHạn phản hồi: "+limit+"\nHạn đến quầy xác minh: "+verificationLimit+"\n"+verificationRule
+            +"\n\nĐồng ý lịch hẹn: "+confirm+"\nTừ chối lịch hẹn: "+decline
             +"\n\nMở liên kết rồi xác nhận lựa chọn. Không cần đăng nhập. Không chia sẻ liên kết này."
             +"\nKhông phản hồi trong hạn: yêu cầu tự động bị từ chối, lịch hẹn bị hủy. Gửi lại thư không gia hạn."
             +(mail.note()==null?"":"\nHướng dẫn: "+mail.note());
@@ -46,15 +49,17 @@ public class AppointmentEmailService {
             <h1 style="font-size:25px">Lịch hẹn nhận đồ</h1><p>Xin chào %s,</p><p>Văn phòng đã duyệt yêu cầu nhận đồ của bạn.</p>
             <table role="presentation" width="100%%" cellpadding="10" style="background:#f0fdfa;text-align:left">
             <tr><th>Hồ sơ</th><td>#%s</td></tr><tr><th>Đồ vật</th><td>%s</td></tr><tr><th>Thời gian</th><td>%s (UTC+7)</td></tr>
-            <tr><th>Địa điểm</th><td>%s</td></tr><tr><th>Hạn phản hồi</th><td>%s</td></tr></table>
-            <p style="line-height:1.6">%s</p><p style="line-height:3">
+            <tr><th>Địa điểm</th><td>%s</td></tr><tr><th>Hạn phản hồi</th><td>%s</td></tr>
+            <tr><th>Hạn đến quầy xác minh</th><td>%s</td></tr></table>
+            <p>%s</p><p style="line-height:1.6">%s</p><p style="line-height:3">
             <a href="%s" style="display:inline-block;background:#0f766e;color:white;padding:0 18px;border-radius:8px;text-decoration:none;margin:4px">Đồng ý lịch hẹn</a>
             <a href="%s" style="display:inline-block;background:#fff1f2;color:#9f1239;padding:0 18px;border-radius:8px;text-decoration:none;margin:4px">Từ chối lịch hẹn</a></p>
             <p>Mở liên kết rồi xác nhận lựa chọn. <strong>Không cần đăng nhập.</strong> Mở thư hoặc liên kết chưa được tính là phản hồi.</p>
             <p style="color:#64748b;line-height:1.6">Không phản hồi trong 12 giờ: yêu cầu tự động bị từ chối và lịch hẹn bị hủy. Gửi lại thư không gia hạn.
             Chỉ liên kết trong thư mới nhất có hiệu lực. Không chuyển tiếp liên kết cho người khác.</p>
             <p>Mang theo giấy tờ và bằng chứng sở hữu khi đến nhận đồ.</p></td></tr></table></td></tr></table></body></html>
-            """.formatted(h(mail.name()),mail.claimId(),h(mail.title()),h(date(mail.time())),h(mail.location()),h(limit),h(mail.note()).replace("\n","<br>"),h(confirm),h(decline));
+            """.formatted(h(mail.name()),mail.claimId(),h(mail.title()),h(date(mail.time())),h(mail.location()),h(limit),
+                h(verificationLimit),h(verificationRule),h(mail.note()).replace("\n","<br>"),h(confirm),h(decline));
         try {
             var message=sender.createMimeMessage(); var helper=new MimeMessageHelper(message,true,"UTF-8");
             if(!from.isBlank()) helper.setFrom(from);

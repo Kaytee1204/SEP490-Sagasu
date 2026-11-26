@@ -1,17 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, ArrowLeft } from 'lucide-react';
 import Badge from './Badge';
 import OfficeReturnPanel from './OfficeReturnPanel';
 import OfficeClaimTimeline from './OfficeClaimTimeline';
 import { date } from '../officeUtils';
-import ReportButton from '../../reports/components/ReportButton';
 import ClaimAppealPanel from '@/features/claims/components/ClaimAppealPanel';
 import CancelClaimDialog from '@/features/claims/components/CancelClaimDialog';
 
 export default function PersonalClaimDetail({ claim, workflow, onChanged }) {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [now, setNow] = useState(Date.now);
   const ended = ['COMPLETED','REJECTED','CANCELLED','CLOSED'].includes(claim.status);
+  const reportDeadline = workflow.data?.reportDeadline;
+  const reportExpired = Boolean(reportDeadline && Date.parse(reportDeadline) <= now);
+  useEffect(() => {
+    if (!reportDeadline) return;
+    const refreshTime = () => setNow(Date.now());
+    const timer = window.setTimeout(refreshTime, Math.max(0, Date.parse(reportDeadline) - Date.now()));
+    window.addEventListener("focus", refreshTime);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refreshTime);
+    };
+  }, [reportDeadline]);
   return <div className="op-detail-content">
     <Link className="op-back" to="/van-phong/claims"><ArrowLeft size={16}/> Nhận đồ tại văn phòng</Link>
     <header className="op-item-heading">
@@ -23,11 +35,10 @@ export default function PersonalClaimDetail({ claim, workflow, onChanged }) {
       </div>
       <div className="op-item-actions">
         <Badge value={claim.status} />
-        <ReportButton type="CLAIM" id={claim.id} label="Phản ánh về yêu cầu nhận đồ" />
         {claim.canCancel && <button type="button" className="of-button of-danger" onClick={() => setWithdrawOpen(true)}>Rút yêu cầu</button>}
       </div>
     </header>
-    <OfficeReturnPanel claim={claim} state={workflow} mine onChanged={onChanged}/>
+    <OfficeReturnPanel claim={claim} state={workflow} mine reportExpired={reportExpired} onChanged={onChanged} onRefresh={onChanged}/>
     <ClaimAppealPanel key={claim.id} claim={claim} />
     {withdrawOpen && claim.canCancel && <CancelClaimDialog claim={claim} onClose={() => setWithdrawOpen(false)}
       onCancelled={() => { setWithdrawOpen(false); onChanged(); }} />}

@@ -6,6 +6,7 @@ import ReportReasonPicker from './ReportReasonPicker';
 import { reportDescriptionHint } from '../utils/reportDescriptionHints';
 import useReportReasons from '../hooks/useReportReasons';
 import { reportTitles, reportTypes } from '../constants/reportConstants';
+import { formatReportDate } from '../utils/reportUtils';
 import '../styles/Reports.css';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
@@ -13,7 +14,7 @@ import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
 import CharCountHint from '@/components/common/CharCountHint';
 
-export default function ReportButton({ type, id, label = 'Báo cáo', targetLabel }) {
+export default function ReportButton({ type, id, label = 'Báo cáo', targetLabel, officeHandover, onReported }) {
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState(null);
   return <>
@@ -21,12 +22,12 @@ export default function ReportButton({ type, id, label = 'Báo cáo', targetLabe
       <Flag size={15} /><span>{label}</span>
     </button>
     {sent && <Link className="claims-muted" role="status" to={`/bao-cao/${sent}`}>Đã gửi báo cáo — Theo dõi xử lý</Link>}
-    {open && <ReportForm key={`${type}:${id}`} type={type} id={id} targetLabel={targetLabel}
-      close={() => setOpen(false)} done={result => { setSent(result.id); setOpen(false); }} />}
+    {open && <ReportForm key={`${type}:${id}`} type={type} id={id} targetLabel={targetLabel} officeHandover={officeHandover}
+      close={() => setOpen(false)} done={result => { setSent(result.id); setOpen(false); onReported?.(result); }} />}
   </>;
 }
 
-function ReportForm({ type, id, targetLabel, close, done }) {
+function ReportForm({ type, id, targetLabel, officeHandover, close, done }) {
   const dialog = useRef(null);
   const title = useId();
   const sending = useRef(false);
@@ -39,7 +40,6 @@ function ReportForm({ type, id, targetLabel, close, done }) {
   const [submitting, setBusy] = useState(false);
   const { prepare, processing } = useImageUploads();
   const busy = submitting || processing;
-  const [discard, setDiscard] = useState(false);
   const selected = options?.reasons.find(reason => reason.code === reasonCode);
   const canSend = selected && (!selected.requiresDescription || description.trim());
 
@@ -58,14 +58,11 @@ function ReportForm({ type, id, targetLabel, close, done }) {
 
   function changed() {
     retry.current = null;
-    setDiscard(false);
     setError('');
   }
 
   function requestClose() {
-    if (sending.current || processing) return;
-    if (reasonCode || description.trim() || files.length) setDiscard(true);
-    else close();
+    if (!sending.current && !processing) close();
   }
 
   async function pickImages(event) {
@@ -77,7 +74,6 @@ function ReportForm({ type, id, targetLabel, close, done }) {
       return;
     }
     setError('');
-    setDiscard(false);
     try {
       const prepared = await prepare(picked);
       if (prepared) { setFiles(current => [...current, ...prepared]); retry.current = null; }
@@ -106,16 +102,22 @@ function ReportForm({ type, id, targetLabel, close, done }) {
 
   return <dialog ref={dialog} className="report-dialog" aria-labelledby={title}
     onCancel={event => { event.preventDefault(); requestClose(); }}>
-    <header><h2 id={title}>{reportTitles[options?.group || type]}</h2>
+    <header><h2 id={title}>{officeHandover ? 'Báo cáo sự cố bàn giao tại văn phòng' : reportTitles[options?.group || type]}</h2>
       <button disabled={busy} type="button" aria-label="Đóng" onClick={requestClose}><X size={20} /></button></header>
     <form onSubmit={send}>
       <div className="report-form-content">
-      <div className="report-target-context"><span>{reportTypes[options?.group || type]}</span>
-        <strong>{targetLabel || `${reportTypes[type]} #${id}`}</strong></div>
+      <div className="report-target-context"><span>{officeHandover ? 'Văn phòng' : reportTypes[options?.group || type]}</span>
+        <strong>{targetLabel || `${reportTypes[type]} #${id}`}</strong>
+        {officeHandover && <dl className="report-office-facts">
+          <div><dt>Biên bản bàn giao</dt><dd>#{officeHandover.id}</dd></div>
+          <div><dt>Đã xác nhận lúc</dt><dd>{formatReportDate(officeHandover.confirmedAt)}</dd></div>
+          <div><dt>Hạn tiếp nhận phản ánh</dt><dd>{formatReportDate(officeHandover.reportDeadline)}</dd></div>
+        </dl>}
+      </div>
       <ReportReasonPicker options={options} error={catalogError} reload={reload} value={reasonCode}
         disabled={busy} onChange={code => { setReasonCode(code); changed(); }} />
       <label>{selected?.requiresDescription ? 'Mô tả chi tiết *' : 'Mô tả thêm (không bắt buộc)'}
-        <small>{reportDescriptionHint(reasonCode)}</small>
+        <small>{officeHandover ? 'Vui lòng nêu rõ vấn đề và điểm khác biệt so với nội dung biên bản bàn giao.' : reportDescriptionHint(reasonCode)}</small>
         <textarea required={!!selected?.requiresDescription} maxLength={4800} value={description} disabled={busy}
           placeholder="Bổ sung thông tin giúp làm rõ báo cáo…"
           onChange={event => { setDescription(event.target.value); changed(); }} />
@@ -131,13 +133,10 @@ function ReportForm({ type, id, targetLabel, close, done }) {
         }}>Bỏ ảnh</button></li>)}</ul>}
       {error && <p className="report-error" role="alert">{error}</p>}
       </div>
-      {discard ? <div className="report-discard" role="alert"><p>Bỏ nội dung báo cáo đang nhập?</p><footer>
-        <button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-        <button type="button" className="btn btn-ghost" onClick={close}>Bỏ nội dung và đóng</button>
-      </footer></div> : <footer>
+      <footer>
         <button className="btn btn-ghost" type="button" disabled={busy} onClick={requestClose}>Hủy</button>
         <button type="submit" className="btn btn-accent" disabled={busy || !canSend}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang gửi…' : 'Gửi báo cáo'}</button>
-      </footer>}
+      </footer>
     </form>
   </dialog>;
 }

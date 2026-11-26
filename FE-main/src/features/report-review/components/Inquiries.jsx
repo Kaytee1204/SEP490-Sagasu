@@ -2,6 +2,7 @@ import { useState } from "react";
 import { reviewApi } from "../api";
 import { Dialog, ErrorBox, Gallery, Empty } from "./Shared";
 import { availableRecipients, date, participantRoles, usesVerification, verificationOptions, verificationLabels } from "../format";
+
 function exchangesByRecipient(inquiries) {
   const latest = i => Date.parse(i.responded_at || i.created_at);
   const groups = new Map();
@@ -49,16 +50,29 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const structured = usesVerification(inquiryData);
+  const handoverVerification = structured && inquiryData.caseKind === "HANDOVER_ISSUE";
   const options = structured ? verificationOptions(inquiryData) : [];
-  const [kind, setKind] = useState("");
-  const selected = options.find(option => option.kind === kind && !option.reason);
-  const targetId = structured ? selected?.person.id : Number(recipientId);
-  const canSend = targetId && question.trim();
+  const [selectedKinds, setSelectedKinds] = useState([]);
+  const [handoverQuestions, setHandoverQuestions] = useState({});
+  const selected = options.filter(option => !option.reason && selectedKinds.includes(option.kind));
+  const singleOption = selected.length === 1 ? selected[0] : null;
+  const sendingToBoth = selected.length === 2 && selected[0].person.id !== selected[1].person.id;
+  const handoverQuestion = option => handoverQuestions[option.kind] ?? "";
+  const message = question.trim();
+  const verificationQuestions = selected.map(option => ({
+    verificationKind: option.kind,
+    recipientId: option.person.id,
+    question: handoverVerification ? handoverQuestion(option).trim() : message,
+  }));
+  const canSend = structured
+    ? (Boolean(singleOption) || sendingToBoth) && verificationQuestions.every(item => item.question)
+    : Number(recipientId) > 0 && Boolean(message);
   function close() {
     setOpen(false);
     setQuestion("");
     setRecipient("");
-    setKind("");
+    setSelectedKinds([]);
+    setHandoverQuestions({});
     setError("");
   }
   async function ask(e) {
@@ -67,14 +81,15 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
     setBusy(true);
     setError("");
     try {
-      onSaved(
-        await reviewApi.ask(data.report.report_id, {
-          version: inquiryData.report.version,
-          verificationKind: structured ? kind : null,
-          recipientId: targetId,
-          question: question.trim(),
-        }),
-      );
+      const id = inquiryData.report.report_id;
+      const version = inquiryData.report.version;
+      const result = sendingToBoth
+        ? await reviewApi.askBoth(id, { version, questions: verificationQuestions })
+        : await reviewApi.ask(id, {
+            version,
+            ...(structured ? verificationQuestions[0] : { recipientId: Number(recipientId), question: message }),
+          });
+      onSaved(result);
       close();
     } catch (e) {
       setError(e.message);
@@ -86,7 +101,7 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
     <section className="rr-card">
       <div className="rr-row">
         <h3>Trao đổi với người liên quan</h3>
-        {(structured ? options : recipients).length > 0 && (data.canAsk ?? data.canProcess) && (
+        {data.caseKind !== "GENERAL" && (structured ? options : recipients).length > 0 && (data.canAsk ?? data.canProcess) && (
           <button
             onClick={() => {
               setError("");
@@ -113,7 +128,7 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
             <span className="rr-badge" data-state={pending ? i.overdue ? "late" : "waiting" : "done"}>{status}</span>
           </div>
           <dl>
-            <dt>{verificationLabels[i.verification_kind] || "Câu hỏi"}</dt><dd>{i.question}</dd>
+            <dt>{data.verificationOptions?.find(o => o.kind === i.verification_kind)?.label || verificationLabels[i.verification_kind] || "Câu hỏi"}</dt><dd>{i.question}</dd>
             {i.responded_at && <><dt>Trả lời</dt><dd>{i.response}<Gallery images={i.evidence} /></dd></>}
             {i.verified_custody && <><dt>Quản lý xác minh</dt><dd>
               {{HELD: "Người nhặt vẫn giữ đồ", DELIVERED: "Đã giao đồ", UNKNOWN: "Chưa rõ ai giữ đồ"}[i.verified_custody]}
@@ -133,61 +148,61 @@ export default function Inquiries({ data, onSaved, open, setOpen, draftData }) {
           busy={busy}
           onClose={close}
         >
-          <form className="rr-stack" onSubmit={ask}>
-            <p className="rr-muted">Người nhận có 12 giờ làm việc để trả lời. Hết hạn, hồ sơ về mục Cần xử lý để bạn kết luận dựa trên căn cứ hiện có.</p>
+          <form className={structured ? "rr-stack rr-verification-form" : "rr-stack"} onSubmit={ask}>
             {structured ? <>
-              <label>Nội dung cần xác minh
-                <select autoFocus required value={kind} onChange={e => { setKind(e.target.value); setQuestion(""); }}>
-                  <option value="">Chọn việc cần xác minh</option>
-                  {options.map(option => <option key={option.kind} value={option.kind} disabled={Boolean(option.reason)}>
-                    {verificationLabels[option.kind]}{option.reason && ` · ${option.reason}`}
-                  </option>)}
+              <strong>Nội dung cần xác minh</strong>
+              <div className="rr-verification-options" role="group" aria-label="Nội dung cần xác minh">
+                {options.map(option => {
+                  const checked = selected.includes(option);
+                  const label = option.label || verificationLabels[option.kind];
+                  return <div className="rr-verification-option" data-selected={checked} key={option.kind}>
+                    <label className="rr-check">
+                      <input type="checkbox" checked={checked} disabled={busy || Boolean(option.reason)}
+                        onChange={event => {
+                          const nextChecked = event.target.checked;
+                          setSelectedKinds(values => nextChecked ? [...values, option.kind] : values.filter(value => value !== option.kind));
+                        }} />
+                      <span>
+                        <strong>{label}</strong>
+                        {option.person && <small>Gửi đến <b>{option.person.full_name}</b> · {option.role}</small>}
+                        {option.reason && <small>{option.reason}</small>}
+                      </span>
+                    </label>
+                    {handoverVerification && <label className="rr-verification-question">
+                      Câu hỏi xác minh{checked && " *"}
+                      <textarea required={checked} disabled={busy || Boolean(option.reason)} maxLength={5000} rows={3}
+                        value={handoverQuestion(option)}
+                        onChange={event => {
+                          const value = event.target.value;
+                          setHandoverQuestions(questions => ({ ...questions, [option.kind]: value }));
+                        }} />
+                    </label>}
+                  </div>;
+                })}
+              </div>
+            </> : <>
+              <p className="rr-muted">Người nhận có 12 giờ làm việc để trả lời. Hết hạn, hồ sơ về mục Cần xử lý để bạn kết luận dựa trên căn cứ hiện có.</p>
+              <label>Người nhận *
+                <select autoFocus required disabled={busy} value={recipientId}
+                  onChange={e => setRecipient(e.target.value)}>
+                  <option value="">Chọn người liên quan</option>
+                  {recipients.map(person => (
+                    <option key={person.id} value={person.id}>
+                      {[...participantRoles(inquiryData, person.id), person.full_name, person.email].filter(Boolean).join(" · ")}
+                    </option>
+                  ))}
                 </select>
               </label>
-              {selected && <p>Gửi đến <strong>{selected.person.full_name}</strong> · {selected.role}</p>}
-            </> : <label>
-              Người nhận *
-              <select
-                autoFocus
-                required
-                value={recipientId}
-                onChange={(e) => setRecipient(e.target.value)}
-              >
-                <option value="">Chọn người liên quan</option>
-                {recipients.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {[...participantRoles(inquiryData, person.id), person.full_name, person.email].filter(Boolean).join(" · ")}
-                  </option>
-                ))}
-              </select>
+            </>}
+            {!handoverVerification && <label>{structured ? "Câu hỏi xác minh" : "Nội dung cần làm rõ"} *
+              <textarea required disabled={busy} maxLength={5000} rows={structured ? 3 : 5} value={question}
+                placeholder={singleOption?.kind === "DISCREPANCY" ? "Ví dụ: Bạn có thể mô tả vị trí vết nứt trên máy?" : undefined}
+                onChange={e => setQuestion(e.target.value)} />
             </label>}
-            {(!structured || selected) && <label>
-              {kind === "OWNERSHIP" ? "Bạn cần thêm bằng chứng nào?" : kind === "DISCREPANCY" ? "Chi tiết nào cần người nhận mô tả lại?" : "Nội dung cần làm rõ *"}
-              <textarea
-                required
-                placeholder={kind === "DISCREPANCY" ? "Ví dụ: Bạn có thể mô tả vị trí vết nứt trên máy?" : undefined}
-                maxLength={5000}
-                rows={5}
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-              />
-            </label>}
-            {data.report.reason_code === "HANDOVER_MISSING_ITEMS" && !question && (
-              <div className="rr-actions" aria-label="Câu hỏi gợi ý">
-                <button type="button" onClick={() => setQuestion("Khi nhận đồ, bạn đã nhận những gì và còn thiếu phụ kiện nào? Nếu có, hãy gửi ảnh để đối chiếu.")}>
-                  Hỏi người nhận còn thiếu gì
-                </button>
-                <button type="button" onClick={() => setQuestion("Khi nhặt được món đồ, bạn thấy những phụ kiện nào đi kèm? Bạn đã giao những gì và hiện còn giữ phụ kiện nào?")}>
-                  Hỏi người nhặt đang giữ gì
-                </button>
-                <button type="button" onClick={() => setQuestion("Bạn đã nhận phần phụ kiện được giao bổ sung chưa? Hãy cho biết đã nhận những gì và còn thiếu gì, nếu có.")}>
-                  Kiểm tra sau khi giao bổ sung
-                </button>
-              </div>
-            )}
+            {structured && selected.length > 0 && <small>Hạn phản hồi 12 giờ làm việc.</small>}
             <ErrorBox>{error}</ErrorBox>
-            <button className="rr-primary" disabled={busy || !canSend}>
-              {busy ? "Đang gửi…" : "Gửi yêu cầu"}
+            <button type="submit" className="rr-primary" disabled={busy || !canSend}>
+              {busy ? "Đang gửi…" : sendingToBoth ? "Gửi yêu cầu cho cả hai" : "Gửi yêu cầu"}
             </button>
           </form>
         </Dialog>

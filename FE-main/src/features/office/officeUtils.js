@@ -28,6 +28,7 @@ export const date = (value) =>
       })
     : "—";
 
+
 export function claimActivityReason(activity, hideVerificationNote = false) {
   const { action, reason } = activity;
   if (action === "AUTO_CLOSE" && reason === "ITEM_RETURNED") {
@@ -47,6 +48,33 @@ export function earliestAppointment() {
   }).format(time).replace(' ', 'T');
 }
 
+export const pickupScheduleHint = "Đặt lịch từ thứ Hai đến thứ Năm, trong ca 08:00–12:00 hoặc 13:00–17:00 (giờ Việt Nam).";
+
+export function pickupScheduleError(value) {
+  if (!value) return "";
+  const [day, time] = value.split("T");
+  const weekday = new Date(day).getUTCDay();
+  const inWorkingHours = (time >= "08:00" && time < "12:00") || (time >= "13:00" && time < "17:00");
+  return weekday >= 1 && weekday <= 4 && inWorkingHours ? "" : pickupScheduleHint;
+}
+
+export function validateRequiredText(form) {
+  const textInputs = 'input[required]:enabled:is(:not([type]), [type="text"]), textarea[required]:enabled';
+  const blank = Array.from(form.querySelectorAll(textInputs)).find(field => !field.value.trim());
+  if (!blank) return true;
+
+  const clearError = () => {
+    blank.setCustomValidity("");
+    blank.removeEventListener("input", clearError);
+    blank.removeEventListener("blur", clearError);
+  };
+  blank.setCustomValidity("Nhập nội dung cho trường này.");
+  blank.addEventListener("input", clearError);
+  blank.addEventListener("blur", clearError);
+  blank.reportValidity();
+  return false;
+}
+
 export const progressLabels = {
   APPEAL_WAIT: "Trong thời hạn gửi tranh chấp",
   APPEAL_REVIEW: "Đang xử lý tranh chấp",
@@ -56,5 +84,7 @@ export const progressLabels = {
   REVIEW: "Chờ xét duyệt", NEEDS_INFO: "Chờ bổ sung thông tin", EMAIL_UNSENT: "Cần gửi lịch hẹn",
   AWAITING_REPLY: "Chờ đồng ý lịch hẹn", REPLY_EXPIRED: "Hết hạn phản hồi lịch", COUNTER_VERIFICATION: "Chờ đến xác minh", VERIFICATION_FAILED: "Không đạt xác minh",
   READY_TO_HANDOVER: "Sẵn sàng trao trả", OFFICE_COMPLETION: "Cần xác nhận hoàn tất", COMPLETED: "Đã trao trả",
+  AWAITING_RECEIPT: "Chờ người nhận xác nhận",
+  COUNTER_CONFIRMATION_EXPIRED: "Hết hạn xác nhận tại quầy",
   DISPUTED: "Có phản ánh cần xử lý", REJECTED: "Đã từ chối", CANCELLED: "Đã hủy", CLOSED: "Đã kết thúc",
 };

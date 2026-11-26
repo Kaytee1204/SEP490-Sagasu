@@ -45,7 +45,7 @@ import java.util.UUID;
 @Slf4j
 public class PostManagementService {
     private static final Set<String> MY_POST_FILTERS = Set.of(
-            "ALL", "PENDING", "VISIBLE", "REJECTED", "HIDDEN");
+            "ALL", "ACTIVE", "PENDING", "HISTORY", "VISIBLE", "REJECTED", "HIDDEN");
     private static final Set<String> MY_POST_TYPES = Set.of("ALL", "LOST", "FOUND");
 
     private final PostRepository posts;

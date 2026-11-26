@@ -109,7 +109,7 @@ function ClaimDetail({ postId, id }) {
   );
   const listPath = isSafeReturn
     ? returnTo : claim?.claimType === 'OFFICE' ? `/claim-cua-toi?view=${String(user?.id) === String(claim.claimantId) ? 'sent' : 'office'}`
-      : postClaimsPath(postId, 'ALL', String(user?.id) === String(claim?.claimantId) ? 'sent' : 'received');
+      : postClaimsPath(postId, claim && claimDisplayStatus(claim), String(user?.id) === String(claim?.claimantId) ? 'sent' : 'received');
   const showHandover = claim?.claimType === 'P2P' && ['APPROVED', 'COMPLETED'].includes(claim.status);
   const isClaimant = claim && String(user?.id) === String(claim.claimantId);
   return <main className="container claims-page claim-detail-page">

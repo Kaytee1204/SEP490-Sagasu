@@ -26,8 +26,13 @@ public class OfficeInvitationService {
     private final PlatformTransactionManager transactions;
     private final EntityManager em;
     private final OfficeAccess access;
+    private final OfficePickupSchedule pickupSchedule;
     private final P2pClaimAppealService appeals;
     private final NotificationService notifications;
+
+    public void validatePickupSchedule(OffsetDateTime scheduledAt, OffsetDateTime now) {
+        pickupSchedule.validate(scheduledAt,now);
+    }
 
     private Claim lock(long id) {
         Long postId=claims.findPostId(id).orElseThrow(()->bad("Không tìm thấy hồ sơ."));

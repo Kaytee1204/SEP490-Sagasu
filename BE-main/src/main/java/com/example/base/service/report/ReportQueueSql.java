@@ -25,7 +25,7 @@ final class ReportQueueSql {
           or (chosen.claim_type='OFFICE' and exists (
             select 1 from item_receipt receipt where receipt.post_id=p.post_id and receipt.status='IN_STORAGE'
           ) and not exists (
-            select 1 from office_handover office_record where office_record.claim_id=chosen.claim_id
+            select 1 from office_handover office_record where office_record.claim_id=chosen.claim_id and office_record.status<>'CANCELLED'
           )))
         and not exists (
           select 1 from p2p_claim_appeal custody_appeal join report_inquiry inquiry using (report_id)
@@ -62,7 +62,8 @@ final class ReportQueueSql {
       left join lateral (
         select min(ap.scheduled_at) as next_pickup
         from appointment ap join claim scheduled on scheduled.claim_id=ap.claim_id
-        where r.kind='HANDOVER_ISSUE' and appeal.report_id is null and scheduled.post_id=p.post_id
+        where r.kind='HANDOVER_ISSUE' and appeal.report_id is null and office_issue.report_id is null
+          and scheduled.post_id=p.post_id
           and scheduled.status='APPROVED' and ap.status='SCHEDULED'
           and coalesce(ap.response_status,'LEGACY') not in ('DECLINED','EXPIRED') and ap.scheduled_at>=now()
       ) pickup on true
@@ -110,6 +111,7 @@ final class ReportQueueSql {
           when risk.urgent_reason is not null or facts.new_reply or facts.recovery_overdue then null
           when facts.recovery_pending then 'WAITING_RECOVERY'
           when inquiry.reply_overdue then null
+          when r.kind='HANDOVER_ISSUE' and exists (select 1 from report_decision d where d.report_id=r.report_id and d.action='HANDOVER_VERIFY_HOLDER' and d.created_at=decisions.latest_decision and (inquiry.latest_question is null or d.created_at>=inquiry.latest_question)) then null
           when inquiry.waiting_reply then 'WAITING_REPLY'
           when facts.accepted_appeal and pending.waiting_other_appeals then 'WAITING_OTHER_APPEALS'
           when facts.accepted_appeal and not (%s) then 'WAITING_REOPEN'

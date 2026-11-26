@@ -36,7 +36,7 @@
 
 .claim-list-filter-row { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #edf2ee; }
 .claim-list-status-group { display: grid; gap: 7px; }
-.claim-list-filter-label, .claim-list-history-filter label { color: #647a69; font-size: .74rem; font-weight: 600; }
+.claim-list-filter-label { color: #647a69; font-size: .74rem; font-weight: 600; }
 .claim-list-status-filters { display: flex; flex-wrap: wrap; gap: 8px; }
 .claim-list-status-filters button {
   min-height: 36px;
@@ -78,8 +78,6 @@
   box-shadow: 0 2px 6px rgba(217, 119, 6, 0.24);
 }
 
-.claim-list-history-filter { display: grid; gap: 7px; min-width: 180px; }
-.claim-list-history-filter select { width: 100%; min-height: 38px; padding: 8px 28px 8px 10px; border: 1px solid #cdded0; border-radius: 9px; background: #fff; color: #2d5543; font: inherit; font-size: .79rem; }
 
 /* ── Time Filter Bar ── */
 .claim-time-filter-bar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
@@ -131,6 +129,7 @@
 
 /* ── Modern Clean Table (inspired by reference design) ── */
 .claim-modern-table-card {
+  --claim-list-columns: minmax(260px, 1fr) 125px 135px 165px 155px;
   background: #ffffff;
   border: 1px solid #e6eee9;
   border-radius: 20px;
@@ -138,9 +137,13 @@
   box-shadow: 0 6px 24px rgba(17, 45, 38, 0.04);
 }
 
+.claim-modern-table-card.without-summary {
+  --claim-list-columns: minmax(0, 1fr) 135px 165px 155px;
+}
+
 .claim-modern-table-head {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 125px 135px 165px 155px;
+  grid-template-columns: var(--claim-list-columns);
   align-items: center;
   gap: 16px;
   padding: 14px 22px;
@@ -162,7 +165,7 @@
 
 .claim-modern-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 125px 135px 165px 155px;
+  grid-template-columns: var(--claim-list-columns);
   align-items: center;
   gap: 16px;
   padding: 16px 22px;
@@ -447,7 +450,6 @@
   .claim-list-office-link { justify-content: center; }
   .claim-list-filter-row { align-items: stretch; gap: 12px; }
   .claim-list-status-group,
-  .claim-list-history-filter,
   .claim-time-filter-bar,
   .claim-time-custom-range,
   .claim-time-field { width: 100%; }
@@ -458,6 +460,6 @@
 @media (max-width: 480px) {
   .claims-page.claim-list-page { padding-block: 20px 32px; }
   .claim-list-heading { margin-bottom: 18px; }
-  .claim-list-status-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .claim-list-status-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .claim-list-status-filters button { padding-inline: 5px; font-size: .71rem; }
 }

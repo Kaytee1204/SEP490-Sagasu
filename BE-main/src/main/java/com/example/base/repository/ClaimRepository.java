@@ -46,9 +46,15 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
             join report_decision d on d.report_id = appeal.report_id
             where c.post_id = :postId and c.claimant_id = :claimantId
               and (d.action = 'APPEAL_REJECT_CLAIM' or (approval.custody_mode='P2P' and d.action='APPEAL_KEEP'))
+            union all
+            select 1 from claim c
+            join report r on r.claim_id=c.claim_id
+            join report_decision d on d.report_id=r.report_id
+            where c.post_id=:postId and c.claimant_id=:claimantId
+              and d.after_state->>'claimResubmissionBlocked'='true'
         )
         """, nativeQuery = true)
-    boolean hasDisputeRejection(@Param("postId") long postId, @Param("claimantId") long claimantId);
+    boolean hasResubmissionBlock(@Param("postId") long postId, @Param("claimantId") long claimantId);
 
     @Query(value = """
         select distinct on (appeal.appellant_claim_id) appeal.appellant_claim_id, d.action
@@ -90,6 +96,16 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})
     @Query("select c from Claim c where c.claimType='P2P' and c.post.account.id=:finderId and (:status='ALL' or c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED'))) order by case when c.status='PENDING' then 0 else 1 end, c.createdAt desc, c.id desc")
     Page<Claim> findReceived(@Param("finderId") long finderId, @Param("status") String status, Pageable pageable);
+
+    @Query("""
+        select c.id from Claim c
+        where c.claimType = 'P2P' and c.post.account.id = :finderId and c.status = 'PENDING'
+          and not exists (
+              select approved.id from Claim approved
+              where approved.post.id = c.post.id and approved.claimType = 'P2P' and approved.status = 'APPROVED'
+          )
+        """)
+    List<Long> findPendingReviewIds(@Param("finderId") long finderId);
 
     @EntityGraph(attributePaths = {"post", "post.account", "claimant"})
     @Query("select c from Claim c where c.post.id=:postId and ((c.claimType='P2P' and c.post.account.id=:actorId) or (c.claimType='OFFICE' and :approver=true)) and (:status='ALL' or c.status=:status or (:status='HISTORY' and c.status in ('COMPLETED','REJECTED','CANCELLED','CLOSED'))) order by c.createdAt desc, c.id desc")

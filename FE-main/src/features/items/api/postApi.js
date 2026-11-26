@@ -44,8 +44,8 @@ async function createPost(type, data, images) {
   return response.data;
 }
 
-export async function getMyPosts(page = 1, filter = 'ALL', postType = 'ALL') {
-  return (await apiClient.get(`/posts/mine?${new URLSearchParams({page: String(page), size: '12', filter, postType})}`)).data;
+export async function getMyPosts(page = 1, filter = 'ALL', postType = 'ALL', size = 12) {
+  return (await apiClient.get(`/posts/mine?${new URLSearchParams({page: String(page), size: String(size), filter, postType})}`)).data;
 }
 
 export async function getPostForEdit(id) {

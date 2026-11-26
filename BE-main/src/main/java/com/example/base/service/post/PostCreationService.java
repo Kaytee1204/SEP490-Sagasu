@@ -11,6 +11,7 @@ import com.example.base.repository.AccountRepository;
 import com.example.base.repository.CategoryRepository;
 import com.example.base.repository.PostRepository;
 import com.example.base.security.CustomUserDetails;
+import com.example.base.service.report.SubmissionRestrictions;
 import com.example.base.storage.ImageStorage;
 import com.example.base.storage.ImageValidator;
 import com.example.base.storage.ImageValidator.ValidatedImage;
@@ -37,6 +38,7 @@ public class PostCreationService {
     private final ImageStorage storage;
     private final ImageValidator validator;
     private final PlatformTransactionManager transactionManager;
+    private final SubmissionRestrictions restrictions;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AiIndexSyncService aiIndexSyncService;
@@ -62,6 +64,7 @@ public class PostCreationService {
             var existing = findRequest(authorId, draft.requestId());
             if (existing != null) return existing;
         }
+        restrictions.checkAvailable(authorId, SubmissionRestrictions.Action.POST);
         if (!categories.existsByCategoryIdAndActiveTrue(draft.categoryId())) {
             throw new AppException(ErrorCode.POST_CATEGORY_UNAVAILABLE);
         }
@@ -82,6 +85,7 @@ public class PostCreationService {
                     var existing = findRequest(authorId, draft.requestId());
                     if (existing != null) { reused[0] = true; return existing; }
                 }
+                restrictions.requireAvailableForSubmission(authorId, SubmissionRestrictions.Action.POST);
                 var saved = savePost(draft, authorId, images, uploadedKeys);
                 if (draft.requestId() != null) jdbc.update(
                         "insert into post_creation_request(account_id, request_id, post_id) values (?, ?, ?)",

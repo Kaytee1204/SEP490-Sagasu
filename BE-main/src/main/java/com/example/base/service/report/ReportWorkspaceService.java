@@ -18,7 +18,8 @@ public class ReportWorkspaceService {
     private static final int PAGE_SIZE = 12;
     private static final String WORKSPACE = """
             with my_inquiries as (
-                select report_id, bool_or(responded_at is null and closed_at is null) as unanswered
+                select report_id, bool_or(responded_at is null and closed_at is null
+                    and coalesce(response_due_at, created_at + interval '3 days') > now()) as unanswered
                 from report_inquiry
                 where recipient_id = :actor
                 group by report_id
@@ -28,6 +29,10 @@ public class ReportWorkspaceService {
                 union select report_id from report_recipient where account_id = :actor
             ), workspace as (
                 select r.report_id, r.status, r.created_at, r.updated_at, r.resolved_at,
+                    r.status='OPEN' and r.assigned_to is null and r.reporter_id=:actor
+                        and exists (select 1 from p2p_handover_issue issue where issue.report_id=r.report_id) as can_withdraw,
+                    exists (select 1 from report_decision d
+                        where d.report_id=r.report_id and d.action='HANDOVER_WITHDRAWN') as withdrawn,
                     r.reporter_id = :actor as mine, %s,
                     coalesce(i.unanswered, false) and (
                         r.status in ('OPEN', 'IN_REVIEW') or (
@@ -40,6 +45,7 @@ public class ReportWorkspaceService {
                     case when c.claimant_id=:actor or (c.claim_type='P2P' and p.account_id=:actor) then c.claim_id
                          when chosen.claimant_id=:actor then chosen.claim_id end as participant_claim_id,
                     c.claim_type,
+                    exists (select 1 from office_handover_issue office_issue where office_issue.report_id=r.report_id) as office_handover,
                     p.account_id=:actor as post_owner,
                     follow_up.step as appeal_step, approval.appeal_until,
                     coalesce(follow_up.step='READY_TO_REOPEN' and chosen.claim_type='P2P' and p.account_id=:actor
@@ -79,7 +85,7 @@ public class ReportWorkspaceService {
             )
             """;
     private static final String LIST_FIELDS = """
-            select report_id, status, created_at, updated_at, mine, report_type, report_subject,
+            select report_id, status, withdrawn, created_at, updated_at, mine, report_type, report_subject,
                 report_subject_id, report_reason, thumbnail_post_id, needs_reply, needs_reopen, appeal_step, appeal_until
             """;
 
@@ -161,13 +167,15 @@ public class ReportWorkspaceService {
                              and (reopened.action='APPEAL_REOPEN'
                                or (reopened.action='APPEAL_WRONG_RECIPIENT'
                                  and reopened.after_state->>'approvalReopened'='true'))) as approval_reopened,
-                       case when w.post_owner then d.after_state->>'appliedMeasure' end as post_measure
+                       case when w.post_owner then d.after_state->>'appliedMeasure' end as post_measure,
+                       d.after_state->>'appliedMeasure' as applied_measure,
+                       d.after_state->>'restrictionUntil' as restriction_until
                 from workspace w left join lateral (
                     select d.action, d.after_state from report_decision d
                     where d.report_id = w.report_id
                       and d.action in ('VIOLATION', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE',
                                        'APPEAL_WITHDRAWN', 'APPEAL_KEEP', 'APPEAL_INSUFFICIENT', 'APPEAL_REJECT_CLAIM', 'APPEAL_REQUIRE_REVIEW',
-                                       'APPEAL_WRONG_RECIPIENT', 'HANDOVER_COMPLETED',
+                                       'APPEAL_WRONG_RECIPIENT', 'HANDOVER_COMPLETED', 'HANDOVER_WITHDRAWN',
                                        'HANDOVER_CONTINUE', 'HANDOVER_RETRY', 'HANDOVER_REOPEN', 'CLAIM_REJECTED')
                     order by d.decision_id desc limit 1
                 ) d on true

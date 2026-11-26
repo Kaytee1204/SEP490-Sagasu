@@ -14,7 +14,7 @@ const events = {
   RESCHEDULE: ["Đổi lịch hẹn", "Người đổi lịch", "Lý do đổi lịch"],
   OFFICE_CANCEL: ["Hủy lịch và thu hồi duyệt", "Người xử lý", "Lý do thu hồi duyệt"],
   REVOKE_APPROVAL: ["Thu hồi duyệt", "Người xử lý", "Lý do thu hồi duyệt"],
-  HANDOVER: ["Ghi nhận giao đồ", "Người ghi nhận", "Nội dung giao đồ"],
+  HANDOVER: ["Cập nhật biên bản bàn giao", "Nhân viên ghi nhận", "Nội dung cập nhật"],
   CONFIRM_RECEIPT: ["Hoàn tất trao trả", "Người ghi nhận", "Nội dung xác nhận"],
   AUTO_CLOSE: ["Đóng hồ sơ do đồ đã được trao trả", null, "Lý do đóng hồ sơ"],
   REPORT_ISSUE: ["Phản ánh việc nhận đồ", "Người gửi phản ánh", "Thông tin phản ánh"],
@@ -134,7 +134,9 @@ export default function OfficeClaimTimeline({ claim, workflow, mine = false }) {
   const stage = claim.stage || claim.status;
   const ended = terminalStages.includes(stage);
   const closed = ended && stage !== "COMPLETED";
-  const currentLabel = mine && claim.stage === "EMAIL_UNSENT"
+  const currentLabel = workflow.data?.handover?.completionMethod === "TIMEOUT"
+    ? "Đã kết thúc bàn giao · Chưa có xác nhận"
+    : mine && claim.stage === "EMAIL_UNSENT"
     ? "Chờ văn phòng gửi lịch hẹn"
     : progressLabels[claim.stage] || labels[claim.status] || "Chờ cập nhật";
   const StateIcon = ended ? (closed ? X : Check) : CircleDot;
@@ -161,10 +163,18 @@ export default function OfficeClaimTimeline({ claim, workflow, mine = false }) {
             );
           }
           const { action, actorName, createdAt } = activity;
-          const [title, role, noteLabel = "Nội dung cập nhật"] = events[action] || ["Cập nhật yêu cầu", "Người thực hiện"];
+          const missedPickup = action === "CANCEL" && activity.reason === "Không đến xác minh trong thời hạn.";
+          const timedOut = action === "CONFIRM_RECEIPT" && workflow.data?.handover?.completionMethod === "TIMEOUT";
+          const confirmedByRecipient = action === "CONFIRM_RECEIPT" && workflow.data?.handover?.completionMethod === "RECIPIENT";
+          const [title, role, noteLabel = "Nội dung cập nhật"] = timedOut
+            ? ["Kết thúc bàn giao do hết hạn xác nhận", null, "Kết quả"]
+            : confirmedByRecipient ? ["Người nhận đã xác nhận", "Người xác nhận", "Nội dung xác nhận"]
+            : missedPickup
+            ? ["Hết hạn đến quầy xác minh", null, "Lý do hủy"]
+            : events[action] || ["Cập nhật yêu cầu", "Người thực hiện"];
           const created = action === "SUBMIT";
           const creator = actorName || claim.createdBy || (claim.channel === "ONLINE" ? claim.claimantName : null);
-          const automatic = action === "AUTO_CLOSE" || action === "INVITE_EXPIRE";
+          const automatic = action === "AUTO_CLOSE" || action === "INVITE_EXPIRE" || missedPickup || timedOut;
           // Email responses for requests without accounts can be recorded under the creator's account.
           const actor = action.startsWith("INVITE_") && claim.claimantId == null ? claim.claimantName : actorName;
           const note = claimActivityReason(activity, mine || hasFailedVerification);

@@ -110,7 +110,8 @@ public class OfficeManagementService {
     public ReceiptView receiptView(ItemReceipt r) {
         return new ReceiptView(r.getId(),r.getReceiptCode(),r.getPostId(),r.getTitle(),r.getStatus(),r.getConditionAtReceipt(),
             r.getStorageLocation()==null?null:r.getStorageLocation().getCode()+" · "+r.getStorageLocation().getName(),
-            r.getStorageLocation()==null?null:r.getStorageLocation().getId(),person(r.getReceivedBy()),r.getReceivedAt(),r.getFinderName(),r.getFinderContact());
+            r.getStorageLocation()==null?null:r.getStorageLocation().getId(),person(r.getReceivedBy()),r.getReceivedAt(),
+            r.getFinderName(),r.getFinderContact(),r.getItemSummary());
     }
     @Transactional(readOnly=true)
     public PageData<ReceiptView> stored(int page,String q,Long locationId,CustomUserDetails user) {

@@ -51,6 +51,7 @@ class ReportReviewServiceTest {
     @Mock ChatConversationService chat;
     @Mock ClaimService claims;
     @Mock com.example.base.service.claim.P2pClaimAppealService claimAppeals;
+    @Mock SubmissionRestrictions restrictions;
 
     ReportContextService context;
     ReportReviewService service;
@@ -64,7 +65,8 @@ class ReportReviewServiceTest {
     void setUp() {
         context = spy(new ReportContextService(jdbc, new ObjectMapper(), storage));
         service = new ReportReviewService(access, jdbc, context, accounts, accountRepository, moderation, posts, notifications, chat, claims, claimAppeals,
-                new ReportReviewCalendar("Asia/Ho_Chi_Minh", "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY", "08:00-12:00,13:00-17:00", ""));
+                new ReportReviewCalendar("Asia/Ho_Chi_Minh", "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY", "08:00-12:00,13:00-17:00", ""),
+                restrictions);
         manager = new Account();
         manager.setId(1L);
         manager.setRole(AccountRole.MANAGER);
@@ -173,13 +175,19 @@ class ReportReviewServiceTest {
     }
 
     @Test
-    void appealHistoryGroupsByReportIdSoSeparateDisputesOnTheSameClaimStayVisible() {
-        givenTotals(2L, 2L);
-        service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "HISTORY", null, user);
+    void appealHistoryGroupsByApprovalAndExpandsToIndividualReports() {
+        givenTotals(2L, 1L);
+        var grouped = service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "HISTORY", null, user);
+        var expanded = service.list(1, "ALL", "CLAIM_APPEAL", "ALL", "", "HISTORY", null, "ALL", 30L, user);
 
-        String appealKey = "when appeal.report_id is not null then 'APPEAL:'||r.report_id";
-        verify(jdbc).queryForMap(contains(appealKey), any(Object[].class));
-        verify(jdbc).queryForList(contains(appealKey), any(Object[].class));
+        String appealKey = "when appeal.report_id is not null then 'APPEAL:'||appeal.approval_id";
+        verify(jdbc, times(2)).queryForMap(contains(appealKey), any(Object[].class));
+        verify(jdbc).queryForList(argThat(sql -> sql.contains(appealKey) && sql.contains("where object_row=1")),
+                any(Object[].class));
+        verify(jdbc).queryForList(argThat(sql -> sql.contains("and appeal.approval_id=?") && !sql.contains("where object_row=1")),
+                any(Object[].class));
+        assertThat(grouped).containsEntry("totalElements", 1L).containsEntry("totalReports", 2L);
+        assertThat(expanded).containsEntry("totalElements", 2L);
     }
 
     @Test
@@ -503,13 +511,52 @@ class ReportReviewServiceTest {
     void structuredViolationAppliesTheMeasureAndLogsItWithTheFinding() {
         givenVisiblePost();
 
-        var request = new ReportReviewService.Action(3L, "VIOLATION", "Conclusion", "Basis", null, false, "HIDE_POST");
+        var request = new ReportReviewService.Action(3L, "VIOLATION", "Conclusion", null, null, false, "HIDE_POST");
         service.act(5L, request, user);
 
         verify(moderation).moderate(eq(10L), any(OfficeDtos.Moderation.class), eq(user));
         verifyStatusUpdate("RESOLVED");
         verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L), eq("VIOLATION"), eq("Conclusion"),
-                eq("Basis"), anyString(), contains("\"appliedMeasure\":\"HIDE_POST\""));
+                eq(""), anyString(), contains("\"appliedMeasure\":\"HIDE_POST\""));
+    }
+
+    @Test
+    void postViolationRequiresOneOfThePostMeasures() {
+        @SuppressWarnings("unchecked")
+        var post = (Map<String, Object>) ctx.get("post");
+        post.put("account_id", 8L);
+
+        assertThat(service.detail(5L, user)).containsEntry("availableMeasures", List.of("HIDE_POST", "BAN_POST_7_DAYS"));
+        assertBad(() -> service.act(5L, action("VIOLATION"), user), "Chọn biện pháp");
+
+        var until = java.time.OffsetDateTime.parse("2026-12-02T09:30:00Z");
+        when(restrictions.restrictForSevenDays(8L, SubmissionRestrictions.Action.POST, 5L)).thenReturn(until);
+        service.act(5L, new ReportReviewService.Action(3L, "VIOLATION", "Conclusion", null, null, false, "BAN_POST_7_DAYS"), user);
+        verify(restrictions).restrictForSevenDays(8L, SubmissionRestrictions.Action.POST, 5L);
+        verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L), eq("VIOLATION"), eq("Conclusion"),
+                eq(""), anyString(), contains("\"restrictionUntil\":\"2026-12-02T09:30Z\""));
+        verifyNoInteractions(moderation);
+        verifyStatusUpdate("RESOLVED");
+    }
+
+    @Test
+    void claimViolationCanRestrictTheClaimantOrBlockResubmissionOnThisPost() {
+        report.remove("post_id");
+        report.put("claim_id", 25L);
+        ctx.put("claim", row("claim_id", 25L, "post_id", 10L, "claimant_id", 8L, "claim_type", "P2P", "status", "PENDING"));
+        givenReport(report);
+
+        assertThat(service.detail(5L, user)).containsEntry("availableMeasures", List.of("CLAIM_VIOLATION_BLOCK", "BAN_CLAIM_7_DAYS"));
+        var until = java.time.OffsetDateTime.parse("2026-12-02T09:30:00Z");
+        when(restrictions.restrictForSevenDays(8L, SubmissionRestrictions.Action.CLAIM, 5L)).thenReturn(until);
+        service.act(5L, new ReportReviewService.Action(3L, "VIOLATION", "Conclusion", null, null, false, "BAN_CLAIM_7_DAYS"), user);
+        verify(restrictions).restrictForSevenDays(8L, SubmissionRestrictions.Action.CLAIM, 5L);
+        verifyNoInteractions(claims);
+
+        service.act(5L, new ReportReviewService.Action(3L, "VIOLATION", "Conclusion", null, null, false, "CLAIM_VIOLATION_BLOCK"), user);
+        verify(claims).rejectReportedClaim(eq(25L), contains("không thể gửi lại"), eq(user));
+        verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L), eq("VIOLATION"), eq("Conclusion"),
+                eq(""), anyString(), contains("\"claimResubmissionBlocked\":true"));
     }
 
     @Test
@@ -546,8 +593,8 @@ class ReportReviewServiceTest {
         verifyStatusUpdate("IN_REVIEW");
         verify(jdbc).update(contains("insert into report_hold"), eq(5L), eq(10L), eq(1L), eq("Conclusion"));
         verify(notifications).notifyUser(7L, "REPORT_RECOVERY_REQUESTED", "Yêu cầu thu hồi món đồ", "Conclusion", "/bao-cao/5", false);
-        verify(notifications).notifyUser(8L, "REPORT_INFORMATION", "Cần phản hồi về việc thu hồi món đồ",
-                "Conclusion", "/bao-cao/5#phan-hoi", false);
+        verify(notifications).notifyUserWithEmail(eq(8L), eq("REPORT_INFORMATION"), eq("Cần phản hồi về việc thu hồi món đồ"),
+                eq("Conclusion"), eq("/bao-cao/5#phan-hoi"), contains("phản hồi trước"));
         verifyNoInteractions(claims);
     }
 
@@ -566,8 +613,9 @@ class ReportReviewServiceTest {
         service.act(5L, new ReportReviewService.Action(3L, "APPEAL_KEEP", "Conclusion", "Basis", null,
                 false, null, false, ReportReviewService.AppealFinding.INVALID_CLAIM), user);
 
-        if ("P2P".equals(claimType)) verify(claimAppeals).releaseWindowIfUncontested(25L);
-        else verifyNoInteractions(claimAppeals);
+        verify(claimAppeals).releaseWindowIfUncontested(25L);
+        verify(notifications).notifyUser(eq(7L), eq("REPORT_RESOLVED"), anyString(), eq("Conclusion"), anyString(), eq(false));
+        verify(notifications, never()).notifyUserWithEmail(eq(7L), eq("REPORT_RESOLVED"), anyString(), anyString(), anyString(), anyString());
         verify(claims).rejectClaimAfterAppeal(eq(41L), contains("Bạn không thể gửi lại"), eq(user));
         verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
                 eq("APPEAL_REJECT_CLAIM"), eq("Conclusion"), eq("Basis"), anyString(), anyString());
@@ -595,26 +643,27 @@ class ReportReviewServiceTest {
     void confirmingWrongRecipientReopensTheApprovalRoundAndNotifiesTheFinder() {
         report.put("kind", "HANDOVER_ISSUE");
         rows(jdbc, "where a.report_id=?", row("approval_id", 30L, "approved_claim_id", 40L,
-                "active", true, "can_reopen_approval", true, "post_id", 10L, "finder_id", 8L, "waiting_other_appeals", true));
+                "active", true, "can_reopen_approval", true, "post_id", 10L, "finder_id", 8L,
+                "claim_type", "P2P", "waiting_other_appeals", true));
         rows(jdbc, "where appeal.approval_id=? and r.report_id<>?", row("report_id", 6L, "reporter_id", 9L, "status", "OPEN"));
-        when(jdbc.update(startsWith("update report set status='RESOLVED'"), anyString(), eq(1L), eq(6L))).thenReturn(1);
+        when(jdbc.update(startsWith("update report set status=?,resolution_note="),
+                eq("RESOLVED"), anyString(), eq(1L), eq(6L))).thenReturn(1);
         assertThat(service.detail(5L, user).get("actions")).isEqualTo(List.of("APPEAL_KEEP", "APPEAL_WRONG_RECIPIENT"));
         assertBad(() -> service.act(5L, action("RESOLVE"), user), "quyết định xử lý tranh chấp");
         assertBad(() -> service.act(5L, action("APPEAL_REQUIRE_REVIEW"), user), "Thao tác không hợp lệ");
         assertBad(() -> service.act(5L, action("APPEAL_WRONG_RECIPIENT"), user), "Cần xác nhận đã đối chiếu");
-        assertBad(() -> service.act(5L, new ReportReviewService.Action(3L, "APPEAL_WRONG_RECIPIENT",
-                "Conclusion", "Basis", null, false, null, true), user), "Cần xác minh đồ");
         service.act(5L, new ReportReviewService.Action(3L, "APPEAL_WRONG_RECIPIENT",
-                "Conclusion", "Basis", null, true, null, true), user);
+                "Conclusion", "Basis", null, false, null, true), user);
         verify(jdbc).update(contains("insert into report_decision"), eq(5L), eq(1L),
                 eq("APPEAL_WRONG_RECIPIENT"), eq("Conclusion"), eq("Basis"), anyString(),
                 contains("\"approvalReopened\":true"));
         verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(5L));
         verify(jdbc).update(contains("update report_inquiry i set closed_at=now()"), eq(6L));
-        verify(jdbc).update(startsWith("update report set status='RESOLVED'"), contains("đã được mở lại"), eq(1L), eq(6L));
-        verify(notifications).notifyUser(eq(8L), eq("REPORT_RESOLVED"), eq("Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt"),
-                anyString(), eq("/bai-dang/10/claims?claimStatus=PENDING"), eq(false));
-        verify(notifications).notifyUser(eq(9L), eq("REPORT_RESOLVED"), anyString(), anyString(), eq("/bao-cao/6"), eq(false));
+        verify(jdbc).update(startsWith("update report set status=?,resolution_note="),
+                eq("RESOLVED"), contains("mở lại xét duyệt"), eq(1L), eq(6L));
+        verify(notifications).notifyUserWithEmail(eq(8L), eq("REPORT_RESOLVED"), eq("Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt"),
+                anyString(), eq("/bai-dang/10/claims?claimStatus=PENDING"), contains("chọn người nhận"));
+        verify(notifications).notifyUser(eq(9L), eq("REPORT_RESOLVED"), anyString(), anyString(), eq("/bao-cao/6#ket-qua"), eq(true));
         verify(chat).notifyAppealChanged(5L);
         verifyStatusUpdate("RESOLVED");
         verify(claims).reopenApprovalForReview(40L, "Báo cáo #5: Conclusion", user);
@@ -739,6 +788,39 @@ class ReportReviewServiceTest {
     }
 
     @Test
+    void wrongItemExchangeAsksBothPartiesAndKeepsTheReportOpen() {
+        givenDispute("DISPUTED", "APPROVED");
+        report.put("reason_code","HANDOVER_WRONG_ITEM");
+        ctx.put("post",row("post_id",10L,"account_id",8L));
+        ctx.put("claim",row("claimant_id",7L));
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        service.act(5L, action("HANDOVER_CORRECTION"), user);
+        verifyStatusUpdate("IN_REVIEW");
+        for (long recipient : List.of(7L,8L))
+            verify(jdbc).update(contains("insert into report_inquiry"),eq(5L),eq(recipient),eq(1L),anyString(),any(),eq("HANDOVER_CORRECTION"));
+    }
+
+    @Test
+    void unverifiedHandoverClosesOnlyTheReport() {
+        givenDispute("DISPUTED", "APPROVED");
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        when(jdbc.queryForObject(contains("h.status='DISPUTED'"), eq(Boolean.class), any(Object[].class))).thenReturn(true);
+        service.act(5L, action("HANDOVER_UNVERIFIED"), user);
+        verifyStatusUpdate("RESOLVED");
+        verify(jdbc).update(contains("status='WAITING_CONFIRMATION'"), eq(70L));
+        verify(jdbc, never()).update(contains("set status='COMPLETED'"), any(Object[].class));
+    }
+
+    @Test
+    void tracingTheHolderKeepsTheReportAssignedAndOpen() {
+        givenDispute("DISPUTED", "APPROVED");
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        service.act(5L, action("HANDOVER_VERIFY_HOLDER"), user);
+        verifyStatusUpdate("IN_REVIEW");
+        verify(jdbc, never()).update(contains("update p2p_handover set status"), any(Object[].class));
+    }
+
+    @Test
     void utc092_handoverContinue_backToWaitingConfirmation() {
         givenDispute("DISPUTED", "APPROVED");
 
@@ -754,6 +836,14 @@ class ReportReviewServiceTest {
 
         assertBad(() -> service.act(5L, action("CLAIM_REJECTED", null, true), user), "Thao tác không hợp lệ");
         verify(jdbc, never()).update(contains("update p2p_handover set status='CANCELLED'"), anyLong());
+    }
+
+    @Test
+    void paymentReportCannotReopenRecipientSelection() {
+        givenDispute("DISPUTED", "APPROVED");
+        report.put("reason_code", "P2P_HANDOVER_PAYMENT");
+        rows(jdbc, "select phase from p2p_handover_issue", row("phase", "DURING"));
+        assertBad(() -> service.act(5L, action("HANDOVER_REOPEN", null, true), user), "không phù hợp");
     }
 
     @Test

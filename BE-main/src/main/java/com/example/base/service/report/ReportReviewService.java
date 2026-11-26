@@ -43,6 +43,7 @@ public class ReportReviewService {
   private final ClaimService claims;
   private final P2pClaimAppealService claimAppeals;
   private final ReportReviewCalendar calendar;
+  private final SubmissionRestrictions restrictions;
 
   public enum AppealFinding { INSUFFICIENT_EVIDENCE, INVALID_CLAIM }
 
@@ -99,6 +100,12 @@ public class ReportReviewService {
   @Transactional(readOnly = true)
   public Map<String,Object> list(int page, String status, String kind, String target, String q,
       String queue, Long targetId, String assignee, Long approvalId, CustomUserDetails user) {
+    return list(page, status, kind, target, q, queue, targetId, assignee, approvalId, null, user);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String,Object> list(int page, String status, String kind, String target, String q,
+      String queue, Long targetId, String assignee, Long approvalId, Boolean officeHandover, CustomUserDetails user) {
     Account actor = access.require(user, AccountRole.MANAGER);
     if (!Set.of("ALL","READY","UNASSIGNED","MINE","WAITING","REPLIED","HISTORY").contains(queue))
       throw bad("Hàng đợi không hợp lệ.");
@@ -115,6 +122,8 @@ public class ReportReviewService {
     ) throw bad("Bộ lọc không hợp lệ.");
     if (approvalId != null && (approvalId <= 0 || targetId != null || !"CLAIM_APPEAL".equals(kind)))
       throw bad("Bộ lọc lần duyệt không hợp lệ.");
+    if (officeHandover != null && (!"HANDOVER_ISSUE".equals(kind) || targetId == null || !"CLAIM".equals(target)))
+      throw bad("Bộ lọc nhóm sự cố bàn giao không hợp lệ.");
     boolean expandedGroup = targetId != null || approvalId != null;
     // Compiling the priority expressions can take longer than reading the report queue itself.
     jdbc.execute("set local jit = off");
@@ -131,6 +140,7 @@ public class ReportReviewService {
       left join accounts subject on subject.id=coalesce(r.reported_account_id,msg.sender_id,p.created_by)
       left join p2p_claim_appeal appeal on appeal.report_id=r.report_id
       left join p2p_claim_approval approval on approval.approval_id=appeal.approval_id
+      left join office_handover_issue office_issue on office_issue.report_id=r.report_id
       """ + ReportQueueSql.CLASSIFICATION + """
       where (?='ALL' or case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end=?)
       """;
@@ -174,12 +184,14 @@ public class ReportReviewService {
       args.add(targetId);
     }
     if (approvalId != null) {
-      where += " and appeal.approval_id=? and approval.custody_mode='OFFICE'";
+      where += " and appeal.approval_id=?";
       args.add(approvalId);
     }
+    if (officeHandover != null)
+      where += officeHandover ? " and office_issue.report_id is not null" : " and office_issue.report_id is null";
     String objectKey = """
-        case when appeal.report_id is not null and approval.custody_mode='OFFICE' then 'OFFICE_APPEAL:'||appeal.approval_id
-          when appeal.report_id is not null then 'APPEAL:'||r.report_id
+        case when appeal.report_id is not null then 'APPEAL:'||appeal.approval_id
+          when office_issue.report_id is not null then 'OFFICE_HANDOVER:'||r.claim_id
           when r.kind='HANDOVER_ISSUE' then 'HANDOVER:'||r.claim_id
           when r.post_id is not null then 'POST:'||r.post_id
           when r.claim_id is not null then 'CLAIM:'||r.claim_id
@@ -211,9 +223,11 @@ public class ReportReviewService {
     String projection = """
       select r.report_id,case when appeal.report_id is not null then 'CLAIM_APPEAL' else r.kind end as kind,
         appeal.approval_id, approval.custody_mode as appeal_custody_mode,
+        case when office_issue.report_id is not null then 'OFFICE' end as handover_source,
         r.post_id,r.claim_id,r.message_id,r.reported_account_id,r.description,r.reason_code,
         case when appeal.report_id is null then r.reason_label_snapshot end as reason_label_snapshot,
         r.status,r.created_at,
+        exists (select 1 from report_decision d where d.report_id=r.report_id and d.action='HANDOVER_WITHDRAWN') as withdrawn,
         a.full_name as reporter,m.full_name as assignee,
         coalesce(nullif(p.title,''),case when r.reported_account_id is not null then nullif(subject.full_name,'') end) as subject_title,
         nullif(subject.full_name,'') as subject_name,
@@ -238,6 +252,13 @@ public class ReportReviewService {
         + "(select jsonb_object_agg(reason_label, amount)::text from "
         + "(select reason_label,count(*) as amount from queue_rows sibling where sibling.report_key=queue_rows.report_key group by reason_label) reasons) as reason_summary, "
         + """
+          (select case
+             when count(distinct related.assigned_to)>1
+               or (count(related.assigned_to)>0 and count(related.assigned_to)<count(*))
+             then 'Cần thống nhất phân công' else min(owner.full_name) end
+           from p2p_claim_appeal entry join report related using(report_id)
+           left join accounts owner on owner.id=related.assigned_to
+           where entry.approval_id=queue_rows.approval_id and related.status in ('OPEN','IN_REVIEW')) as appeal_assignee,
           (select jsonb_build_object('storage_key', image.storage_key, 'image_url', image.image_url)::text
              from post_image image where image.post_id=queue_rows.related_post_id
              order by image.sort_order limit 1) as post_thumbnail
@@ -297,8 +318,12 @@ public class ReportReviewService {
     var current = context.context(r);
     var appeal = appeal(reportId);
     String kind = caseKind(r, appeal);
-    boolean conflict = participantsFor(r).contains(actor.getId());
-    boolean assigned = !conflict && Objects.equals(id(r, "assigned_to"), actor.getId());
+    Long approvalId = id(appeal, "approval_id");
+    var reportsInRound = approvalId == null || !open(r) ? List.<Map<String, Object>>of() : appealReports(approvalId);
+    var round = reportsInRound.stream().filter(this::open).toList();
+    boolean conflict = hasAssignmentConflict(r, reportsInRound, actor.getId());
+    boolean assigned = !conflict && Objects.equals(id(r, "assigned_to"), actor.getId())
+        && round.stream().allMatch(item -> Objects.equals(id(item, "assigned_to"), actor.getId()));
     boolean p2pDispute = activeP2pDispute(reportId);
     var hold = context.one("select * from report_hold where report_id=? and released_at is null", reportId);
     boolean recoveryRequested = recoveryRequested(reportId);
@@ -307,10 +332,14 @@ public class ReportReviewService {
     var out = new LinkedHashMap<String, Object>();
     out.put("report", r);
     out.put("caseKind", kind);
+    out.put("handoverSource", current.get("handoverSource"));
     out.put("appeal", appeal);
     if (!appeal.isEmpty()) {
       out.put("approvedContext", context.withUrls(context.context(
           Map.of("claim_id", appeal.get("approved_claim_id"), "report_id", reportId, "kind", kind))));
+      if ("REJECTED".equals(r.get("status")) && Boolean.TRUE.equals(appeal.get("active"))) {
+        out.put("approvalWindow", claimAppeals.handoverWindow(id(appeal, "post_id"), id(appeal, "approved_claim_id")));
+      }
     }
     out.put("recoveryRequested", recoveryRequested);
     out.put("recovery", recovery);
@@ -325,7 +354,11 @@ public class ReportReviewService {
     }
     out.put("current", context.withUrls(current));
     out.put("snapshot", context.snapshot(reportId));
-    out.put("canTake", !conflict && r.get("assigned_to") == null && open(r));
+    out.put("canTake", !conflict && open(r) && (round.isEmpty()
+        ? r.get("assigned_to") == null : !assigned && canTakeAppealRound(round, reportsInRound, actor.getId())));
+    out.put("appealRoundTransfer", round.stream().anyMatch(item ->
+        item.get("assigned_to") != null && !Objects.equals(id(item, "assigned_to"), actor.getId())));
+    out.put("appealOpenCount", round.size());
     out.put("canProcess", assigned && open(r));
     out.put("canAsk", assigned && (open(r) || activeRecoveryFollowUp(r, appeal, recoveryRequested)));
     Long assignee = id(r, "assigned_to");
@@ -352,14 +385,20 @@ public class ReportReviewService {
         reportId
       )
     );
-    out.put(
-      "decisions",
-      jdbc.queryForList(
-        "select d.decision_id,d.action,d.conclusion,d.basis,d.created_at,d.after_state->>'appliedMeasure' as applied_measure,a.full_name as actor from report_decision d join accounts a on a.id=d.actor_id where report_id=? order by decision_id",
+    var decisions = jdbc.queryForList(
+        """
+        select d.decision_id,d.action,d.conclusion,d.basis,d.created_at,
+            d.after_state->>'appliedMeasure' as applied_measure,
+            d.after_state->>'restrictionUntil' as restriction_until,a.full_name as actor
+        from report_decision d join accounts a on a.id=d.actor_id
+        where report_id=? order by decision_id
+        """,
         reportId
-      )
     );
+    out.put("decisions", decisions);
+    out.put("withdrawn", decisions.stream().anyMatch(item -> "HANDOVER_WITHDRAWN".equals(item.get("action"))));
     out.put("inquiries", inquiries(reportId));
+    if ("HANDOVER_ISSUE".equals(kind) && issuePhase != null) out.put("verificationOptions", HandoverVerification.options(r, current));
     out.put("hold", hold);
     out.put("p2pDispute", p2pDispute);
     out.put(
@@ -368,20 +407,24 @@ public class ReportReviewService {
         """
         select x.report_id,case when sibling.report_id is not null then 'CLAIM_APPEAL' else x.kind end as kind,
           x.status,x.version,x.assigned_to,x.reason_code,x.reason_label_snapshot,x.description,x.post_id,x.claim_id,
+          exists (select 1 from report_decision d where d.report_id=x.report_id and d.action='HANDOVER_WITHDRAWN') as withdrawn,
           x.message_id,x.reported_account_id,x.resolution_note,x.created_at,
           coalesce(sibling.approval_id=cast(? as bigint),false) as same_approval
         from report x left join p2p_claim_appeal sibling on sibling.report_id=x.report_id
-        where x.report_id<>? and (x.post_id=? or x.claim_id=? or x.message_id=? or x.reported_account_id=?
-          or sibling.approval_id=?)
-        order by same_approval desc,x.created_at desc limit 30
+        where x.report_id<>? and (sibling.approval_id=? or (cast(? as bigint) is null
+          and (x.post_id=? or x.claim_id=? or x.message_id=? or x.reported_account_id=?)))
+        order by x.created_at desc,x.report_id desc
+        limit (case when cast(? as bigint) is null then 30 end)
         """,
         appeal.get("approval_id"),
         reportId,
+        approvalId,
+        approvalId,
         r.get("post_id"),
         r.get("claim_id"),
         r.get("message_id"),
         r.get("reported_account_id"),
-        appeal.get("approval_id")
+        approvalId
       )
     );
     return out;
@@ -406,6 +449,13 @@ public class ReportReviewService {
             ReportQueueSql.APPEAL_STEP, ReportQueueSql.OTHER_APPEALS_PENDING), reportId);
   }
 
+  static boolean isP2pReport(Map<String, Object> report, Map<String, Object> appeal, Map<String, Object> current) {
+    if (!appeal.isEmpty()) return "P2P".equals(appeal.get("claim_type"));
+    if ("OFFICE".equals(current.get("handoverSource"))) return false;
+    return "HANDOVER_ISSUE".equals(report.get("kind")) && current.get("claim") instanceof Map<?, ?> claim
+        && "P2P".equals(claim.get("claim_type"));
+  }
+
   private static String caseKind(Map<String, Object> report, Map<String, Object> appeal) {
     return appeal.isEmpty() ? (String) report.get("kind") : "CLAIM_APPEAL";
   }
@@ -423,7 +473,7 @@ public class ReportReviewService {
         """,reportId);
   }
 
-  private String issuePhase(long reportId) {
+  String issuePhase(long reportId) {
     return (String) context.one("select phase from p2p_handover_issue where report_id=?",reportId).get("phase");
   }
 
@@ -456,18 +506,43 @@ public class ReportReviewService {
       if (!recoveryPending) actions.add("APPEAL_KEEP");
       if (activeAppeal && Boolean.TRUE.equals(appeal.get("can_reopen_approval"))) actions.add("APPEAL_WRONG_RECIPIENT");
     } else if ("HANDOVER_ISSUE".equals(kind)) {
+      if ("OFFICE".equals(current.get("handoverSource"))) return officeHandoverActions(held, recoveryPending);
       var post = (Map<String, Object>) current.getOrDefault("post", Map.of());
       if (held && !recoveryRequested && !"BEFORE".equals(issuePhase)) actions.add("RELEASE");
       if (!held && canHold(post)) actions.add("HOLD");
       if (!"BEFORE".equals(issuePhase) && (p2pDispute || issuePhase!=null) && !recoveryRequested) actions.add("REQUEST_ITEM_RECOVERY");
       if (!recoveryPending) {
+        if (issuePhase != null && !"BEFORE".equals(issuePhase) && !recoveryRequested
+            && Set.of("HANDOVER_WRONG_ITEM","HANDOVER_MISSING_ITEMS").contains(Objects.toString(report.get("reason_code"), ""))
+            && !hasCorrection(id(report, "report_id"))) actions.add("HANDOVER_CORRECTION");
+        if (issuePhase != null) actions.addAll(List.of("HANDOVER_VERIFY_HOLDER", "HANDOVER_UNVERIFIED"));
         if (p2pDispute) actions.addAll(List.of("HANDOVER_COMPLETED","HANDOVER_CONTINUE","HANDOVER_RETRY","HANDOVER_REOPEN"));
         else if ("BEFORE".equals(issuePhase)) actions.addAll(List.of("HANDOVER_CONTINUE","HANDOVER_REOPEN","DISMISS"));
         else actions.addAll(List.of("RESOLVE","DISMISS"));
       }
     } else actions.addAll(List.of("VIOLATION", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE"));
+    if ("HANDOVER_ISSUE".equals(kind) && issuePhase != null) actions.removeIf(action -> !fitsHandoverReason(report, action));
     if (recoveryPending) actions.add("CONFIRM_ITEM_RECOVERY");
     return actions;
+  }
+
+  private static List<String> officeHandoverActions(boolean held, boolean recoveryPending) {
+    if (recoveryPending) return List.of("CONFIRM_ITEM_RECOVERY");
+    return held ? List.of("RELEASE", "RESOLVE", "DISMISS") : List.of("RESOLVE", "DISMISS");
+  }
+
+  private boolean hasCorrection(long reportId) {
+    return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from report_decision where report_id=? and action='HANDOVER_CORRECTION')",Boolean.class,reportId));
+  }
+
+  private static boolean fitsHandoverReason(Map<String,Object> report, String action) {
+    String reason = Objects.toString(report.get("reason_code"), "");
+    return switch (action) {
+      case "HANDOVER_REOPEN" -> Set.of("HANDOVER_WRONG_RECIPIENT", "HANDOVER_NOT_RECEIVED", "HANDOVER_ISSUE_OTHER").contains(reason) || reason.isEmpty();
+      case "REQUEST_ITEM_RECOVERY" -> !Set.of("HANDOVER_MISSING_ITEMS", "HANDOVER_CONDITION", "P2P_HANDOVER_NO_CONTACT", "HANDOVER_CONFIRMATION_ERROR").contains(reason);
+      case "HANDOVER_RETRY" -> !Set.of("HANDOVER_MISSING_ITEMS", "HANDOVER_CONDITION").contains(reason);
+      default -> true;
+    };
   }
 
   @SuppressWarnings("unchecked")
@@ -476,18 +551,24 @@ public class ReportReviewService {
     var claim = (Map<String, Object>) current.getOrDefault("claim", Map.of());
     var account = (Map<String, Object>) current.getOrDefault("account", Map.of());
     var measures = new ArrayList<String>();
-    if (report.get("post_id") != null && post.get("deleted_at") == null && "VISIBLE".equals(post.get("moderation_status"))) {
-      if (post.get("account_id") != null) measures.add("REQUEST_POST_CORRECTION");
-      measures.add("HIDE_POST");
+    if (report.get("post_id") != null) {
+      if (post.get("deleted_at") == null && "VISIBLE".equals(post.get("moderation_status"))) measures.add("HIDE_POST");
+      Long author = id(post, "account_id");
+      if (author != null && !author.equals(id(report, "reporter_id"))) measures.add("BAN_POST_7_DAYS");
+    }
+    if (report.get("claim_id") != null && isReportAgainstClaimant(report, claim)) {
+      if (Set.of("PENDING", "NEEDS_INFO").contains(Objects.toString(claim.get("status"), ""))
+          && Set.of("OPEN", "RESERVED").contains(Objects.toString(post.get("status"), ""))
+          && post.get("deleted_at") == null && "VISIBLE".equals(post.get("moderation_status"))) {
+        measures.add("CLAIM_VIOLATION_BLOCK");
+      }
+      measures.add("BAN_CLAIM_7_DAYS");
     }
     if (report.get("reported_account_id") != null && "ACTIVE".equals(account.get("status"))
         && isSanctionableRole(account.get("role"))) {
       measures.add("WARN_ACCOUNT");
       measures.add("SUSPEND_ACCOUNT");
     }
-    if (report.get("claim_id") != null && "P2P".equals(claim.get("claim_type"))
-        && "PENDING".equals(claim.get("status")) && "OPEN".equals(post.get("status"))
-        && isReportAgainstClaimant(report, claim)) measures.add("CLAIM_VIOLATION_REJECT");
     return measures;
   }
 
@@ -596,12 +677,49 @@ public class ReportReviewService {
     if (!Objects.equals(id(r, "version"), version)) throw bad(
       "Báo cáo đã thay đổi. Hãy tải lại."
     );
-    if (participantsFor(r).contains(actor.getId())) throw bad(
+    Long approvalId = open(r) ? id(context.one(
+        "select approval_id from p2p_claim_appeal where report_id=?", id(r, "report_id")), "approval_id") : null;
+    var round = approvalId == null ? List.<Map<String, Object>>of() : appealReports(approvalId);
+    if (hasAssignmentConflict(r, round, actor.getId())) throw bad(
       "Bạn có liên quan đến vụ việc. Cần một quản lý khác xử lý."
     );
     if (!Objects.equals(id(r, "assigned_to"), actor.getId())) throw bad(
       "Cần nhận xử lý báo cáo trước khi thực hiện thao tác."
     );
+    if (round.stream().anyMatch(item -> open(item) && !Objects.equals(id(item, "assigned_to"), actor.getId())))
+      throw bad("Cần thống nhất người phụ trách toàn bộ vụ việc trước khi tiếp tục.");
+  }
+
+  private List<Map<String, Object>> appealReports(long approvalId) {
+    return jdbc.queryForList("""
+        select r.* from p2p_claim_appeal a join report r using(report_id)
+        where a.approval_id=? order by r.report_id
+        """, approvalId);
+  }
+
+  private boolean hasAssignmentConflict(Map<String, Object> report, List<Map<String, Object>> round, long actorId) {
+    return participantsFor(report).contains(actorId) || round.stream()
+        .filter(item -> !Objects.equals(item.get("report_id"), report.get("report_id")))
+        .anyMatch(item -> participantsFor(item).contains(actorId));
+  }
+
+  private boolean canTakeAppealRound(List<Map<String, Object>> round, List<Map<String, Object>> reportsInRound, long actorId) {
+    var assignees = round.stream().map(item -> id(item, "assigned_to")).filter(Objects::nonNull).distinct().toList();
+    return assignees.isEmpty() || assignees.contains(actorId) || assignees.stream().noneMatch(assignee ->
+        accountRepository.findById(assignee).filter(account -> account.getRole() == AccountRole.MANAGER
+            && account.getStatus() == AccountStatus.ACTIVE && new CustomUserDetails(account).isAccountNonLocked()
+            && reportsInRound.stream().noneMatch(item -> participantsFor(item).contains(assignee))).isPresent());
+  }
+
+  private void assignReport(Map<String, Object> report, long actorId, boolean round) {
+    long reportId = id(report, "report_id");
+    Long previous = id(report, "assigned_to");
+    jdbc.update(
+        "update report set assigned_to=?,assigned_at=now(),status='IN_REVIEW',version=version+1,updated_at=now() where report_id=?",
+        actorId, reportId);
+    history(reportId, actorId, "TAKE", (String) report.get("status"), "IN_REVIEW",
+        round ? "Quản lý đã nhận xử lý báo cáo cùng vụ việc tranh chấp." : "Quản lý đã nhận xử lý.",
+        previous != null && previous != actorId ? "Chuyển từ quản lý tài khoản #" + previous + "." : null);
   }
 
   @Transactional
@@ -613,32 +731,28 @@ public class ReportReviewService {
     Account actor = access.require(user, AccountRole.MANAGER);
     var r = lock(reportId);
     String action = request.action();
+    var appeal = appeal(reportId);
+    Long approvalId = id(appeal, "approval_id");
     if ("TAKE".equals(action)) {
-      if (
-        !open(r) ||
-        id(r, "version") != request.version().longValue() ||
-        r.get("assigned_to") != null
-      ) throw bad("Báo cáo đã được nhận hoặc thay đổi. Hãy tải lại.");
-      if (participantsFor(r).contains(actor.getId())) throw bad(
-        "Bạn có liên quan đến vụ việc; cần quản lý khác xử lý."
-      );
-      jdbc.update(
-        "update report set assigned_to=?,assigned_at=now(),status='IN_REVIEW',version=version+1,updated_at=now() where report_id=?",
-        actor.getId(),
-        reportId
-      );
-      history(
-        reportId,
-        actor.getId(),
-        "TAKE",
-        (String) r.get("status"),
-        "IN_REVIEW",
-        "Quản lý đã nhận xử lý.",
-        null
-      );
+      if (!open(r) || !Objects.equals(id(r, "version"), request.version()))
+        throw bad("Báo cáo đã được nhận hoặc thay đổi. Hãy tải lại.");
+      var reportsInRound = approvalId == null ? List.<Map<String, Object>>of() : appealReports(approvalId);
+      var round = reportsInRound.stream().filter(this::open).toList();
+      if (hasAssignmentConflict(r, reportsInRound, actor.getId()))
+        throw bad("Bạn có liên quan đến vụ việc; cần quản lý khác xử lý.");
+      if (round.isEmpty()) {
+        if (r.get("assigned_to") != null) throw bad("Báo cáo đã được nhận hoặc thay đổi. Hãy tải lại.");
+        assignReport(r, actor.getId(), false);
+      } else {
+        if (!canTakeAppealRound(round, reportsInRound, actor.getId()))
+          throw bad("Vụ việc đã có quản lý phụ trách. Hãy tải lại.");
+        for (var item : round) {
+          if (!Objects.equals(id(item, "assigned_to"), actor.getId()))
+            assignReport(item, actor.getId(), true);
+        }
+      }
       return detail(reportId, user);
     }
-    var appeal = appeal(reportId);
     String kind = caseKind(r, appeal);
     boolean afterAppealConclusion = "RESOLVED".equals(r.get("status")) && "CLAIM_APPEAL".equals(kind);
     if ("REQUEST_ITEM_RECOVERY".equals(action) && "CLAIM_APPEAL".equals(kind))
@@ -647,24 +761,40 @@ public class ReportReviewService {
       requireAssignee(r, actor, request.version());
     else processing(r, actor, request.version());
     String conclusion = text(request.conclusion()),
-      basis = text(request.basis());
+      basis = Objects.toString(request.basis(), "").strip();
     String status = (String) r.get("status");
     var current = context.context(r);
+    boolean emailP2pOutcome = isP2pReport(r, appeal, current);
+    Long recipientWithClaimEmail = null;
     var before = new LinkedHashMap<String, Object>();
     before.put("reportStatus", status);
     String measure = request.measure();
     boolean violationFinding = VIOLATION_FINDINGS.contains(action);
     if (violationFinding) requireKind(kind, "GENERAL");
+    if ("VIOLATION".equals(action) && measure == null && (r.get("post_id") != null || r.get("claim_id") != null))
+      throw bad("Chọn biện pháp xử lý vi phạm trước khi lưu kết luận.");
     if (measure != null && (!"VIOLATION".equals(action) || !violationMeasures(r, current).contains(measure)))
       throw bad("Biện pháp không phù hợp với kết luận hoặc đối tượng được báo cáo.");
     String next = violationFinding ? ("VIOLATION".equals(action) ? "RESOLVED" : "REJECTED") : status;
     String recordedAction = action;
     String effect = measure == null ? action : measure;
+    OffsetDateTime restrictionUntil = null;
+    Long restrictedAccount = null;
     var recovery = recovery(reportId);
+    if ("OFFICE".equals(current.get("handoverSource"))) {
+      boolean held = !context.one("select report_id from report_hold where report_id=? and released_at is null", reportId).isEmpty();
+      boolean recoveryPending = !recovery.isEmpty() && recovery.get("confirmed_at") == null;
+      if (!officeHandoverActions(held, recoveryPending).contains(effect))
+        throw bad("Thao tác không áp dụng cho sự cố bàn giao tại văn phòng.");
+    }
     if (!recovery.isEmpty() && recovery.get("confirmed_at")==null && Set.of(
         "APPEAL_KEEP","APPEAL_WRONG_RECIPIENT","RESOLVE","DISMISS","HANDOVER_COMPLETED","HANDOVER_CONTINUE",
-        "HANDOVER_RETRY","HANDOVER_REOPEN","RELEASE").contains(effect))
+        "HANDOVER_RETRY","HANDOVER_REOPEN","HANDOVER_UNVERIFIED","RELEASE").contains(effect))
       throw bad("Cần xác nhận kết quả thu hồi trước khi xử lý bước này.");
+    if ("HANDOVER_ISSUE".equals(kind) && !fitsHandoverReason(r, effect) && issuePhase(reportId) != null)
+      throw bad("Thao tác không phù hợp với lý do sự cố bàn giao.");
+    if ("HANDOVER_ISSUE".equals(kind) && "RESOLVE".equals(effect) && Set.of("HANDOVER_WRONG_ITEM", "HANDOVER_MISSING_ITEMS").contains(Objects.toString(r.get("reason_code"), "")) && !request.custodyVerified())
+      throw bad("Cần xác minh kết quả đổi đồ hoặc giao bổ sung trước khi kết luận.");
     switch (effect) {
       case "VIOLATION", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE" -> requireGeneralConclusion(reportId);
       case "HOLD", "RELEASE" -> {
@@ -689,6 +819,15 @@ public class ReportReviewService {
         if (r.get("post_id") == null) throw bad("Chỉ có thể ẩn bài đăng được báo cáo.");
         hidePost(current, conclusion, user, before);
       }
+      case "BAN_POST_7_DAYS", "BAN_CLAIM_7_DAYS" -> {
+        if (measure == null) throw bad("Cần ghi kết luận vi phạm trước khi áp dụng lệnh cấm.");
+        boolean posting = "BAN_POST_7_DAYS".equals(effect);
+        Map<?, ?> target = (Map<?, ?>) current.get(posting ? "post" : "claim");
+        restrictedAccount = ((Number) target.get(posting ? "account_id" : "claimant_id")).longValue();
+        restrictionUntil = restrictions.restrictForSevenDays(restrictedAccount,
+            posting ? SubmissionRestrictions.Action.POST : SubmissionRestrictions.Action.CLAIM, reportId);
+        next = "RESOLVED";
+      }
       case "REQUEST_POST_CORRECTION" -> {
         if (measure == null) throw bad("Cần ghi kết luận vi phạm trước khi yêu cầu chỉnh sửa bài đăng.");
         @SuppressWarnings("unchecked")
@@ -704,20 +843,24 @@ public class ReportReviewService {
           throw bad("Chọn đúng tài khoản liên quan bị báo cáo.");
         }
         if ("SUSPEND_ACCOUNT".equals(effect))
-          basis = suspendAccount(target, before) + "\n" + basis;
+          basis = suspendAccount(target, before) + (basis.isEmpty() ? "" : "\n" + basis);
         else requireActiveAccount(target);
         publishToParticipant(reportId, target,
             "WARN_ACCOUNT".equals(effect) ? "REPORT_ACCOUNT_WARNING" : "REPORT_ACCOUNT_SUSPENDED",
             "WARN_ACCOUNT".equals(effect) ? "Cảnh báo tài khoản" : "Tài khoản đã bị đình chỉ", conclusion);
       }
-      case "CLAIM_VIOLATION_REJECT" -> {
+      case "CLAIM_VIOLATION_REJECT", "CLAIM_VIOLATION_BLOCK" -> {
         requireKind(kind, "GENERAL");
         Long claimId = id(r, "claim_id");
         @SuppressWarnings("unchecked")
         var claim = (Map<String, Object>) current.getOrDefault("claim", Map.of());
         if (claimId == null || !isReportAgainstClaimant(r, claim))
           throw bad("Chỉ có thể bác yêu cầu nhận đồ đang bị báo cáo vi phạm.");
-        claims.rejectReportedClaim(claimId, claimNote(reportId, conclusion), user);
+        boolean blocksRetry = "CLAIM_VIOLATION_BLOCK".equals(effect);
+        if (blocksRetry && measure == null) throw bad("Cần ghi kết luận vi phạm trước khi chặn gửi lại.");
+        String note = claimNote(reportId, conclusion);
+        claims.rejectReportedClaim(claimId, blocksRetry ? note + " Bạn không thể gửi lại yêu cầu trên bài đăng này." : note, user);
+        if (blocksRetry) claimAppeals.releaseWindowIfUncontested(id(claim, "post_id"));
         next = "RESOLVED";
       }
       case "REQUEST_ITEM_RECOVERY" -> {
@@ -744,9 +887,13 @@ public class ReportReviewService {
                 + conclusion.substring(0, Math.min(4800, conclusion.length())),due,reportId,holder,due);
         if (!afterHandover) holdItem(reportId, id(post, "post_id"), actor.getId(), conclusion);
         for (Long recipient : participantsFor(r)) {
-          if (holder.equals(recipient)) notifications.notifyUser(recipient,"REPORT_INFORMATION","Cần phản hồi về việc thu hồi món đồ",
-              conclusion,"/bao-cao/" + reportId + "#phan-hoi",false);
-          else publishToParticipant(reportId, recipient, "REPORT_RECOVERY_REQUESTED", "Yêu cầu thu hồi món đồ", conclusion);
+          if (holder.equals(recipient)) {
+            notifications.notifyUserWithEmail(recipient, "REPORT_INFORMATION", "Cần phản hồi về việc thu hồi món đồ",
+                conclusion, "/bao-cao/" + reportId + "#phan-hoi",
+                "Mở hồ sơ để xem hướng dẫn thu hồi và phản hồi trước " + NotificationService.formatVietnamDeadline(due) + ".");
+          } else {
+            publishToParticipant(reportId, recipient, "REPORT_RECOVERY_REQUESTED", "Yêu cầu thu hồi món đồ", conclusion);
+          }
         }
       }
       case "CONFIRM_ITEM_RECOVERY" -> {
@@ -778,6 +925,17 @@ public class ReportReviewService {
         if (request.appealFinding() == AppealFinding.INVALID_CLAIM && pendingAppealingClaim(r, current)) {
           claims.rejectClaimAfterAppeal(id(r, "claim_id"),
               claimNote(reportId, conclusion) + " Bạn không thể gửi lại yêu cầu trên bài đăng này.", user);
+          recipientWithClaimEmail = id(r, "reporter_id");
+        }
+        if (approvalId != null && request.appealFinding() == AppealFinding.INSUFFICIENT_EVIDENCE
+            && Boolean.TRUE.equals(appeal.get("active"))) {
+          if (Boolean.TRUE.equals(jdbc.queryForObject("""
+              select exists(select 1 from p2p_claim_appeal a join report r using(report_id)
+                join report_recovery x using(report_id) where a.approval_id=? and x.confirmed_at is null
+                  and r.status in ('OPEN','IN_REVIEW'))
+              """, Boolean.class, approvalId)))
+            throw bad("Cần xác nhận kết quả thu hồi trong vụ việc trước khi lưu kết luận.");
+          closeOtherAppeals(reportId, approvalId, actor.getId(), false, false);
         }
         next = "REJECTED";
       }
@@ -789,11 +947,49 @@ public class ReportReviewService {
         }
         if (!request.wrongRecipientVerified())
           throw bad("Cần xác nhận đã đối chiếu căn cứ cho thấy người được chấp thuận không phải chủ món đồ.");
-        requireCustody(request);
         if (!"OFFICE".equals(appeal.get("claim_type"))) {
           claims.reopenApprovalForReview(id(appeal, "approved_claim_id"), claimNote(reportId, conclusion), user);
-          closeOtherAppeals(reportId, id(appeal, "approval_id"), actor.getId());
+          recipientWithClaimEmail = id(appeal, "approved_recipient_id");
         }
+        closeOtherAppeals(reportId, id(appeal, "approval_id"), actor.getId(), true, emailP2pOutcome);
+        next = "RESOLVED";
+      }
+      case "HANDOVER_CORRECTION" -> {
+        requireKind(kind, "HANDOVER_ISSUE");
+        String reason = Objects.toString(r.get("reason_code"), "");
+        String phase = issuePhase(reportId);
+        boolean exchange = "HANDOVER_WRONG_ITEM".equals(reason);
+        if ((!exchange && !"HANDOVER_MISSING_ITEMS".equals(reason)) || phase == null || "BEFORE".equals(phase)
+            || recoveryRequested(reportId) || hasCorrection(reportId))
+          throw bad("Hồ sơ không còn phù hợp để gửi yêu cầu này.");
+        var parties = HandoverVerification.options(r, current);
+        if (parties.stream().anyMatch(party -> party.recipientId() == null)) throw bad("Chưa xác định đủ hai bên giao nhận.");
+        closeInquiries(reportId);
+        var due = inquiryResponseDue();
+        for (var party : parties) {
+          boolean giver = "ISSUE_GIVER".equals(party.kind());
+          String prompt = exchange
+              ? (giver ? "Hãy hẹn đổi đúng món và xác nhận khi đã nhận lại món nhầm." : "Hãy trả lại món nhầm và xác nhận khi đã nhận đúng món.")
+              : (giver ? "Hãy giao phụ kiện còn thiếu và phản hồi phần đã giao." : "Hãy xác nhận phụ kiện bạn thực tế nhận bổ sung.");
+          jdbc.update("insert into report_inquiry(report_id,recipient_id,created_by,question,response_due_at,verification_kind) values(?,?,?,?,?,?)",
+              reportId, party.recipientId(), actor.getId(), prompt + " " + conclusion.substring(0,Math.min(4500,conclusion.length())), due, "HANDOVER_CORRECTION");
+          long recipient = party.recipientId();
+          addReportRecipient(reportId, recipient);
+          notifications.notifyUserWithEmail(recipient, "REPORT_INFORMATION",
+              exchange ? "Cần đổi đúng món" : "Cần giao bổ sung phụ kiện", prompt,
+              "/bao-cao/" + reportId + "#phan-hoi",
+              "Mở hồ sơ để xem việc bạn cần làm và phản hồi trước " + NotificationService.formatVietnamDeadline(due) + ".");
+        }
+      }
+      case "HANDOVER_VERIFY_HOLDER" -> {
+        requireKind(kind, "HANDOVER_ISSUE");
+        if (issuePhase(reportId) == null || !recovery.isEmpty() && recovery.get("confirmed_at") == null) throw bad("Chưa thể tạo việc xác minh cho hồ sơ này.");
+        // Keep the investigation assigned and open across shifts.
+      }
+      case "HANDOVER_UNVERIFIED" -> {
+        requireKind(kind, "HANDOVER_ISSUE");
+        if (issuePhase(reportId) == null) throw bad("Cần hồ sơ sự cố bàn giao P2P.");
+        if (activeP2pDispute(reportId)) resolveHandover(r, "HANDOVER_CONTINUE", actor.getId(), conclusion, before);
         next = "RESOLVED";
       }
       case "RESOLVE", "DISMISS" -> {
@@ -823,6 +1019,12 @@ public class ReportReviewService {
     boolean officeAppeal = "OFFICE".equals(appeal.get("claim_type"));
     if ("APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal) afterState.put("approvalReopened", true);
     if (measure != null) afterState.put("appliedMeasure", measure);
+    if ("CLAIM_VIOLATION_BLOCK".equals(effect)) afterState.put("claimResubmissionBlocked", true);
+    if (restrictionUntil != null) {
+      afterState.put("appliedMeasure", effect);
+      afterState.put("restrictionUntil", restrictionUntil.toString());
+      afterState.put("restrictedAccountId", restrictedAccount);
+    }
     context.retainAssets(reportId, current, "DECISION");
     context.retainAssets(reportId, after, "DECISION");
     jdbc.update(
@@ -861,23 +1063,26 @@ public class ReportReviewService {
         claims.finishOfficeAppealReview(id(appeal, "post_id"));
       }
       Set<Long> recipients = participantsFor(r);
+      if (restrictedAccount != null) recipients.add(restrictedAccount);
       Long finderToReview = "APPEAL_WRONG_RECIPIENT".equals(action) && !officeAppeal ? id(appeal, "finder_id") : null;
       if (finderToReview != null) recipients.add(finderToReview);
       for (Long recipient : recipients) {
         boolean needsReview = Objects.equals(recipient, finderToReview);
-        jdbc.update(
-          "insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing",
-          reportId,
-          recipient
-        );
-        notifications.notifyUser(
-          recipient,
-          "REPORT_RESOLVED",
-          needsReview ? "Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt" : "Báo cáo #" + reportId + " đã có kết quả",
-          needsReview ? "Hồ sơ đã chấp thuận đã về chờ duyệt. Hãy đối chiếu các hồ sơ và chọn người nhận." : conclusion,
-          needsReview ? "/bai-dang/" + id(appeal, "post_id") + "/claims?claimStatus=PENDING" : "/bao-cao/" + reportId + "#ket-qua",
-          false
-        );
+        addReportRecipient(reportId, recipient);
+        String title = needsReview ? "Các yêu cầu nhận đồ đã mở lại để bạn xét duyệt" : "Báo cáo #" + reportId + " đã có kết quả";
+        String reviewMessage = "Hồ sơ đã chấp thuận đã về chờ duyệt. Hãy đối chiếu các hồ sơ và chọn người nhận.";
+        String message = needsReview ? reviewMessage : conclusion;
+        if (Objects.equals(recipient, restrictedAccount) && restrictionUntil != null)
+          message += " Tạm cấm " + ("BAN_POST_7_DAYS".equals(effect) ? "đăng tin" : "gửi yêu cầu nhận đồ mới")
+              + " đến " + NotificationService.formatVietnamDeadline(restrictionUntil) + ".";
+        String path = needsReview ? "/bai-dang/" + id(appeal, "post_id") + "/claims?claimStatus=PENDING"
+            : "/bao-cao/" + reportId + "#ket-qua";
+        if (emailP2pOutcome && !Objects.equals(recipient, recipientWithClaimEmail)) {
+          notifications.notifyUserWithEmail(recipient, "REPORT_RESOLVED", title, message, path,
+              needsReview ? reviewMessage : p2pOutcomeEmail(action));
+        } else {
+          notifications.notifyUser(recipient, "REPORT_RESOLVED", title, message, path, false);
+        }
       }
       if ("HANDOVER_ISSUE".equals(kind) && id(r, "claim_id") != null)
         chat.notifyHandoverChanged(id(r, "claim_id"));
@@ -885,8 +1090,11 @@ public class ReportReviewService {
     return detail(reportId, user);
   }
 
-  private void closeOtherAppeals(long reportId, long approvalId, long actorId) {
-    String conclusion = "Lượt xét duyệt đã được mở lại. Người nhặt sẽ xét các yêu cầu nhận đồ còn hợp lệ.";
+  private void closeOtherAppeals(long reportId, long approvalId, long actorId, boolean reopen, boolean emailParticipants) {
+    String outcome = reopen ? "RESOLVED" : "REJECTED";
+    String conclusion = reopen
+        ? "Quản lý đã quyết định mở lại xét duyệt các yêu cầu nhận đồ còn hợp lệ."
+        : "Sau khi đối chiếu các báo cáo cùng lần duyệt, quản lý giữ nguyên kết quả đã chấp thuận.";
     var siblings = jdbc.queryForList("""
         select r.report_id,r.reporter_id,r.status
         from p2p_claim_appeal appeal join report r using(report_id)
@@ -895,13 +1103,20 @@ public class ReportReviewService {
     for (var sibling : siblings) {
       long siblingId = id(sibling, "report_id");
       int closed = jdbc.update("""
-          update report set status='RESOLVED',resolution_note=?,resolved_by=?,resolved_at=now(),
+          update report set status=?,resolution_note=?,resolved_by=?,resolved_at=now(),
             version=version+1,updated_at=now() where report_id=? and status in ('OPEN','IN_REVIEW')
-          """, conclusion, actorId, siblingId);
+          """, outcome, conclusion, actorId, siblingId);
       if (closed != 1) continue;
-      history(siblingId, actorId, "APPEAL_ROUND_CLOSED", (String) sibling.get("status"), "RESOLVED", conclusion, null);
+      history(siblingId, actorId, reopen ? "APPEAL_ROUND_CLOSED" : "APPEAL_INSUFFICIENT",
+          (String) sibling.get("status"), outcome, conclusion,
+          "Kết luận vụ việc được lưu tại báo cáo #" + reportId + ".");
       closeInquiries(siblingId);
-      publishToParticipant(siblingId, id(sibling, "reporter_id"), "REPORT_RESOLVED", "Lượt xét duyệt đã được mở lại", conclusion);
+      jdbc.update("update report_hold set released_at=now() where report_id=? and released_at is null", siblingId);
+      long recipient = id(sibling, "reporter_id");
+      addReportRecipient(siblingId, recipient);
+      String title = reopen ? "Lượt xét duyệt đã được mở lại" : "Báo cáo #" + siblingId + " đã có kết quả";
+      notifications.notifyUser(recipient, "REPORT_RESOLVED", title,
+          conclusion, "/bao-cao/" + siblingId + "#ket-qua", emailParticipants);
     }
   }
 
@@ -919,8 +1134,23 @@ public class ReportReviewService {
   }
 
   private void publishToParticipant(long reportId, long recipient, String type, String title, String conclusion) {
-    jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing", reportId, recipient);
+    addReportRecipient(reportId, recipient);
     notifications.notifyUser(recipient, type, title, conclusion, "/bao-cao/" + reportId, false);
+  }
+
+  private void addReportRecipient(long reportId, long recipient) {
+    jdbc.update("insert into report_recipient(report_id,account_id) values(?,?) on conflict do nothing", reportId, recipient);
+  }
+
+  private static String p2pOutcomeEmail(String action) {
+    return switch (action) {
+      case "APPEAL_KEEP" -> "Quản lý giữ kết quả xét duyệt hiện tại. Mở hồ sơ để xem kết luận và trạng thái bàn giao.";
+      case "APPEAL_WRONG_RECIPIENT", "HANDOVER_REOPEN" -> "Việc xét duyệt người nhận đã được mở lại. Mở hồ sơ để xem bước tiếp theo.";
+      case "HANDOVER_RETRY" -> "Hai bên cần hẹn giao lại. Mở hồ sơ để xem hướng dẫn.";
+      case "HANDOVER_CONTINUE" -> "Hai bên có thể tiếp tục xử lý việc trao trả. Mở hồ sơ để xem bước tiếp theo.";
+      case "HANDOVER_COMPLETED" -> "Quản lý đã ghi nhận hoàn tất bàn giao. Mở hồ sơ để xem kết quả.";
+      default -> "Quản lý đã ghi kết luận. Mở hồ sơ để xem kết quả và việc cần làm tiếp theo, nếu có.";
+    };
   }
 
   private static void requireKind(String actual, String expected) {
@@ -1165,7 +1395,7 @@ public class ReportReviewService {
 
   public static String text(String value) {
     if (value == null || value.isBlank() || value.length() > 5000) throw bad(
-      "Cần ghi kết luận và căn cứ xử lý (tối đa 5.000 ký tự)."
+      "Cần ghi kết luận xử lý (tối đa 5.000 ký tự)."
     );
     return value.strip();
   }

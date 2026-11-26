@@ -1,22 +1,23 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { getHandover, uploadHandover } from '../api/handoverApi';
+import { reportDescriptionHint } from "@/features/reports/utils/reportDescriptionHints";
 import ReportReasonPicker from '@/features/reports/components/ReportReasonPicker';
-import { claimDate } from '@/features/claims/utils/claimUtils';
+import useDeadlineCountdown from '@/hooks/useDeadlineCountdown';
 import useImageUploads from '@/hooks/useImageUploads';
 import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
-import { handoverStatusLabels } from '../utils/issueForm';
+import HandoverIssueDeadline from './HandoverIssueDeadline';
+import { handoverIssueDeadline, incidentPhaseLabels } from '../utils/issueForm';
 import '../styles/Handover.css';
 
-export default function ReportHandoverIssueDialog({ claim, handover, initialMessage, onClose, onReported }) {
+export default function ReportHandoverIssueDialog({ claim, handover, onClose, onReported }) {
   const dialog = useRef(null);
   const sending = useRef(false);
   const request = useRef(null);
   const titleId = useId();
   const [current, setCurrent] = useState(handover);
-  const [message, setMessage] = useState(initialMessage ?? null);
   const [reasonCode, setReasonCode] = useState('');
   const [reason, setReason] = useState('');
   const [files, setFiles] = useState([]);
@@ -24,10 +25,12 @@ export default function ReportHandoverIssueDialog({ claim, handover, initialMess
   const { prepare, processing } = useImageUploads();
   const busy = submitting || processing;
   const [error, setError] = useState('');
-  const [discard, setDiscard] = useState(false);
   const reasons = current.issueReasons ?? [];
   const validReason = reasons.some(item => item.code === reasonCode);
   const [reasonNotice, setReasonNotice] = useState('');
+  const deadline = handoverIssueDeadline(current);
+  const timeLeft = useDeadlineCountdown(deadline, { showDays: true });
+  const canReport = current.canReportIssue && (!deadline || Boolean(timeLeft));
 
   useEffect(() => {
     const element = dialog.current;
@@ -43,9 +46,7 @@ export default function ReportHandoverIssueDialog({ claim, handover, initialMess
   }, []);
 
   function close() {
-    if (sending.current || processing) return;
-    if (reasonCode || reason.trim() || files.length || message) setDiscard(true);
-    else onClose();
+    if (!sending.current && !processing) onClose();
   }
 
   async function pickImages(event) {
@@ -57,7 +58,6 @@ export default function ReportHandoverIssueDialog({ claim, handover, initialMess
       return;
     }
     setError('');
-    setDiscard(false);
     try {
       const prepared = await prepare(selected);
       if (prepared) { setFiles(current => [...current, ...prepared]); request.current = null; }
@@ -66,11 +66,11 @@ export default function ReportHandoverIssueDialog({ claim, handover, initialMess
 
   async function submit(event) {
     event.preventDefault();
-    if (busy || sending.current || !current.canReportIssue || !reason.trim() || !validReason) return;
+    if (busy || sending.current || !canReport || !reason.trim() || !validReason) return;
     sending.current = true;
     setBusy(true);
     setError('');
-    request.current ||= { reasonCode, reason: reason.trim(), messageId: message?.id ?? null,
+    request.current ||= { reasonCode, reason: reason.trim(), messageId: null,
       expectedVersion: current.version, expectedPhase: current.issuePhase, clientRequestId: crypto.randomUUID() };
     let result;
     try {
@@ -108,31 +108,19 @@ export default function ReportHandoverIssueDialog({ claim, handover, initialMess
     <header><h2 id={titleId}>Báo sự cố trao trả</h2>
       <button type="button" aria-label="Đóng" disabled={busy} onClick={close}><X size={20} /></button></header>
     <form onSubmit={submit}>
-      <div className="handover-record-context"><strong>{claim.postTitle}</strong>
-        <dl className="handover-issue-fields">
-          <div><dt>Mã yêu cầu</dt><dd>#{claim.id}</dd></div>
-          <div><dt>Trạng thái hiện tại</dt><dd>{handoverStatusLabels[current.status]}</dd></div>
-          <div><dt>Người giao</dt><dd>{current.finderName || claim.finderName}</dd></div>
-          <div><dt>Người nhận</dt><dd>{current.claimantName || claim.claimantName}</dd></div>
-        </dl>
-      </div>
-      <ReportReasonPicker options={{ reasons }} value={reasonCode} disabled={busy || !current.canReportIssue}
-        onChange={code => { setReasonCode(code); request.current = null; setDiscard(false); setError(''); setReasonNotice(''); }} />
+      {incidentPhaseLabels[current.issuePhase] && <p className="claims-muted">{incidentPhaseLabels[current.issuePhase]}</p>}
+      <HandoverIssueDeadline deadline={deadline} timeLeft={timeLeft} />
+      <ReportReasonPicker options={{ reasons }} value={reasonCode} disabled={busy || !canReport}
+        onChange={code => { setReasonCode(code); request.current = null; setError(''); setReasonNotice(''); }} />
       {reasonNotice && <p role="status" className="claims-muted">{reasonNotice}</p>}
       <label className="handover-record-field">Mô tả chi tiết sự cố *
-        <small>Mô tả điều đã xảy ra. Nếu nhớ, hãy ghi thêm thời gian và địa điểm.</small>
+        <small>{reportDescriptionHint(reasonCode)}</small>
         <textarea required maxLength={4800} value={reason} disabled={busy}
-          onChange={event => { setReason(event.target.value); request.current = null; setDiscard(false); }} /></label>
+          onChange={event => { setReason(event.target.value); request.current = null; }} /></label>
       <div className="handover-record-field"><span>Ảnh bằng chứng (tùy chọn)</span>
         <span className="claims-muted">{IMAGE_FORMATS} · Tối đa 5 ảnh, 5 MB mỗi ảnh · Đã chọn {files.length}/5</span>
         <ImageUploadButton label="Thêm ảnh bằng chứng" disabled={busy||files.length>=5} onChange={pickImages} /></div>
       <ImageProcessingStatus active={processing} />
-      {message && <div className="handover-record-context">
-        <strong>Tin nhắn kèm báo cáo</strong>
-        <p>{claimDate(message.createdAt)}</p><p className="claim-prose">{message.body}</p>
-        <button type="button" className="btn btn-ghost" disabled={busy}
-          onClick={() => { setMessage(null); request.current = null; }}>Bỏ tin nhắn</button>
-      </div>}
       {files.length > 0 && <ul className="handover-record-files">{files.map((file, index) => <li key={`${file.name}:${index}`}>
         <span>{file.name}</span><button type="button" disabled={busy} aria-label={`Bỏ ảnh ${file.name}`} onClick={() => {
           setFiles(current => current.filter((_, position) => position !== index)); request.current = null;
@@ -143,11 +131,8 @@ export default function ReportHandoverIssueDialog({ claim, handover, initialMess
         : current.issuePhase === 'DURING'
           ? 'Hệ thống sẽ tạm dừng xác nhận đã nhận đồ trong lúc quản lý xem xét.'
           : 'Quản lý sẽ xem xét sự cố dựa trên hồ sơ trao trả và bằng chứng bạn cung cấp.'}</p>}
-      {discard ? <div className="handover-record-discard" role="alert"><p>Bỏ lý do và ảnh đang chọn để đóng?</p>
-        <footer><button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Bỏ nội dung và đóng</button></footer></div>
-        : <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
-          <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !validReason || !current.canReportIssue}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang gửi…' : 'Gửi báo cáo sự cố'}</button></footer>}
+      <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Quay lại</button>
+        <button type="submit" className="btn btn-accent" disabled={busy || !reason.trim() || !validReason || !canReport}>{processing ? 'Đang xử lý ảnh…' : submitting ? 'Đang gửi…' : 'Gửi báo cáo sự cố'}</button></footer>
     </form>
   </dialog>;
 }

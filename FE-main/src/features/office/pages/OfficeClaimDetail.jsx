@@ -16,8 +16,6 @@ import OfficeReturnPanel from "../components/OfficeReturnPanel";
 import "../Office.css";
 import "../PersonalOffice.css";
 import PersonalClaimDetail from '../components/PersonalClaimDetail';
-// DaiHV integration: office complaints enter the shared Manager report workflow.
-import ReportButton from "@/features/reports/components/ReportButton";
 
 export default function OfficeClaimDetail({ mine = false }) {
   const { id } = useParams();
@@ -38,10 +36,12 @@ export default function OfficeClaimDetail({ mine = false }) {
     const timer = remaining > 0 ? window.setTimeout(refresh, remaining + 150) : null;
     const interval = window.setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
+    window.addEventListener("report-workspace-updated", refresh);
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(interval);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("report-workspace-updated", refresh);
     };
   }, [appealDeadline, refreshWorkflow]);
   if (mine) return <main className="office-page office-personal"><Notice error={notice?.error}>{notice?.text}</Notice><LoadState state={state}>{claim && <PersonalClaimDetail claim={claim} workflow={workflow} onChanged={state.reload}/>}</LoadState></main>;
@@ -86,7 +86,6 @@ export default function OfficeClaimDetail({ mine = false }) {
             >
               <Badge value={claim.status} />
               <Badge value={claim.channel} />
-              <ReportButton type="CLAIM" id={claim.id} label="Phản ánh về yêu cầu nhận đồ" />
             </Header>
             {!mine && claim.ownRequest && ["PENDING", "NEEDS_INFO"].includes(claim.status) && <Notice>Đây là yêu cầu nhận đồ của bạn. Nhờ một nhân viên khác xét duyệt nhé.</Notice>}
             <div className="of-detail-grid of-claim-grid">
@@ -152,7 +151,7 @@ export default function OfficeClaimDetail({ mine = false }) {
                 <OfficeClaimTimeline claim={claim} workflow={workflow} />
               </div>
               <aside className="of-sticky">
-                <OfficeReturnPanel claim={claim} state={workflow} onChanged={(result) => {
+                <OfficeReturnPanel claim={claim} state={workflow} onRefresh={state.reload} onChanged={(result) => {
                   setNotice({ error: result?.emailStatus === "FAILED", text: result?.emailStatus === "FAILED" ? "Đã lưu lịch. Email chưa gửi được, người nhận vẫn có thể phản hồi trên hệ thống." : "Đã cập nhật tiến trình trao trả." });
                   state.reload();
                 }} />

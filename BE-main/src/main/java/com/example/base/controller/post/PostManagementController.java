@@ -35,7 +35,7 @@ public class PostManagementController {
     @GetMapping("/mine")
     @Operation(
             summary = "[5.1] UC18: Danh sách bài đăng của tôi (kèm trạng thái và quyền thao tác)",
-            description = "Danh sách bài đăng do tài khoản hiện tại tạo. Lọc trạng thái bằng filter (ALL, VISIBLE, PENDING, REJECTED, HIDDEN) và loại bài bằng postType (ALL, LOST, FOUND), áp dụng trước khi phân trang."
+            description = "Danh sách bài đăng do tài khoản hiện tại tạo. Lọc trạng thái bằng filter (ACTIVE, PENDING, HISTORY, ALL, VISIBLE, REJECTED, HIDDEN) và loại bài bằng postType (ALL, LOST, FOUND), áp dụng trước khi phân trang."
     )
     public ResponseEntity<ApiResponse<MyPostPageDto>> mine(
             @RequestParam(defaultValue="1") String page,

@@ -70,6 +70,8 @@ class PostCreationServiceTest {
     private ImageValidator validator;
     @Mock
     private PlatformTransactionManager transactionManager;
+    @Mock
+    private com.example.base.service.report.SubmissionRestrictions restrictions;
 
     @InjectMocks
     private PostCreationService service;
@@ -93,6 +95,17 @@ class PostCreationServiceTest {
         category.setName("Wallet");
 
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    }
+
+    @Test
+    void postingRestrictionBlocksNewPostBeforePreparingImages() {
+        var request = new CreateLostPostRequest(null, "Wallet", "Black leather", 3L, "Hall A",
+                OffsetDateTime.now().minusDays(1), null);
+        doThrow(new AppException(ErrorCode.FORBIDDEN)).when(restrictions).checkAvailable(7L,
+                com.example.base.service.report.SubmissionRestrictions.Action.POST);
+
+        assertThrows(AppException.class, () -> service.createLost(request, List.of(), user));
+        verifyNoInteractions(validator, storage, posts);
     }
 
     // UTC098 - createLost valid request with 2 images trims text and persists ordered images

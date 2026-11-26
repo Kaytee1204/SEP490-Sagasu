@@ -70,6 +70,7 @@ class ReportInquiryServiceTest {
         when(images.upload(anyString(), any())).thenReturn(uploaded);
         when(context.one(contains("recipient_id=?"), any(Object[].class))).thenReturn(row("inquiry_id", 2L, "report_id", 5L));
         when(context.one(contains("for update"), any(Object[].class))).thenReturn(row("inquiry_id", 2L, "responded_at", null));
+        when(jdbc.update(contains("update report_inquiry set response=?"), anyString(), eq(2L))).thenReturn(1);
         SqlStub.defaults(jdbc);
     }
 
@@ -122,17 +123,68 @@ class ReportInquiryServiceTest {
     }
 
     @Test
+    void missingAccessoriesQuestionsGoToTheCorrectHandoverParty() {
+        report.put("kind", "HANDOVER_ISSUE");
+        report.put("reason_code", "HANDOVER_MISSING_ITEMS");
+        when(reviews.issuePhase(5L)).thenReturn("DURING");
+        when(context.context(report)).thenReturn(row("post", row("account_id", 8L), "claim", row("claimant_id", 7L)));
+        service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Còn thiếu gì?", "ISSUE_RECEIVER"), managerUser);
+        assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "Còn thiếu gì?", "ISSUE_RECEIVER"), managerUser), "phù hợp");
+    }
+
+    @Test
     void p2pVerificationUsesOnlyTheParticipantForTheSelectedPurpose() {
         report.put("reporter_id", 7L);
         when(reviews.participants(any())).thenReturn(Set.of(7L, 8L, 9L));
+        var deadline = OffsetDateTime.parse("2026-11-24T09:00:00Z");
+        when(reviews.inquiryResponseDue()).thenReturn(deadline);
         var appeal = row("claim_type", "P2P", "active", true, "can_reopen_approval", true,
                 "finder_id", 9L, "approved_recipient_id", 8L);
         when(reviews.appeal(5L)).thenReturn(appeal);
         service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "Ảnh nào cho thấy dấu riêng?", "OWNERSHIP"), managerUser);
         service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "Vết xước nằm ở đâu?", "DISCREPANCY"), managerUser);
+        verify(notifications).notifyUserWithEmail(eq(7L), eq("REPORT_INFORMATION"), anyString(),
+                eq("Ảnh nào cho thấy dấu riêng?"), eq("/bao-cao/5#phan-hoi"),
+                eq("Quản lý cần bạn xác minh thông tin. Vui lòng mở hồ sơ và phản hồi trước 16:00 24/11/2026 (giờ Việt Nam)."));
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 9L, null, "CUSTODY"), managerUser), "chọn");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 8L, "?", "OWNERSHIP"), managerUser), "vai trò");
         assertBad(() -> service.ask(5L, new ReportInquiryService.Ask(3L, 7L, "?", null), managerUser), "chọn");
+    }
+
+    @Test
+    void askBothSendsSeparateQuestionsWithTheSameDeadlineAndUpdatesReportOnce() {
+        report.put("reporter_id", 7L);
+        when(reviews.appeal(5L)).thenReturn(row("claim_type", "P2P", "active", true, "approved_recipient_id", 8L));
+        var deadline = OffsetDateTime.parse("2026-11-24T09:00:00Z");
+        when(reviews.inquiryResponseDue()).thenReturn(deadline);
+        var request = new ReportInquiryService.AskBoth(3L, List.of(
+                new ReportInquiryService.Question(7L, "Bạn có ảnh chứng minh sở hữu không?", "OWNERSHIP"),
+                new ReportInquiryService.Question(8L, "Vết xước nằm ở đâu?", "DISCREPANCY")));
+
+        assertThat(service.askBoth(5L, request, managerUser)).containsEntry("ok", true);
+
+        verify(reviews).processing(report, manager, 3L);
+        verify(jdbc).update(contains("insert into report_inquiry"), eq(5L), eq(7L), eq(1L),
+                eq("Bạn có ảnh chứng minh sở hữu không?"), eq(deadline), eq("OWNERSHIP"));
+        verify(jdbc).update(contains("insert into report_inquiry"), eq(5L), eq(8L), eq(1L),
+                eq("Vết xước nằm ở đâu?"), eq(deadline), eq("DISCREPANCY"));
+        verify(jdbc).update(contains("update report set version=version+1"), eq(5L));
+        verify(notifications, times(2)).notifyUserWithEmail(anyLong(), eq("REPORT_INFORMATION"),
+                anyString(), anyString(), eq("/bao-cao/5#phan-hoi"), anyString());
+    }
+
+    @Test
+    void askBothDoesNotCreateEitherQuestionWhenOneTargetIsInvalid() {
+        report.put("reporter_id", 7L);
+        when(reviews.appeal(5L)).thenReturn(row("claim_type", "P2P", "active", true, "approved_recipient_id", 8L));
+        var request = new ReportInquiryService.AskBoth(3L, List.of(
+                new ReportInquiryService.Question(7L, "Bạn có ảnh chứng minh sở hữu không?", "OWNERSHIP"),
+                new ReportInquiryService.Question(9L, "Vết xước nằm ở đâu?", "DISCREPANCY")));
+
+        assertBad(() -> service.askBoth(5L, request, managerUser), "vai trò");
+
+        verify(jdbc, never()).update(contains("insert into report_inquiry"), any(Object[].class));
+        verifyNoInteractions(notifications);
     }
 
     @Test
@@ -166,6 +218,19 @@ class ReportInquiryServiceTest {
         verify(notifications).notifyUser(7L, "REPORT_INFORMATION", "Sắp đến hạn bổ sung báo cáo #5",
                 "Mở báo cáo để xem yêu cầu và gửi thông tin trước hạn.", "/bao-cao/5#phan-hoi", false);
         verifyNoMoreInteractions(notifications);
+    }
+
+    @Test
+    void emailsP2pReminderWithExactDeadline() {
+        when(jdbc.queryForList(contains("set reminded_at = now()")))
+                .thenReturn(List.of(row("report_id", 5L, "recipient_id", 7L,
+                        "email_enabled", true, "local_deadline", "16:00 24/11/2026")));
+
+        service.remindBeforeDeadline();
+
+        verify(notifications).notifyUser(7L, "REPORT_INFORMATION", "Sắp đến hạn bổ sung báo cáo #5",
+                "Bạn có một yêu cầu chưa phản hồi. Vui lòng mở hồ sơ và phản hồi trước 16:00 24/11/2026 (giờ Việt Nam).",
+                "/bao-cao/5#phan-hoi", true);
     }
 
     // ---------- mine / results ----------
@@ -214,6 +279,22 @@ class ReportInquiryServiceTest {
         when(context.one(contains("recipient_id=?"), any(Object[].class))).thenReturn(new LinkedHashMap<>());
         assertBad(() -> service.reply(2L, new ReportInquiryService.Reply("ok"), files, claimantUser), "Không tìm thấy");
         verify(images, never()).upload(anyString(), any());
+    }
+
+    @Test
+    void reply_afterDeadlineIsRejectedBeforeUploads() {
+        when(context.one(contains("recipient_id=?"), any(Object[].class)))
+                .thenReturn(row("inquiry_id", 2L, "report_id", 5L, "overdue", true));
+        assertBad(() -> service.reply(2L, new ReportInquiryService.Reply("Late reply"), files, claimantUser), "quá hạn");
+        verify(images, never()).upload(anyString(), any());
+    }
+
+    @Test
+    void reply_expiringAfterUploadIsRejectedAndImagesAreCleaned() {
+        when(jdbc.update(contains("statement_timestamp() <"), anyString(), eq(2L))).thenReturn(0);
+        assertBad(() -> service.reply(2L, new ReportInquiryService.Reply("Late reply"), files, claimantUser), "quá hạn");
+        verify(images).cleanup(uploaded);
+        verifyNoInteractions(notifications);
     }
 
     @Test

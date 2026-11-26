@@ -149,6 +149,11 @@ class P2pHandoverServiceTest {
                 lenient().when(reportReasons.p2pHandoverOptions()).thenReturn(new ReportReasonService.Options(
                                 "HANDOVER_ISSUE", List.of(
                                                 new ReportReasonService.Reason("P2P_HANDOVER_PAYMENT", "Yêu cầu thanh toán", true),
+                                                new ReportReasonService.Reason("P2P_HANDOVER_THREAT", "Đe dọa", true),
+                                                new ReportReasonService.Reason("P2P_HANDOVER_NO_CONTACT", "Không liên lạc được", true),
+                                                new ReportReasonService.Reason("P2P_HANDOVER_NOT_RETURNED", "Không trao trả tài sản", true),
+                                                new ReportReasonService.Reason("HANDOVER_NOT_RECEIVED", "Chưa nhận đồ", true),
+                                                new ReportReasonService.Reason("HANDOVER_CONFIRMATION_ERROR", "Xác nhận nhầm", true),
                                                 new ReportReasonService.Reason("HANDOVER_WRONG_ITEM", "Giao sai món đồ", true))));
         }
 
@@ -184,6 +189,7 @@ class P2pHandoverServiceTest {
         @Test
         void detail_whenNoHandoverRecorded_finderCanRecordAndReportBeforeHandoverIssues() {
                 when(actors.actor(finderUser)).thenReturn(finder);
+                when(actors.actor(claimantUser)).thenReturn(claimant);
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
                 when(handovers.findByClaimId(500L)).thenReturn(Optional.empty());
@@ -196,10 +202,29 @@ class P2pHandoverServiceTest {
                 assertFalse(detail.canConfirm());
                 assertTrue(detail.canReportIssue());
                 assertEquals("BEFORE", detail.issuePhase());
-                assertEquals(List.of("P2P_HANDOVER_PAYMENT"),
+                assertNull(detail.issueDeadline());
+                assertEquals(List.of("P2P_HANDOVER_PAYMENT", "P2P_HANDOVER_THREAT", "P2P_HANDOVER_NO_CONTACT"),
                                 detail.issueReasons().stream().map(ReportReasonService.Reason::code).toList());
+                assertTrue(service.detail(500L, claimantUser).issueReasons().stream()
+                                .anyMatch(reason -> "P2P_HANDOVER_NOT_RETURNED".equals(reason.code())));
                 assertTrue(detail.evidence().isEmpty());
                 assertNull(detail.issue());
+        }
+
+        @Test
+        void issue_whenFinderReportsRefusalBeforeHandover_rejectsReason() {
+                when(actors.actor(finderUser)).thenReturn(finder);
+                when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
+                when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
+                when(images.prepare(anyString(), eq(List.of())))
+                                .thenReturn(new WorkflowImages.Prepared(List.of(), List.of(), "hash"));
+
+                var request = new P2pHandoverService.IssueRequest("Không giao đồ", approvedClaim.getVersion(),
+                                UUID.randomUUID(), "P2P_HANDOVER_NOT_RETURNED", null, "BEFORE");
+                var failure = assertThrows(AppException.class, () -> service.issue(500L, request, List.of(), finderUser));
+
+                assertEquals(ErrorCode.REPORT_REASON_INVALID, failure.getErrorCode());
+                verify(images, never()).upload(anyString(), any());
         }
 
         @Test
@@ -214,15 +239,29 @@ class P2pHandoverServiceTest {
                 var detail = service.detail(500L, finderUser);
                 assertEquals("COMPLETED", detail.status());
                 assertTrue(detail.confirmedByManager());
+                assertFalse(detail.issueReasons().stream().anyMatch(r -> "HANDOVER_WRONG_ITEM".equals(r.code())));
+                when(actors.actor(claimantUser)).thenReturn(claimant);
+                var receiverReasons = service.detail(500L, claimantUser).issueReasons();
+                assertTrue(receiverReasons.stream().anyMatch(r -> "HANDOVER_WRONG_ITEM".equals(r.code())));
+                assertTrue(receiverReasons.stream().anyMatch(r -> "HANDOVER_NOT_RECEIVED".equals(r.code())
+                                && "Hệ thống đã hoàn tất trao trả nhưng tôi chưa nhận được đồ".equals(r.label())));
+                assertFalse(receiverReasons.stream().anyMatch(r -> "HANDOVER_CONFIRMATION_ERROR".equals(r.code())));
+                for (var options : List.of(detail.issueReasons(), receiverReasons)) {
+                        assertTrue(options.stream().map(ReportReasonService.Reason::code).toList()
+                                        .containsAll(List.of("P2P_HANDOVER_PAYMENT", "P2P_HANDOVER_THREAT")));
+                }
                 assertTrue(detail.canReportIssue());
                 assertEquals("AFTER", detail.issuePhase());
+                assertEquals(handover.getConfirmedAt().plusDays(7), detail.issueDeadline());
 
                 ReflectionTestUtils.setField(handover, "confirmedAt", OffsetDateTime.now().minusDays(8));
-                assertFalse(service.detail(500L, finderUser).canReportIssue());
+                var expired = service.detail(500L, finderUser);
+                assertFalse(expired.canReportIssue());
+                assertEquals(handover.getConfirmedAt().plusDays(7), expired.issueDeadline());
         }
 
         @Test
-        void handoverIsBlockedWhileAppealsAreBeingReviewed() {
+        void resolvedHandoverIssueDoesNotReleaseAnOpenClaimAppeal() {
                 UUID requestId = UUID.randomUUID();
                 var window = new P2pClaimAppealService.HandoverWindow(
                                 OffsetDateTime.now().minusHours(1), P2pClaimAppealService.State.UNDER_REVIEW);
@@ -230,12 +269,18 @@ class P2pHandoverServiceTest {
                 when(claims.findById(500L)).thenReturn(Optional.of(approvedClaim));
                 when(routing.matches(approvedClaim, Set.of("RESERVED"))).thenReturn(true);
                 when(appeals.handoverWindow(approvedClaim)).thenReturn(window);
+                when(jdbc.queryForList(contains("order by r.resolved_at"), eq(Long.class), eq(500L), eq(10L), eq(10L)))
+                                .thenReturn(List.of(41L));
                 var prepared = new WorkflowImages.Prepared(List.of(), List.of(), "hash");
                 when(images.prepare(anyString(), eq(List.of()))).thenReturn(prepared);
 
                 var detail = service.detail(500L, finderUser);
+                assertEquals(41L, detail.resolvedIssueId());
+                assertNull(detail.issue());
+                assertEquals("NOT_RECORDED", detail.status());
                 assertFalse(detail.canRecord());
                 assertEquals(window, detail.appealWindow());
+                assertFalse(detail.issueReasons().stream().anyMatch(r -> "P2P_HANDOVER_NO_CONTACT".equals(r.code())));
 
                 AppException failure = assertThrows(AppException.class, () -> service.record(500L,
                                 new P2pHandoverService.RecordRequest(null, 2L, requestId), List.of(), finderUser));
@@ -290,6 +335,8 @@ class P2pHandoverServiceTest {
                 assertFalse(detail.canRecord());
                 assertTrue(detail.canConfirm());
                 assertTrue(detail.canReportIssue());
+                assertTrue(detail.issueReasons().stream().anyMatch(r -> "HANDOVER_NOT_RECEIVED".equals(r.code())
+                                && "Đã ghi nhận giao nhưng tôi chưa nhận được đồ".equals(r.label())));
                 assertEquals(1, detail.evidence().size());
                 assertNull(detail.issue());
         }

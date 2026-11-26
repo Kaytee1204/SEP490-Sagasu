@@ -7,10 +7,11 @@ import Pagination from '@/components/common/Pagination';
 import { getGroupedClaims } from '../api/claimApi';
 import {
   CLAIM_STATUS,
-  HISTORY_STATUSES,
+  CLAIM_LIST_STATUSES,
   TIME_RANGE_OPTIONS,
   claimDetailPath,
   claimDisplayStatus,
+  claimListStatus,
   claimShortDate,
   disputeDismissed,
   matchesClaimStatus,
@@ -34,40 +35,22 @@ export default function MyClaimsPage({ embedded = false }) {
   const legacyPostId = validClaimId(params.get('postId')) ? params.get('postId') : null;
   if (params.get('view') === 'office' && isApprover) return <Navigate replace to="/approver/office-claims" />;
   if (!embedded && initialView === 'received' && legacyPostId) {
-    return <Navigate replace to={postClaimsPath(legacyPostId, params.get('claimStatus') || 'ALL', 'received')} />;
+    return <Navigate replace to={postClaimsPath(legacyPostId, params.get('claimStatus'))} />;
   }
   return <ClaimList key={`${user?.id}:${initialView}:${params.get('postId') || ''}`} initialView={initialView} embedded={embedded} />;
 }
 
-function resolveGroupStatus(visibleClaims, incoming) {
-  const pendingCount = visibleClaims.filter(c => matchesClaimStatus(c, 'PENDING', incoming)).length;
-  const approvedCount = visibleClaims.filter(c => c.status === 'APPROVED').length;
-  if (pendingCount > 0) {
-    return {
-      code: 'PENDING',
-      label: incoming ? 'Chờ xét duyệt' : 'Chờ phản hồi',
-      pendingCount,
-      approvedCount,
-    };
-  }
-  if (approvedCount > 0) {
-    return {
-      code: 'APPROVED',
-      label: 'Đang nhận đồ',
-      pendingCount,
-      approvedCount,
-    };
-  }
-  const latest = visibleClaims[0];
-  if (!latest) return { code: 'CLOSED', label: 'Đã đóng', pendingCount: 0, approvedCount: 0 };
-  if (disputeDismissed(latest)) {
-    return { code: 'CLOSED', label: 'Tranh chấp đã bị bác', pendingCount, approvedCount };
-  }
+function summarizeClaimGroup(group, incoming) {
+  // The API returns claims for each post newest first.
+  const latestClaim = group.claims[0];
+  const activeClaim = group.claims.find(claim => matchesClaimStatus(claim, 'APPROVED'))
+    || group.claims.find(claim => matchesClaimStatus(claim, 'PENDING'));
+  const primaryClaim = activeClaim || latestClaim;
   return {
-    code: claimDisplayStatus(latest),
-    label: rejectedAfterDispute(latest) ? 'Bị bác sau tranh chấp' : (CLAIM_STATUS[latest.status] || latest.status),
-    pendingCount,
-    approvedCount,
+    ...group,
+    primaryClaim,
+    listStatus: activeClaim ? claimDisplayStatus(activeClaim) : 'HISTORY',
+    displayDate: (incoming ? latestClaim : primaryClaim).createdAt,
   };
 }
 
@@ -89,11 +72,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     if (urlPage && /^[1-9]\d*$/.test(urlPage)) return Number(urlPage);
     return 1;
   });
-  const [status, setStatus] = useState(() => {
-    const urlStatus = searchParams.get('claimStatus');
-    if (urlStatus && (urlStatus === 'ALL' || urlStatus === 'HISTORY' || CLAIM_STATUS[urlStatus])) return urlStatus;
-    return 'ALL';
-  });
+  const status = claimListStatus(searchParams.get('claimStatus'));
   const [timeRange, setTimeRange] = useState(() => {
     const urlRange = searchParams.get('timeRange');
     return urlRange && VALID_TIME_RANGES.has(urlRange) ? urlRange : 'ALL';
@@ -115,7 +94,6 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
 
     setView(nextView);
     setPage(nextPage);
-    setStatus(nextStatus);
     setTimeRange(nextRange);
     setFromDate(nextFrom);
     setToDate(nextTo);
@@ -132,7 +110,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     if (nextPage <= 1) updated.delete('claimPage');
     else updated.set('claimPage', String(nextPage));
 
-    if (nextStatus === 'ALL') updated.delete('claimStatus');
+    if (nextStatus === 'PENDING') updated.delete('claimStatus');
     else updated.set('claimStatus', nextStatus);
 
     if (nextRange === 'ALL') {
@@ -154,7 +132,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
   };
 
   const incoming = view !== 'sent';
-  // Fetch ALL grouped claims (up to 100) once per view/postId so live status counts & time filters are always exact.
+  // Fetch each post's claims together so the list can determine its current stage.
   const key = `${postId}:${view}:${attempt}`;
 
   useEffect(() => {
@@ -183,44 +161,22 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
   const { processed, statusCounts } = useMemo(() => {
     const rawGroups = snapshot.result?.content || [];
 
-    // Apply time filter first so status pill counts reflect the selected time period accurately
     const timeScopedGroups = rawGroups
-      .map(group => {
-        const claimsInTime = timeRange === 'ALL'
-          ? group.claims
-          : group.claims.filter(c => matchesTimeFilter(c.createdAt, timeRange, fromDate, toDate));
-        return { ...group, claimsInTime };
-      })
-      .filter(group => group.claimsInTime.length > 0);
+      .filter(group => group.claims.length > 0)
+      .map(group => summarizeClaimGroup(group, incoming))
+      .filter(group => matchesTimeFilter(group.displayDate, timeRange, fromDate, toDate));
 
-    const counts = Object.fromEntries(['ALL', 'PENDING', 'APPROVED', 'HISTORY'].map(value => [
-      value, timeScopedGroups.filter(g => g.claimsInTime.some(c => matchesClaimStatus(c, value, incoming))).length,
+    const counts = Object.fromEntries(CLAIM_LIST_STATUSES.map(value => [
+      value, timeScopedGroups.filter(group => group.listStatus === value).length,
     ]));
 
-    const enriched = timeScopedGroups
-      .map(group => {
-        const visibleClaims = group.claimsInTime.filter(c => matchesClaimStatus(c, status, incoming));
-        const sortedClaims = [...visibleClaims].sort((a, b) => {
-          const diff = Date.parse(b.createdAt) - Date.parse(a.createdAt);
-          return sortOrder === 'OLDEST' ? -diff : diff;
-        });
-        const latestDate = sortedClaims[0]?.createdAt || null;
-        return {
-          ...group,
-          visibleClaims: sortedClaims,
-          latestDate,
-          latestMs: latestDate ? Date.parse(latestDate) : 0,
-          hasPending: sortedClaims.some(c => matchesClaimStatus(c, 'PENDING', incoming)),
-        };
-      })
-      .filter(group => group.visibleClaims.length > 0);
-
-    enriched.sort((a, b) => {
-      if (sortOrder === 'OLDEST') return a.latestMs - b.latestMs || a.postId - b.postId;
-      return (Number(b.hasPending) - Number(a.hasPending)) || (b.latestMs - a.latestMs) || (b.postId - a.postId);
+    const matchingGroups = timeScopedGroups.filter(group => group.listStatus === status);
+    matchingGroups.sort((a, b) => {
+      const descending = Date.parse(b.displayDate) - Date.parse(a.displayDate) || b.postId - a.postId;
+      return sortOrder === 'OLDEST' ? -descending : descending;
     });
 
-    const totalElements = enriched.length;
+    const totalElements = matchingGroups.length;
     const totalPages = Math.max(1, Math.ceil(totalElements / PAGE_SIZE));
     const safePage = Math.min(page, totalPages);
     const start = (safePage - 1) * PAGE_SIZE;
@@ -228,7 +184,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     return {
       statusCounts: counts,
       processed: {
-        items: enriched.slice(start, start + PAGE_SIZE),
+        items: matchingGroups.slice(start, start + PAGE_SIZE),
         totalElements,
         totalPages,
         currentPage: safePage,
@@ -236,8 +192,6 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     };
   }, [snapshot.result, status, timeRange, fromDate, toDate, sortOrder, page, incoming]);
 
-  const historySelected = status === 'HISTORY' || HISTORY_STATUSES.includes(status);
-  const activeFilter = historySelected ? 'HISTORY' : status;
   const Wrapper = embedded ? 'section' : 'main';
   const title = 'Danh sách yêu cầu nhận đồ';
   const allPostsParams = new URLSearchParams(searchParams);
@@ -247,19 +201,21 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
     ['received', 'Người khác yêu cầu', UsersRound],
     ['sent', 'Tôi yêu cầu', Send],
   ];
-  const hasAnyFilter = status !== 'ALL' || timeRange !== 'ALL' || sortOrder !== 'NEWEST';
-  const onlyArchived = status === 'ALL' && statusCounts.ALL === 0 && statusCounts.HISTORY > 0;
+  const hasAnyFilter = timeRange !== 'ALL' || sortOrder !== 'NEWEST';
+  const onlyArchived = status === 'PENDING' && statusCounts.PENDING === 0
+    && statusCounts.APPROVED === 0 && statusCounts.HISTORY > 0;
+  const hasClaims = snapshot.result?.content?.length > 0;
 
-  const statusButtons = [
-    { value: 'ALL', label: `Tất cả (${statusCounts.ALL})`, tone: 'default' },
-    {
-      value: 'PENDING',
-      label: `${incoming ? 'Chờ xét duyệt' : 'Chờ phản hồi'} (${statusCounts.PENDING})`,
-      tone: statusCounts.PENDING > 0 ? 'warning' : 'default',
-    },
-    { value: 'APPROVED', label: `Đang nhận đồ (${statusCounts.APPROVED})`, tone: 'default' },
-    { value: 'HISTORY', label: `Lịch sử (${statusCounts.HISTORY})`, tone: 'default' },
-  ];
+  const statusLabels = {
+    PENDING: incoming ? 'Chờ xét duyệt' : 'Chờ phản hồi',
+    APPROVED: 'Đang nhận đồ',
+    HISTORY: 'Lịch sử',
+  };
+  const isReceiving = status === 'APPROVED';
+  const showSummary = incoming || status !== 'PENDING';
+  const summaryLabel = isReceiving
+    ? (incoming ? 'Người được chấp thuận' : 'Người giao đồ')
+    : status === 'HISTORY' ? 'Hồ sơ đã kết thúc' : 'Yêu cầu đang chờ';
 
   return (
     <Wrapper className={`${embedded ? '' : 'container'} claims-page claim-list-page ${embedded ? 'claims-embedded' : ''}`} aria-label={title}>
@@ -281,26 +237,18 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
       <section className="claim-list-controls" aria-label="Bộ lọc danh sách yêu cầu nhận đồ">
         <div className="claim-list-navigation">
           <div className="claim-list-tabs" role="group" aria-label="Loại yêu cầu nhận đồ">
-            {views.map(([value, label, Icon]) => {
-              const tabPending = value === 'received' ? claimCounts.receivedPending : claimCounts.sentPending;
-              return (
-                <button
-                  type="button"
-                  key={value}
-                  aria-pressed={view === value}
-                  className={view === value ? 'active' : ''}
-                  onClick={() => syncParams({ view: value, page: 1, status: 'ALL' })}
-                >
-                  <Icon size={18} aria-hidden="true" />
-                  <span>{label}</span>
-                  {tabPending > 0 && (
-                    <span className="ml-1 inline-flex min-w-[20px] items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">
-                      {tabPending > 99 ? '99+' : tabPending}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            {views.map(([value, label, Icon]) => (
+              <button
+                type="button"
+                key={value}
+                aria-pressed={view === value}
+                className={view === value ? 'active' : ''}
+                onClick={() => syncParams({ view: value, page: 1, status: 'PENDING' })}
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
           <Link
             className="claim-list-office-link"
@@ -317,35 +265,19 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
           <div className="claim-list-status-group">
             <span className="claim-list-filter-label">Trạng thái</span>
             <div className="claim-list-status-filters" role="group" aria-label="Lọc trạng thái yêu cầu">
-              {statusButtons.map(btn => (
+              {CLAIM_LIST_STATUSES.map(value => (
                 <button
-                  key={btn.value}
+                  key={value}
                   type="button"
-                  className={`${activeFilter === btn.value ? 'active' : ''} ${btn.tone === 'warning' ? 'is-warning' : ''}`.trim()}
-                  aria-pressed={activeFilter === btn.value}
-                  onClick={() => syncParams({ page: 1, status: btn.value })}
+                  className={`${status === value ? 'active' : ''} ${value === 'PENDING' && statusCounts.PENDING > 0 ? 'is-warning' : ''}`.trim()}
+                  aria-pressed={status === value}
+                  onClick={() => syncParams({ page: 1, status: value })}
                 >
-                  {btn.label}
+                  {statusLabels[value]} ({statusCounts[value]})
                 </button>
               ))}
             </div>
           </div>
-
-          {historySelected && (
-            <div className="claim-list-history-filter">
-              <label htmlFor="claim-history-status">Trạng thái trong lịch sử</label>
-              <select
-                id="claim-history-status"
-                value={status}
-                onChange={event => syncParams({ page: 1, status: event.target.value })}
-              >
-                <option value="HISTORY">Tất cả lịch sử</option>
-                {HISTORY_STATUSES.map(value => (
-                  <option key={value} value={value}>{CLAIM_STATUS[value]}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <ClaimTimeFilter
             timeRange={timeRange}
@@ -376,10 +308,10 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
           
 
           {processed.items.length ? (
-            <div className="claim-modern-table-card">
+            <div className={`claim-modern-table-card${showSummary ? '' : ' without-summary'}`}>
               <div className="claim-modern-table-head" role="row">
                 <span className="col-left">Món đồ</span>
-                <span className="col-center">{incoming ? 'Số yêu cầu' : 'Hồ sơ'}</span>
+                {showSummary && <span className="col-center">{summaryLabel}</span>}
                 <span className="col-center">{incoming ? 'Ngày gần nhất' : 'Ngày gửi'}</span>
                 <span className="col-center">Trạng thái</span>
                 <span className="col-center">Thao tác</span>
@@ -387,20 +319,24 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
 
               <div className="claim-modern-table-body" role="rowgroup">
                 {processed.items.map(group => {
-                  const latestClaim = group.visibleClaims[0];
-                  const statusInfo = resolveGroupStatus(group.visibleClaims, incoming);
+                  const { listStatus, primaryClaim } = group;
+                  const archived = listStatus === 'HISTORY';
+                  const statusCode = archived
+                    ? (incoming ? 'CLOSED' : claimDisplayStatus(primaryClaim))
+                    : listStatus;
+                  let statusLabel = statusLabels[listStatus];
+                  if (archived && incoming) statusLabel = 'Đã kết thúc';
+                  if (archived && !incoming) {
+                    statusLabel = CLAIM_STATUS[statusCode] || primaryClaim.status;
+                    if (rejectedAfterDispute(primaryClaim)) statusLabel = 'Bị bác sau tranh chấp';
+                    if (disputeDismissed(primaryClaim)) statusLabel = 'Tranh chấp đã bị bác';
+                  }
                   const targetUrl = incoming
-                    ? postClaimsPath(group.postId, status, 'received')
-                    : claimDetailPath(group.postId, latestClaim.id);
+                    ? postClaimsPath(group.postId, listStatus)
+                    : claimDetailPath(group.postId, primaryClaim.id);
                   const navState = incoming
                     ? { fromClaimsList: location.pathname + location.search }
                     : { claimListReturn: location.pathname + location.search };
-                  const subText = incoming
-                    ? `${group.claimantCount} người yêu cầu${statusInfo.pendingCount > 0 ? ` · ${statusInfo.pendingCount} chờ duyệt` : ''}`
-                    : latestClaim?.claimType === 'OFFICE'
-                      ? 'Văn phòng tiếp nhận'
-                      : `Người nhặt: ${latestClaim?.finderName || 'Thành viên'}`;
-
                   return (
                     <Link
                       key={`${group.postId}:${status}`}
@@ -412,22 +348,26 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
                         <ClaimPostThumbnail url={group.postThumbnailUrl} title={group.postTitle} />
                         <div className="claim-modern-item-info">
                           <strong title={group.postTitle}>{group.postTitle}</strong>
-                          <span>{subText}</span>
+                          {!incoming && !isReceiving && <span>Người nhặt: {primaryClaim.finderName || 'Thành viên'}</span>}
                         </div>
                       </div>
 
-                      <div className="claim-modern-count-cell col-center" data-label={incoming ? 'Số yêu cầu' : 'Hồ sơ'}>
-                        {group.visibleClaims.length} yêu cầu
-                      </div>
+                      {showSummary && (
+                        <div className="claim-modern-count-cell col-center" data-label={summaryLabel}>
+                          {isReceiving
+                            ? (incoming ? primaryClaim.claimantName : primaryClaim.finderName) || 'Thành viên'
+                            : `${group.claims.filter(claim => matchesClaimStatus(claim, listStatus)).length} yêu cầu`}
+                        </div>
+                      )}
 
                       <div className="claim-modern-date-cell col-center" data-label={incoming ? 'Ngày gần nhất' : 'Ngày gửi'}>
-                        {group.latestDate ? claimShortDate(group.latestDate) : '—'}
+                        {group.displayDate ? claimShortDate(group.displayDate) : '—'}
                       </div>
 
                       <div className="claim-modern-status-cell col-center" data-label="Trạng thái">
-                        <span className={`claim-status-pill status-${statusInfo.code}`}>
+                        <span className={`claim-status-pill status-${statusCode}`}>
                           <span className="claim-status-dot" aria-hidden="true" />
-                          {statusInfo.label}
+                          {statusLabel}
                         </span>
                       </div>
 
@@ -447,6 +387,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
               <h3>
                 {onlyArchived ? 'Các yêu cầu đã được chuyển vào lịch sử' : hasAnyFilter
                   ? 'Không có yêu cầu phù hợp với bộ lọc'
+                  : hasClaims ? 'Chưa có yêu cầu trong mục này'
                   : incoming
                     ? 'Chưa có yêu cầu nhận đồ'
                     : 'Bạn chưa gửi yêu cầu nhận đồ'}
@@ -454,6 +395,7 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
               {!onlyArchived && <p>
                 {hasAnyFilter
                   ? 'Thử thay đổi khoảng thời gian hoặc trạng thái để xem các hồ sơ khác.'
+                  : hasClaims ? 'Chọn mục trạng thái khác để xem các hồ sơ còn lại.'
                   : incoming
                     ? 'Khi có người gửi yêu cầu nhận lại món đồ bạn đăng, món đồ đó sẽ hiển thị tại đây.'
                     : 'Các yêu cầu bạn gửi sẽ được theo dõi tại đây.'}
@@ -470,9 +412,9 @@ function ClaimList({ embedded = false, initialView = 'received' }) {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={() => syncParams({ page: 1, status: 'ALL', timeRange: 'ALL', fromDate: '', toDate: '', sortOrder: 'NEWEST' })}
+                  onClick={() => syncParams({ page: 1, timeRange: 'ALL', fromDate: '', toDate: '', sortOrder: 'NEWEST' })}
                 >
-                  Xóa tất cả bộ lọc
+                  Đặt lại thời gian và sắp xếp
                 </button>
               )}
             </div>

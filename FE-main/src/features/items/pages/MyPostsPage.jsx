@@ -1,7 +1,7 @@
 import '@/styles/Workspace.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowDownWideNarrow, CircleCheck, CircleX, Clock3, Eye, EyeOff, Layers3, ListFilter, PackageOpen, Search, TriangleAlert, X } from 'lucide-react';
+import { ArrowDownWideNarrow, CircleCheck, EyeOff, TriangleAlert, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getMyPosts, deletePost } from '../api/postApi';
 import Pagination from '@/components/common/Pagination';
@@ -12,32 +12,34 @@ import MyPostsFilterBar from '../components/my-posts/MyPostsFilterBar';
 import '../styles/MyPosts.css';
 
 const FILTERS = [
-  { key: 'ALL', label: 'Tất cả', icon: ListFilter },
-  { key: 'VISIBLE', label: 'Đang hiển thị', icon: Eye },
-  { key: 'PENDING', label: 'Chờ duyệt', icon: Clock3 },
-  { key: 'REJECTED', label: 'Bị từ chối', icon: CircleX },
-  { key: 'HIDDEN', label: 'Bị ẩn', icon: EyeOff },
+  { key: 'ACTIVE', label: 'Đang hoạt động' },
+  { key: 'PENDING', label: 'Chờ duyệt' },
+  { key: 'HISTORY', label: 'Lịch sử' },
 ];
 const VALID_FILTERS = new Set(FILTERS.map(option => option.key));
 const POST_TYPES = [
-  { key: 'ALL', label: 'Tất cả', icon: Layers3 },
-  { key: 'LOST', label: 'Mất đồ', icon: Search },
-  { key: 'FOUND', label: 'Nhặt được', icon: PackageOpen },
+  { key: 'ALL', label: 'Tất cả loại' },
+  { key: 'LOST', label: 'Mất đồ' },
+  { key: 'FOUND', label: 'Nhặt được' },
 ];
 const VALID_POST_TYPES = new Set(POST_TYPES.map(option => option.key));
 const STORAGE_KEY = 'sagasu_my_posts_state';
+const DEFAULT_FILTER = 'ACTIVE';
+
+function normalizeFilter(value) {
+  if (value === 'REJECTED' || value === 'HIDDEN') return 'HISTORY';
+  return VALID_FILTERS.has(value) ? value : DEFAULT_FILTER;
+}
 
 function readSavedMyPostsState() {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return { page: 1, filter: 'ALL', postType: 'ALL' };
-    const parsed = JSON.parse(raw);
-    const page = Number.isInteger(parsed?.page) && parsed.page >= 1 ? parsed.page : 1;
-    const filter = VALID_FILTERS.has(parsed?.filter) ? parsed.filter : 'ALL';
+    const parsed = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    const filter = normalizeFilter(parsed?.filter);
+    const page = parsed?.filter === filter && Number.isSafeInteger(parsed.page) && parsed.page >= 1 ? parsed.page : 1;
     const postType = VALID_POST_TYPES.has(parsed?.postType) ? parsed.postType : 'ALL';
     return { page, filter, postType };
   } catch {
-    return { page: 1, filter: 'ALL', postType: 'ALL' };
+    return { page: 1, filter: DEFAULT_FILTER, postType: 'ALL' };
   }
 }
 
@@ -47,13 +49,13 @@ export default function MyPostsPage({ embedded = false }) {
   const [saved] = useState(readSavedMyPostsState);
   const [attempt, setAttempt] = useState(0);
   const hasUrlState = ['page', 'filter', 'postType'].some(key => searchParams.has(key));
-  const defaults = hasUrlState ? { page: 1, filter: 'ALL', postType: 'ALL' } : saved;
+  const defaults = hasUrlState ? { page: 1, filter: DEFAULT_FILTER, postType: 'ALL' } : saved;
 
   const rawUrlPage = searchParams.get('page');
   const page = rawUrlPage && /^[1-9]\d*$/.test(rawUrlPage) && Number.isSafeInteger(Number(rawUrlPage))
     ? Number(rawUrlPage) : defaults.page;
   const rawUrlFilter = searchParams.get('filter');
-  const filter = VALID_FILTERS.has(rawUrlFilter) ? rawUrlFilter : defaults.filter;
+  const filter = rawUrlFilter ? normalizeFilter(rawUrlFilter) : defaults.filter;
   const rawUrlPostType = searchParams.get('postType');
   const postType = VALID_POST_TYPES.has(rawUrlPostType) ? rawUrlPostType : defaults.postType;
 
@@ -64,39 +66,34 @@ export default function MyPostsPage({ embedded = false }) {
     const updated = new URLSearchParams(searchParams);
     if (nextPage <= 1) updated.delete('page');
     else updated.set('page', String(nextPage));
-    if (nextFilter === 'ALL') updated.delete('filter');
-    else updated.set('filter', nextFilter);
-    // Keep the type explicit so selecting "Tất cả" overrides a saved filter on reload.
+    updated.set('filter', nextFilter);
     updated.set('postType', nextPostType);
     setSearchParams(updated, { replace: true });
   };
 
-  const [statusCounts, setStatusCounts] = useState({});
-  const [typeCounts, setTypeCounts] = useState({});
+  const [counts, setCounts] = useState({ scope: '', values: {} });
+  const countsScope = `${user?.id}:${postType}`;
 
   useEffect(() => {
     if (!user?.id) return;
-    let cancelled = false;
-    Promise.all([
-      Promise.allSettled(FILTERS.map((opt) => getMyPosts(1, opt.key, postType))),
-      Promise.allSettled(POST_TYPES.map((opt) => getMyPosts(1, 'ALL', opt.key))),
-    ]).then(([filterRes, typeRes]) => {
-      if (cancelled) return;
-      const nextStatus = {};
-      FILTERS.forEach((opt, idx) => {
-        const item = filterRes[idx];
-        nextStatus[opt.key] = item?.status === 'fulfilled' ? Number(item.value?.totalElements ?? 0) : 0;
+    let request = 0;
+    async function loadCounts() {
+      const current = ++request;
+      const results = await Promise.allSettled(FILTERS.map(({ key }) => getMyPosts(1, key, postType, 1)));
+      if (current !== request) return;
+      const values = {};
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') values[FILTERS[index].key] = result.value.totalElements;
       });
-      const nextType = {};
-      POST_TYPES.forEach((opt, idx) => {
-        const item = typeRes[idx];
-        nextType[opt.key] = item?.status === 'fulfilled' ? Number(item.value?.totalElements ?? 0) : 0;
-      });
-      setStatusCounts(nextStatus);
-      setTypeCounts(nextType);
-    });
-    return () => { cancelled = true; };
-  }, [user?.id, postType, attempt]);
+      setCounts({ scope: countsScope, values });
+    }
+    loadCounts();
+    window.addEventListener('sagasu-counts-changed', loadCounts);
+    return () => {
+      request++;
+      window.removeEventListener('sagasu-counts-changed', loadCounts);
+    };
+  }, [user?.id, postType, countsScope, attempt]);
 
   const handlePageChange = (nextPage) => syncState(nextPage, filter, postType);
   const handleFilterChange = (nextFilter) => syncState(1, nextFilter, postType);
@@ -108,10 +105,10 @@ export default function MyPostsPage({ embedded = false }) {
 
     {!embedded && <header className="my-posts-heading"><h1>Bài đăng của tôi</h1></header>}
     <MyPostsFilterBar filter={filter} filters={FILTERS} onSelectFilter={handleFilterChange}
-      statusCounts={statusCounts} typeCounts={typeCounts}
+      statusCounts={counts.scope === countsScope ? counts.values : {}}
       postType={postType} postTypes={POST_TYPES} onSelectPostType={handlePostTypeChange} />
     <MyPostList key={`${user?.id}:${page}:${filter}:${postType}:${attempt}`} page={page} filter={filter} postType={postType} onPage={handlePageChange}
-      onReload={() => setAttempt(n => n + 1)} onResetFilter={() => syncState(1, 'ALL', 'ALL')} />
+      onReload={() => setAttempt(n => n + 1)} onResetFilter={() => handlePostTypeChange('ALL')} />
   </Wrapper>;
 }
 
@@ -164,13 +161,12 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const inFlight = useRef(false);
   const dialog = useRef(null);
-  const [discard, setDiscard] = useState(false);
   useEffect(() => {
     const element = dialog.current, focus = document.activeElement, overflow = document.body.style.overflow;
     element.showModal(); document.body.style.overflow = 'hidden';
     return () => { element.close(); document.body.style.overflow = overflow; if (focus?.isConnected) focus.focus(); };
   }, []);
-  const close = () => { if (inFlight.current) return; if (reason.trim()) setDiscard(true); else onCancel(); };
+  const close = () => { if (!inFlight.current) onCancel(); };
   function handleFormSubmit(event) {
     event.preventDefault();
     if (inFlight.current) return;
@@ -195,13 +191,10 @@ function DeletePostDialog({ post, onCancel, onSuccess }) {
         <label htmlFor="deletion-reason" className="input-label">Lý do ẩn bài *</label>
         <textarea id="deletion-reason" className="input" required maxLength={1000} rows={4}
           placeholder="Nhập lý do bạn muốn ẩn bài đăng…"
-          value={reason} disabled={busy} onChange={e => { setReason(e.target.value); setDiscard(false); }} />
+          value={reason} disabled={busy} onChange={e => setReason(e.target.value)} />
         {error && <p className="my-post-hide-error" role="alert">{error}</p>}
-        {discard ? <div className="my-post-hide-discard" role="alert"><p>Bỏ lý do đang nhập và giữ bài đăng?</p><footer>
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>Bỏ nội dung và đóng</button>
-          <button type="button" className="btn btn-primary" onClick={() => setDiscard(false)}>Tiếp tục nhập</button></footer></div> :
         <footer><button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>Giữ bài đăng</button>
-          <button className="btn btn-primary" disabled={busy}><EyeOff size={16} aria-hidden="true" />{busy ? 'Đang ẩn…' : 'Ẩn bài đăng'}</button></footer>}
+          <button className="btn btn-primary" disabled={busy}><EyeOff size={16} aria-hidden="true" />{busy ? 'Đang ẩn…' : 'Ẩn bài đăng'}</button></footer>
       </form>
       <ConfirmActionPopup
         open={confirmOpen}

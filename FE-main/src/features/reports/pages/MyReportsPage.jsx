@@ -146,8 +146,9 @@ function ReportRow({ report, returnTo }) {
   const type = violationTypes[report.report_type] || reportTypes[report.report_type] || title;
   const needsAction = report.needs_reply || report.needs_reopen;
   const isFinished = finished(report.status);
+  const displayStatus = report.withdrawn ? 'WITHDRAWN' : report.status;
   const state = report.needs_reply ? 'Cần bạn phản hồi'
-    : report.needs_reopen ? 'Cần xét lại người nhận' : appealSteps[report.appeal_step] || reportStatuses[report.status];
+    : report.needs_reopen ? 'Cần xét lại người nhận' : appealSteps[report.appeal_step] || reportStatuses[displayStatus];
   const action = report.needs_reply ? 'Gửi thông tin bổ sung'
     : report.needs_reopen ? 'Xem việc cần làm' : report.appeal_step ? 'Xem bước tiếp theo' : isFinished ? 'Xem kết quả' : 'Xem tiến trình';
   const hash = report.needs_reply ? '#phan-hoi' : report.appeal_step ? '#buoc-tiep-theo' : isFinished ? '#ket-qua' : '';
@@ -169,7 +170,7 @@ function ReportRow({ report, returnTo }) {
       </div>
       <p className="report-entry-reason">{report.report_reason || 'Chưa phân loại'}</p>
       <div className="report-entry-actions">
-        <span className={`report-state report-state-${needsAction ? 'ACTION' : report.appeal_step ? 'IN_REVIEW' : report.status}`}>{state}</span>
+        <span className={`report-state report-state-${needsAction ? 'ACTION' : report.appeal_step ? 'IN_REVIEW' : displayStatus}`}>{state}</span>
         <Link className={`btn ${needsAction ? 'btn-accent' : 'btn-ghost'}`}
           to={reportDetailPath(report.report_id) + hash} state={{ returnTo }}
           aria-label={`${action} báo cáo #${report.report_id}`}>

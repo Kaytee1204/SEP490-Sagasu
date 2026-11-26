@@ -20,6 +20,9 @@ import java.time.OffsetDateTime;
 
 @Service @RequiredArgsConstructor
 public class ReportService {
+    private static final Set<String> OFFICE_HANDOVER_REASONS = Set.of(
+            "HANDOVER_WRONG_ITEM", "HANDOVER_MISSING_ITEMS", "HANDOVER_CONDITION", "HANDOVER_ISSUE_OTHER");
+
     private final ReportRepository reports;
     private final EntityManager em;
     private final ChatAccessPolicy actors;
@@ -56,10 +59,7 @@ public class ReportService {
         var tx=new TransactionTemplate(transactions);
         Detail retry=tx.execute(status->{
             Detail old=retry(actor,request.clientRequestId(),prepared.hash());
-            if(old==null) {
-                checkTarget(request,actor);
-                validateReason(reasonGroup(request.targetType(),request.targetId()),request.reasonCode(),text);
-            }
+            if(old==null) submissionReason(checkTarget(request,actor),request.reasonCode(),text);
             return old;
         });
         if(retry!=null)return retry;
@@ -67,23 +67,30 @@ public class ReportService {
         boolean[] inserted={false};
         try {
             Detail result=tx.execute(status->{
+                // Serialize office incident submission with the recipient's confirmation.
+                if ("CLAIM".equals(request.targetType())) jdbc.queryForList("""
+                    select p.post_id from post p join claim c using(post_id)
+                    where c.claim_id=? for update of p
+                    """,Long.class,request.targetId());
                 em.find(Account.class,actor,LockModeType.PESSIMISTIC_WRITE);
                 actors.actor(user);
                 Detail duplicate=retry(actor,request.clientRequestId(),prepared.hash());
                 if(duplicate!=null)return duplicate;
-                checkTarget(request,actor);
+                String group=checkTarget(request,actor);
                 String column="POST".equals(request.targetType())?"post_id":"claim_id";
                 if(jdbc.queryForObject("select count(*) from report where reporter_id=? and status in ('OPEN','IN_REVIEW') and "+column+"=?",Long.class,actor,request.targetId())>0)
                     throw new AppException(ErrorCode.REPORT_DUPLICATE);
-                String group=reasonGroup(request.targetType(),request.targetId());
-                Report created = insert(actor,"HANDOVER_ISSUE".equals(group)?"HANDOVER_ISSUE":"GENERAL",
-                    request.targetType(),request.targetId(),text,request.reasonCode(),request.clientRequestId(),prepared.hash(),uploaded);
+                boolean officeHandover = "HANDOVER_ISSUE".equals(group);
+                var reason = submissionReason(group,request.reasonCode(),text);
+                Report created = persist(actor,officeHandover?"HANDOVER_ISSUE":"GENERAL",request.targetType(),request.targetId(),
+                    text,reason,request.clientRequestId(),prepared.hash(),uploaded,officeHandover);
                 inserted[0]=true;
+                String notificationTitle = officeHandover ? "Sự cố bàn giao tại văn phòng" : "Báo cáo vi phạm mới";
+                String notificationText = officeHandover ? "Người nhận đã gửi báo cáo về việc bàn giao tài sản của yêu cầu #" + request.targetId() + "."
+                    : "Người dùng vừa gửi báo cáo đối với " + request.targetType() + " #" + request.targetId() + ": " + created.getDescription();
                 notifications.notifyRoles(List.of(AccountRole.MANAGER),actor,"REPORT_CREATED",
-                    "Báo cáo vi phạm mới (#" + created.getId() + ")",
-                    "Người dùng vừa gửi báo cáo đối với " + request.targetType() + " #" + request.targetId() + ": " + created.getDescription(),
-                    "/admin/reports/" + created.getId() + "?kind="
-                        + ("HANDOVER_ISSUE".equals(group) ? "HANDOVER_ISSUE" : "GENERAL"),false);
+                    notificationTitle + " (#" + created.getId() + ")",notificationText,
+                    "/admin/reports/" + created.getId() + "?kind=" + created.getKind(),false);
                 return detail(created);
             });
             // A concurrent identical request won after our upload. Delete only our unused objects.
@@ -119,11 +126,14 @@ public class ReportService {
         report=reports.saveAndFlush(report);
         for(var image:uploaded)jdbc.update("insert into report_evidence(report_id,storage_key,original_name,mime_type,size_bytes,content_hash,sort_order) values(?,?,?,?,?,?,?)",report.getId(),image.key(),image.name(),image.mime(),image.size(),image.hash(),image.order());
         jdbc.update("insert into report_activity(report_id,actor_id,action,to_status) values(?,?,'CREATE','OPEN')",report.getId(),actor);
-        // DaiHV integration: keep the source content before later edits and retain referenced assets.
-        context.capture(report.getId(),"SUBMISSION");
-        // DaiHV case review: notify the case owner; preserve the team's independent report submission.
         if("CLAIM".equals(type) && linkOfficeHandover)
-            jdbc.update("insert into office_handover_issue(report_id,handover_id) select ?,handover_id from office_handover where claim_id=? on conflict do nothing",report.getId(),target);
+            jdbc.update("""
+                insert into office_handover_issue(report_id,handover_id)
+                select ?, h.handover_id from office_handover h join claim c using(claim_id)
+                where h.claim_id=? and c.claim_type='OFFICE' and h.recipient_id=?
+                  and h.status='COMPLETED' and h.completion_method='RECIPIENT'
+                """,report.getId(),target,actor);
+        context.capture(report.getId(),"SUBMISSION");
         return report;
     }
     public Detail retry(long actor,UUID request,String hash) {
@@ -163,17 +173,20 @@ public class ReportService {
                 && (claim.getClaimant().getId()==actor || claim.getPost().getAccount().getId()==actor))
                 return reasons.options("HANDOVER_ISSUE");
         }
-        checkTarget(new Submit(targetType,targetId,null,null,null),actor);
         if(handoverIssue && !"CLAIM".equals(targetType))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
-        return reasons.options(handoverIssue?"HANDOVER_ISSUE":reasonGroup(targetType,targetId));
+        String group = checkTarget(new Submit(targetType,targetId,null,null,null),actor);
+        var options = reasons.options(group);
+        if (!"HANDOVER_ISSUE".equals(group)) return options;
+        return new ReportReasonService.Options(group, options.reasons().stream()
+                .filter(reason -> OFFICE_HANDOVER_REASONS.contains(reason.code())).toList());
     }
     public void validateReason(String group,String code,String description) {
         reasons.require(group,code,description);
     }
-    private String reasonGroup(String type,long id) {
-        boolean officeIssue="CLAIM".equals(type) && Boolean.TRUE.equals(jdbc.queryForObject(
-            "select exists(select 1 from office_handover where claim_id=?)",Boolean.class,id));
-        return officeIssue?"HANDOVER_ISSUE":type;
+    private ReportReasonService.Reason submissionReason(String group,String code,String description) {
+        if ("HANDOVER_ISSUE".equals(group) && !OFFICE_HANDOVER_REASONS.contains(code))
+            throw new AppException(ErrorCode.REPORT_REASON_INVALID);
+        return reasons.require(group,code,description);
     }
     @Transactional(readOnly=true)
     public Detail mineDetail(long id,CustomUserDetails user) {
@@ -196,7 +209,14 @@ public class ReportService {
     private TargetAccount targetAccount(Report report) {
         String sql = switch (report.targetType()) {
             case "POST" -> "select a.id,a.full_name from post p join accounts a on a.id=p.account_id where p.post_id=?";
-            case "CLAIM" -> "select a.id,a.full_name from claim c join post p on p.post_id=c.post_id join accounts a on a.id=case when c.claimant_id=" + report.getReporterId() + " then p.account_id else c.claimant_id end where c.claim_id=?";
+            case "CLAIM" -> """
+                select a.id,a.full_name from claim c join post p on p.post_id=c.post_id
+                left join office_handover_issue i on i.report_id=%d
+                left join office_handover h on h.handover_id=i.handover_id
+                join accounts a on a.id=coalesce(h.recorded_by,
+                    case when c.claimant_id=%d then p.account_id else c.claimant_id end)
+                where c.claim_id=?
+                """.formatted(report.getId(),report.getReporterId());
             case "MESSAGE" -> "select a.id,a.full_name from chat_message m join accounts a on a.id=m.sender_id where m.message_id=?";
             default -> "select id,full_name from accounts where id=?";
         };
@@ -222,18 +242,45 @@ public class ReportService {
     private void validateTarget(String type,Long id) {
         if(id==null || id<1 || !Set.of("POST","CLAIM").contains(Objects.toString(type,"")))throw new AppException(ErrorCode.WORKFLOW_INPUT_INVALID);
     }
-    private void checkTarget(Submit r,long actor) {
-        boolean allowed=switch(r.targetType()) {
+
+    public static OffsetDateTime officeHandoverReportDeadline(OffsetDateTime confirmedAt) {
+        return confirmedAt.plusDays(7);
+    }
+
+    private String checkTarget(Submit r,long actor) {
+        String group=switch(r.targetType()) {
             case "POST" -> {
                 Post post=em.find(Post.class,r.targetId());
                 if(post!=null && (post.getAccount().getId()==actor
                         || post.getCreatedBy()!=null && post.getCreatedBy().getId()==actor))
                     throw new AppException(ErrorCode.REPORT_SELF_POST_NOT_ALLOWED);
-                yield post!=null && post.getDeletedAt()==null && "VISIBLE".equals(post.getModerationStatus());
+                yield post!=null && post.getDeletedAt()==null && "VISIBLE".equals(post.getModerationStatus()) ? "POST" : null;
             }
-            case "CLAIM" -> {Claim c=em.find(Claim.class,r.targetId()); yield c!=null && ((c.isOffice() && c.getClaimant()!=null && c.getClaimant().getId()==actor) || claimPolicy.reviewer(c,em.find(Account.class,actor)));}
-            default -> false;
+            case "CLAIM" -> {
+                Claim claim=em.find(Claim.class,r.targetId());
+                if (claim==null) yield null;
+                if (claim.isOffice()) {
+                    if (claim.getClaimant()==null || claim.getClaimant().getId()!=actor) yield null;
+                    requireOfficeHandoverReportWindow(r.targetId(),actor);
+                    yield "HANDOVER_ISSUE";
+                }
+                yield claimPolicy.reviewer(claim,em.find(Account.class,actor)) ? "CLAIM" : null;
+            }
+            default -> null;
         };
-        if(!allowed)throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);
+        if(group==null)throw new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE);
+        return group;
+    }
+
+    private void requireOfficeHandoverReportWindow(long claimId,long recipientId) {
+        OffsetDateTime confirmed = jdbc.query("""
+            select confirmed_at from office_handover
+            where claim_id=? and recipient_id=? and status='COMPLETED'
+              and completion_method='RECIPIENT' and confirmed_at<=clock_timestamp()
+            """,(row,index)->row.getObject("confirmed_at",OffsetDateTime.class),claimId,recipientId)
+                .stream().findFirst().orElseThrow(() -> new AppException(ErrorCode.REPORT_TARGET_UNAVAILABLE,
+                        "Quý vị có thể gửi phản ánh sau khi xác nhận biên bản bàn giao."));
+        if (!OffsetDateTime.now().isBefore(officeHandoverReportDeadline(confirmed)))
+            throw new AppException(ErrorCode.REPORT_HANDOVER_EXPIRED);
     }
 }

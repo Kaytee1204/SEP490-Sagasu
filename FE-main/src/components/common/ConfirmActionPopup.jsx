@@ -38,6 +38,7 @@ export default function ConfirmActionPopup({
   children,
   onConfirm,
   onClose,
+  inline = false,
 }) {
   const titleId = useId();
   const descId = useId();
@@ -204,5 +205,5 @@ export default function ConfirmActionPopup({
     </dialog>
   );
 
-  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
+  return !inline && typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
 }

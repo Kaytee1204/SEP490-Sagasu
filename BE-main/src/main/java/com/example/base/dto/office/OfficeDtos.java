@@ -15,7 +15,8 @@ public final class OfficeDtos {
         Long parentId, boolean active) {}
     public record LocationView(Long id, String code, String name, Long parentId, boolean active) {}
     public record ReceiptView(Long id, String code, Long postId, String title, String status, String condition,
-        String location, Long locationId, String receivedBy, OffsetDateTime receivedAt, String finderName, String finderContact) {}
+        String location, Long locationId, String receivedBy, OffsetDateTime receivedAt, String finderName, String finderContact,
+        String items) {}
     public record PostView(Long id, String title, String description, String postType, String status,
         String moderationStatus, String custodyMode, String category, String author, String authorEmail,
         String location, OffsetDateTime createdAt, OffsetDateTime updatedAt, String moderationNote,
@@ -24,7 +25,9 @@ public final class OfficeDtos {
     public record ClaimantOption(Long id, String name, String email) {}
     public record Submission(@NotNull @Positive Long postId, @Positive Long claimantId,
         @Size(max=150) String claimantName, @Email @Size(max=255) String claimantEmail,
-        @Size(max=40) String claimantPhone, @NotBlank @Size(max=5000) String description,
+        @Pattern(regexp = "^$|^(0|\\+84)[0-9]{9,10}$",
+            message = "Nhập số điện thoại hợp lệ, ví dụ 0912345678 hoặc +84912345678.") String claimantPhone,
+        @NotBlank @Size(max=5000) String description,
         @Size(max=5000) String evidenceNote,
         @NotBlank @Size(max=160) String questionnaireVersion,
         @NotNull @Size(max=24) List<@jakarta.validation.Valid ClaimAnswerRequest> answers) {
@@ -49,6 +52,6 @@ public final class OfficeDtos {
         OffsetDateTime createdAt, ReceiptView receipt, List<ClaimDetailDto.EvidenceDto> evidence,
         List<ClaimDetailDto.ActivityDto> activities, AppointmentView appointment, List<AnswerView> answers,
         String stage, OffsetDateTime collectionAt, boolean canReview, boolean ownRequest,
-        boolean canCancel, String priorWrongRecipientConclusion) {}
+        boolean canCancel, String priorWrongRecipientConclusion, String closeReason) {}
     public record ReviewResult(Long id, String status, String emailStatus) {}
 }

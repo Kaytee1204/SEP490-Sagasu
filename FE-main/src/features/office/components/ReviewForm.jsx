@@ -1,4 +1,4 @@
-import { earliestAppointment } from "../officeUtils";
+import { earliestAppointment, pickupScheduleError, pickupScheduleHint, validateRequiredText } from "../officeUtils";
 import { useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { officeApi } from "../api/officeApi";
@@ -21,8 +21,11 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
   const reapproving = form.decision === "APPROVED" && claim.priorWrongRecipientConclusion;
   function handleFormSubmit(e) {
     e.preventDefault();
-    if (busy || !form.reason.trim()) return;
+    if (busy) return;
     setError("");
+    if (!validateRequiredText(e.currentTarget)) return;
+    const scheduleError = form.decision === "APPROVED" && !hasCompetitors && pickupScheduleError(form.scheduledAt);
+    if (scheduleError) { setError(scheduleError); return; }
     setConfirmOpen(true);
   }
   async function executeSubmit() {
@@ -117,7 +120,7 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
                 value={form.scheduledAt}
                 onChange={(e) => change("scheduledAt", e.target.value)}
               />
-              <small>
+              <small>{pickupScheduleHint}<br />
                 Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để người nhận có đủ
                 thời gian phản hồi.
               </small>
@@ -159,7 +162,7 @@ export default function ReviewForm({ claim, hasCompetitors, onDone }) {
         )}
         <button
           className={`of-button ${form.decision === "REJECTED" ? "of-danger" : "of-primary"}`}
-          disabled={busy || !form.reason.trim()}
+          disabled={busy}
         >
           {busy
             ? "Đang lưu & xử lý…"

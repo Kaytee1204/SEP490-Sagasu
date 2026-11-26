@@ -1,4 +1,4 @@
-import { earliestAppointment } from "../officeUtils";
+import { earliestAppointment, validateRequiredText } from "../officeUtils";
 import { useState } from "react";
 import Notice from "./Notice";
 import { workflowApi } from "../api/workflowApi";
@@ -12,7 +12,8 @@ export default function IntakeScheduleForm({ transfer, onClose, onDone, onBusyCh
   const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   function handleFormSubmit(e) {
     e.preventDefault(); if (busy) return;
-    setError(""); setConfirmOpen(true);
+    setError("");
+    if (validateRequiredText(e.currentTarget)) setConfirmOpen(true);
   }
   async function executeSubmit() {
     if (busy) return;

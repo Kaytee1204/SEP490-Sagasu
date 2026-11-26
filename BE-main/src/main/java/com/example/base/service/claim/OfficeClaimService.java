@@ -9,6 +9,7 @@ import com.example.base.exception.*;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
 import com.example.base.service.office.*;
+import com.example.base.service.report.SubmissionRestrictions;
 import com.example.base.storage.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -31,6 +32,7 @@ import static com.example.base.entity.AccountRole.APPROVER;
 public class OfficeClaimService {
     private final ClaimRepository claims;
     private final ClaimDailyLimit dailyLimit;
+    private final SubmissionRestrictions restrictions;
     private final ClaimQuestionnaireService questionnaires;
     private final OfficeClaimProgress progress;
     private final PostRepository posts;
@@ -192,8 +194,10 @@ public class OfficeClaimService {
         eligible(p);
         if(!"OPEN".equals(p.getStatus())||!"VISIBLE".equals(p.getModerationStatus())) throw bad("Bài đăng hiện không nhận thêm yêu cầu.");
         Account claimant = counter ? counterClaimant(r) : actor;
-        if (claims.hasDisputeRejection(p.getId(), claimant.getId()))
+        if (claims.hasResubmissionBlock(p.getId(), claimant.getId()))
             throw new AppException(ErrorCode.CLAIM_RESUBMISSION_BLOCKED);
+        if (lock) restrictions.requireAvailableForSubmission(claimant.getId(), SubmissionRestrictions.Action.CLAIM);
+        else restrictions.checkAvailable(claimant.getId(), SubmissionRestrictions.Action.CLAIM);
         if(claims.hasFailedOfficeVerification(p.getId(),claimant.getId()))
             throw bad("Người nhận đã không đạt xác minh tại quầy và không được yêu cầu nhận lại món đồ này.");
         if (claimant != null && (Objects.equals(p.getAccount().getId(), claimant.getId()) || (p.getCreatedBy() != null && Objects.equals(p.getCreatedBy().getId(), claimant.getId())))) {
@@ -233,8 +237,7 @@ public class OfficeClaimService {
                 deadline=appeals.open(c);
                 if (deadline==null && request.scheduledAt()!=null) {
                     OffsetDateTime now=OffsetDateTime.now();
-                    if (!request.scheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
-                        throw bad("Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
+                    invitations.validatePickupSchedule(request.scheduledAt(),now);
                     if (clean(request.location())==null) throw bad("Nhập địa điểm nhận đồ.");
                     String recipient=clean(request.email());
                     if (recipient==null) recipient=recipient(c);
@@ -342,7 +345,8 @@ public class OfficeClaimService {
             detail?c.getEvidence().stream().map(e->new ClaimDetailDto.EvidenceDto(e.getId(),storage.readUrl(e.getStorageKey(),null),e.getOriginalName(),e.getMimeType(),e.getSizeBytes())).toList():List.of(),
             detail?activities.findByClaim_IdOrderByCreatedAtAscIdAsc(c.getId()).stream().map(e->new ClaimDetailDto.ActivityDto(e.getId(),e.getAction(),person(e.getActor()),e.getFromStatus(),e.getToStatus(),e.getReason(),e.getCreatedAt())).toList():List.of(),appointment,detail?c.getAnswers().stream().map(a->new AnswerView(a.getId(),a.getQuestionLabel(),a.getAnswerText(),a.getSectionTitle())).toList():List.of(),phase.stage(),phase.scheduledAt(),canReview,ownRequest,
             detail && ownRequest && ClaimService.canWithdrawOfficeRequest(c),
-            detail && canReview ? claims.lastWrongRecipientConclusion(c.getId()) : null);
+            detail && canReview ? claims.lastWrongRecipientConclusion(c.getId()) : null,
+            c.getCloseReason());
     }
 }
 
