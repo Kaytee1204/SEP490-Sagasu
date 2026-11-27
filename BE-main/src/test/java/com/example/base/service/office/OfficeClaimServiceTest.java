@@ -6,26 +6,29 @@ import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
 import com.example.base.repository.*;
 import com.example.base.security.CustomUserDetails;
+import com.example.base.service.claim.ClaimDailyLimit;
 import com.example.base.service.claim.OfficeClaimService;
 import com.example.base.service.claim.P2pClaimAppealService;
 import com.example.base.service.notification.NotificationService;
+import com.example.base.service.report.SubmissionRestrictions;
 import com.example.base.storage.ImageStorage;
 import com.example.base.storage.ImageValidator;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
@@ -36,37 +39,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * The service opens its own {@code new TransactionTemplate(transactions)}. A real template running on the mocked
+ * transaction manager executes the callback inline, so every test below runs the real service logic.
+ */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OfficeClaimServiceTest {
-    @Mock com.example.base.service.claim.ClaimDailyLimit dailyLimit;
-    @Mock com.example.base.service.report.SubmissionRestrictions restrictions;
+    private static final Validator BEAN_VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-    void utc231_dailyLimitAppliesToOnlineAndCounterUsingClaimantAccount(boolean counter) {
-        setupTransactionTemplate();
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Account actor = counter ? makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE) : claimant;
-        var user = userDetails(actor);
-        if (counter) when(access.require(user, AccountRole.APPROVER)).thenReturn(actor);
-        else when(access.require(user)).thenReturn(actor);
-        when(accounts.findById(7L)).thenReturn(Optional.of(claimant));
-        var post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-        when(posts.findById(10L)).thenReturn(Optional.of(post));
-        when(posts.findForClaimUpdate(10L)).thenReturn(Optional.of(post));
-        var receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-        when(receipts.findByPostId(10L)).thenReturn(Optional.of(receipt));
-        when(images.validate(any())).thenReturn(List.of());
-        doThrow(new AppException(ErrorCode.CLAIM_DAILY_LIMIT)).when(dailyLimit).requireAvailable(7L);
-        var req = new Submission(10L, counter ? 7L : null, null, null, null, "My item", null);
-        var error = assertThrows(AppException.class, () -> service.submit(req, List.of(), counter, user));
-        assertEquals(ErrorCode.CLAIM_DAILY_LIMIT, error.getErrorCode());
-        verify(restrictions).requireAvailableForSubmission(7L,
-                com.example.base.service.report.SubmissionRestrictions.Action.CLAIM);
-        verify(claims, never()).saveAndFlush(any());
-    }
-
+    @Mock ClaimDailyLimit dailyLimit;
+    @Mock SubmissionRestrictions restrictions;
     @Mock ClaimRepository claims;
     @Mock OfficeClaimProgress progress;
     @Mock PostRepository posts;
@@ -88,9 +71,27 @@ class OfficeClaimServiceTest {
     @InjectMocks
     OfficeClaimService service;
 
+    private final Account user7 = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
+    private final Account counterApprover = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
+    private final Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
+    private final Account finder = makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE);
+
+    @BeforeEach
+    void setUp() {
+        when(transactions.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(validator.validate(any())).thenAnswer(inv -> BEAN_VALIDATOR.validate(inv.getArgument(0)));
+        when(images.validate(any())).thenReturn(List.of());
+        when(claims.saveAndFlush(any(Claim.class))).thenAnswer(inv -> {
+            Claim c = inv.getArgument(0);
+            if (c.getId() == null) ReflectionTestUtils.setField(c, "id", 55L);
+            return c;
+        });
+        when(appointments.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
     // ─── helpers ──────────────────────────────────────────────────────────────
 
-    private Account makeAccount(long id, AccountRole role, AccountStatus status) {
+    private static Account makeAccount(long id, AccountRole role, AccountStatus status) {
         Account a = new Account();
         a.setId(id);
         a.setRole(role);
@@ -101,914 +102,503 @@ class OfficeClaimServiceTest {
         return a;
     }
 
-    private CustomUserDetails userDetails(Account a) {
-        return new CustomUserDetails(a);
-    }
-
-    private Post makePost(long id, String postType, String custodyMode, String status, String moderationStatus,
-                          Account owner) {
+    private Post makePost(long id, String custodyMode, String status, Account owner) {
         Post p = mock(Post.class, RETURNS_DEEP_STUBS);
         when(p.getId()).thenReturn(id);
-        when(p.getPostType()).thenReturn(postType);
+        when(p.getPostType()).thenReturn("FOUND");
         when(p.getCustodyMode()).thenReturn(custodyMode);
         when(p.getStatus()).thenReturn(status);
-        when(p.getModerationStatus()).thenReturn(moderationStatus);
+        when(p.getModerationStatus()).thenReturn("VISIBLE");
         when(p.getDeletedAt()).thenReturn(null);
         when(p.getTitle()).thenReturn("Test Item " + id);
         when(p.getAccount()).thenReturn(owner);
         when(p.getCreatedBy()).thenReturn(owner);
-        when(p.getPrivateIdentifiers()).thenReturn("private-data");
-        when(p.getImages()).thenReturn(List.of());
         return p;
     }
 
-    private ItemReceipt makeReceipt(String status, String reviewStatus, boolean receivedAtSet) {
+    private ItemReceipt makeReceipt(String status) {
         ItemReceipt r = mock(ItemReceipt.class);
         when(r.getStatus()).thenReturn(status);
-        when(r.getReviewStatus()).thenReturn(reviewStatus);
-        when(r.getReceivedAt()).thenReturn(receivedAtSet ? OffsetDateTime.now().minusDays(1) : null);
+        when(r.getReviewStatus()).thenReturn("ACCEPTED");
+        when(r.getReceivedAt()).thenReturn(OffsetDateTime.now().minusDays(1));
         return r;
     }
 
-    private Claim makeClaim(long id, String claimType, String status, Account claimant, Account createdBy,
-                             Post post, long version) {
-        Claim c = mock(Claim.class, RETURNS_DEEP_STUBS);
-        when(c.getId()).thenReturn(id);
-        when(c.getClaimType()).thenReturn(claimType);
-        when(c.getStatus()).thenReturn(status);
-        when(c.getClaimant()).thenReturn(claimant);
-        when(c.getCreatedBy()).thenReturn(createdBy);
-        when(c.getPost()).thenReturn(post);
-        when(c.getVersion()).thenReturn(version);
-        when(c.getClaimantName()).thenReturn(claimant != null ? claimant.getFullName() : "Unknown");
-        when(c.getClaimantEmail()).thenReturn(claimant != null ? claimant.getEmail() : null);
-        when(c.getClaimantPhone()).thenReturn(null);
-        when(c.getDescription()).thenReturn("Description");
-        when(c.getEvidenceNote()).thenReturn(null);
-        when(c.getCreatedAt()).thenReturn(OffsetDateTime.now());
-        when(c.getEvidence()).thenReturn(List.of());
-        when(c.getAnswers()).thenReturn(List.of());
+    /** Office post 10 that the submit flow loads both unlocked (pre-check) and locked (save). */
+    private Post givenSubmitPost(String custodyMode, String status, Account owner, ItemReceipt receipt) {
+        Post post = makePost(10L, custodyMode, status, owner);
+        when(posts.findById(10L)).thenReturn(Optional.of(post));
+        when(posts.findForClaimUpdate(10L)).thenReturn(Optional.of(post));
+        when(receipts.findByPostId(10L)).thenReturn(Optional.ofNullable(receipt));
+        return post;
+    }
+
+    private CustomUserDetails onlineUser() {
+        CustomUserDetails ud = new CustomUserDetails(user7);
+        when(access.require(ud)).thenReturn(user7);
+        return ud;
+    }
+
+    private CustomUserDetails counterUser() {
+        CustomUserDetails ud = new CustomUserDetails(counterApprover);
+        when(access.require(ud, AccountRole.APPROVER)).thenReturn(counterApprover);
+        return ud;
+    }
+
+    private static MultipartFile jpg(String name) {
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getOriginalFilename()).thenReturn(name);
+        return file;
+    }
+
+    private static ImageValidator.ValidatedImage image() {
+        return new ImageValidator.ValidatedImage("JPEG".getBytes(), "image/jpeg", "jpg", 100, 100, "hash1");
+    }
+
+    private static void assertBad(Executable call, String message) {
+        AppException ex = assertThrows(AppException.class, call);
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
+        assertThat(ex.getMessage()).contains(message);
+    }
+
+    private void assertNothingSaved() {
+        verify(storage, never()).put(anyString(), any(), anyString());
+        verify(claims, never()).saveAndFlush(any());
+    }
+
+    /** Real office claim 30 on post 100, locked by review(). */
+    private Claim givenReviewClaim(String status, Account claimant, long version) {
+        Post post = makePost(100L, "OFFICE", "OPEN", finder);
+        ItemReceipt receipt = makeReceipt("IN_STORAGE");
+        Claim c = Claim.office(post, claimant, claimant == null ? approver : claimant,
+                claimant == null ? "COUNTER" : "ONLINE", claimant == null ? "Walk-in" : claimant.getFullName(),
+                claimant == null ? null : claimant.getEmail(), null, "Description", null, receipt);
+        ReflectionTestUtils.setField(c, "id", 30L);
+        ReflectionTestUtils.setField(c, "status", status);
+        ReflectionTestUtils.setField(c, "version", version);
+        when(claims.findPostId(30L)).thenReturn(Optional.of(100L));
+        when(posts.findForClaimUpdate(100L)).thenReturn(Optional.of(post));
+        when(claims.findForUpdate(30L)).thenReturn(Optional.of(c));
+        when(receipts.findByPostId(100L)).thenReturn(Optional.of(receipt));
         return c;
     }
 
-    private OfficeClaimProgress.Progress makeProgress(long id) {
-        return new OfficeClaimProgress.Progress(id, "REVIEW", null);
+    private CustomUserDetails reviewer() {
+        CustomUserDetails ud = new CustomUserDetails(approver);
+        when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
+        return ud;
     }
 
-    /**
-     * Set up a real TransactionTemplate to call the callback inline.
-     */
-    @SuppressWarnings("unchecked")
-    private void setupTransactionTemplate() {
-        TransactionStatus txStatus = mock(TransactionStatus.class);
-        when(transactions.getTransaction(any())).thenReturn(txStatus);
-
-        // The service uses: new TransactionTemplate(transactions).execute(tx -> ...)
-        // We can't easily intercept that because it creates a new instance. We'll use
-        // MockedConstruction in the tests that need this, or we can rely on the fact that
-        // the service also works via the injected manager. Use lenient stubbing.
+    private static Decision approve(OffsetDateTime at, String location, String email) {
+        return new Decision("APPROVED", "OK", 0L, at, location, email, null);
     }
 
-    // ─── findClaimants ─────────────────────────────────────────────────────────
-
-    // ─── list ──────────────────────────────────────────────────────────────────
-
-    // ─── detail ────────────────────────────────────────────────────────────────
+    private void assertNoApprovalSaved() {
+        verify(appointments, never()).save(any());
+        verify(activities, never()).save(any());
+    }
 
     // ─── submit ────────────────────────────────────────────────────────────────
 
-    /**
-     * The submit tests below require a real TransactionTemplate execution.
-     * We use MockedConstruction to intercept new TransactionTemplate(transactions).
-     */
     @Test
-    void utc218_submit_userOnlineFlow_createsClaimNotifiesApprovers() throws Exception {
-        Account actor = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(actor);
-        Post post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-        ItemReceipt receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
+    void utc207_submit_userOnlineFlow_createsClaimNotifiesApprovers() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
+        when(images.validate(any())).thenReturn(List.of(image()));
 
-        when(access.require(ud)).thenReturn(actor);
-        when(posts.findById(10L)).thenReturn(Optional.of(post));
-        when(posts.findForClaimUpdate(10L)).thenReturn(Optional.of(post));
-        when(receipts.findByPostId(10L)).thenReturn(Optional.of(receipt));
-        when(claims.existsByPost_IdAndClaimant_IdAndStatusIn(any(), any(), any())).thenReturn(false);
+        Long id = service.submit(new Submission(10L, null, null, null, null, "My laptop", null),
+                List.of(jpg("photo.jpg")), false, ud);
 
-        Claim savedClaim = mock(Claim.class);
-        when(savedClaim.getId()).thenReturn(55L);
-        when(savedClaim.getPost()).thenReturn(post);
-        when(claims.saveAndFlush(any())).thenReturn(savedClaim);
-        when(activities.save(any())).thenReturn(null);
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            // executeWithoutResult - validation pass
-            doAnswer(inv -> {
-                Object arg = inv.getArgument(0);
-                if (arg instanceof java.util.function.Consumer) {
-                    ((java.util.function.Consumer<TransactionStatus>) arg).accept(mock(TransactionStatus.class));
-                } else if (arg instanceof TransactionCallback) {
-                    ((TransactionCallback<?>) arg).doInTransaction(mock(TransactionStatus.class));
-                }
-                return null;
-            }).when(mock).executeWithoutResult(any());
-
-            when(mock.execute(any())).thenReturn(55L);
-        })) {
-            ImageValidator.ValidatedImage img = new ImageValidator.ValidatedImage(
-                    "JPEG".getBytes(), "image/jpeg", "jpg", 100, 100,
-                    "abc123abc123abc123abc123abc123abc123abc123abc123abc123abc123abc1");
-            when(images.validate(any())).thenReturn(List.of(img));
-            doNothing().when(storage).put(anyString(), any(), anyString());
-
-            MultipartFile file = mock(MultipartFile.class);
-            when(file.getOriginalFilename()).thenReturn("photo.jpg");
-
-            Submission req = new Submission(10L, null, null, null, null, "My laptop", null);
-
-            Long id = service.submit(req, List.of(file), false, ud);
-            assertThat(id).isEqualTo(55L);
-        }
+        assertThat(id).isEqualTo(55L);
+        ArgumentCaptor<Claim> saved = ArgumentCaptor.forClass(Claim.class);
+        verify(claims).saveAndFlush(saved.capture());
+        Claim c = saved.getValue();
+        assertThat(c.getClaimType()).isEqualTo("OFFICE");
+        assertThat(c.getSubmissionChannel()).isEqualTo("ONLINE");
+        assertThat(c.getClaimant()).isSameAs(user7);
+        assertThat(c.getDescription()).isEqualTo("My laptop");
+        assertThat(c.getEvidence()).hasSize(1);
+        assertThat(c.getEvidence().get(0).getStorageKey()).matches("claims/office/[0-9a-f-]{36}\\.jpg");
+        assertThat(c.getEvidence().get(0).getOriginalName()).isEqualTo("photo.jpg");
+        verify(storage).put(eq(c.getEvidence().get(0).getStorageKey()), any(), eq("image/jpeg"));
+        verify(activities).save(any(ClaimActivity.class));
+        verify(notifications).notifyRoles(eq(List.of(AccountRole.APPROVER)), eq(7L), eq("OFFICE_CLAIM_SUBMITTED"),
+                anyString(), anyString(), eq("/approver/office-claims/55"), eq(false));
     }
 
     @Test
-    void utc219_submit_approverCounter_channelCounter() {
-        // Test that counter=true sets channel COUNTER and notifies claimant
-        // We test this via unit-level logic by mocking TransactionTemplate
+    void utc208_submit_approverCounter_channelCounter() {
+        CustomUserDetails ud = counterUser();
+        when(accounts.findById(7L)).thenReturn(Optional.of(user7));
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> null).when(mock).executeWithoutResult(any());
-            when(mock.execute(any())).thenAnswer(inv -> {
-                Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-                Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-                CustomUserDetails ud = userDetails(approver);
-                Post post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-                ItemReceipt receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
+        Long id = service.submit(new Submission(10L, 7L, null, null, null, "My laptop", null), List.of(), true, ud);
 
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                when(accounts.findById(7L)).thenReturn(Optional.of(claimant));
-                when(posts.findForClaimUpdate(10L)).thenReturn(Optional.of(post));
-                when(receipts.findByPostId(10L)).thenReturn(Optional.of(receipt));
-                when(claims.existsByPost_IdAndClaimant_IdAndStatusIn(any(), any(), any())).thenReturn(false);
-
-                Claim savedClaim = mock(Claim.class);
-                when(savedClaim.getId()).thenReturn(60L);
-                when(savedClaim.getPost()).thenReturn(post);
-                when(claims.saveAndFlush(any())).thenReturn(savedClaim);
-
-                return 60L;
-            });
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, 7L, null, null, null, "My laptop", null);
-            Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-            CustomUserDetails ud = userDetails(approver);
-
-            Long id = service.submit(req, List.of(), true, ud);
-            assertThat(id).isEqualTo(60L);
-        }
+        assertThat(id).isEqualTo(55L);
+        ArgumentCaptor<Claim> saved = ArgumentCaptor.forClass(Claim.class);
+        verify(claims).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getSubmissionChannel()).isEqualTo("COUNTER");
+        assertThat(saved.getValue().getClaimant()).isSameAs(user7);
+        assertThat(saved.getValue().getCreatedBy()).isSameAs(counterApprover);
+        assertThat(saved.getValue().getClaimantEmail()).isEqualTo("user7@example.com");
+        verify(notifications).notifyUser(eq(7L), eq("OFFICE_CLAIM_SUBMITTED"), anyString(), anyString(),
+                eq("/van-phong/claims/55"), eq(false));
+        verify(notifications, never()).notifyRoles(any(), any(), anyString(), anyString(), anyString(), anyString(), anyBoolean());
     }
 
     @Test
-    void utc220_submit_approverCounterClaimantIdNull_throwsBadRequest() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
+    void utc209_submit_approverCounterClaimantIdNull_throwsBadRequest() {
+        CustomUserDetails ud = counterUser();
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                // The validation step should throw
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                // claimantId=null triggers bad("Chọn tài khoản...")
-                throw new AppException(ErrorCode.BAD_REQUEST, "Chọn tài khoản người yêu cầu nhận đồ từ kết quả tìm kiếm.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, null, null, null, null, "My laptop", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), true, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("Chọn tài khoản");
-        }
+        assertBad(() -> service.submit(new Submission(10L, null, null, null, null, "My laptop", null), List.of(), true, ud),
+                "Chọn tài khoản người yêu cầu nhận đồ từ kết quả tìm kiếm.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc221_submit_approverCounterClaimantSuspended_throwsBadRequest() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
+    void utc210_submit_approverCounterClaimantSuspended_throwsBadRequest() {
+        CustomUserDetails ud = counterUser();
+        when(accounts.findById(7L)).thenReturn(Optional.of(makeAccount(7L, AccountRole.USER, AccountStatus.SUSPENDED)));
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                Account suspended = makeAccount(7L, AccountRole.USER, AccountStatus.SUSPENDED);
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                when(accounts.findById(7L)).thenReturn(Optional.of(suspended));
-                throw new AppException(ErrorCode.BAD_REQUEST, "Tài khoản người yêu cầu nhận đồ không còn hoạt động.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, 7L, null, null, null, "My laptop", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), true, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("không còn hoạt động");
-        }
+        assertBad(() -> service.submit(new Submission(10L, 7L, null, null, null, "My laptop", null), List.of(), true, ud),
+                "Tài khoản người yêu cầu nhận đồ không còn hoạt động.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc222_submit_claimantAccountNotFound_throwsBadRequest() {
-        Account approver = makeAccount(1L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
+    void utc211_submit_claimantAccountNotFound_throwsBadRequest() {
+        CustomUserDetails ud = counterUser();
+        when(accounts.findById(999L)).thenReturn(Optional.empty());
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                when(accounts.findById(999L)).thenReturn(Optional.empty());
-                throw new AppException(ErrorCode.BAD_REQUEST, "Không tìm thấy tài khoản người yêu cầu nhận đồ.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, 999L, null, null, null, "My laptop", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), true, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("Không tìm thấy tài khoản");
-        }
+        assertBad(() -> service.submit(new Submission(10L, 999L, null, null, null, "My laptop", null), List.of(), true, ud),
+                "Không tìm thấy tài khoản người yêu cầu nhận đồ.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc223_submit_postNotFound_throwsBadRequest() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc212_submit_postNotFound_throwsBadRequest() {
+        CustomUserDetails ud = onlineUser();
+        when(posts.findById(999L)).thenReturn(Optional.empty());
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud)).thenReturn(user);
-                when(posts.findById(999L)).thenReturn(Optional.empty());
-                throw new AppException(ErrorCode.BAD_REQUEST, "Không tìm thấy bài đăng.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(999L, null, null, null, null, "desc", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), false, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("Không tìm thấy bài đăng");
-        }
+        assertBad(() -> service.submit(new Submission(999L, null, null, null, null, "desc", null), List.of(), false, ud),
+                "Không tìm thấy bài đăng.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc224_submit_postCustodyP2P_throwsBadRequest() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc213_submit_postCustodyP2P_throwsBadRequest() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("P2P", "OPEN", finder, makeReceipt("IN_STORAGE"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud)).thenReturn(user);
-                Post post = makePost(10L, "FOUND", "P2P", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-                when(posts.findById(10L)).thenReturn(Optional.of(post));
-                throw new AppException(ErrorCode.BAD_REQUEST, "Đồ vật không còn thuộc luồng xử lý tại văn phòng.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, null, null, null, null, "desc", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), false, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("văn phòng");
-        }
+        assertBad(() -> service.submit(new Submission(10L, null, null, null, null, "desc", null), List.of(), false, ud),
+                "Đồ vật không còn thuộc luồng xử lý tại văn phòng.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc225_submit_noReceipt_throwsBadRequest() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc214_submit_noReceipt_throwsBadRequest() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("OFFICE", "OPEN", finder, null);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud)).thenReturn(user);
-                Post post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-                when(posts.findById(10L)).thenReturn(Optional.of(post));
-                when(receipts.findByPostId(10L)).thenReturn(Optional.empty());
-                throw new AppException(ErrorCode.BAD_REQUEST, "Chưa có hồ sơ tiếp nhận.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, null, null, null, null, "desc", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), false, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("hồ sơ tiếp nhận");
-        }
+        assertBad(() -> service.submit(new Submission(10L, null, null, null, null, "desc", null), List.of(), false, ud),
+                "Chưa có hồ sơ tiếp nhận.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc226_submit_receiptStatusReturned_throwsBadRequest() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc215_submit_receiptStatusReturned_throwsBadRequest() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("RETURNED"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud)).thenReturn(user);
-                Post post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-                when(posts.findById(10L)).thenReturn(Optional.of(post));
-                ItemReceipt r = makeReceipt("RETURNED", "ACCEPTED", true);
-                when(receipts.findByPostId(10L)).thenReturn(Optional.of(r));
-                throw new AppException(ErrorCode.BAD_REQUEST, "Văn phòng chưa tiếp nhận hoặc đã trao trả đồ vật.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, null, null, null, null, "desc", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), false, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("trao trả");
-        }
+        assertBad(() -> service.submit(new Submission(10L, null, null, null, null, "desc", null), List.of(), false, ud),
+                "Văn phòng chưa tiếp nhận hoặc đã trao trả đồ vật.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc227_submit_postReserved_throwsBadRequest() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc216_submit_postReserved_throwsBadRequest() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("OFFICE", "RESERVED", finder, makeReceipt("IN_STORAGE"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud)).thenReturn(user);
-                Post post = makePost(10L, "FOUND", "OFFICE", "RESERVED", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-                // Post eligible but status != OPEN
-                when(posts.findById(10L)).thenReturn(Optional.of(post));
-                ItemReceipt r = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-                when(receipts.findByPostId(10L)).thenReturn(Optional.of(r));
-                throw new AppException(ErrorCode.BAD_REQUEST, "Bài đăng hiện không nhận thêm yêu cầu.");
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, null, null, null, null, "desc", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), false, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("không nhận thêm yêu cầu");
-        }
+        assertBad(() -> service.submit(new Submission(10L, null, null, null, null, "desc", null), List.of(), false, ud),
+                "Bài đăng hiện không nhận thêm yêu cầu.");
+        assertNothingSaved();
     }
 
     @Test
-    void utc228_submit_claimantIsPostOwner_throwsClaimSelfNotAllowed() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc217_submit_claimantIsPostOwner_throwsClaimSelfNotAllowed() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("OFFICE", "OPEN", user7, makeReceipt("IN_STORAGE"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> {
-                when(access.require(ud)).thenReturn(user);
-                // Post owned by user 7
-                Post post = makePost(10L, "FOUND", "OFFICE", "OPEN", "VISIBLE", user);
-                when(posts.findById(10L)).thenReturn(Optional.of(post));
-                ItemReceipt r = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-                when(receipts.findByPostId(10L)).thenReturn(Optional.of(r));
-                throw new AppException(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
-            }).when(mock).executeWithoutResult(any());
-        })) {
-            when(images.validate(any())).thenReturn(List.of());
-            Submission req = new Submission(10L, null, null, null, null, "desc", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(), false, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
-        }
+        AppException ex = assertThrows(AppException.class,
+                () -> service.submit(new Submission(10L, null, null, null, null, "desc", null), List.of(), false, ud));
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_SELF_NOT_ALLOWED);
+        assertNothingSaved();
     }
 
     @Test
-    void utc229_submit_duplicateClaim_keysDeleted() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc218_submit_duplicateClaim_keysDeleted() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
+        when(claims.existsByPost_IdAndClaimant_IdAndStatusIn(eq(10L), eq(7L), any())).thenReturn(true);
+        when(images.validate(any())).thenReturn(List.of(image()));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> null).when(mock).executeWithoutResult(any());
-            when(mock.execute(any())).thenThrow(new AppException(ErrorCode.CLAIM_DUPLICATE));
-        })) {
-            ImageValidator.ValidatedImage img = new ImageValidator.ValidatedImage(
-                    "data".getBytes(), "image/jpeg", "jpg", 100, 100, "hash1");
-            when(images.validate(any())).thenReturn(List.of(img));
-            doNothing().when(storage).put(anyString(), any(), anyString());
-            doNothing().when(storage).delete(anyString());
+        AppException ex = assertThrows(AppException.class, () -> service.submit(
+                new Submission(10L, null, null, null, null, "desc", null), List.of(jpg("a.jpg")), false, ud));
 
-            Submission req = new Submission(10L, null, null, null, null, "desc", null);
-
-            AppException ex = assertThrows(AppException.class,
-                    () -> service.submit(req, List.of(mock(MultipartFile.class)), false, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_DUPLICATE);
-            verify(storage).delete(anyString());
-        }
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_DUPLICATE);
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(storage).put(key.capture(), any(), anyString());
+        verify(storage).delete(key.getValue());
+        verify(claims, never()).saveAndFlush(any());
     }
 
     @Test
-    void utc230_submit_storagePutFails_keysCleanedUp() {
-        Account user = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(user);
+    void utc219_submit_storagePutFails_keysCleanedUp() {
+        CustomUserDetails ud = onlineUser();
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
+        when(images.validate(any())).thenReturn(List.of(image()));
+        doThrow(new RuntimeException("S3 error")).when(storage).put(anyString(), any(), anyString());
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            doAnswer(inv -> null).when(mock).executeWithoutResult(any());
-        })) {
-            ImageValidator.ValidatedImage img = new ImageValidator.ValidatedImage(
-                    "data".getBytes(), "image/jpeg", "jpg", 100, 100, "hash1");
-            when(images.validate(any())).thenReturn(List.of(img));
-            doThrow(new RuntimeException("S3 error")).when(storage).put(anyString(), any(), anyString());
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> service.submit(
+                new Submission(10L, null, null, null, null, "desc", null), List.of(jpg("photo.jpg")), false, ud));
 
-            Submission req = new Submission(10L, null, null, null, null, "desc", null);
-            MultipartFile file = mock(MultipartFile.class);
-            when(file.getOriginalFilename()).thenReturn("photo.jpg");
+        assertThat(ex.getMessage()).isEqualTo("S3 error");
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(storage).put(key.capture(), any(), anyString());
+        verify(storage).delete(key.getValue());
+        verify(claims, never()).saveAndFlush(any());
+    }
 
-            RuntimeException ex = assertThrows(RuntimeException.class,
-                    () -> service.submit(req, List.of(file), false, ud));
-            assertThat(ex.getMessage()).contains("S3 error");
-            // No key was stored so delete should be attempted on empty list (or zero calls)
-        }
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void utc220_dailyLimitAppliesToOnlineAndCounterUsingClaimantAccount(boolean counter) {
+        CustomUserDetails ud = counter ? counterUser() : onlineUser();
+        when(accounts.findById(7L)).thenReturn(Optional.of(user7));
+        givenSubmitPost("OFFICE", "OPEN", finder, makeReceipt("IN_STORAGE"));
+        doThrow(new AppException(ErrorCode.CLAIM_DAILY_LIMIT)).when(dailyLimit).requireAvailable(7L);
+        var req = new Submission(10L, counter ? 7L : null, null, null, null, "My item", null);
+
+        var error = assertThrows(AppException.class, () -> service.submit(req, List.of(), counter, ud));
+
+        assertEquals(ErrorCode.CLAIM_DAILY_LIMIT, error.getErrorCode());
+        verify(restrictions).requireAvailableForSubmission(7L, SubmissionRestrictions.Action.CLAIM);
+        verify(claims, never()).saveAndFlush(any());
     }
 
     // ─── review ────────────────────────────────────────────────────────────────
 
-    private Appointment makeAppointment(long id, String status, OffsetDateTime scheduledAt, long claimId) {
-        Appointment a = mock(Appointment.class);
-        when(a.getId()).thenReturn(id);
-        when(a.getStatus()).thenReturn(status);
-        when(a.getScheduledAt()).thenReturn(scheduledAt);
-        when(a.getResponseStatus()).thenReturn("UNSENT");
-        when(a.getResponseDeadline()).thenReturn(null);
-        when(a.getCancellationReason()).thenReturn(null);
-        when(a.getNote()).thenReturn(null);
-        when(a.getLocation()).thenReturn("Room 101");
-        return a;
-    }
+    @Test
+    void utc221_review_approved_appointmentSaved() {
+        CustomUserDetails ud = reviewer();
+        Claim c = givenReviewClaim("PENDING", user7, 0L);
+        when(invitations.send(30L)).thenReturn(true);
+        OffsetDateTime at = OffsetDateTime.now().plusDays(1);
 
-    @SuppressWarnings({"unchecked"})
-    private void setupLockedClaimForReview(long claimId, String claimStatus, Account claimant, Account approver,
-                                            Post post, long version) {
-        long pid = post.getId();
-        when(claims.findPostId(claimId)).thenReturn(Optional.of(pid));
-        when(posts.findForClaimUpdate(post.getId())).thenReturn(Optional.of(post));
-        doNothing().when(em).refresh(any(), any(LockModeType.class));
+        ReviewResult result = service.review(30L, approve(at, " Room 101 ", null), ud);
 
-        Claim c = makeClaim(claimId, "OFFICE", claimStatus, claimant, approver, post, version);
-        when(claims.findForUpdate(claimId)).thenReturn(Optional.of(c));
-
-        // Post receipt eligible check
-        ItemReceipt receipt = makeReceipt("IN_STORAGE", "ACCEPTED", true);
-        when(receipts.findByPostId(post.getId())).thenReturn(Optional.of(receipt));
+        assertThat(result).isEqualTo(new ReviewResult(30L, "APPROVED", "SENT"));
+        assertThat(c.getStatus()).isEqualTo("APPROVED");
+        assertThat(c.getClaimantEmail()).isEqualTo("user7@example.com");
+        ArgumentCaptor<Appointment> appt = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointments).save(appt.capture());
+        assertThat(appt.getValue().getLocation()).isEqualTo("Room 101");
+        assertThat(appt.getValue().getScheduledAt()).isEqualTo(at);
+        verify(invitations).validatePickupSchedule(eq(at), any());
+        verify(c.getPost()).reserveForClaim();
+        ArgumentCaptor<ClaimActivity> activity = ArgumentCaptor.forClass(ClaimActivity.class);
+        verify(activities).save(activity.capture());
+        assertThat(activity.getValue().getAction()).isEqualTo("APPROVE");
+        verify(notifications).notifyUser(eq(7L), eq("APPOINTMENT_SCHEDULED"), anyString(), contains("Room 101"),
+                eq("/van-phong/claims/30"), eq(false));
     }
 
     @Test
-    void utc232_review_approved_appointmentSaved() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc222_review_scheduledAtInPast_throwsBadRequest() {
+        CustomUserDetails ud = reviewer();
+        givenReviewClaim("PENDING", user7, 0L);
+        OfficeAppointmentSchedule schedule = new OfficeAppointmentSchedule("");
+        doAnswer(inv -> {
+            schedule.validatePickup(inv.getArgument(0), inv.getArgument(1));
+            return null;
+        }).when(invitations).validatePickupSchedule(any(), any());
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                TransactionCallback<?> cb = inv.getArgument(0);
-
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-
-                Claim c = claims.findForUpdate(30L).get();
-                // Approver != claimant check OK
-                // version check: expectedVersion 0 == claim version 0
-                // existing approved check: none
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-
-                OffsetDateTime future = OffsetDateTime.now().plusHours(13).plusMinutes(5);
-                // Email valid: claimant has email
-                when(validator.validate(any())).thenReturn(Set.of());
-
-                Appointment appt = makeAppointment(1L, "SCHEDULED", future, 30L);
-                when(appointments.save(any())).thenReturn(appt);
-                when(activities.save(any())).thenReturn(null);
-
-                // invitations.send called outside transaction
-                when(invitations.send(30L)).thenReturn(true);
-
-                // return Committed(30, "APPROVED", true)
-                // We simulate it by returning from execute
-                return null; // Not the real committed; we test via invitations.send
-            });
-        })) {
-            OffsetDateTime scheduledAt = OffsetDateTime.now().plusHours(13).plusMinutes(5);
-            Decision req = new Decision("APPROVED", "OK", 0L, scheduledAt, " Room 101 ",
-                    null, null);
-
-            // Expect no exception - full flow not easily assertable without real TX
-            // The key behaviors: invitations.send is called; result has APPROVED
-            // We cover this symbolically since we can't run real TX in Mockito
-            // We verify at least the service was constructed correctly
-            assertThat(service).isNotNull();
-        }
+        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().minusHours(1), "Room 101", null), ud),
+                "Vui lòng chọn giờ hẹn sau thời điểm hiện tại.");
+        assertNoApprovalSaved();
+        verify(invitations, never()).send(anyLong());
     }
 
     @Test
-    void utc233_review_scheduledAtTooSoon_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc223_review_scheduledAt12h2min_accepted() {
+        CustomUserDetails ud = reviewer();
+        givenReviewClaim("PENDING", user7, 0L);
+        when(invitations.send(30L)).thenReturn(true);
+        OffsetDateTime at = OffsetDateTime.now().plusHours(12).plusMinutes(2);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                // scheduledAt within 12h => throw
-                throw new AppException(ErrorCode.BAD_REQUEST, "Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
-            });
-        })) {
-            OffsetDateTime tooSoon = OffsetDateTime.now().plusHours(12); // exactly 12h, not past 12h+1m
-            Decision req = new Decision("APPROVED", "OK", 0L, tooSoon, "Room 101", null, null);
+        ReviewResult result = service.review(30L, approve(at, "Room 101", null), ud);
 
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("12 giờ");
-        }
+        assertThat(result.status()).isEqualTo("APPROVED");
+        verify(invitations).validatePickupSchedule(eq(at), any());
+        verify(appointments).save(any(Appointment.class));
     }
 
     @Test
-    void utc234_review_scheduledAt12h2min_accepted() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc224_review_scheduledAtNull_approvesWithoutAppointment() {
+        CustomUserDetails ud = reviewer();
+        Claim c = givenReviewClaim("PENDING", user7, 0L);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                when(validator.validate(any())).thenReturn(Set.of());
-                Appointment appt = makeAppointment(1L, "SCHEDULED", OffsetDateTime.now().plusHours(13), 30L);
-                when(appointments.save(any())).thenReturn(appt);
-                when(activities.save(any())).thenReturn(null);
-                // Simulate committed result
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-            when(invitations.send(anyLong())).thenReturn(true);
-        })) {
-            OffsetDateTime scheduledAt = OffsetDateTime.now().plusHours(12).plusMinutes(2);
-            Decision req = new Decision("APPROVED", "OK", 0L, scheduledAt, "Room 101", null, null);
+        ReviewResult result = service.review(30L, approve(null, "Room 101", null), ud);
 
-            // Should not throw
-            assertDoesNotThrow(() -> service.review(30L, req, ud));
-        }
+        assertThat(result).isEqualTo(new ReviewResult(30L, "APPROVED", "NOT_REQUIRED"));
+        verify(c.getPost()).reserveForClaim();
+        verify(invitations, never()).validatePickupSchedule(any(), any());
+        verify(appointments, never()).save(any());
+        verify(invitations, never()).send(anyLong());
+        verify(notifications).notifyUser(eq(7L), eq("CLAIM_APPROVED"), anyString(), anyString(),
+                eq("/van-phong/claims/30"), eq(false));
     }
 
     @Test
-    void utc235_review_scheduledAtNull_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc225_review_locationBlank_throwsBadRequest() {
+        CustomUserDetails ud = reviewer();
+        givenReviewClaim("PENDING", user7, 0L);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                throw new AppException(ErrorCode.BAD_REQUEST, "Chọn giờ hẹn sau ít nhất 12 giờ và 1 phút để dành đủ thời gian phản hồi.");
-            });
-        })) {
-            Decision req = new Decision("APPROVED", "OK", 0L, null, "Room 101", null, null);
-
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-        }
+        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().plusDays(1), "  ", null), ud),
+                "Nhập địa điểm nhận đồ.");
+        assertNoApprovalSaved();
     }
 
     @Test
-    void utc236_review_locationBlank_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc226_review_noClaimantEmailAndEmptyParam_throwsBadRequest() {
+        CustomUserDetails ud = reviewer();
+        Account noEmail = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
+        noEmail.setEmail(null);
+        givenReviewClaim("PENDING", noEmail, 0L);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                throw new AppException(ErrorCode.BAD_REQUEST, "Nhập địa điểm nhận đồ.");
-            });
-        })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "  ", null, null);
-
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("địa điểm");
-        }
+        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().plusDays(1), "Room 101", ""), ud),
+                "Cần email hợp lệ của người nhận để gửi lịch hẹn.");
+        assertNoApprovalSaved();
     }
 
     @Test
-    void utc237_review_noClaimantEmailAndEmptyParam_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc227_review_invalidEmailParam_throwsBadRequest() {
+        CustomUserDetails ud = reviewer();
+        givenReviewClaim("PENDING", user7, 0L);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                // Claim with no claimant email and no email param
-                Account claimantNoEmail = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-                claimantNoEmail.setEmail(null);
-                setupLockedClaimForReview(30L, "PENDING", claimantNoEmail, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                // validator rejects null/blank email
-                Set<ConstraintViolation<?>> violations = Set.of(mock(ConstraintViolation.class));
-                doReturn(violations).when(validator).validate(any());
-                throw new AppException(ErrorCode.BAD_REQUEST, "Cần email hợp lệ của người nhận để gửi lịch hẹn.");
-            });
-        })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "Room 101", "", null);
-
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("email");
-        }
+        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().plusDays(1), "Room 101", "not-an-email"), ud),
+                "Cần email hợp lệ của người nhận để gửi lịch hẹn.");
+        assertNoApprovalSaved();
     }
 
     @Test
-    void utc238_review_invalidEmailParam_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc228_review_rejected_notifiesClaimant() {
+        CustomUserDetails ud = reviewer();
+        Claim c = givenReviewClaim("PENDING", user7, 0L);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                Set<ConstraintViolation<?>> violations = Set.of(mock(ConstraintViolation.class));
-                doReturn(violations).when(validator).validate(any());
-                throw new AppException(ErrorCode.BAD_REQUEST, "Cần email hợp lệ của người nhận để gửi lịch hẹn.");
-            });
-        })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "Room 101", "not-an-email", null);
+        ReviewResult result = service.review(30L,
+                new Decision("REJECTED", "Evidence mismatch", 0L, null, null, null, null), ud);
 
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-        }
+        assertThat(result).isEqualTo(new ReviewResult(30L, "REJECTED", "NOT_REQUIRED"));
+        verify(c.getPost(), never()).reserveForClaim();
+        ArgumentCaptor<ClaimActivity> activity = ArgumentCaptor.forClass(ClaimActivity.class);
+        verify(activities).save(activity.capture());
+        assertThat(activity.getValue().getAction()).isEqualTo("REJECT");
+        verify(notifications).notifyUser(eq(7L), eq("CLAIM_REJECTED"), anyString(), contains("Evidence mismatch"),
+                eq("/van-phong/claims/30"), eq(true));
+        verify(invitations, never()).send(anyLong());
     }
 
     @Test
-    void utc239_review_rejected_notifiesClaimant() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(activities.save(any())).thenReturn(null);
-                // Returns Committed(30, "REJECTED", false)
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-        })) {
-            Decision req = new Decision("REJECTED", "Evidence mismatch", 0L, null, null, null, null);
-            // Should not throw; delivery = NOT_REQUIRED since no sendInvitation
-            // We only check the service call does not throw
-            assertDoesNotThrow(() -> service.review(30L, req, ud));
-        }
-    }
-
-    @Test
-    void utc240_review_needsInfoDecision_rejectedAsInvalid() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
+    void utc229_review_needsInfoDecision_rejectedAsInvalid() {
+        CustomUserDetails ud = new CustomUserDetails(approver);
         Decision req = new Decision("NEEDS_INFO", "Send receipt photo", 0L, null, null, null, null);
 
-        AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-        assertThat(ex.getMessage()).contains("Quyết định xét duyệt không hợp lệ");
+        assertBad(() -> service.review(30L, req, ud), "Quyết định xét duyệt không hợp lệ");
         verifyNoInteractions(activities);
     }
 
     @Test
-    void utc241_review_legacyNeedsInfoClaimApproveDecision_throwsAlreadyProcessed() {
-        assertLegacyNeedsInfoClaimRefused(new Decision("APPROVED", "OK", 0L,
-                OffsetDateTime.now().plusHours(13), "Room 101", null, null));
+    void utc230_review_claimAlreadyApproved_throwsBadRequest() {
+        CustomUserDetails ud = reviewer();
+        givenReviewClaim("APPROVED", user7, 0L);
+
+        assertBad(() -> service.review(30L, new Decision("REJECTED", "X", 0L, null, null, null, null), ud),
+                "Hồ sơ này đã được xử lý. Hãy tải lại.");
+        assertNoApprovalSaved();
     }
 
     @Test
-    void utc242_review_legacyNeedsInfoClaimRejectDecision_throwsAlreadyProcessed() {
-        assertLegacyNeedsInfoClaimRefused(new Decision("REJECTED", "Evidence mismatch", 0L, null, null, null, null));
-    }
+    void utc231_review_approverIsClaimant_throwsBadRequest() {
+        CustomUserDetails ud = reviewer();
+        givenReviewClaim("PENDING", approver, 0L);
 
-    private void assertLegacyNeedsInfoClaimRefused(Decision req) {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "NEEDS_INFO", claimant, approver, post, 0L);
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-        })) {
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("đã được xử lý");
-            verifyNoInteractions(activities);
-        }
+        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().plusDays(1), "Room 101", null), ud),
+                "Không được tự xét duyệt hồ sơ nhận đồ của mình.");
+        assertNoApprovalSaved();
     }
 
     @Test
-    void utc243_review_claimAlreadyApproved_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc232_review_anotherClaimAlreadyApproved_throwsBadRequest() {
+        CustomUserDetails ud = reviewer();
+        Claim c = givenReviewClaim("PENDING", user7, 0L);
+        when(claims.existsByPost_IdAndStatusIn(100L, List.of("APPROVED"))).thenReturn(true);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "APPROVED", claimant, approver, post, 0L);
-                // Not PENDING or NEEDS_INFO
-                throw new AppException(ErrorCode.BAD_REQUEST, "Hồ sơ này đã được xử lý. Hãy tải lại.");
-            });
-        })) {
-            Decision req = new Decision("REJECTED", "X", 0L, null, null, null, null);
-
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("đã được xử lý");
-        }
+        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().plusDays(1), "Room 101", null), ud),
+                "Đồ vật đã có yêu cầu được duyệt.");
+        verify(c.getPost(), never()).reserveForClaim();
+        assertNoApprovalSaved();
     }
 
     @Test
-    void utc244_review_approverIsClaimant_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc233_review_versionMismatch_throwsClaimStale() {
+        CustomUserDetails ud = reviewer();
+        givenReviewClaim("PENDING", user7, 1L);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                // Approver is also the claimant
-                setupLockedClaimForReview(30L, "PENDING", approver, approver, post, 0L);
-                throw new AppException(ErrorCode.BAD_REQUEST, "Không được tự xét duyệt hồ sơ nhận đồ của mình.");
-            });
-        })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "Room 101", null, null);
-
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("tự xét duyệt");
-        }
+        AppException ex = assertThrows(AppException.class,
+                () -> service.review(30L, new Decision("REJECTED", "X", 0L, null, null, null, null), ud));
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_STALE);
+        assertNoApprovalSaved();
     }
 
     @Test
-    void utc245_review_anotherClaimAlreadyApproved_throwsBadRequest() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc234_review_invitationSendReturnsFalse_deliveryFailed() {
+        CustomUserDetails ud = reviewer();
+        Claim c = givenReviewClaim("PENDING", user7, 0L);
+        when(invitations.send(30L)).thenReturn(false);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                // Another claim is APPROVED for this post
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(true);
-                throw new AppException(ErrorCode.BAD_REQUEST, "Đồ vật đã có yêu cầu được duyệt.");
-            });
-        })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "Room 101", null, null);
+        ReviewResult result = service.review(30L, approve(OffsetDateTime.now().plusDays(1), "Room 101", null), ud);
 
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST);
-            assertThat(ex.getMessage()).contains("đã có yêu cầu được duyệt");
-        }
+        assertThat(result).isEqualTo(new ReviewResult(30L, "APPROVED", "FAILED"));
+        assertThat(c.getStatus()).isEqualTo("APPROVED");
+        verify(appointments).save(any(Appointment.class));
     }
 
     @Test
-    void utc246_review_versionMismatch_throwsClaimStale() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc235_review_invitationSendThrows_deliveryFailedNoException() {
+        CustomUserDetails ud = reviewer();
+        Claim c = givenReviewClaim("PENDING", user7, 0L);
+        when(invitations.send(30L)).thenThrow(new RuntimeException("SMTP down"));
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                // Claim has version=1, expectedVersion=0 => stale
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 1L);
-                throw new AppException(ErrorCode.CLAIM_STALE);
-            });
-        })) {
-            Decision req = new Decision("REJECTED", "X", 0L, null, null, null, null); // expectedVersion=0
+        ReviewResult result = service.review(30L, approve(OffsetDateTime.now().plusDays(1), "Room 101", null), ud);
 
-            AppException ex = assertThrows(AppException.class, () -> service.review(30L, req, ud));
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CLAIM_STALE);
-        }
+        assertThat(result).isEqualTo(new ReviewResult(30L, "APPROVED", "FAILED"));
+        assertThat(c.getStatus()).isEqualTo("APPROVED");
     }
 
     @Test
-    void utc247_review_invitationSendReturnsFalse_deliveryFailed() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
+    void utc236_review_counterClaimNullClaimant_noNotification() {
+        CustomUserDetails ud = reviewer();
+        Claim c = givenReviewClaim("PENDING", null, 0L);
 
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                when(validator.validate(any())).thenReturn(Set.of());
-                Appointment appt = makeAppointment(1L, "SCHEDULED", OffsetDateTime.now().plusHours(13), 30L);
-                when(appointments.save(any())).thenReturn(appt);
-                when(activities.save(any())).thenReturn(null);
-                // We can't return the actual Committed because it's a private class
-                // The test at service level - we simulate committed.sendInvitation()=true
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-            when(invitations.send(anyLong())).thenReturn(false);
-        })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "Room 101", null, null);
+        ReviewResult result = service.review(30L, new Decision("REJECTED", "X", 0L, null, null, null, null), ud);
 
-            // The service continues despite delivery failure
-            assertDoesNotThrow(() -> service.review(30L, req, ud));
-        }
+        assertThat(result.status()).isEqualTo("REJECTED");
+        assertThat(c.getStatus()).isEqualTo("REJECTED");
+        verify(activities).save(any(ClaimActivity.class));
+        verifyNoInteractions(notifications);
     }
-
-    @Test
-    void utc248_review_invitationSendThrows_deliveryFailedNoException() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Account claimant = makeAccount(7L, AccountRole.USER, AccountStatus.ACTIVE);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                setupLockedClaimForReview(30L, "PENDING", claimant, approver, post, 0L);
-                when(claims.existsByPost_IdAndStatusIn(eq(100L), any())).thenReturn(false);
-                when(validator.validate(any())).thenReturn(Set.of());
-                Appointment appt = makeAppointment(1L, "SCHEDULED", OffsetDateTime.now().plusHours(13), 30L);
-                when(appointments.save(any())).thenReturn(appt);
-                when(activities.save(any())).thenReturn(null);
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-            when(invitations.send(anyLong())).thenThrow(new RuntimeException("SMTP down"));
-        })) {
-            OffsetDateTime future = OffsetDateTime.now().plusHours(13);
-            Decision req = new Decision("APPROVED", "OK", 0L, future, "Room 101", null, null);
-
-            // Service must NOT propagate the mail failure
-            assertDoesNotThrow(() -> service.review(30L, req, ud));
-        }
-    }
-
-    @Test
-    void utc249_review_counterClaimNullClaimant_noNotification() {
-        Account approver = makeAccount(2L, AccountRole.APPROVER, AccountStatus.ACTIVE);
-        CustomUserDetails ud = userDetails(approver);
-        Post post = makePost(100L, "FOUND", "OFFICE", "OPEN", "VISIBLE", makeAccount(99L, AccountRole.USER, AccountStatus.ACTIVE));
-
-        try (var mocked = mockConstruction(TransactionTemplate.class, (mock, ctx) -> {
-            when(mock.execute(any())).thenAnswer(inv -> {
-                when(access.require(ud, AccountRole.APPROVER)).thenReturn(approver);
-                // Counter claim: claimant = null
-                setupLockedClaimForReview(30L, "PENDING", null, approver, post, 0L);
-                when(activities.save(any())).thenReturn(null);
-                TransactionCallback<?> action = inv.getArgument(0);
-                return action.doInTransaction(mock(TransactionStatus.class));
-            });
-        })) {
-            Decision req = new Decision("REJECTED", "X", 0L, null, null, null, null);
-            // No notification should be sent when claimant is null
-            assertDoesNotThrow(() -> service.review(30L, req, ud));
-            verifyNoInteractions(notifications);
-        }
-    }
-
-    // ─── resend ────────────────────────────────────────────────────────────────
-
-    // ─── supplement ────────────────────────────────────────────────────────────
-
 }

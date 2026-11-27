@@ -6,7 +6,7 @@ import com.example.base.entity.AccountStatus;
 import com.example.base.entity.OtpChallenge;
 import com.example.base.entity.OtpPurpose;
 import com.example.base.entity.RefreshToken;
-import com.example.base.integration.ScenarioTestBase;
+import com.example.base.integration.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Only flows that need the real stack (DB, security filter, mail, several requests in a row).
  * Pure input validation (blank / bad e-mail, password format boundaries) is covered by Report-5.1 (Auth/Account UTC).
  */
-class AuthScenarioIntegrationTest extends ScenarioTestBase {
+class AuthIntegrationTest extends IntegrationTestBase {
 
     static final String MSG_LOCK_5 = "Tài khoản đã bị khóa do nhập sai mật khẩu 5 lần liên tiếp.";
     static final String MSG_SUSPENDED = "Tài khoản đang bị đình chỉ. Liên hệ văn phòng để được hỗ trợ.";

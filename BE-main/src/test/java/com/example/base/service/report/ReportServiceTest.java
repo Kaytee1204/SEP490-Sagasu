@@ -118,7 +118,7 @@ class ReportServiceTest {
     // ---------- create ----------
 
     @Test
-    void utc276_create_visiblePost_createsReportAndNotifiesManagers() {
+    void utc263_create_visiblePost_createsReportAndNotifiesManagers() {
         Post p0 = post("VISIBLE", 99L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
 
         ReportService.Detail d = service.create(submit("POST", 10L, " Scam post "), files, user);
@@ -141,45 +141,45 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc277_create_nullRequest_invalid() {
+    void utc264_create_nullRequest_invalid() {
         assertCode(() -> service.create(null, files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test
-    void utc278_create_unknownTargetType_invalid() {
+    void utc265_create_unknownTargetType_invalid() {
         assertCode(() -> service.create(submit("COMMENT", 10L, "x"), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test
-    void utc279_create_targetIdZero_invalid() {
+    void utc266_create_targetIdZero_invalid() {
         assertCode(() -> service.create(submit("POST", 0L, "x"), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test
-    void utc280_create_description4801Chars_invalid() {
+    void utc267_create_description4801Chars_invalid() {
         assertCode(() -> service.create(submit("POST", 10L, "a".repeat(4801)), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test
-    void utc281_create_nullClientRequestId_invalid() {
+    void utc268_create_nullClientRequestId_invalid() {
         assertCode(() -> service.create(new ReportService.Submit("POST", 10L, "x", null, REASON), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test
-    void utc282_create_deletedPost_targetUnavailable() {
+    void utc269_create_deletedPost_targetUnavailable() {
         Post p0 = post("VISIBLE", 99L, true); when(em.find(Post.class, 10L)).thenReturn(p0);
         assertCode(() -> service.create(submit("POST", 10L, "x"), files, user), ErrorCode.REPORT_TARGET_UNAVAILABLE);
         verify(images, never()).upload(anyString(), any());
     }
 
     @Test
-    void utc283_create_pendingPostOfOtherUser_targetUnavailable() {
+    void utc270_create_pendingPostOfOtherUser_targetUnavailable() {
         Post p0 = post("PENDING", 99L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
         assertCode(() -> service.create(submit("POST", 10L, "x"), files, user), ErrorCode.REPORT_TARGET_UNAVAILABLE);
     }
 
     @Test
-    void utc284_create_p2pClaimReport_targetUnavailable() {
+    void utc271_create_p2pClaimReport_targetUnavailable() {
         Claim c = claim(7L);
         when(em.find(Claim.class, 20L)).thenReturn(c);
 
@@ -188,7 +188,7 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc292_create_claimWithOfficeHandover_kindHandoverIssue() {
+    void utc278_create_claimWithOfficeHandover_kindHandoverIssue() {
         Claim c0 = claim(7L); when(em.find(Claim.class, 20L)).thenReturn(c0);
         when(c0.isOffice()).thenReturn(true);
         when(jdbc.query(contains("completion_method='RECIPIENT'"), any(RowMapper.class), eq(20L), eq(7L)))
@@ -202,7 +202,7 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc285_create_claimUnrelatedReporter_targetUnavailable() {
+    void utc272_create_claimUnrelatedReporter_targetUnavailable() {
         Claim c = claim(55L);
         when(em.find(Claim.class, 20L)).thenReturn(c);
         when(claimPolicy.reviewer(eq(c), any())).thenReturn(false);
@@ -210,17 +210,17 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc286_create_messageReportsAreRetired() {
+    void utc273_create_messageReportsAreRetired() {
         assertCode(() -> service.create(submit("MESSAGE", 30L, "x"), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test
-    void utc287_create_accountReportsAreRetired() {
+    void utc274_create_accountReportsAreRetired() {
         assertCode(() -> service.create(submit("USER", 8L, "spam"), files, user), ErrorCode.WORKFLOW_INPUT_INVALID);
     }
 
     @Test
-    void utc289_create_openReportExists_duplicateAndImagesCleaned() {
+    void utc275_create_openReportExists_duplicateAndImagesCleaned() {
         Post p0 = post("VISIBLE", 99L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
         when(jdbc.queryForObject(contains("from report where reporter_id"), eq(Long.class), any(), any())).thenReturn(1L);
 
@@ -229,7 +229,7 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc290_create_sameRequestSameHash_returnsExistingWithoutUpload() {
+    void utc276_create_sameRequestSameHash_returnsExistingWithoutUpload() {
         Report old = withId(new Report(7L, "GENERAL", "POST", 10L, "x", reqId, "hash-1"), 55L);
         when(reports.findByReporterIdAndClientRequestId(7L, reqId)).thenReturn(Optional.of(old));
 
@@ -238,7 +238,7 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc291_create_sameRequestDifferentPayload_duplicatePayload() {
+    void utc277_create_sameRequestDifferentPayload_duplicatePayload() {
         Report old = withId(new Report(7L, "GENERAL", "POST", 10L, "x", reqId, "other-hash"), 55L);
         when(reports.findByReporterIdAndClientRequestId(7L, reqId)).thenReturn(Optional.of(old));
 
@@ -250,30 +250,30 @@ class ReportServiceTest {
     // ---------- reason codes (added after report-reason feature) ----------
 
     @Test
-    void utc293_create_nullReasonCode_reasonInvalid() {
+    void utc279_create_nullReasonCode_reasonInvalid() {
         assertCode(() -> service.create(new ReportService.Submit("POST", 10L, "x", reqId, null), files, user), ErrorCode.REPORT_REASON_INVALID);
     }
 
     @Test
-    void utc294_create_reasonCode65Chars_reasonInvalid() {
+    void utc280_create_reasonCode65Chars_reasonInvalid() {
         assertCode(() -> service.create(new ReportService.Submit("POST", 10L, "x", reqId, "R".repeat(65)), files, user), ErrorCode.REPORT_REASON_INVALID);
     }
 
     @Test
-    void utc295_create_ownPost_selfPostNotAllowed() {
+    void utc281_create_ownPost_selfPostNotAllowed() {
         Post p0 = post("VISIBLE", 7L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
         assertCode(() -> service.create(submit("POST", 10L, "x"), files, user), ErrorCode.REPORT_SELF_POST_NOT_ALLOWED);
         verify(images, never()).upload(anyString(), any());
     }
 
     @Test
-    void utc296_create_description4800Chars_accepted() {
+    void utc282_create_description4800Chars_accepted() {
         Post p0 = post("VISIBLE", 99L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
         assertThat(service.create(submit("POST", 10L, "a".repeat(4800)), files, user).id()).isEqualTo(100L);
     }
 
     @Test
-    void utc297_create_nullDescription_savesReasonLabelOnly() {
+    void utc283_create_nullDescription_savesReasonLabelOnly() {
         Post p0 = post("VISIBLE", 99L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
 
         ReportService.Detail d = service.create(submit("POST", 10L, null), files, user);
@@ -285,7 +285,7 @@ class ReportServiceTest {
     }
 
     @Test
-    void utc298_create_reasonNotInGroup_reasonInvalid() {
+    void utc284_create_reasonNotInGroup_reasonInvalid() {
         Post p0 = post("VISIBLE", 99L, false); when(em.find(Post.class, 10L)).thenReturn(p0);
         when(reasons.require("POST", REASON, "x")).thenThrow(new AppException(ErrorCode.REPORT_REASON_INVALID));
         assertCode(() -> service.create(submit("POST", 10L, "x"), files, user), ErrorCode.REPORT_REASON_INVALID);

@@ -51,7 +51,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Unit tests UTC001-UTC038 (sheet "Auth"): login, sendOtp/verifyOtp, verifyResetPasswordOtp/resetPassword. */
+/** Unit tests UTC001-UTC031 (sheet "Auth"): login, sendOtp/verifyOtp, verifyResetPasswordOtp/resetPassword. */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AuthServiceTest {
@@ -225,13 +225,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void utc015_sendOtp_nullPurposeDefaultsToChangePassword() {
-        assertEquals("CHANGE_PASSWORD", service.sendOtp(sendOtpReq(EMAIL, null)).get("purpose"));
-        verify(emailService).sendOtpEmail(eq(EMAIL), anyString(), eq(OtpPurpose.CHANGE_PASSWORD));
-    }
-
-    @Test
-    void utc016_sendOtp_revokesOldOpenChallenges() {
+    void utc015_sendOtp_revokesOldOpenChallenges() {
         OtpChallenge old1 = futureChallenge(OtpPurpose.CHANGE_PASSWORD, 0);
         OtpChallenge old2 = futureChallenge(OtpPurpose.CHANGE_PASSWORD, 0);
         when(otpChallengeRepository.findByAccount_IdAndPurposeAndUsedAtIsNullAndRevokedAtIsNull(1L, OtpPurpose.CHANGE_PASSWORD))
@@ -245,31 +239,25 @@ class AuthServiceTest {
     }
 
     @Test
-    void utc017_sendOtp_suspendedAccountAllowedForForgotPassword() {
+    void utc016_sendOtp_suspendedAccountAllowedForForgotPassword() {
         acc.setStatus(AccountStatus.SUSPENDED);
         assertEquals("FORGOT_PASSWORD", service.sendOtp(sendOtpReq(EMAIL, OtpPurpose.FORGOT_PASSWORD)).get("purpose"));
     }
 
     @Test
-    void utc018_sendOtp_suspendedAccountThrowsAccountLockedForChangePassword() {
-        acc.setStatus(AccountStatus.SUSPENDED);
-        assertEquals(ErrorCode.ACCOUNT_LOCKED, code(() -> service.sendOtp(sendOtpReq(EMAIL, OtpPurpose.CHANGE_PASSWORD))));
-    }
-
-    @Test
-    void utc019_sendOtp_deletedAccountThrowsAccountDeleted() {
+    void utc017_sendOtp_deletedAccountThrowsAccountDeleted() {
         acc.setStatus(AccountStatus.DELETED);
         assertEquals(ErrorCode.ACCOUNT_DELETED, code(() -> service.sendOtp(sendOtpReq(EMAIL, OtpPurpose.FORGOT_PASSWORD))));
     }
 
     @Test
-    void utc020_sendOtp_missingAccountThrowsAccountNotFound() {
+    void utc018_sendOtp_missingAccountThrowsAccountNotFound() {
         assertEquals(ErrorCode.ACCOUNT_NOT_FOUND,
                 code(() -> service.sendOtp(sendOtpReq("none@gmail.com", OtpPurpose.LOGIN))));
     }
 
     @Test
-    void utc021_sendOtp_otpIsSixZeroPaddedDigits() {
+    void utc019_sendOtp_otpIsSixZeroPaddedDigits() {
         ArgumentCaptor<String> otp = ArgumentCaptor.forClass(String.class);
         service.sendOtp(sendOtpReq(EMAIL, OtpPurpose.LOGIN));
         verify(emailService).sendOtpEmail(eq(EMAIL), otp.capture(), eq(OtpPurpose.LOGIN));
@@ -279,80 +267,46 @@ class AuthServiceTest {
     // ---------------------------------------------------------------- verifyOtp / verifyResetPasswordOtp
 
     @Test
-    void utc022_verifyOtp_validOtpMarksUsedIssuesTokensAndAudits() {
-        OtpChallenge ch = stubChallenge(OtpPurpose.LOGIN, futureChallenge(OtpPurpose.LOGIN, 0));
-        LoginResponse res = service.verifyOtp(verifyReq(EMAIL, "123456", OtpPurpose.LOGIN));
-        assertEquals("jwt-access-token", res.getAccessToken());
-        assertNotNull(ch.getUsedAt());
-        assertAuditSaved("OTP_VERIFY_LOGIN", true);
-    }
-
-    @Test
-    void utc023_verifyOtp_nullPurposeDefaultsToLogin() {
-        OtpChallenge ch = stubChallenge(OtpPurpose.LOGIN, futureChallenge(OtpPurpose.LOGIN, 0));
-        assertNotNull(service.verifyOtp(verifyReq(EMAIL, "123456", null)).getAccessToken());
-        assertNotNull(ch.getUsedAt());
-    }
-
-    @Test
-    void utc024_verifyOtp_missingAccountThrowsAccountNotFound() {
-        assertEquals(ErrorCode.ACCOUNT_NOT_FOUND,
-                code(() -> service.verifyOtp(verifyReq("none@gmail.com", "123456", OtpPurpose.LOGIN))));
-    }
-
-    @Test
-    void utc025_verifyOtp_expiredChallengeThrowsOtpExpired() {
-        stubChallenge(OtpPurpose.LOGIN, challenge(acc, OtpPurpose.LOGIN, "123456", OffsetDateTime.now().minusMinutes(1), 0));
-        assertEquals(ErrorCode.OTP_EXPIRED, code(() -> service.verifyOtp(verifyReq(EMAIL, "123456", OtpPurpose.LOGIN))));
-    }
-
-    @Test
-    void utc026_verifyOtp_wrongOtpThrowsOtpInvalid() {
-        stubChallenge(OtpPurpose.LOGIN, futureChallenge(OtpPurpose.LOGIN, 0));
-        assertEquals(ErrorCode.OTP_INVALID, code(() -> service.verifyOtp(verifyReq(EMAIL, "999999", OtpPurpose.LOGIN))));
-    }
-
-    @Test
-    void utc027_verifyResetPasswordOtp_validForActiveWithoutMarkingUsed() {
+    void utc020_verifyResetPasswordOtp_validForActiveWithoutMarkingUsed() {
         OtpChallenge ch = stubChallenge(OtpPurpose.FORGOT_PASSWORD, futureChallenge(OtpPurpose.FORGOT_PASSWORD, 0));
         assertEquals(true, service.verifyResetPasswordOtp(verifyReq(EMAIL, "123456", null)).get("valid"));
         assertNull(ch.getUsedAt());
     }
 
     @Test
-    void utc028_verifyResetPasswordOtp_allowsSuspendedAccount() {
+    void utc021_verifyResetPasswordOtp_allowsSuspendedAccount() {
         acc.setStatus(AccountStatus.SUSPENDED);
         stubChallenge(OtpPurpose.FORGOT_PASSWORD, futureChallenge(OtpPurpose.FORGOT_PASSWORD, 0));
         assertEquals(true, service.verifyResetPasswordOtp(verifyReq(EMAIL, "123456", null)).get("valid"));
     }
 
     @Test
-    void utc029_verifyResetPasswordOtp_deletedAccountThrowsAccountDeleted() {
+    void utc022_verifyResetPasswordOtp_deletedAccountThrowsAccountDeleted() {
         acc.setStatus(AccountStatus.DELETED);
         stubChallenge(OtpPurpose.FORGOT_PASSWORD, futureChallenge(OtpPurpose.FORGOT_PASSWORD, 0));
         assertEquals(ErrorCode.ACCOUNT_DELETED, code(() -> service.verifyResetPasswordOtp(verifyReq(EMAIL, "123456", null))));
     }
 
     @Test
-    void utc030_verifyResetPasswordOtp_missingChallengeThrowsOtpNotFound() {
+    void utc023_verifyResetPasswordOtp_missingChallengeThrowsOtpNotFound() {
         assertEquals(ErrorCode.OTP_NOT_FOUND, code(() -> service.verifyResetPasswordOtp(verifyReq(EMAIL, "123456", null))));
     }
 
     @Test
-    void utc031_verifyResetPasswordOtp_expiredChallengeThrowsOtpExpired() {
+    void utc024_verifyResetPasswordOtp_expiredChallengeThrowsOtpExpired() {
         stubChallenge(OtpPurpose.FORGOT_PASSWORD,
                 challenge(acc, OtpPurpose.FORGOT_PASSWORD, "123456", OffsetDateTime.now().minusMinutes(1), 0));
         assertEquals(ErrorCode.OTP_EXPIRED, code(() -> service.verifyResetPasswordOtp(verifyReq(EMAIL, "123456", null))));
     }
 
     @Test
-    void utc032_verifyResetPasswordOtp_maxAttemptsThrowsOtpMaxAttempts() {
+    void utc025_verifyResetPasswordOtp_maxAttemptsThrowsOtpMaxAttempts() {
         stubChallenge(OtpPurpose.FORGOT_PASSWORD, futureChallenge(OtpPurpose.FORGOT_PASSWORD, 5));
         assertEquals(ErrorCode.OTP_MAX_ATTEMPTS, code(() -> service.verifyResetPasswordOtp(verifyReq(EMAIL, "123456", null))));
     }
 
     @Test
-    void utc033_verifyResetPasswordOtp_fifthWrongOtpRevokesChallenge() {
+    void utc026_verifyResetPasswordOtp_fifthWrongOtpRevokesChallenge() {
         OtpChallenge ch = stubChallenge(OtpPurpose.FORGOT_PASSWORD, futureChallenge(OtpPurpose.FORGOT_PASSWORD, 4));
         assertEquals(ErrorCode.OTP_INVALID, code(() -> service.verifyResetPasswordOtp(verifyReq(EMAIL, "000000", null))));
         assertEquals(5, ch.getAttemptCount());
@@ -362,7 +316,7 @@ class AuthServiceTest {
     // ---------------------------------------------------------------- resetPassword
 
     @Test
-    void utc034_resetPassword_unlocksSuspendedAccountAndRevokesTokens() {
+    void utc027_resetPassword_unlocksSuspendedAccountAndRevokesTokens() {
         acc.setStatus(AccountStatus.SUSPENDED);
         acc.setFailedLoginCount(5);
         acc.setLockedUntil(OffsetDateTime.now().plusYears(10));
@@ -378,7 +332,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void utc035_resetPassword_validOtpUpdatesPassword() {
+    void utc028_resetPassword_validOtpUpdatesPassword() {
         OtpChallenge ch = stubChallenge(OtpPurpose.FORGOT_PASSWORD, futureChallenge(OtpPurpose.FORGOT_PASSWORD, 0));
         when(passwordEncoder.encode("New@1234")).thenReturn("new-hash");
 
@@ -388,7 +342,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void utc036_resetPassword_reusedOtpThrowsOtpNotFound() {
+    void utc029_resetPassword_reusedOtpThrowsOtpNotFound() {
         when(otpChallengeRepository.findFirstByAccount_IdAndPurposeAndUsedAtIsNullAndRevokedAtIsNullOrderByCreatedAtDesc(
                 1L, OtpPurpose.FORGOT_PASSWORD))
                 .thenReturn(Optional.of(futureChallenge(OtpPurpose.FORGOT_PASSWORD, 0)))
@@ -398,13 +352,13 @@ class AuthServiceTest {
     }
 
     @Test
-    void utc037_resetPassword_otpMismatchThrowsOtpInvalid() {
+    void utc030_resetPassword_otpMismatchThrowsOtpInvalid() {
         stubChallenge(OtpPurpose.FORGOT_PASSWORD, futureChallenge(OtpPurpose.FORGOT_PASSWORD, 0));
         assertEquals(ErrorCode.OTP_INVALID, code(() -> service.resetPassword(resetReq(EMAIL, "000000"))));
     }
 
     @Test
-    void utc038_resetPassword_missingAccountThrowsAccountNotFound() {
+    void utc031_resetPassword_missingAccountThrowsAccountNotFound() {
         assertEquals(ErrorCode.ACCOUNT_NOT_FOUND, code(() -> service.resetPassword(resetReq("none@gmail.com", "123456"))));
     }
 

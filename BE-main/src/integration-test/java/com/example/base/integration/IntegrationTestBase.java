@@ -48,7 +48,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
-public abstract class ScenarioTestBase {
+public abstract class IntegrationTestBase {
 
     protected static final String PW = "Test@1234";
     protected static final String NEW_PW = "NewPass@123";

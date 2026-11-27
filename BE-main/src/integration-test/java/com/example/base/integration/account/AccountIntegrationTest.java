@@ -4,7 +4,7 @@ import com.example.base.entity.Account;
 import com.example.base.entity.AccountRole;
 import com.example.base.entity.AccountStatus;
 import com.example.base.entity.RefreshToken;
-import com.example.base.integration.ScenarioTestBase;
+import com.example.base.integration.IntegrationTestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -29,13 +29,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Field validation (phone / password / e-mail format, missing current password, Manager role scope, create with a past date)
  * is covered by Report-5.1 Account UTC039-UTC085.
  */
-class AccountScenarioIntegrationTest extends ScenarioTestBase {
+class AccountIntegrationTest extends IntegrationTestBase {
 
     static final String NEW1 = "sagasunewtest01@gmail.com";
     static final String NEW2 = "sagasunewtest02@gmail.com";
     static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     static final String MSG_DUP = "Email/Tài khoản đã tồn tại trong hệ thống";
-    static final String MSG_SCOPE = "Tài khoản MANAGER chỉ được phép quản lý các tài khoản có role: USER, APPROVER";
+    static final String MSG_SCOPE = "Tài khoản MANAGER chỉ được phép quản lý các tài khoản có role: USER, STAFF";
     static final String MSG_SUSPENDED = "Tài khoản đang bị đình chỉ. Liên hệ văn phòng để được hỗ trợ.";
     static final String MSG_PROFILE_OK = "Cập nhật hồ sơ cá nhân thành công";
     static final String MSG_SAME_PW = "Mật khẩu mới phải khác mật khẩu hiện tại";
@@ -266,7 +266,7 @@ class AccountScenarioIntegrationTest extends ScenarioTestBase {
         login(USER02, PW);
         String t = token(MANAGER01);
         Res d = send(delete("/api/accounts/" + user02.getId()), t, null);
-        expect("Step 2 delete", d, 200, null, "Đã xóa mềm tài khoản thành công");
+        expect("Step 2 delete", d, 200, null, "Đã xóa tài khoản thành công");
         soft.assertThat(accounts.findById(user02.getId())).as("Step 2 row kept").isPresent();
         soft.assertThat(reload(user02).getStatus()).as("Step 2 status").isEqualTo(AccountStatus.DELETED);
         soft.assertThat(activeTokens(user02)).as("Step 2 refresh tokens revoked").isEmpty();
@@ -452,7 +452,7 @@ class AccountScenarioIntegrationTest extends ScenarioTestBase {
         String a = token(ADMIN01);
         long auditBefore = auditLogs.findByAccount_IdOrderByCreatedAtDesc(user02.getId()).size();
         Res before = dashboard(a);
-        expect("Step 1 manager deletes user02", send(delete("/api/accounts/" + user02.getId()), token(MANAGER01), null), 200, null, "Đã xóa mềm tài khoản thành công");
+        expect("Step 1 manager deletes user02", send(delete("/api/accounts/" + user02.getId()), token(MANAGER01), null), 200, null, "Đã xóa tài khoản thành công");
         em.flush();
         em.clear();
         soft.assertThat(posts.findById(p.getId())).as("Step 2 post row kept (GBR-07)").isPresent();

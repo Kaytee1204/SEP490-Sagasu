@@ -152,7 +152,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc250_create_validWithTwoImages_createsDraftAndUploads() {
+    void utc237_create_validWithTwoImages_createsDraftAndUploads() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"), mockFile("2.jpg"));
         when(validator.validate(files)).thenReturn(validImages(2, "jpg"));
         when(receipts.saveAndFlush(any(ItemReceipt.class))).thenAnswer(inv -> {
@@ -168,7 +168,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc251_create_nonEmptyKeptImageIds_throwsBadRequest() {
+    void utc238_create_nonEmptyKeptImageIds_throwsBadRequest() {
         SaveReceiptRequest req = saveReq(List.of(5L), null, 1L, 3L, past);
 
         assertThatThrownBy(() -> service.create(req, List.of(mockFile("1.jpg")), ud(approver)))
@@ -181,7 +181,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc252_create_futureFoundAt_throwsBadRequest() {
+    void utc239_create_futureFoundAt_throwsBadRequest() {
         SaveReceiptRequest req = saveReq(List.of(), null, 1L, 3L, OffsetDateTime.now().plusDays(1));
 
         assertThatThrownBy(() -> service.create(req, List.of(mockFile("1.jpg")), ud(approver)))
@@ -194,7 +194,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc253_create_inactiveCategory_throwsPostCategoryUnavailable() {
+    void utc240_create_inactiveCategory_throwsPostCategoryUnavailable() {
         when(categories.existsByCategoryIdAndActiveTrue(9L)).thenReturn(false);
         SaveReceiptRequest req = saveReq(List.of(), null, 9L, 3L, past);
 
@@ -205,7 +205,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc254_create_zeroImages_throwsBadRequest() {
+    void utc241_create_zeroImages_throwsBadRequest() {
         when(validator.validate(List.of())).thenReturn(List.of());
         SaveReceiptRequest req = saveReq(List.of(), null, 1L, 3L, past);
 
@@ -219,7 +219,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc255_create_oneJpg_accepted() {
+    void utc242_create_oneJpg_accepted() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"));
         when(validator.validate(files)).thenReturn(validImages(1, "jpg"));
         when(receipts.saveAndFlush(any(ItemReceipt.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -230,7 +230,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc256_create_sixImages_throwsImageCountExceeded() {
+    void utc243_create_sixImages_throwsImageCountExceeded() {
         List<MultipartFile> files = Collections.nCopies(6, mockFile("1.jpg"));
         when(validator.validate(files)).thenThrow(new AppException(ErrorCode.IMAGE_COUNT_EXCEEDED));
 
@@ -241,7 +241,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc257_create_inactiveLocation_throwsBadRequestAndCleansUpUploads() {
+    void utc244_create_inactiveLocation_throwsBadRequestAndCleansUpUploads() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"));
         when(validator.validate(files)).thenReturn(validImages(1, "jpg"));
         when(locations.resolve(eq(3L), any())).thenThrow(
@@ -258,7 +258,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc258_create_dbSaveFailsAfterUpload_rethrowsAndCleansUpKeys() {
+    void utc245_create_dbSaveFailsAfterUpload_rethrowsAndCleansUpKeys() {
         List<MultipartFile> files = List.of(mockFile("1.jpg"));
         when(validator.validate(files)).thenReturn(validImages(1, "jpg"));
         when(receipts.saveAndFlush(any())).thenThrow(new RuntimeException("db error"));
@@ -271,7 +271,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc259_submit_validDraft_publishesPostAndMarksReceived() {
+    void utc246_submit_validDraft_publishesPostAndMarksReceived() {
         ItemReceipt r = draftReceipt(3L, 2);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
         Post published = Post.receivedByOffice(approver, activeCat, r.getTitle(), r.getDescription(), r.getFoundLocation(), past);
@@ -287,7 +287,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc260_submit_alreadyPublished_returnsIdempotently() {
+    void utc247_submit_alreadyPublished_returnsIdempotently() {
         ItemReceipt r = draftReceipt(3L, 2);
         r.receiveAndPublish(approver, 99L);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
@@ -299,7 +299,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc261_submit_blankConditionAtReceipt_throwsBadRequest() {
+    void utc248_submit_blankConditionAtReceipt_throwsBadRequest() {
         ItemReceipt r = draftReceipt(3L, 2);
         ReflectionTestUtils.setField(r, "conditionAtReceipt", "   ");
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
@@ -314,7 +314,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc262_submit_nullStorageLocation_throwsBadRequest() {
+    void utc249_submit_nullStorageLocation_throwsBadRequest() {
         ItemReceipt r = draftReceipt(3L, 2);
         ReflectionTestUtils.setField(r, "storageLocation", null);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
@@ -329,7 +329,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc263_submit_allImagesSensitive_throwsBadRequest() {
+    void utc250_submit_allImagesSensitive_throwsBadRequest() {
         ItemReceipt r = draftReceipt(3L, 2);
         for (ItemReceiptImage img : r.getImages()) {
             ReflectionTestUtils.setField(img, "sensitive", true);
@@ -346,7 +346,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc264_submit_categoryDeactivatedMeanwhile_throwsPostCategoryUnavailable() {
+    void utc251_submit_categoryDeactivatedMeanwhile_throwsPostCategoryUnavailable() {
         ItemReceipt r = draftReceipt(3L, 2);
         when(receipts.lockIntake(3L)).thenReturn(Optional.of(r));
         when(categories.findActiveForPostCreation(1L)).thenReturn(Optional.empty());
@@ -358,7 +358,7 @@ class ApproverIntakeServiceTest {
     }
 
     @Test
-    void utc265_submit_approverSuspendedInDb_throwsForbidden() {
+    void utc252_submit_approverSuspendedInDb_throwsForbidden() {
         Account suspendedInDb = account(2L, AccountRole.APPROVER, AccountStatus.SUSPENDED, "Approver 2");
         when(entityManager.find(eq(Account.class), eq(2L), eq(LockModeType.PESSIMISTIC_READ))).thenReturn(suspendedInDb);
 
