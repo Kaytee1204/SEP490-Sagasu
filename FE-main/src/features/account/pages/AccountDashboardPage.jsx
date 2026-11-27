@@ -103,7 +103,7 @@ export default function AccountDashboardPage() {
             <UserCheck size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Đang hoạt động (ACTIVE)</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Đang hoạt động</div>
             <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#059669' }}>{counts.active}</div>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function AccountDashboardPage() {
             <Ban size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Đang tạm khóa (SUSPENDED)</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Đang tạm khóa</div>
             <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ea580c' }}>{counts.suspended}</div>
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function AccountDashboardPage() {
             <Trash2 size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Đã xóa mềm (DELETED)</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Đã xóa</div>
             <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#dc2626' }}>{counts.deleted}</div>
           </div>
         </div>
@@ -152,34 +152,17 @@ export default function AccountDashboardPage() {
           }}
         >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-              <h2
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '1.2rem',
-                  fontWeight: 700,
-                  margin: 0,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                Quản lý Tài khoản Người dùng (Dashboard)
-              </h2>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  background: 'rgba(30,107,107,0.08)',
-                  color: 'var(--teal-700)',
-                  padding: '2px 10px',
-                  borderRadius: '12px',
-                }}
-              >
-                Đang đăng nhập: {user?.email} ({user?.role})
-              </span>
-            </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-              Hiển thị ID tự tăng, Tên, Role, Mail — Hỗ trợ CRUD (Tạo tay, Sửa, Xóa mềm), Import Excel và Phân trang từ Backend
-            </p>
+            <h2
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                margin: 0,
+                color: 'var(--text-primary)',
+              }}
+            >
+              Quản lý Tài khoản
+            </h2>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
@@ -310,7 +293,7 @@ export default function AccountDashboardPage() {
         }
         title={
           confirmTarget?.type === 'delete'
-            ? 'Xóa mềm tài khoản?'
+            ? 'Xóa tài khoản?'
             : confirmTarget?.account?.status === 'SUSPENDED'
               ? 'Mở khóa tài khoản?'
               : 'Tạm khóa tài khoản?'
@@ -318,15 +301,15 @@ export default function AccountDashboardPage() {
         description={
           confirmTarget
             ? confirmTarget.type === 'delete'
-              ? `Bạn có chắc chắn muốn xóa mềm tài khoản #${confirmTarget.account.id} (${confirmTarget.account.email})? Tài khoản này sẽ ngừng truy cập hệ thống.`
+              ? `Bạn có chắc chắn muốn xóa tài khoản ${confirmTarget.account.email}?`
               : confirmTarget.account.status === 'SUSPENDED'
-                ? `Mở khóa để tài khoản #${confirmTarget.account.id} (${confirmTarget.account.email}) có thể đăng nhập và sử dụng hệ thống trở lại.`
-                : `Tài khoản #${confirmTarget.account.id} (${confirmTarget.account.email}) sẽ bị tạm khóa truy cập hệ thống.`
+                ? `Mở khóa để tài khoản ${confirmTarget.account.email} có thể đăng nhập và sử dụng hệ thống trở lại.`
+                : `Tài khoản ${confirmTarget.account.email} sẽ bị tạm khóa truy cập hệ thống.`
             : ''
         }
         confirmLabel={
           confirmTarget?.type === 'delete'
-            ? 'Xác nhận xóa'
+            ? 'Xóa'
             : confirmTarget?.account?.status === 'SUSPENDED'
               ? 'Đồng ý mở khóa'
               : 'Đồng ý khóa'

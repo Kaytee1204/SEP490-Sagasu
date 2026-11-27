@@ -55,7 +55,7 @@ export default function AccountCrudModal({
             color: 'var(--text-primary)',
           }}
         >
-          {isCreate ? 'Thêm tài khoản mới (Lưu vào PostgreSQL)' : `Cập nhật tài khoản #${crudModal.data?.id}`}
+          {isCreate ? 'Thêm tài khoản mới' : 'Cập nhật tài khoản'}
         </h3>
 
         <form onSubmit={submitCrud} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -152,11 +152,11 @@ export default function AccountCrudModal({
                 color: 'var(--text-secondary)',
               }}
             >
-              Số điện thoại Việt Nam (tùy chọn)
+              Số điện thoại
             </label>
             <input
               type="tel"
-              placeholder="VD: 0912345678 hoặc +84912345678"
+              placeholder="VD: 0912345678"
               value={formData.phone || ''}
               onChange={(e) => {
                 if (modalError && setModalError) setModalError('');
@@ -184,15 +184,13 @@ export default function AccountCrudModal({
                 color: 'var(--text-secondary)',
               }}
             >
-              {isCreate
-                ? 'Mật khẩu (8-16 ký tự, có ký tự đặc biệt; để trống tự sinh)'
-                : 'Mật khẩu mới (8-16 ký tự, có ký tự đặc biệt; để trống giữ nguyên)'}
+              {isCreate ? 'Mật khẩu' : 'Mật khẩu mới'}
             </label>
             <input
               type="text"
               minLength={8}
               maxLength={16}
-              placeholder={isCreate ? 'VD: Abc@1234' : 'Nhập mật khẩu mới (8-16 ký tự, có ký tự đặc biệt)'}
+              placeholder={isCreate ? 'Để trống nếu muốn tạo tự động' : 'Để trống nếu giữ nguyên mật khẩu cũ'}
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               style={{
@@ -218,7 +216,7 @@ export default function AccountCrudModal({
                   color: 'var(--text-secondary)',
                 }}
               >
-                Role (Vai trò) {!isPureAdmin && <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>(Chỉ ADMIN được đổi)</span>}
+                Vai trò
               </label>
               <select
                 value={formData.role}
@@ -236,10 +234,10 @@ export default function AccountCrudModal({
                   fontSize: '0.85rem',
                 }}
               >
-                <option value="USER">USER (Sinh viên)</option>
-                <option value="APPROVER">STAFF (Nhân viên tiếp nhận)</option>
-                {isPureAdmin && <option value="MANAGER">MANAGER (Quản lý)</option>}
-                {isPureAdmin && <option value="ADMIN">ADMIN (Quản trị viên)</option>}
+                <option value="USER">USER</option>
+                <option value="APPROVER">STAFF</option>
+                {isPureAdmin && <option value="MANAGER">MANAGER</option>}
+                {isPureAdmin && <option value="ADMIN">ADMIN</option>}
               </select>
             </div>
 
@@ -268,10 +266,10 @@ export default function AccountCrudModal({
                   fontSize: '0.85rem',
                 }}
               >
-                <option value="ACTIVE">ACTIVE (Hoạt động)</option>
-                <option value="SUSPENDED">SUSPENDED (Tạm khóa)</option>
-                <option value="PENDING_ACTIVATION">PENDING_ACTIVATION</option>
-                {!isCreate && <option value="DELETED">DELETED (Đã xóa mềm)</option>}
+                <option value="ACTIVE">Hoạt động</option>
+                <option value="SUSPENDED">Tạm khóa</option>
+                <option value="PENDING_ACTIVATION">Chờ kích hoạt</option>
+                {!isCreate && <option value="DELETED">Đã xóa</option>}
               </select>
             </div>
           </div>

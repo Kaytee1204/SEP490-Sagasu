@@ -10,10 +10,10 @@ const ROLE_STYLES = {
 };
 
 const STATUS_STYLES = {
-  ACTIVE: { bg: '#ecfdf5', color: '#059669', dot: '#10b981', label: 'Hoạt động (ACTIVE)' },
-  SUSPENDED: { bg: '#fff7ed', color: '#ea580c', dot: '#f97316', label: 'Tạm khóa (SUSPENDED)' },
+  ACTIVE: { bg: '#ecfdf5', color: '#059669', dot: '#10b981', label: 'Hoạt động' },
+  SUSPENDED: { bg: '#fff7ed', color: '#ea580c', dot: '#f97316', label: 'Tạm khóa' },
   PENDING_ACTIVATION: { bg: '#eff6ff', color: '#2563eb', dot: '#3b82f6', label: 'Chờ kích hoạt' },
-  DELETED: { bg: '#fef2f2', color: '#dc2626', dot: '#ef4444', label: 'Đã xóa mềm (DELETED)' },
+  DELETED: { bg: '#fef2f2', color: '#dc2626', dot: '#ef4444', label: 'Đã xóa' },
 };
 
 export default function AccountTable({
@@ -26,7 +26,7 @@ export default function AccountTable({
   if (loading) {
     return (
       <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-        Đang tải danh sách tài khoản từ cơ sở dữ liệu...
+        Đang tải danh sách tài khoản...
       </div>
     );
   }
@@ -43,16 +43,16 @@ export default function AccountTable({
               Tên người dùng
             </th>
             <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Role (Vai trò)
+              Vai trò
             </th>
             <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Mail (Email / Gmail)
+              Email
             </th>
             <th style={{ padding: '12px 18px', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Trạng thái
             </th>
             <th style={{ padding: '12px 24px', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>
-              Thao tác CRUD
+              Thao tác
             </th>
           </tr>
         </thead>
@@ -60,7 +60,7 @@ export default function AccountTable({
           {accounts.map((acc) => {
             const roleStyle = ROLE_STYLES[acc.role] || ROLE_STYLES.USER;
             const statusStyle = STATUS_STYLES[acc.status] || STATUS_STYLES.ACTIVE;
-            const displayName = String(acc.fullName || acc.email).replace(/\s*\((Manager|Admin)\)/gi, '');
+            const displayName = String(acc.fullName || acc.email).replace(/\s*\((Manager|Admin|Approver|User|Staff)\)/gi, '').trim();
 
             return (
               <tr
@@ -226,9 +226,9 @@ export default function AccountTable({
                           fontSize: '0.75rem',
                           fontWeight: 600,
                         }}
-                        title="Xóa mềm tài khoản"
+                        title="Xóa tài khoản"
                       >
-                        <Trash2 size={13} /> Xóa mềm
+                        <Trash2 size={13} /> Xóa
                       </button>
                     )}
                   </div>

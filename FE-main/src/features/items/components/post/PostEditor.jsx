@@ -99,7 +99,7 @@ export default function PostEditor({ id, onReload }) {
   }
 
   if(saved)return <main className="container-sm my-posts-page"><h1>Đã lưu bài đăng #{saved.id}</h1>
-    <p role="status">{saved.moderationStatus==='VISIBLE'?'Bài đăng đã được cập nhật và hiển thị.':'Bài đăng đã được gửi lại để Approver duyệt.'}</p>
+    <p role="status">{saved.moderationStatus==='VISIBLE'?'Bài đăng đã được cập nhật và hiển thị.':'Bài đăng đã được gửi lại để Quản lý duyệt.'}</p>
     <div className="my-post-actions"><Link className="btn btn-primary" to={backUrl}>{backLabel}</Link>
       <Link className="btn btn-ghost" to={`/chi-tiet/${id}`} state={{ from: backUrl }}>Xem bài đăng</Link></div></main>;
   const review = form && {

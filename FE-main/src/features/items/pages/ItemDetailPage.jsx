@@ -164,7 +164,7 @@ function PostDetail({ id, onRetry }) {
               </p>}
             </div>
 
-            {post.moderationStatus === 'PENDING' && <p className="post-detail-notice" role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
+            {post.moderationStatus === 'PENDING' && <p className="post-detail-notice" role="status">Bài đăng đang chờ Quản lý duyệt. Chỉ bạn xem được nội dung này.</p>}
 
             <div className="post-detail-actions">
               {canUseSmartMatch && (

@@ -58,7 +58,7 @@ export default function AccountImportModal({
           overflowY: 'auto',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3
             style={{
               fontFamily: 'var(--font-display)',
@@ -68,7 +68,7 @@ export default function AccountImportModal({
               color: 'var(--text-primary)',
             }}
           >
-            Import tài khoản từ file Excel (.xlsx / .xls)
+            Nhập danh sách tài khoản từ Excel
           </h3>
           <button
             type="button"
@@ -78,11 +78,6 @@ export default function AccountImportModal({
             <X size={18} />
           </button>
         </div>
-
-        <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: 1.5 }}>
-          Hỗ trợ file Excel chứa <b>Cột A = email (Gmail)</b>, <b>Cột B = password (Mật khẩu)</b>, tùy chọn{' '}
-          <b>Cột C = full_name (Tên)</b>, <b>Cột D = role</b>.
-        </p>
 
         {/* Download template */}
         <div
@@ -100,7 +95,7 @@ export default function AccountImportModal({
           }}
         >
           <span style={{ fontSize: '0.8rem', color: '#0f766e', fontWeight: 500 }}>
-            Chưa có file mẫu? Tải file Excel mẫu có sẵn cột email & password:
+            Tải file Excel mẫu:
           </span>
           <button
             type="button"
@@ -214,7 +209,7 @@ export default function AccountImportModal({
                 cursor: selectedFile ? 'pointer' : 'not-allowed',
               }}
             >
-              {importing ? 'Đang Import...' : 'Bắt đầu Import vào DB'}
+              {importing ? 'Đang nhập...' : 'Nhập danh sách'}
             </button>
           </div>
         </form>
