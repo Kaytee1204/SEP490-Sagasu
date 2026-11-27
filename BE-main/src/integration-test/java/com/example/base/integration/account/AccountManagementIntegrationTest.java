@@ -71,7 +71,7 @@ class AccountManagementIntegrationTest {
     static final String MSG05 = "Mật khẩu phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không có khoảng trắng";
     static final String MSG04 = "Email/Tài khoản đã tồn tại trong hệ thống";
     static final String MSG_NEW_PW = "Mật khẩu mới phải dài từ 8 đến 16 ký tự, chứa ít nhất 1 ký tự đặc biệt và không có khoảng trắng";
-    static final String MSG_MANAGER_SCOPE = "Tài khoản MANAGER chỉ được phép quản lý các tài khoản có role: USER, APPROVER";
+    static final String MSG_MANAGER_SCOPE = "Tài khoản MANAGER chỉ được phép quản lý các tài khoản có role: USER, STAFF";
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -285,7 +285,7 @@ class AccountManagementIntegrationTest {
     void itc011_newPasswordSameAsOld() throws Exception {
         call(put("/api/accounts/me"), U, body("currentPassword", PW, "newPassword", PW))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Mật khẩu mới không được trùng với mật khẩu cũ"));
+                .andExpect(jsonPath("$.message").value("Mật khẩu mới phải khác mật khẩu hiện tại"));
     }
 
     @Test
@@ -584,7 +584,7 @@ class AccountManagementIntegrationTest {
         login(U, PW).andExpect(status().isOk());
         call(delete("/api/accounts/" + user.getId()), M, null)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Đã xóa mềm tài khoản thành công"))
+                .andExpect(jsonPath("$.message").value("Đã xóa tài khoản thành công"))
                 .andExpect(jsonPath("$.data.status").value("DELETED"));
         assertThat(reload(user).getStatus()).isEqualTo(AccountStatus.DELETED);
         assertThat(refreshTokens.findByAccount_IdAndRevokedAtIsNull(user.getId())).isEmpty();
