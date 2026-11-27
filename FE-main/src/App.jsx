@@ -49,8 +49,8 @@ import NotificationProvider from '@/features/notifications/NotificationProvider'
 import SavedPostsPage from '@/features/items/pages/SavedPostsPage';
 import SavedPostsProvider from '@/features/items/context/SavedPostsProvider';
 
-function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
-  const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
+function ProtectedRoute({ children, adminOnly = false, pureAdminOnly = false, managerOnly = false, approverOnly = false }) {
+  const { isAuthenticated, isAdmin, isPureAdmin, isManager, isApprover } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
@@ -59,9 +59,13 @@ function ProtectedRoute({ children, adminOnly = false, managerOnly = false, appr
     return <Navigate to="/dang-nhap" replace state={officeReceipt ? { officeReceipt } : undefined} />;
   }
 
-  // Chỉ ADMIN và MANAGER mới được phép vào trang Dashboard (/admin)
+  // Chỉ ADMIN và MANAGER mới được phép vào khu vực quản trị (/admin)
   if (adminOnly && !isAdmin) {
     return <Navigate to="/" replace />;
+  }
+
+  if (pureAdminOnly && !isPureAdmin) {
+    return <Navigate to={isManager ? '/admin/items' : '/'} replace />;
   }
 
   if (managerOnly && !isManager) return <Navigate to="/admin" replace />;
@@ -82,8 +86,8 @@ function ReportWorkspaceRedirect({ results = false }) {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, isAdmin, isApprover } = useAuth();
-  const postLoginRedirect = isApprover ? '/approver/receipts' : isAdmin ? '/admin' : '/';
+  const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
+  const postLoginRedirect = isApprover ? '/approver/receipts' : isManager ? '/admin/items' : isAdmin ? '/admin' : '/';
   const location = useLocation();
   const officeReceipt = counterConfirmationReturn(location.state?.officeReceipt);
 
@@ -178,12 +182,12 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<AdminOverviewPage />} />
-        <Route path="dashboard" element={<AdminOverviewPage />} />
+        <Route index element={<ProtectedRoute pureAdminOnly><AdminOverviewPage /></ProtectedRoute>} />
+        <Route path="dashboard" element={<ProtectedRoute pureAdminOnly><AdminOverviewPage /></ProtectedRoute>} />
         <Route path="users" element={<AccountDashboardPage />} />
         <Route path="users/:id" element={<AdminUserDetailsPage />} />
-        <Route path="report-reasons" element={<ReportReasonsManagementPage />} />
-        <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+        <Route path="report-reasons" element={<ProtectedRoute pureAdminOnly><ReportReasonsManagementPage /></ProtectedRoute>} />
+        <Route path="audit-logs" element={<ProtectedRoute pureAdminOnly><AdminAuditLogsPage /></ProtectedRoute>} />
         <Route path="items" element={<ProtectedRoute managerOnly><PostAdministration /></ProtectedRoute>} />
         <Route path="items/:id" element={<ProtectedRoute managerOnly><StaffPostDetail /></ProtectedRoute>} />
         <Route path="storage" element={<ProtectedRoute managerOnly><StoragePage /></ProtectedRoute>} />

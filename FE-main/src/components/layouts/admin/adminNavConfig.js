@@ -52,7 +52,7 @@ export const ADMIN_NAV_SECTIONS = [
         path: '/admin',
         exact: true,
         icon: LayoutDashboard,
-        roles: ['ADMIN', 'MANAGER'],
+        roles: ['ADMIN'],
       },
     ],
   },
@@ -60,7 +60,7 @@ export const ADMIN_NAV_SECTIONS = [
     title: 'Quản lý dữ liệu',
     items: [
       { label: 'Danh mục', path: '/admin/categories', icon: Tags, roles: ['MANAGER'] },
-      { label: 'Lý do báo cáo', path: '/admin/report-reasons', icon: FileWarning, roles: ['ADMIN', 'MANAGER'] },
+      { label: 'Lý do báo cáo', path: '/admin/report-reasons', icon: FileWarning, roles: ['ADMIN'] },
       {
         label: 'Kho & vị trí lưu trữ',
         path: '/admin/storage',
@@ -105,7 +105,7 @@ export const ADMIN_NAV_SECTIONS = [
         label: 'Nhật ký hệ thống (Audit)',
         path: '/admin/audit-logs',
         icon: Shield,
-        roles: ['ADMIN', 'MANAGER'],
+        roles: ['ADMIN'],
       },
     ],
   },

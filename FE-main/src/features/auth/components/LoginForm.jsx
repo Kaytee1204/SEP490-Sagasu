@@ -67,7 +67,9 @@ export default function LoginForm({ initialMode = 'login' }) {
     const officeReceipt = counterConfirmationReturn(location.state?.officeReceipt);
     if (officeReceipt) {
       navigate(officeReceipt, { replace: true });
-    } else if (role === 'ADMIN' || role === 'MANAGER') {
+    } else if (role === 'MANAGER') {
+      navigate('/admin/items', { replace: true });
+    } else if (role === 'ADMIN') {
       navigate('/admin', { replace: true });
     } else {
       navigate('/', { replace: true });
