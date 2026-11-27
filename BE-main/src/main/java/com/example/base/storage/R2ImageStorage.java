@@ -36,7 +36,10 @@ public class R2ImageStorage implements ImageStorage {
     @Override
     public void delete(String key) {
         // DaiHV integration: source edits must not delete evidence retained by an investigation.
-        if(Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from report_asset where storage_key=?)",Boolean.class,key)))return;
+        if(Boolean.TRUE.equals(jdbc.queryForObject("""
+            select exists(select 1 from report_asset where storage_key=?)
+                or exists(select 1 from office_transfer_post_image where storage_key=?)
+            """,Boolean.class,key,key)))return;
         client.deleteObject(DeleteObjectRequest.builder().bucket(properties.bucket()).key(key).build());
     }
 

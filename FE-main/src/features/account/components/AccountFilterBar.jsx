@@ -70,7 +70,7 @@ export default function AccountFilterBar({
               cursor: 'pointer',
             }}
           >
-            <option value="ALL">Tất cả Role</option>
+            <option value="ALL">Tất cả vai trò</option>
             <option value="ADMIN">ADMIN</option>
             <option value="MANAGER">MANAGER</option>
             <option value="APPROVER">STAFF</option>
@@ -91,11 +91,11 @@ export default function AccountFilterBar({
             cursor: 'pointer',
           }}
         >
-          <option value="ALL">Tất cả Trạng thái</option>
-          <option value="ACTIVE">Đang hoạt động (ACTIVE)</option>
-          <option value="SUSPENDED">Đang tạm khóa (SUSPENDED)</option>
-          <option value="PENDING_ACTIVATION">Chờ kích hoạt (PENDING_ACTIVATION)</option>
-          <option value="DELETED">Đã xóa mềm (DELETED)</option>
+          <option value="ALL">Tất cả trạng thái</option>
+          <option value="ACTIVE">Đang hoạt động</option>
+          <option value="SUSPENDED">Đang tạm khóa</option>
+          <option value="PENDING_ACTIVATION">Chờ kích hoạt</option>
+          <option value="DELETED">Đã xóa</option>
         </select>
       </div>
 

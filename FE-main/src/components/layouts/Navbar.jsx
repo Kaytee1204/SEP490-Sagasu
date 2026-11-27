@@ -62,7 +62,7 @@ function AvatarDropdown() {
   const rawName = user?.fullName || user?.name || user?.email || 'Người dùng';
   const displayName = String(rawName).replace(/\s*\((manager|admin|user|approver|staff)\)\s*$/i, '').trim();
   const displayEmail = user?.email || '';
-  const displayOrg = user?.organizationName || user?.unitName || 'Trường Đại học Sakura';
+  const displayOrg = user?.organizationName || user?.unitName || 'Trường học';
   const initials = getInitials(displayName);
 
   const rawRole = user?.role ? String(user.role).toUpperCase() : 'USER';
@@ -266,7 +266,7 @@ function AvatarDropdown() {
           {(isApprover || isAdmin || isManager) && (
             <div className="p-2 border-b border-slate-100">
               <Link
-                to={isApprover ? '/approver/receipts' : '/admin'}
+                to={isApprover ? '/approver/receipts' : isManager ? '/admin/items' : '/admin'}
                 onClick={() => setOpen(false)}
                 className="block p-3 rounded-xl bg-slate-50/90 border border-slate-200 hover:bg-teal-50/60 hover:border-teal-300 transition-all group"
               >
@@ -306,7 +306,7 @@ function AvatarDropdown() {
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, isAdmin, isApprover, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isManager, isApprover, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const lastScrollYRef = useRef(0);
@@ -557,7 +557,7 @@ export default function Navbar() {
                   </Link>
                   {isAdmin && (
                     <Link
-                      to="/admin"
+                      to={isManager ? '/admin/items' : '/admin'}
                       onClick={() => setMobileMenuOpen(false)}
                       className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-teal-700 bg-teal-50/50 hover:bg-teal-50"
                     >

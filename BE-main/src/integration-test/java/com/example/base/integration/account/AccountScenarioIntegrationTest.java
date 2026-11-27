@@ -390,7 +390,7 @@ class AccountScenarioIntegrationTest extends ScenarioTestBase {
                 .as("Step 4 date range today").isNotEmpty();
         soft.assertThat(num(audit(a, "?keyword=" + USER01 + "&fromDate=" + tomorrow), "/data/totalElements")).as("Step 4 date range tomorrow").isZero();
         soft.assertThat(num(audit(a, "?keyword=zzznomatch999"), "/data/totalElements")).as("Step 5 no match (UC-75 E1)").isZero();
-        expect("Step 6 manager", audit(token(MANAGER01), "?keyword=" + USER01), 200, null, null);
+        expect("Step 6 manager", audit(token(MANAGER01), "?keyword=" + USER01), 403, "ERR_403", MSG_403);
         expect("Step 6 user", audit(u, ""), 403, "ERR_403", MSG_403);
     }
 

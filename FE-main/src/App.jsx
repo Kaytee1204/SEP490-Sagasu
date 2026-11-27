@@ -25,7 +25,6 @@ import OfficeClaimList from '@/features/office/pages/OfficeClaimList';
 import OfficeClaimForm from '@/features/office/pages/OfficeClaimForm';
 import OfficeClaimDetail from '@/features/office/pages/OfficeClaimDetail';
 import { counterConfirmationReturn } from '@/features/office/officeRoutes';
-import InvitationPage from '@/features/office/pages/InvitationPage';
 // DaiHV integration: office custody requests share the existing protected layouts.
 import OfficeTransfers from '@/features/office/pages/OfficeTransfers';
 import OfficeTransferDetailPage from '@/features/office/pages/OfficeTransferDetailPage';
@@ -42,7 +41,6 @@ import CategoryManagementPage from '@/features/category/pages/CategoryManagement
 import ReceiptQueuePage from '@/features/approver/pages/ReceiptQueuePage';
 import IntakeFormPage from '@/features/approver/pages/IntakeFormPage';
 import IntakeDetailPage from '@/features/approver/pages/IntakeDetailPage';
-import ApproverNewsPage from '@/features/approver/pages/ApproverNewsPage';
 import ChatPage from '@/features/chat/pages/ChatPage';
 import MyReportsPage from '@/features/reports/pages/MyReportsPage';
 import ReportDetailPage from '@/features/reports/pages/ReportDetailPage';
@@ -51,8 +49,8 @@ import NotificationProvider from '@/features/notifications/NotificationProvider'
 import SavedPostsPage from '@/features/items/pages/SavedPostsPage';
 import SavedPostsProvider from '@/features/items/context/SavedPostsProvider';
 
-function ProtectedRoute({ children, adminOnly = false, managerOnly = false, approverOnly = false }) {
-  const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
+function ProtectedRoute({ children, adminOnly = false, pureAdminOnly = false, managerOnly = false, approverOnly = false }) {
+  const { isAuthenticated, isAdmin, isPureAdmin, isManager, isApprover } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
@@ -61,9 +59,13 @@ function ProtectedRoute({ children, adminOnly = false, managerOnly = false, appr
     return <Navigate to="/dang-nhap" replace state={officeReceipt ? { officeReceipt } : undefined} />;
   }
 
-  // Chỉ ADMIN và MANAGER mới được phép vào trang Dashboard (/admin)
+  // Chỉ ADMIN và MANAGER mới được phép vào khu vực quản trị (/admin)
   if (adminOnly && !isAdmin) {
     return <Navigate to="/" replace />;
+  }
+
+  if (pureAdminOnly && !isPureAdmin) {
+    return <Navigate to={isManager ? '/admin/items' : '/'} replace />;
   }
 
   if (managerOnly && !isManager) return <Navigate to="/admin" replace />;
@@ -84,14 +86,14 @@ function ReportWorkspaceRedirect({ results = false }) {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, isAdmin, isApprover } = useAuth();
-  const postLoginRedirect = isApprover ? '/approver/receipts' : isAdmin ? '/admin' : '/';
+  const { isAuthenticated, isAdmin, isManager, isApprover } = useAuth();
+  const postLoginRedirect = isApprover ? '/approver/receipts' : isManager ? '/admin/items' : isAdmin ? '/admin' : '/';
   const location = useLocation();
   const officeReceipt = counterConfirmationReturn(location.state?.officeReceipt);
 
   return (
     <Routes>
-      <Route path="/van-phong/lich-hen" element={<InvitationPage />} />
+      <Route path="/van-phong/lich-hen" element={<Navigate to="/van-phong/claims" replace />} />
       <Route path="/van-phong/hen-giao-do" element={<Navigate to="/van-phong/chuyen-giao" replace />} />
       {/* ── AUTH ROUTES (Dành cho tất cả các Role) ── */}
       <Route
@@ -180,12 +182,12 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<AdminOverviewPage />} />
-        <Route path="dashboard" element={<AdminOverviewPage />} />
+        <Route index element={<ProtectedRoute pureAdminOnly><AdminOverviewPage /></ProtectedRoute>} />
+        <Route path="dashboard" element={<ProtectedRoute pureAdminOnly><AdminOverviewPage /></ProtectedRoute>} />
         <Route path="users" element={<AccountDashboardPage />} />
         <Route path="users/:id" element={<AdminUserDetailsPage />} />
-        <Route path="report-reasons" element={<ReportReasonsManagementPage />} />
-        <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+        <Route path="report-reasons" element={<ProtectedRoute pureAdminOnly><ReportReasonsManagementPage /></ProtectedRoute>} />
+        <Route path="audit-logs" element={<ProtectedRoute pureAdminOnly><AdminAuditLogsPage /></ProtectedRoute>} />
         <Route path="items" element={<ProtectedRoute managerOnly><PostAdministration /></ProtectedRoute>} />
         <Route path="items/:id" element={<ProtectedRoute managerOnly><StaffPostDetail /></ProtectedRoute>} />
         <Route path="storage" element={<ProtectedRoute managerOnly><StoragePage /></ProtectedRoute>} />
@@ -198,7 +200,6 @@ function AppRoutes() {
         <Route path="reports/khang-cao" element={<ProtectedRoute managerOnly><AdminReportsPage kind="CLAIM_APPEAL" /></ProtectedRoute>} />
         <Route path="reports/:id" element={<ProtectedRoute managerOnly><ReportReviewDetailPage /></ProtectedRoute>} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
-        <Route path="news" element={<ProtectedRoute managerOnly><ApproverNewsPage /></ProtectedRoute>} />
       </Route>
 
       
@@ -217,7 +218,6 @@ function AppRoutes() {
         <Route path="receipts/new" element={<IntakeFormPage />} />
         <Route path="receipts/:id/edit" element={<IntakeFormPage />} />
         <Route path="receipts/:id" element={<IntakeDetailPage />} />
-        <Route path="news" element={<ApproverNewsPage />} />
       </Route>
       <Route path="/dashboard" element={<Navigate to={postLoginRedirect} replace />} />
       <Route path="/quan-tri" element={<Navigate to="/admin" replace />} />

@@ -6,7 +6,7 @@ import { IMAGE_FORMATS } from '@/utils/imageUploads';
 import ImageProcessingStatus from '@/components/common/ImageProcessingStatus';
 import ImageUploadButton from '@/components/common/ImageUploadButton';
 
-export default function EvidencePicker({ files, setFiles, disabled, onProcessing, label = "Thêm ảnh bằng chứng" }) {
+export default function EvidencePicker({ files, setFiles, disabled, onProcessing, label = "Thêm ảnh bằng chứng", hint = "Ảnh được lưu trong hồ sơ." }) {
   const [error, setError] = useState("");
   const { prepare, processing } = useImageUploads();
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function EvidencePicker({ files, setFiles, disabled, onProcessing
     <>
       <div className="of-evidence-picker">
         <ImageUploadButton label={label} disabled={busy || files.length >= 5} onChange={select} />
-        <small>{IMAGE_FORMATS} · {files.length}/5 ảnh, tối đa 5 MB mỗi ảnh. Ảnh được lưu trong hồ sơ.</small>
+        <small>{IMAGE_FORMATS} · {files.length}/5 ảnh mới, tối đa 5 MB mỗi ảnh. {hint}</small>
       </div>
       <Notice error>{error}</Notice>
       <ImageProcessingStatus active={processing} />

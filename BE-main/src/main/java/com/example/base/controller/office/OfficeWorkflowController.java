@@ -20,13 +20,12 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(
         name = "11. Office Workflow & Invitations - Chuyển giao, Lịch hẹn & Trao trả",
-        description = "Tiếp nhận đồ chuyển giao từ bài đăng P2P, Đặt lịch hẹn nộp/nhận đồ (Token Email 12h), Xác minh tại quầy và Lập biên bản trao trả văn phòng"
+        description = "Tiếp nhận đồ chuyển giao từ bài đăng P2P, Đặt lịch hẹn nộp/nhận đồ, Xác minh tại quầy và Lập biên bản trao trả văn phòng"
 )
 public class OfficeWorkflowController {
     private final OfficeTransferService transfers;
     private final OfficeReturnService returns;
     private final OfficeIntakeScheduleService intakeSchedules;
-    private final OfficeInvitationService invitations;
 
     @GetMapping("/counter/people")
     @Operation(
@@ -58,8 +57,9 @@ public class OfficeWorkflowController {
     public ApiResponse<Long> counterReceive(
             @Valid @RequestPart("data") CounterIntake request,
             @RequestPart("images") List<MultipartFile> files,
+            @RequestPart(value="publicImages",required=false) List<MultipartFile> publicImages,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(transfers.receiveAtCounter(request, user, files));
+        return ApiResponse.ok(transfers.receiveAtCounter(request, user, files,publicImages));
     }
 
     @PostMapping(value="/transfers/{id}/receive",consumes="multipart/form-data")
@@ -71,9 +71,10 @@ public class OfficeWorkflowController {
             @PathVariable("id") long id,
             @Valid @RequestPart("data") TransferDecision request,
             @RequestPart("images") List<MultipartFile> files,
+            @RequestPart(value="publicImages",required=false) List<MultipartFile> publicImages,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         if(!"RECEIVED".equals(request.decision())) throw OfficeAccess.bad("Thao tác tiếp nhận không hợp lệ.");
-        return ApiResponse.ok(transfers.decide(id,request,user,files));
+        return ApiResponse.ok(transfers.decide(id,request,user,files,publicImages));
     }
 
     @GetMapping("/transfers")
@@ -153,18 +154,6 @@ public class OfficeWorkflowController {
             @PathVariable("id") long id,
             @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
         return ApiResponse.ok(returns.detail(id, user));
-    }
-
-    @PostMapping("/claims/{id}/appointment-response")
-    @Operation(
-            summary = "[11.11] Người nhận đồ phản hồi lịch hẹn đến nhận đồ trực tiếp trên web (CONFIRMED / DECLINED)",
-            description = "Xác nhận tham gia hoặc từ chối lịch hẹn nhận lại đồ tại văn phòng."
-    )
-    public ApiResponse<com.example.base.dto.office.InvitationDtos.View> respondCollection(
-            @PathVariable("id") long id,
-            @Valid @RequestBody AppointmentResponse request,
-            @Parameter(hidden = true) @AuthenticationPrincipal CustomUserDetails user) {
-        return ApiResponse.ok(invitations.respondOnSite(id, request, user));
     }
 
     @PostMapping("/claims/{id}/schedule")

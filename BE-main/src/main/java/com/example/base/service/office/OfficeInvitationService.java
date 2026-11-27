@@ -1,146 +1,55 @@
 package com.example.base.service.office;
 
-import com.example.base.dto.office.InvitationDtos.*;
-import com.example.base.entity.*;
-import com.example.base.repository.*;
+import com.example.base.dto.office.OfficeDtos.ReviewResult;
+import com.example.base.entity.Appointment;
+import com.example.base.repository.AppointmentRepository;
+import com.example.base.repository.ClaimRepository;
 import com.example.base.service.claim.P2pClaimAppealService;
-import com.example.base.service.notification.NotificationService;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
+import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import java.time.OffsetDateTime;
 import static com.example.base.service.office.OfficeAccess.bad;
 
 @Service @RequiredArgsConstructor
 public class OfficeInvitationService {
     private final ClaimRepository claims;
-    private final PostRepository posts;
     private final AppointmentRepository appointments;
-    private final ClaimActivityRepository activities;
     private final AppointmentEmailService email;
     private final PlatformTransactionManager transactions;
-    private final EntityManager em;
-    private final OfficeAccess access;
-    private final OfficePickupSchedule pickupSchedule;
+    private final OfficeAppointmentSchedule appointmentSchedule;
     private final P2pClaimAppealService appeals;
-    private final NotificationService notifications;
 
     public void validatePickupSchedule(OffsetDateTime scheduledAt, OffsetDateTime now) {
-        pickupSchedule.validate(scheduledAt,now);
+        appointmentSchedule.validatePickup(scheduledAt,now);
     }
 
-    private Claim lock(long id) {
-        Long postId=claims.findPostId(id).orElseThrow(()->bad("Không tìm thấy hồ sơ."));
-        Post post=posts.findForClaimUpdate(postId).orElseThrow(); em.refresh(post,LockModeType.PESSIMISTIC_WRITE);
-        Claim claim=claims.findForUpdate(id).orElseThrow(); em.refresh(claim,LockModeType.PESSIMISTIC_WRITE);
-        if(!claim.isOffice()) throw invalid();
-        return claim;
-    }
-    private RuntimeException invalid() { return bad("Liên kết không hợp lệ hoặc đã được thay thế. Hãy mở thư lịch hẹn mới nhất."); }
-    private Appointment lookup(String hash) {
-        Appointment a=appointments.findByResponseTokenHash(hash).orElseThrow(this::invalid);
-        if(!a.getClaim().isOffice()) throw invalid(); return a;
-    }
-    // Called after approval commits, using the existing SMTP bean rather than OTP services.
     public boolean send(long claimId) {
         return "SENT".equals(sendWithResult(claimId).emailStatus());
     }
-    public com.example.base.dto.office.OfficeDtos.ReviewResult sendWithResult(long claimId) {
-        return new TransactionTemplate(transactions).execute(tx->{
-            Claim c=lock(claimId);
-            appeals.requireOfficeClearance(c);
-            Appointment a=appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(claimId,"SCHEDULED").orElseThrow(()->bad("Lịch hẹn không còn hiệu lực."));
-            em.refresh(a,LockModeType.PESSIMISTIC_WRITE);
-            if(!"APPROVED".equals(c.getStatus())) throw bad("Yêu cầu chưa được duyệt.");
-            if("CONFIRMED".equals(a.getResponseStatus())) throw bad("Người nhận đã đồng ý lịch hẹn, không cần gửi lại lời mời.");
-            OffsetDateTime now=OffsetDateTime.now();
-            if(a.responseExpired(now)) { reject(c,a,"EXPIRED",now); return new com.example.base.dto.office.OfficeDtos.ReviewResult(claimId,c.getStatus(),"EXPIRED"); }
-            if(a.getResponseDeadline()==null) {
-                if(!a.getScheduledAt().isAfter(now.plusHours(12).plusMinutes(1)))
-                    throw bad("Giờ hẹn quá gần để dành đủ 12 giờ phản hồi. Cần bố trí lại lịch.");
-                // Staff explicitly republishes a legacy appointment that never opened for response.
-                a.openResponseWindow(now);
-                if(c.getClaimant()!=null) notifications.notifyUser(c.getClaimant().getId(), "APPOINTMENT_SCHEDULED",
-                    "Lịch hẹn nhận đồ đã mở để phản hồi", "Hãy phản hồi lịch của yêu cầu #" + claimId + " trong 12 giờ. Quá hạn, lịch sẽ bị hủy và yêu cầu nhận đồ sẽ bị từ chối.",
-                    "/van-phong/claims/" + claimId, false);
-            }
-            String token=InvitationTokens.create();
-            String recipient=c.getClaimantEmail()!=null?c.getClaimantEmail():c.getClaimant().getEmail();
-            var mail=new AppointmentEmailService.Mail(c.getId(),recipient,c.getClaimantName(),c.getPost().getTitle(),a.getScheduledAt(),a.getLocation(),a.getNote());
-            if(!email.send(mail,token,a.getResponseDeadline())) return new com.example.base.dto.office.OfficeDtos.ReviewResult(claimId,c.getStatus(),"FAILED");
-            // Failed resend preserves the old link. Successful resend rotates it without extending the deadline.
-            a.invitationSent(InvitationTokens.hash(token),OffsetDateTime.now()); appointments.flush();
-            return new com.example.base.dto.office.OfficeDtos.ReviewResult(claimId,c.getStatus(),"SENT");
+
+    private record Delivery(long appointmentId, AppointmentEmailService.Mail message) {}
+
+    public ReviewResult sendWithResult(long claimId) {
+        var transaction = new TransactionTemplate(transactions);
+        Delivery delivery = transaction.execute(tx -> {
+            var claim = claims.findById(claimId).filter(c -> c.isOffice() && "APPROVED".equals(c.getStatus()))
+                .orElseThrow(() -> bad("Yêu cầu nhận tài sản chưa được chấp thuận hoặc đã kết thúc."));
+            appeals.requireOfficeClearance(claim);
+            Appointment appointment = appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(claimId,"SCHEDULED")
+                .orElseThrow(() -> bad("Lịch hẹn không còn hiệu lực."));
+            if (!OffsetDateTime.now().isBefore(OfficeAppointmentSchedule.verificationDeadline(appointment.getScheduledAt())))
+                throw bad("Đã hết hạn đến quầy xác minh.");
+            String recipient = claim.getClaimantEmail();
+            if (recipient == null && claim.getClaimant() != null) recipient = claim.getClaimant().getEmail();
+            var mail = new AppointmentEmailService.Mail(claimId,recipient,claim.getClaimantName(),claim.getPost().getTitle(),
+                appointment.getScheduledAt(),appointment.getLocation(),appointment.getNote());
+            return new Delivery(appointment.getId(),mail);
         });
-    }
-    @Transactional(readOnly=true)
-    public View preview(String token) { return view(lookup(InvitationTokens.hash(token))); }
-    public View respond(Response request) {
-        String hash=InvitationTokens.hash(request.token());
-        return new TransactionTemplate(transactions).execute(tx->{
-            Appointment found=lookup(hash); Claim c=lock(found.getClaim().getId());
-            em.refresh(found,LockModeType.PESSIMISTIC_WRITE);
-            if(!hash.equals(found.getResponseTokenHash())) throw invalid();
-            return applyResponse(c,found,request.decision(),"qua email");
-        });
-    }
-    public View respondOnSite(long id,com.example.base.dto.office.OfficeWorkflowDtos.AppointmentResponse request,com.example.base.security.CustomUserDetails user) {
-        return new TransactionTemplate(transactions).execute(tx->{
-            Account actor=access.require(user);Claim c=lock(id);
-            if(c.getClaimant()==null || !c.getClaimant().getId().equals(actor.getId()))throw bad("Chỉ người yêu cầu nhận đồ được phản hồi lịch hẹn này.");
-            Appointment found=appointments.findById(request.appointmentId()).orElseThrow(()->bad("Không tìm thấy lịch hẹn."));
-            if(!found.getClaim().getId().equals(c.getId()))throw bad("Lịch hẹn không thuộc yêu cầu này.");
-            em.refresh(found,LockModeType.PESSIMISTIC_WRITE);
-            if("CANCELLED".equals(found.getStatus()) && !java.util.Set.of("DECLINED","EXPIRED").contains(found.getResponseStatus()))throw bad("Lịch hẹn đã thay đổi. Hãy tải lại để xem lịch mới.");
-            return applyResponse(c,found,request.decision(),"trên hệ thống");
-        });
-    }
-    private View applyResponse(Claim c,Appointment found,String decision,String channel) {
-            if(!java.util.Set.of("CONFIRM","DECLINE").contains(decision)) throw bad("Lựa chọn không hợp lệ.");
-            OffsetDateTime now=OffsetDateTime.now();
-            if(!"PENDING".equals(found.getResponseStatus()) || !"SCHEDULED".equals(found.getStatus()) || !"APPROVED".equals(c.getStatus())) return view(found);
-            appeals.requireOfficeClearance(c);
-            if(found.responseExpired(now)) reject(c,found,"EXPIRED",now);
-            else if("CONFIRM".equals(decision)) {
-                found.confirmInvitation(now);
-                activities.save(new ClaimActivity(c,c.getClaimant()==null?c.getCreatedBy():c.getClaimant(),"INVITE_CONFIRM","APPROVED","Người nhận đồng ý lịch hẹn " + channel + "."));
-            } else reject(c,found,"DECLINED",now);
-            return view(found);
-    }
-    private View view(Appointment a) {
-        String status=a.getResponseStatus();
-        if((!"SCHEDULED".equals(a.getStatus()) || !"APPROVED".equals(a.getClaim().getStatus())) && !java.util.Set.of("DECLINED","EXPIRED").contains(status)) status="CANCELLED";
-        else if(a.responseExpired(OffsetDateTime.now())) status="EXPIRED";
-        return new View(a.getClaim().getPost().getTitle(),a.getScheduledAt(),a.getLocation(),a.getResponseDeadline(),status);
-    }
-    private void reject(Claim c,Appointment a,String response,OffsetDateTime now) {
-        boolean expired="EXPIRED".equals(response);
-        String reason=expired?"Không phản hồi lời mời nhận đồ trong thời hạn 12 giờ.":"Người nhận từ chối lịch hẹn.";
-        a.rejectInvitation(response,reason,now); c.review("REJECTED");
-        if("RESERVED".equals(c.getPost().getStatus())) c.getPost().reopenAfterClaimCancellation();
-        appeals.reopen(c);
-        Account actor=expired||c.getClaimant()==null?a.getCreatedBy():c.getClaimant();
-        activities.save(new ClaimActivity(c,actor,expired?"INVITE_EXPIRE":"INVITE_DECLINE","APPROVED",reason));
-    }
-    public void expireDue() {
-        for(Long id:appointments.findExpiredOfficeClaims(OffsetDateTime.now(),PageRequest.of(0,100))) {
-            try {
-                new TransactionTemplate(transactions).executeWithoutResult(tx->{
-                    Claim c=lock(id);
-                    appointments.findFirstByClaim_IdAndStatusOrderByIdDesc(id,"SCHEDULED").ifPresent(a->{
-                        em.refresh(a,LockModeType.PESSIMISTIC_WRITE);
-                        OffsetDateTime now=OffsetDateTime.now();
-                        if("APPROVED".equals(c.getStatus()) && a.responseExpired(now)) reject(c,a,"EXPIRED",now);
-                    });
-                });
-            } catch(RuntimeException failure) {
-                org.slf4j.LoggerFactory.getLogger(getClass()).warn("Could not expire office invitation for claim {} ({})",id,failure.getClass().getSimpleName());
-            }
-        }
+        if (delivery.message().recipient() == null || !email.send(delivery.message()))
+            return new ReviewResult(claimId,"APPROVED","FAILED");
+        transaction.executeWithoutResult(tx -> appointments.markEmailSent(delivery.appointmentId(),OffsetDateTime.now()));
+        return new ReviewResult(claimId,"APPROVED","SENT");
     }
 }

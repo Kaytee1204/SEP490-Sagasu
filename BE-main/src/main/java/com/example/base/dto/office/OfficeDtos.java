@@ -23,6 +23,9 @@ public final class OfficeDtos {
         String moderatedBy, OffsetDateTime moderatedAt, List<String> images, ReceiptView receipt,
         Long authorId, String owner, Long ownerId, String privateIdentifiers, String receiptPrivateIdentifiers) {}
     public record ClaimantOption(Long id, String name, String email) {}
+    public record CounterItemOption(Long postId, String code, String title) {}
+    public record CounterItemPreview(Long postId, String code, String title, String category, String description,
+        String foundLocation, OffsetDateTime foundAt, String storageLocation, OffsetDateTime receivedAt, String imageUrl) {}
     public record Submission(@NotNull @Positive Long postId, @Positive Long claimantId,
         @Size(max=150) String claimantName, @Email @Size(max=255) String claimantEmail,
         @Pattern(regexp = "^$|^(0|\\+84)[0-9]{9,10}$",

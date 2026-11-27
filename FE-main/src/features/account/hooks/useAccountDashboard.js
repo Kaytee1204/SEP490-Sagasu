@@ -233,10 +233,10 @@ export function useAccountDashboard() {
   const handleSoftDelete = async (account) => {
     try {
       await accountApi.softDeleteAccount(account.id);
-      showToast(`Đã xóa mềm tài khoản #${account.id} (${account.email})`);
+      showToast(`Đã xóa tài khoản ${account.email}`);
       fetchAccounts();
     } catch (err) {
-      showToast(err?.message || 'Xóa mềm tài khoản thất bại', 'error');
+      showToast(err?.message || 'Xóa tài khoản thất bại', 'error');
     }
   };
 

@@ -59,7 +59,6 @@ final class LocalDemoSnapshotImporter {
             Map<String, Long> accountIds = loadAccountIdsByEmail(conn);
             Map<String, Long> postIds = loadPostIdsByTitle(conn);
 
-            importNewsIdempotently(conn, root.path("newsArticles"), accountIds);
             importClaimsIdempotently(conn, root.path("claims"), root.path("postStatusOverrides"), accountIds, postIds);
             importNotificationsIfEmpty(conn, root.path("notifications"), accountIds);
         } catch (Exception e) {
@@ -110,52 +109,6 @@ final class LocalDemoSnapshotImporter {
         }
         if (created > 0) {
             log.info("[DEMO SNAPSHOT] Đã tạo bổ sung {} tài khoản demo từ snapshot.", created);
-        }
-    }
-
-    private static void importNewsIdempotently(Connection conn, JsonNode newsNode, Map<String, Long> accountIds) throws SQLException {
-        if (!newsNode.isArray() || newsNode.isEmpty()) return;
-
-        Set<String> existingTitles = new HashSet<>();
-        try (Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery("SELECT LOWER(title) FROM news_article")) {
-            while (rs.next()) {
-                existingTitles.add(rs.getString(1));
-            }
-        }
-
-        int inserted = 0;
-        try (PreparedStatement ps = conn.prepareStatement("""
-                INSERT INTO news_article (title, summary, content, category, cover_image_key, cover_image_url, published, author_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """)) {
-            for (JsonNode n : newsNode) {
-                String title = text(n, "title");
-                if (!StringUtils.hasText(title)) continue;
-                if (existingTitles.contains(title.toLowerCase(Locale.ROOT))) continue;
-
-                Timestamp createdAt = parseTs(text(n, "createdAt"));
-                Timestamp updatedAt = parseTs(text(n, "updatedAt"));
-                Long authorId = lookupEmail(accountIds, text(n, "authorEmail"));
-
-                ps.setString(1, title);
-                ps.setString(2, nonNull(text(n, "summary")));
-                ps.setString(3, nonNull(text(n, "content")));
-                ps.setString(4, StringUtils.hasText(text(n, "category")) ? text(n, "category") : "UPDATE");
-                setNullableString(ps, 5, text(n, "coverImageKey"));
-                setNullableString(ps, 6, text(n, "coverImageUrl"));
-                ps.setBoolean(7, n.path("published").asBoolean(true));
-                setNullableLong(ps, 8, authorId);
-                ps.setTimestamp(9, createdAt);
-                ps.setTimestamp(10, updatedAt);
-                ps.addBatch();
-                existingTitles.add(title.toLowerCase(Locale.ROOT));
-                inserted++;
-            }
-            if (inserted > 0) {
-                ps.executeBatch();
-                log.info("[DEMO SNAPSHOT] Đã import bổ sung {} bài tin tức hệ thống.", inserted);
-            }
         }
     }
 

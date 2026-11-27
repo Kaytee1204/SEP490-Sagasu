@@ -40,8 +40,8 @@ export function claimActivityReason(activity, hideVerificationNote = false) {
   return reason;
 }
 
-export function earliestAppointment() {
-  const time = new Date(Date.now() + (12 * 60 + 2) * 60_000);
+export function earliestAppointment(leadMinutes = 12 * 60 + 2) {
+  const time = new Date(Date.now() + leadMinutes * 60_000);
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -49,13 +49,27 @@ export function earliestAppointment() {
 }
 
 export const pickupScheduleHint = "Đặt lịch từ thứ Hai đến thứ Năm, trong ca 08:00–12:00 hoặc 13:00–17:00 (giờ Việt Nam).";
+export const intakeScheduleHint = "Vui lòng chọn giờ hẹn từ thứ Hai đến thứ Sáu, trong ca 08:00–12:00 hoặc 13:00–17:00 (giờ Việt Nam), trừ ngày nghỉ của văn phòng.";
 
-export function pickupScheduleError(value) {
+function officeScheduleError(value, lastWeekday, errorMessage) {
   if (!value) return "";
   const [day, time] = value.split("T");
   const weekday = new Date(day).getUTCDay();
   const inWorkingHours = (time >= "08:00" && time < "12:00") || (time >= "13:00" && time < "17:00");
-  return weekday >= 1 && weekday <= 4 && inWorkingHours ? "" : pickupScheduleHint;
+  return weekday >= 1 && weekday <= lastWeekday && inWorkingHours ? "" : errorMessage;
+}
+
+export function pickupScheduleError(value) {
+  return officeScheduleError(value, 4, pickupScheduleHint);
+}
+
+export function intakeScheduleError(value) {
+  return officeScheduleError(value, 5, "Giờ hẹn đã chọn nằm ngoài khung giờ tiếp nhận. Vui lòng chọn lại.");
+}
+
+export function preparePostUpdate(post) {
+  return { expectedUpdatedAt: post.updatedAt, title: post.title, description: post.description,
+    categoryId: post.categoryId, keptImageIds: post.images.map(image => image.id) };
 }
 
 export function validateRequiredText(form) {
@@ -80,7 +94,7 @@ export const progressLabels = {
   APPEAL_REVIEW: "Đang xử lý tranh chấp",
   APPEAL_REASSESS: "Cần xét duyệt lại",
   SCHEDULE_REQUIRED: "Chờ lập lịch hẹn",
-  APPOINTMENT_REVIEW: "Lịch hẹn đã qua — cần hẹn lại",
+  APPOINTMENT_REVIEW: "Đã hết hạn đến quầy",
   REVIEW: "Chờ xét duyệt", NEEDS_INFO: "Chờ bổ sung thông tin", EMAIL_UNSENT: "Cần gửi lịch hẹn",
   AWAITING_REPLY: "Chờ đồng ý lịch hẹn", REPLY_EXPIRED: "Hết hạn phản hồi lịch", COUNTER_VERIFICATION: "Chờ đến xác minh", VERIFICATION_FAILED: "Không đạt xác minh",
   READY_TO_HANDOVER: "Sẵn sàng trao trả", OFFICE_COMPLETION: "Cần xác nhận hoàn tất", COMPLETED: "Đã trao trả",

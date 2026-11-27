@@ -7,6 +7,8 @@ const query = (values) =>
 export const officeApi = {
   questionnaire: (postId,counter) => data(api.get(`/office-claims/questionnaire?${query({postId,counter})}`)),
   claimants: (q) => data(api.get(`/office-claims/claimants?${query({ q })}`)),
+  counterItems: (q) => data(api.get(`/office-claims/counter/items?${query({ q })}`)),
+  counterItem: (postId) => data(api.get(`/office-claims/counter/items/${encodeURIComponent(postId)}`)),
   posts: (filters) => data(api.get(`/office/posts?${query(filters)}`)),
   post: (id) => data(api.get(`/office/posts/${id}`)),
   moderate: (id, body) =>

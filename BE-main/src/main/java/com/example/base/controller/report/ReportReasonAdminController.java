@@ -17,10 +17,10 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/report-reasons")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+@PreAuthorize("hasRole('ADMIN')")
 @Tag(
         name = "13. Reports & Dispute Resolution - Báo cáo & Điều tra giải quyết",
-        description = "Gửi báo cáo vi phạm, Xem báo cáo của tôi, Điều tra của Manager (Chụp Snapshot, Tạm dừng giao nhận Hold, Hỏi đáp Inquiry, Kết luận xử lý) và Quản trị danh mục lý do báo cáo"
+        description = "Gửi báo cáo vi phạm, Xem báo cáo của tôi, Điều tra của Manager (Chụp Snapshot, Tạm dừng giao nhận Hold, Hỏi đáp Inquiry, Kết luận xử lý) và Quản trị danh mục lý do báo cáo (ADMIN)"
 )
 public class ReportReasonAdminController {
 
@@ -28,7 +28,7 @@ public class ReportReasonAdminController {
 
     @GetMapping
     @Operation(
-            summary = "[13.14] Danh sách toàn bộ lý do báo cáo (report_reason) kèm bộ lọc và thống kê lượt dùng (ADMIN & MANAGER)",
+            summary = "[13.14] Danh sách toàn bộ lý do báo cáo (report_reason) kèm bộ lọc và thống kê lượt dùng (ADMIN)",
             description = "Lọc theo targetGroup (ALL, POST, USER, CLAIM, MESSAGE, HANDOVER_ISSUE), trạng thái active (true/false) và từ khóa tìm kiếm."
     )
     public ApiResponse<List<AdminReasonItem>> list(
@@ -41,7 +41,7 @@ public class ReportReasonAdminController {
 
     @PostMapping
     @Operation(
-            summary = "[13.15] Tạo mới lý do báo cáo vi phạm / sự cố bàn giao (ADMIN & MANAGER)",
+            summary = "[13.15] Tạo mới lý do báo cáo vi phạm / sự cố bàn giao (ADMIN)",
             description = "Thêm mới một bản ghi vào bảng report_reason. Nếu không truyền code, hệ thống tự sinh mã chuẩn từ targetGroup và label."
     )
     public ApiResponse<AdminReasonItem> create(@Valid @RequestBody UpsertReasonRequest request) {
@@ -50,7 +50,7 @@ public class ReportReasonAdminController {
 
     @PutMapping("/{code}")
     @Operation(
-            summary = "[13.16] Cập nhật thông tin lý do báo cáo theo mã code (ADMIN & MANAGER)",
+            summary = "[13.16] Cập nhật thông tin lý do báo cáo theo mã code (ADMIN)",
             description = "Cập nhật tên hiển thị (label), nhóm đối tượng (targetGroup), cờ bắt buộc mô tả (descriptionRequired), thứ tự hiển thị (sortOrder) và trạng thái (active)."
     )
     public ApiResponse<AdminReasonItem> update(
@@ -62,7 +62,7 @@ public class ReportReasonAdminController {
 
     @PatchMapping("/{code}/status")
     @Operation(
-            summary = "[13.17] Bật / Tắt trạng thái hoạt động của lý do báo cáo (ADMIN & MANAGER)",
+            summary = "[13.17] Bật / Tắt trạng thái hoạt động của lý do báo cáo (ADMIN)",
             description = "Chuyển trạng thái active = true hoặc false cho lý do báo cáo theo mã code."
     )
     public ApiResponse<AdminReasonItem> updateStatus(
@@ -74,7 +74,7 @@ public class ReportReasonAdminController {
 
     @DeleteMapping("/{code}")
     @Operation(
-            summary = "[13.18] Xóa hoặc vô hiệu hóa lý do báo cáo theo mã code (ADMIN & MANAGER)",
+            summary = "[13.18] Xóa hoặc vô hiệu hóa lý do báo cáo theo mã code (ADMIN)",
             description = "Xóa vĩnh viễn nếu chưa có báo cáo nào sử dụng; nếu đã được tham chiếu trong bảng report thì tự động chuyển sang Ngừng hoạt động (active = false) để bảo toàn dữ liệu lịch sử."
     )
     public ApiResponse<Map<String, Object>> delete(@PathVariable String code) {

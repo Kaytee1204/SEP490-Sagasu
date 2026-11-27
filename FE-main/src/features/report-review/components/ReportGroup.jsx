@@ -81,7 +81,9 @@ export default function ReportGroup({ report, showReasonColumn, filters, reportP
     : handoverIssue && target === "CLAIM" ? { target, targetId, officeHandover } : { target, targetId };
   const assignee = isAppeal
     ? report.appeal_assignee || (report.open_count > 0 ? "Chưa phân công" : report.assignee || "—")
-    : multiple ? "Theo từng báo cáo" : report.assignee || "Chưa phân công";
+    : report.kind === "GENERAL" && report.work_state !== "HISTORY"
+      ? report.violation_assignee || "Chưa phân công"
+      : handoverIssue && multiple ? "Theo từng báo cáo" : report.assignee || "Chưa phân công";
   const thumbnail = report.post_thumbnail?.url;
   const title = target === "MESSAGE" ? report.message_preview?.trim() || "Tin nhắn đính kèm" : report.subject_title || reportTargets[target];
   const person = target === "CLAIM" ? report.claimant_name : target === "POST" || target === "MESSAGE" ? report.subject_name : "";

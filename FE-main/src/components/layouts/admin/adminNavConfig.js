@@ -1,5 +1,5 @@
 // src/components/layouts/admin/adminNavConfig.js
-import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield } from 'lucide-react';
 import { reportReviewNavItems, reportReviewRoot } from '@/features/report-review/routes';
 
 export const ADMIN_NAV_SECTIONS = [
@@ -42,14 +42,6 @@ export const ADMIN_NAV_SECTIONS = [
         badgeTone: 'neutral',
         roles: ['APPROVER'],
       },
-      {
-        label: 'Tin tức hệ thống',
-        path: '/approver/news',
-        icon: Newspaper,
-        badgeKey: 'newsArticles',
-        badgeTone: 'neutral',
-        roles: ['APPROVER'],
-      },
     ],
   },
   {
@@ -60,7 +52,7 @@ export const ADMIN_NAV_SECTIONS = [
         path: '/admin',
         exact: true,
         icon: LayoutDashboard,
-        roles: ['ADMIN', 'MANAGER'],
+        roles: ['ADMIN'],
       },
     ],
   },
@@ -68,7 +60,7 @@ export const ADMIN_NAV_SECTIONS = [
     title: 'Quản lý dữ liệu',
     items: [
       { label: 'Danh mục', path: '/admin/categories', icon: Tags, roles: ['MANAGER'] },
-      { label: 'Lý do báo cáo', path: '/admin/report-reasons', icon: FileWarning, roles: ['ADMIN', 'MANAGER'] },
+      { label: 'Lý do báo cáo', path: '/admin/report-reasons', icon: FileWarning, roles: ['ADMIN'] },
       {
         label: 'Kho & vị trí lưu trữ',
         path: '/admin/storage',
@@ -94,14 +86,6 @@ export const ADMIN_NAV_SECTIONS = [
         roles: ['MANAGER'],
       },
       {
-        label: 'Tin tức hệ thống',
-        path: '/admin/news',
-        icon: Newspaper,
-        badgeKey: 'newsArticles',
-        badgeTone: 'neutral',
-        roles: ['MANAGER'],
-      },
-      {
         // DaiHV: the report investigation queue belongs to Manager.
         label: 'Báo cáo & phản ánh',
         path: reportReviewRoot,
@@ -121,7 +105,7 @@ export const ADMIN_NAV_SECTIONS = [
         label: 'Nhật ký hệ thống (Audit)',
         path: '/admin/audit-logs',
         icon: Shield,
-        roles: ['ADMIN', 'MANAGER'],
+        roles: ['ADMIN'],
       },
     ],
   },

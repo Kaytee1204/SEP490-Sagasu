@@ -73,7 +73,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
     }
   }
   const confirmMeta = {
-    schedule: { variant: "info", title: "Xác nhận lịch hẹn?", description: "Người nhận có 12 giờ để phản hồi kể từ khi lưu lịch. Hệ thống cũng sẽ gửi email mời.", confirmLabel: "Lập lịch" },
+    schedule: { variant: "info", title: "Xác nhận lịch hẹn?", description: "Lịch xác minh sẽ có hiệu lực ngay khi lưu. Hệ thống sẽ thông báo cho người nhận.", confirmLabel: "Lập lịch" },
     revoke: { variant: "warning", title: "Thu hồi chấp thuận?",
       description: claim.appointment?.status === "SCHEDULED"
         ? "Lịch hẹn hiện tại sẽ bị hủy. Yêu cầu được đưa về bước xét duyệt."
@@ -82,7 +82,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
     verify: form.result === "PASSED"
       ? { variant: "success", title: "Xác nhận kết quả Đạt?", description: `Ghi nhận ${claim.claimantName} đã vượt qua bước đối chiếu trực tiếp tại quầy và đủ điều kiện nhận đồ.`, confirmLabel: "Xác nhận Đạt" }
       : { variant: "danger", title: "Xác nhận Không đạt & Từ chối?", description: `Yêu cầu #${claim.id} sẽ bị từ chối và lịch hẹn bị hủy. Người này sẽ không thể gửi lại yêu cầu cho món đồ này.`, confirmLabel: "Từ chối nhận đồ" },
-    reschedule: { variant: "info", title: "Xác nhận đổi lịch hẹn?", description: "Lịch hẹn cũ sẽ hết hiệu lực. Người nhận có 12 giờ để phản hồi lịch mới kể từ khi lưu.", confirmLabel: "Đồng ý đổi lịch" },
+    reschedule: { variant: "info", title: "Xác nhận đổi lịch hẹn?", description: "Lịch mới sẽ thay thế lịch hiện tại. Hệ thống sẽ thông báo giờ hẹn và hạn đến quầy cho người nhận.", confirmLabel: "Đồng ý đổi lịch" },
     handover: { variant: "info", title: "Ghi nhận đã trao trả?", description: `Hệ thống sẽ mở biên bản để ${claim.claimantName} xác nhận ngay tại quầy.`, confirmLabel: "Ghi nhận đã trao trả" },
     "reopen-confirmation": { variant: "info", title: "Mở lại xác nhận tại quầy?", description: "Người nhận có 15 phút để đối chiếu và xác nhận biên bản này.", confirmLabel: "Mở lại xác nhận" },
     "stop-handover": { variant: "warning", title: "Dừng lượt bàn giao này?", description: "Biên bản được lưu trong lịch sử. Khi đủ điều kiện, nhân viên có thể lập biên bản mới.", confirmLabel: "Dừng bàn giao" },
@@ -98,7 +98,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
         <label>Nội dung đã đối chiếu *<textarea required maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} placeholder="Danh tính, dấu hiệu riêng và bằng chứng đã đối chiếu…" /></label>
       </>}
       {["schedule", "reschedule"].includes(action) && <>
-        <label>Ngày và giờ hẹn (UTC+7) *<input type="datetime-local" min={earliestAppointment()} required value={form.scheduledAt} disabled={busy} onChange={(e) => change("scheduledAt", e.target.value)} /><small>{pickupScheduleHint}<br />Chọn thời điểm cách hiện tại ít nhất 12 giờ và 1 phút.</small></label>
+        <label>Ngày và giờ hẹn (UTC+7) *<input type="datetime-local" min={earliestAppointment(1)} required value={form.scheduledAt} disabled={busy} onChange={(e) => change("scheduledAt", e.target.value)} /><small>{pickupScheduleHint}</small></label>
         <label>Địa điểm *<input required maxLength={1000} value={form.location} disabled={busy} onChange={(e) => change("location", e.target.value)} /></label>
         {action === "schedule" && <label>Thư điện tử người nhận *<input type="email" required maxLength={255} value={form.email} disabled={busy} onChange={(e) => change("email", e.target.value)} /></label>}
         <label>Lời nhắn cho người nhận<textarea maxLength={2000} value={form.note} disabled={busy} onChange={(e) => change("note", e.target.value)} /></label>
@@ -131,7 +131,7 @@ export default function ReturnActionDialog({ action, claim, workflow, onClose, o
           "reopen-confirmation": "Tôi xác nhận người nhận đang có mặt tại quầy để xác nhận biên bản.",
           "stop-handover": "Tôi xác nhận tài sản và phụ kiện vẫn do văn phòng lưu giữ." }[action]}</span>
       </label>}
-      <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Quay lại</button><button className="of-button of-primary" disabled={busy}>{busy ? "Đang lưu…" : (action === "handover" ? "Kiểm tra và lưu" : titles[action])}</button></div>
+      <div className="of-actions"><button type="button" className="of-button" disabled={busy} onClick={onClose}>Quay lại</button><button className="of-button of-primary" disabled={busy || (action === "handover" && (!checked || files.length === 0))}>{busy ? "Đang lưu…" : (action === "handover" ? "Kiểm tra và lưu" : titles[action])}</button></div>
     </form>
     <ConfirmActionPopup
       open={confirmOpen}

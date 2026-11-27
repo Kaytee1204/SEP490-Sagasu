@@ -19,10 +19,10 @@ import ConfirmActionPopup from '@/components/common/ConfirmActionPopup';
 
 const TARGET_GROUPS = [
   { value: 'ALL', label: 'Tất cả nhóm', badgeClass: 'bg-slate-100 text-slate-700 border-slate-200' },
-  { value: 'POST', label: 'Bài đăng (POST)', badgeClass: 'bg-teal-50 text-teal-700 border-teal-200' },
-  { value: 'CLAIM', label: 'Yêu cầu nhận đồ (CLAIM)', badgeClass: 'bg-amber-50 text-amber-800 border-amber-200' },
+  { value: 'POST', label: 'Bài đăng', badgeClass: 'bg-teal-50 text-teal-700 border-teal-200' },
+  { value: 'CLAIM', label: 'Yêu cầu nhận đồ', badgeClass: 'bg-amber-50 text-amber-800 border-amber-200' },
   { value: 'CLAIM_APPEAL', label: 'Tranh chấp', badgeClass: 'bg-sky-50 text-sky-700 border-sky-200' },
-  { value: 'HANDOVER_ISSUE', label: 'Sự cố bàn giao (HANDOVER_ISSUE)', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200' },
+  { value: 'HANDOVER_ISSUE', label: 'Sự cố bàn giao', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200' },
 ];
 
 const GROUP_MAP = Object.fromEntries(TARGET_GROUPS.map((g) => [g.value, g]));
@@ -225,9 +225,6 @@ export default function ReportReasonsManagementPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             Quản lý Lý do Báo cáo & Khiếu nại
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Cấu hình danh mục lý do báo cáo vi phạm (Bài đăng, Người dùng, Claim, Tin nhắn) và Sự cố bàn giao (`report_reason`).
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -322,7 +319,7 @@ export default function ReportReasonsManagementPage() {
               type="text"
               value={keyword}
               onChange={(e) => handleKeywordChange(e.target.value)}
-              placeholder="Tìm theo mã code (VD: POST_SPAM) hoặc tên hiển thị..."
+              placeholder="Tìm theo mã hoặc tên lý do..."
               className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm text-slate-800 focus:border-teal-600 focus:outline-none"
             />
           </div>
@@ -335,8 +332,8 @@ export default function ReportReasonsManagementPage() {
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-teal-600 focus:outline-none"
             >
               <option value="">Tất cả trạng thái</option>
-              <option value="true">Đang hoạt động (Active)</option>
-              <option value="false">Ngừng hoạt động (Inactive)</option>
+              <option value="true">Đang hoạt động</option>
+              <option value="false">Ngừng hoạt động</option>
             </select>
           </div>
         </div>
@@ -373,7 +370,7 @@ export default function ReportReasonsManagementPage() {
             <table className="w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  <th className="px-4 py-3.5">Mã lý do (Code)</th>
+                  <th className="px-4 py-3.5">Mã lý do</th>
                   <th className="px-4 py-3.5">Nhóm đối tượng</th>
                   <th className="px-4 py-3.5">Tên hiển thị</th>
                   <th className="px-4 py-3.5 text-center">Mô tả chi tiết</th>
@@ -393,7 +390,7 @@ export default function ReportReasonsManagementPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold ${groupInfo.badgeClass}`}>
-                          {item.targetGroup}
+                          {groupInfo.label}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 font-medium text-slate-900">
@@ -572,7 +569,7 @@ export default function ReportReasonsManagementPage() {
 
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Mã định danh (Code)
+                  Mã lý do
                 </label>
                 <input
                   type="text"
@@ -583,9 +580,6 @@ export default function ReportReasonsManagementPage() {
                   placeholder="Tự động sinh từ nhóm & tên lý do"
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-800 focus:border-teal-600 focus:outline-none disabled:opacity-70"
                 />
-                <p className="mt-1 text-xs text-slate-400">
-                  Chỉ gồm chữ in hoa, chữ số và dấu gạch dưới (VD: POST_FALSE_INFO).
-                </p>
               </div>
 
               <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
@@ -635,22 +629,14 @@ export default function ReportReasonsManagementPage() {
       {/* Delete Confirmation Modal */}
       <ConfirmActionPopup
         open={Boolean(deleteTarget)}
-        variant={deleteTarget?.usageCount > 0 ? 'warning' : 'danger'}
-        title="Xác nhận xóa lý do báo cáo?"
+        variant="danger"
+        title="Xóa lý do báo cáo?"
         description={
           deleteTarget
-            ? deleteTarget.usageCount > 0
-              ? `Lý do "${deleteTarget.label}" (${deleteTarget.code}) đang được tham chiếu bởi ${deleteTarget.usageCount} báo cáo. Hệ thống sẽ chuyển sang trạng thái Ngừng hoạt động để bảo toàn lịch sử điều tra.`
-              : `Lý do "${deleteTarget.label}" (${deleteTarget.code}) chưa có báo cáo nào sử dụng và sẽ được xóa vĩnh viễn khỏi cơ sở dữ liệu.`
+            ? `Bạn có chắc chắn muốn xóa lý do "${deleteTarget.label}"?`
             : ''
         }
-        confirmLabel={
-          submitting
-            ? 'Đang xử lý…'
-            : deleteTarget?.usageCount > 0
-              ? 'Ngừng hoạt động'
-              : 'Xóa vĩnh viễn'
-        }
+        confirmLabel={submitting ? 'Đang xử lý…' : 'Xóa'}
         cancelLabel="Hủy bỏ"
         busy={submitting}
         onConfirm={handleConfirmDelete}

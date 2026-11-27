@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 export default function SearchBox({
   value,
   onChange,
+  disabled,
   placeholder = "Tìm kiếm…",
 }) {
   return (
@@ -12,6 +13,7 @@ export default function SearchBox({
         aria-label={placeholder}
         type="search"
         maxLength={200}
+        disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

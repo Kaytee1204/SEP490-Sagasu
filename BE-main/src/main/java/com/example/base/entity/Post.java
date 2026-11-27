@@ -148,6 +148,13 @@ public class Post {
         for (int i = 0; i < images.size(); i++) images.get(i).reorder(i);
     }
 
+    public void editAtOfficeIntake(Category category, String title, String description) {
+        this.category = category;
+        this.title = title.strip();
+        this.description = description.strip();
+        this.updatedAt = OffsetDateTime.now();
+    }
+
 
 
     public void softDelete(String reason) {

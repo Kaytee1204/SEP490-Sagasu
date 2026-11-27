@@ -653,7 +653,7 @@ public class AccountService {
             if (!MANAGER_ALLOWED_ROLES.contains(targetRole)) {
                 throw new AppException(
                         ErrorCode.FORBIDDEN,
-                        "Tài khoản MANAGER chỉ được phép quản lý các tài khoản có role: USER, APPROVER"
+                        "Tài khoản MANAGER chỉ được phép quản lý các tài khoản có role: USER, STAFF"
                 );
             }
         }

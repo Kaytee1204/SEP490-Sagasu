@@ -14,6 +14,25 @@ import java.util.Optional;
 public interface ItemReceiptRepository extends JpaRepository<ItemReceipt, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<ItemReceipt> {
     Optional<ItemReceipt> findByPostId(Long postId);
     boolean existsByStorageLocation_IdInAndStatusIn(java.util.Collection<Long> locations, java.util.Collection<String> statuses);
+
+    interface CounterItemMatch {
+        Long getPostId();
+        String getCode();
+        String getTitle();
+    }
+
+    @Query("""
+        select p.id as postId, r.receiptCode as code, p.title as title
+        from ItemReceipt r join Post p on p.id = r.postId
+        where r.status = 'IN_STORAGE' and r.reviewStatus = 'ACCEPTED' and r.receivedAt is not null
+          and p.postType = 'FOUND' and p.custodyMode = 'OFFICE' and p.status = 'OPEN'
+          and p.moderationStatus = 'VISIBLE' and p.deletedAt is null
+          and (locate(:keyword, lower(p.title)) > 0 or locate(:keyword, lower(r.title)) > 0
+               or locate(:keyword, lower(r.receiptCode)) > 0)
+        order by r.receivedAt desc, r.id desc
+        """)
+    List<CounterItemMatch> searchCounterClaimItems(@Param("keyword") String keyword, Pageable pageable);
+
     @Query("""
         select r.id from ItemReceipt r
         where r.recordedBy.id = :owner and (:filter = 'ALL' or r.status = :filter)

@@ -164,7 +164,7 @@ function PostDetail({ id, onRetry }) {
               </p>}
             </div>
 
-            {post.moderationStatus === 'PENDING' && <p className="post-detail-notice" role="status">Bài đăng đang chờ Approver duyệt. Chỉ bạn xem được nội dung này.</p>}
+            {post.moderationStatus === 'PENDING' && <p className="post-detail-notice" role="status">Bài đăng đang chờ Quản lý duyệt. Chỉ bạn xem được nội dung này.</p>}
 
             <div className="post-detail-actions">
               {canUseSmartMatch && (
@@ -181,7 +181,7 @@ function PostDetail({ id, onRetry }) {
                 </Link>
               )}
 
-              {!isOwnPost && current.myClaim?.claimType === 'OFFICE' && <Link className="btn btn-ghost" to={`/van-phong/claims/${current.myClaim.id}`}>Theo dõi yêu cầu nhận đồ của tôi</Link>}
+              {!isOwnPost && current.myClaim && post.custodyMode === 'OFFICE' && <Link className="btn btn-ghost" to={`/van-phong/claims/${current.myClaim.id}`}>Theo dõi yêu cầu nhận đồ của tôi</Link>}
               {!isOwnPost && (current.myClaim || canSubmitPostClaim(post)) && !post.officeReceipt && (
                 !current.myClaim && user && (!quota || quota.error || quota.remaining === 0) ? <div className="post-claim-quota">
                   <button type="button" className="btn btn-accent" disabled>Đây là đồ của tôi<ArrowRight size={17}/></button>

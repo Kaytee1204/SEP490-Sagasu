@@ -147,7 +147,7 @@ export default function ProfilePage() {
   const displayPhone = user?.phone ? String(user.phone).trim() : '';
   const displayRole = user?.role ? String(user.role).toUpperCase() : 'USER';
   const displayRoleLabel = ROLE_LABELS[displayRole] || displayRole;
-  const displayOrg = user?.organizationName || user?.unitName || 'Trường Đại học Sakura';
+  const displayOrg = user?.organizationName || user?.unitName || 'Trường học';
 
   const openProfileModal = () => {
     setInfoFeedback(null);

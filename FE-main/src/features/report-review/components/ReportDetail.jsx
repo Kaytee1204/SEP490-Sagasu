@@ -143,7 +143,7 @@ const completedHandoverInstructions = {
 };
 
 const officeHandoverInstructions = {
-  HANDOVER_WRONG_ITEM: "Đối chiếu đặc điểm tài sản trên phiếu tiếp nhận, biên bản bàn giao và ảnh người nhận cung cấp. Ghi nhận kết quả đổi đúng tài sản nếu xác minh có nhầm lẫn.",
+  HANDOVER_WRONG_ITEM: "Đối chiếu đặc điểm tài sản trên phiếu tiếp nhận, biên bản bàn giao và ảnh người nhận cung cấp. Nếu xác minh có nhầm lẫn, ghi kết luận và hướng dẫn người báo cáo bước tiếp theo.",
   HANDOVER_MISSING_ITEMS: "Đối chiếu danh sách phụ kiện và giải trình chênh lệch. Xác minh với nhân viên bàn giao và người nhận về phần còn thiếu.",
   HANDOVER_CONDITION: "So sánh ảnh và mô tả tình trạng lúc tiếp nhận, lúc bàn giao và do người nhận cung cấp. Ghi rõ chênh lệch đã xác minh.",
 };
@@ -265,12 +265,18 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
   const isClosed = ["RESOLVED", "REJECTED"].includes(report.status);
   const canAsk = caseKind !== "GENERAL" && (data.canAsk ?? canProcess) && (usesVerification(data) ? verificationOptions(data) : availableRecipients(data)).length > 0;
   const isAppeal = caseKind === "CLAIM_APPEAL";
+  const isViolation = caseKind === "GENERAL";
+  const groupTransfer = isAppeal ? data.appealRoundTransfer : data.violationGroupTransfer;
+  const takeLabel = groupTransfer ? "Nhận bàn giao vụ việc" : isAppeal || isViolation ? "Nhận xử lý vụ việc" : "Nhận xử lý";
   const conclusion = data.decisions?.findLast(item => findings.includes(item.action)
+    || ["OFFICE_ISSUE_CONFIRMED", "OFFICE_ISSUE_DISMISSED"].includes(item.action)
     || ["APPEAL_WITHDRAWN", "APPEAL_KEEP", "APPEAL_INSUFFICIENT", "APPEAL_REJECT_CLAIM", "APPEAL_REQUIRE_REVIEW", "APPEAL_WRONG_RECIPIENT"].includes(item.action));
   const title = isClosed ? "Tiếp tục xử lý" : caseKind === "HANDOVER_ISSUE" ? "Kết quả bàn giao" : "Kết luận báo cáo";
   const structured = actions.some(value => findings.includes(value));
   const otherActions = actions.filter(value => !itemMeasures.includes(value));
   const isHandover = caseKind === "HANDOVER_ISSUE";
+  const officeHandover = isHandover && data.handoverSource === "OFFICE";
+  const canConcludeOffice = actions.includes("OFFICE_ISSUE_CONFIRMED");
   return <aside id="rr-process" tabIndex={-1} className="rr-card rr-decision rr-workflow" aria-labelledby="rr-process-title">
     <div className="rr-process-heading">
       <span className="rr-case-icon"><ClipboardCheck size={20} aria-hidden="true" /></span>
@@ -291,13 +297,16 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
     {isAppeal && !isClosed && data.appealOpenCount > 0 && <p className="rr-callout">
       Vụ việc có {data.appealOpenCount} báo cáo đang mở. Một quản lý phụ trách toàn bộ báo cáo thuộc lần duyệt này.
     </p>}
+    {isViolation && !isClosed && data.violationOpenCount > 1 && <p className="rr-callout">
+      Có {data.violationOpenCount} báo cáo vi phạm đang mở về cùng một nội dung. Các báo cáo do cùng một quản lý phụ trách.
+    </p>}
     <FollowUp data={data} />
     {conflict && !isClosed ? <p className="rr-callout">Bạn có liên quan đến vụ việc. Cần một quản lý khác đưa ra quyết định.</p>
       : canTake ? <>
-        <p>{isAppeal
-          ? data.appealRoundTransfer ? "Cần thống nhất người phụ trách trước khi tiếp tục xử lý." : "Nhận phụ trách toàn bộ báo cáo đang mở thuộc lần duyệt này."
-          : caseKind === "GENERAL" ? "Nhận xử lý để xem xét vi phạm và ghi kết luận." : "Nhận xử lý để yêu cầu bổ sung thông tin hoặc ghi kết luận."}</p>
-        <button type="button" disabled={busy} className="rr-primary" onClick={take}>{busy ? "Đang nhận…" : isAppeal ? data.appealRoundTransfer ? "Nhận bàn giao vụ việc" : "Nhận xử lý vụ việc" : "Nhận xử lý"}</button>
+        {groupTransfer ? <p>Cần thống nhất người phụ trách trước khi tiếp tục xử lý.</p>
+          : isAppeal ? <p>Nhận phụ trách toàn bộ báo cáo đang mở thuộc lần duyệt này.</p>
+          : !isViolation && <p>Nhận xử lý để yêu cầu bổ sung thông tin hoặc ghi kết luận.</p>}
+        <button type="button" disabled={busy} className="rr-primary" onClick={take}>{busy ? "Đang nhận…" : takeLabel}</button>
       </> : canProcess || canAsk || actions.length > 0 ? <div className={isHandover ? "rr-workflow-actions rr-handover-actions" : "rr-workflow-actions"}>
         {canAsk && <button type="button" onClick={onAsk}><MessageSquare size={16} aria-hidden="true" />
           {usesVerification(data) ? "Yêu cầu xác minh" : report.reason_code === "HANDOVER_MISSING_ITEMS" ? "Hỏi về phụ kiện còn thiếu" : "Hỏi người liên quan"}</button>}
@@ -310,7 +319,13 @@ function ProcessingPanel({ data, busy, take, onAsk, onAction }) {
         : structured ? <button type="button" className="rr-primary" onClick={() => onAction("CONCLUDE_VIOLATION")}>
           Ghi kết luận báo cáo
         </button> : <>
-          {isHandover && actions.length > 0 && <button type="button" className="rr-primary" onClick={() => onAction("CONCLUDE_HANDOVER")}>Xử lý sự cố</button>}
+          {officeHandover && <>
+            {canConcludeOffice && <button type="button" className="rr-primary" onClick={() => onAction("CONCLUDE_OFFICE_ISSUE")}>Ghi kết luận sự cố</button>}
+            {actions.filter(value => ["RELEASE", "CONFIRM_ITEM_RECOVERY"].includes(value)).map(value => (
+              <button key={value} type="button" onClick={() => onAction(value)}>{labels[value]}</button>
+            ))}
+          </>}
+          {isHandover && !officeHandover && actions.length > 0 && <button type="button" className="rr-primary" onClick={() => onAction("CONCLUDE_HANDOVER")}>Xử lý sự cố</button>}
           {!isHandover && otherActions.length > 0 && <div className="rr-process-actions">
             <h3>{title}</h3>
             {otherActions.map(value => <button type="button" key={value}
@@ -439,9 +454,9 @@ export default function ReportDetail({ id, onBack, onRelated, showConversation }
           </div>}
       </div>
       <ConfirmActionPopup open={confirmTake} variant="info"
-        title={isAppeal ? data.appealRoundTransfer ? "Nhận bàn giao vụ việc?" : "Nhận xử lý vụ việc?" : "Nhận xử lý báo cáo này?"}
-        description={isAppeal ? "Toàn bộ báo cáo đang mở thuộc lần duyệt này sẽ được giao cho bạn. Báo cáo gửi sau cũng sẽ được chuyển đến bạn." : isViolation ? "Bạn sẽ phụ trách xem xét vi phạm và ghi kết luận." : "Báo cáo sẽ được phân công cho bạn để yêu cầu bổ sung và ghi kết luận."}
-        confirmLabel={isAppeal ? "Xác nhận tiếp nhận" : "Nhận xử lý"} cancelLabel="Hủy bỏ"
+        title={isAppeal || isViolation ? (data.appealRoundTransfer || data.violationGroupTransfer ? "Nhận bàn giao vụ việc?" : "Nhận xử lý vụ việc?") : "Nhận xử lý báo cáo này?"}
+        description={isAppeal ? "Toàn bộ báo cáo đang mở thuộc lần duyệt này sẽ được giao cho bạn. Báo cáo gửi sau cũng sẽ được chuyển đến bạn." : isViolation ? "Bạn sẽ phụ trách toàn bộ báo cáo vi phạm đang mở về cùng một nội dung. Báo cáo mới sẽ được chuyển đến bạn trong thời gian vụ việc còn mở." : "Báo cáo sẽ được phân công cho bạn để yêu cầu bổ sung và ghi kết luận."}
+        confirmLabel={isAppeal || isViolation ? "Xác nhận tiếp nhận" : "Nhận xử lý"} cancelLabel="Hủy bỏ"
         busy={busy} onConfirm={take} onClose={() => setConfirmTake(false)} />
       {action && <DecisionDialog key={action.value} action={action.value} data={action.data} onClose={() => setAction(null)} onSaved={setData} />}
     </>}

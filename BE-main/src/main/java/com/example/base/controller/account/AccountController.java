@@ -116,11 +116,11 @@ public class AccountController {
 
     @DeleteMapping("/{id}")
     @Operation(
-            summary = "[2.8] Xóa mềm tài khoản (Soft Delete)",
+            summary = "[2.8] Xóa tài khoản",
             description = "Chuyển trạng thái tài khoản sang DELETED và thu hồi toàn bộ Refresh Token đang hoạt động."
     )
     public ResponseEntity<ApiResponse<AccountDto>> softDeleteAccount(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.ok("Đã xóa mềm tài khoản thành công", accountService.softDeleteAccount(id)));
+        return ResponseEntity.ok(ApiResponse.ok("Đã xóa tài khoản thành công", accountService.softDeleteAccount(id)));
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
