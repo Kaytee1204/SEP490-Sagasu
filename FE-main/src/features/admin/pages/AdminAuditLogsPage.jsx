@@ -150,11 +150,8 @@ export default function AdminAuditLogsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Nhật ký Hệ thống & Bảo mật (Audit Logs)
+            Nhật ký Hệ thống
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Giám sát tập trung lịch sử đăng nhập, bảo mật tài khoản, xét duyệt yêu cầu nhận đồ và điều tra báo cáo dành cho Admin & Manager.
-          </p>
         </div>
 
         <button
@@ -163,7 +160,7 @@ export default function AdminAuditLogsPage() {
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 shadow-2xs hover:bg-slate-50"
         >
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          <span>Làm mới nhật ký</span>
+          <span>Làm mới</span>
         </button>
       </div>
 
@@ -363,7 +360,6 @@ export default function AdminAuditLogsPage() {
                   <th className="px-4 py-3.5">Phân hệ</th>
                   <th className="px-4 py-3.5">Sự kiện</th>
                   <th className="px-4 py-3.5">Người thực hiện</th>
-                  <th className="px-4 py-3.5">Nội dung tóm tắt</th>
                   <th className="px-4 py-3.5 text-center">Kết quả</th>
                   <th className="px-4 py-3.5 text-right">Chi tiết</th>
                 </tr>
@@ -392,7 +388,9 @@ export default function AdminAuditLogsPage() {
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <div>
-                          <div className="font-semibold text-slate-900">{log.actorName}</div>
+                          <div className="font-semibold text-slate-900">
+                            {String(log.actorName || '').replace(/\s*\((Manager|Admin|Approver|User|Staff)\)/gi, '').trim()}
+                          </div>
                           <div className="text-xs text-slate-500">{log.actorEmail}</div>
                         </div>
                         <span
@@ -403,14 +401,6 @@ export default function AdminAuditLogsPage() {
                           {log.actorRole === 'APPROVER' ? 'STAFF' : log.actorRole}
                         </span>
                       </div>
-                    </td>
-                    <td className="max-w-xs px-4 py-3.5">
-                      <div className="truncate font-medium text-slate-800" title={log.summary}>
-                        {log.summary}
-                      </div>
-                      {log.ipAddress && log.ipAddress !== '—' && (
-                        <div className="text-[11px] font-mono text-slate-400">IP: {log.ipAddress}</div>
-                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       {log.success ? (
@@ -500,7 +490,7 @@ export default function AdminAuditLogsPage() {
                   <div className="text-xs font-semibold text-slate-400">Người thực hiện</div>
                   <div className="mt-0.5 flex items-center gap-1.5 font-semibold text-slate-900">
                     <UserCheck size={14} className="text-teal-700" />
-                    {selectedLog.actorName} ({selectedLog.actorRole === 'APPROVER' ? 'STAFF' : selectedLog.actorRole})
+                    {String(selectedLog.actorName || '').replace(/\s*\((Manager|Admin|Approver|User|Staff)\)/gi, '').trim()} ({selectedLog.actorRole === 'APPROVER' ? 'STAFF' : selectedLog.actorRole})
                   </div>
                   <div className="text-xs text-slate-500">{selectedLog.actorEmail}</div>
                 </div>
@@ -517,19 +507,10 @@ export default function AdminAuditLogsPage() {
 
               <div>
                 <div className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Tóm tắt sự kiện
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-3 font-medium text-slate-800">
-                  {selectedLog.summary}
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Dữ liệu chi tiết / Ghi chú (Details)
+                  Chi tiết
                 </div>
                 <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-900 p-3.5 font-mono text-xs text-teal-300">
-                  {selectedLog.details || '{}'}
+                  {String(selectedLog.details || '{}').replace(/APPROVER/gi, 'STAFF')}
                 </pre>
               </div>
             </div>
