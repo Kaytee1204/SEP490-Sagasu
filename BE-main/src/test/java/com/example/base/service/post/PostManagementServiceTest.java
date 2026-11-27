@@ -128,9 +128,9 @@ class PostManagementServiceTest {
         return service.listMine(1, 10, "ALL", user);
     }
 
-    // UTC118 - update keeps specified existing images, uploads new ones in order, and deletes removed keys after commit
+    // UTC107 - update keeps specified existing images, uploads new ones in order, and deletes removed keys after commit
     @Test
-    void utc118_update_whenKeepingImagesAndAddingNew_reordersDeletesRemovedAfterCommit() {
+    void utc107_update_whenKeepingImagesAndAddingNew_reordersDeletesRemovedAfterCommit() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
         Post post = foundPost(10L, owner, category);
         ReflectionTestUtils.setField(post, "updatedAt", updatedAt);
@@ -169,25 +169,25 @@ class PostManagementServiceTest {
     private static final OffsetDateTime UPDATED_AT = OffsetDateTime.now().minusMinutes(5);
 
     @Test
-    void utc119_update_staleTimestampThrowsStale() {
+    void utc108_update_staleTimestampThrowsStale() {
         stubThreeImagePost();
         assertEquals(ErrorCode.POST_STALE, updateError(3L, null, List.of(1L), UPDATED_AT.minusSeconds(1)));
     }
 
     @Test
-    void utc120_update_duplicateKeptImageIdsThrowsImagesInvalid() {
+    void utc109_update_duplicateKeptImageIdsThrowsImagesInvalid() {
         stubThreeImagePost();
         assertEquals(ErrorCode.POST_IMAGES_INVALID, updateError(3L, null, List.of(1L, 1L), UPDATED_AT));
     }
 
     @Test
-    void utc121_update_foreignKeptImageIdThrowsImagesInvalid() {
+    void utc110_update_foreignKeptImageIdThrowsImagesInvalid() {
         stubThreeImagePost();
         assertEquals(ErrorCode.POST_IMAGES_INVALID, updateError(3L, null, List.of(1L, 99L), UPDATED_AT));
     }
 
     @Test
-    void utc122_update_moreThanFiveImagesThrowsCountExceeded() {
+    void utc111_update_moreThanFiveImagesThrowsCountExceeded() {
         stubThreeImagePost();
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
         ValidatedImage img = new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 10, 10, "h");
@@ -196,14 +196,14 @@ class PostManagementServiceTest {
     }
 
     @Test
-    void utc124_update_inactiveCategoryThrowsCategoryUnavailable() {
+    void utc113_update_inactiveCategoryThrowsCategoryUnavailable() {
         stubThreeImagePost();
         when(categories.existsByCategoryIdAndActiveTrue(9L)).thenReturn(false);
         assertEquals(ErrorCode.POST_CATEGORY_UNAVAILABLE, updateError(9L, null, List.of(1L), UPDATED_AT));
     }
 
     @Test
-    void utc125_update_custodyChangeToOfficeRequiresHandover() {
+    void utc114_update_custodyChangeToOfficeRequiresHandover() {
         stubThreeImagePost();
         assertEquals(ErrorCode.POST_CUSTODY_CHANGE_REQUIRES_HANDOVER, updateError(3L, "OFFICE", List.of(1L), UPDATED_AT));
     }
@@ -223,9 +223,9 @@ class PostManagementServiceTest {
         return assertThrows(AppException.class, () -> service.update(10L, req, List.of(), user)).getErrorCode();
     }
 
-    // UTC123 - update succeeds at boundary of 5 total kept and newly uploaded images
+    // UTC112 - update succeeds at boundary of 5 total kept and newly uploaded images
     @Test
-    void utc123_update_whenTotalFiveImages_succeeds() {
+    void utc112_update_whenTotalFiveImages_succeeds() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
         Post post = foundPost(10L, owner, category);
         ReflectionTestUtils.setField(post, "updatedAt", updatedAt);
@@ -249,9 +249,9 @@ class PostManagementServiceTest {
         assertEquals(5, post.getImages().size());
     }
 
-    // UTC126 - update deletes only newly uploaded image keys if transaction throws after upload
+    // UTC115 - update deletes only newly uploaded image keys if transaction throws after upload
     @Test
-    void utc126_update_whenTransactionThrowsAfterUpload_cleansUpOnlyNewKeys() {
+    void utc115_update_whenTransactionThrowsAfterUpload_cleansUpOnlyNewKeys() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
         Post post = foundPost(10L, owner, category);
         ReflectionTestUtils.setField(post, "updatedAt", updatedAt);
@@ -271,9 +271,9 @@ class PostManagementServiceTest {
         verify(storage).delete(org.mockito.ArgumentMatchers.startsWith("posts/5/"));
     }
 
-    // UTC127 - update completes successfully even if cleanup of removed storage keys throws
+    // UTC116 - update completes successfully even if cleanup of removed storage keys throws
     @Test
-    void utc127_update_whenRemovedImageCleanupThrows_stillReturnsSuccess() {
+    void utc116_update_whenRemovedImageCleanupThrows_stillReturnsSuccess() {
         OffsetDateTime updatedAt = OffsetDateTime.now().minusMinutes(5);
         Post post = foundPost(10L, owner, category);
         ReflectionTestUtils.setField(post, "updatedAt", updatedAt);
@@ -295,7 +295,7 @@ class PostManagementServiceTest {
     }
 
     @Test
-    void utc128_delete_ownedPostSoftDeletedWithTrimmedReason() {
+    void utc117_delete_ownedPostSoftDeletedWithTrimmedReason() {
         Post post = deletablePost();
         service.delete(10L, new DeletePostRequest("  Found it myself  "), user);
 
@@ -306,14 +306,14 @@ class PostManagementServiceTest {
     }
 
     @Test
-    void utc129_delete_pendingClaimThrowsDeleteBlocked() {
+    void utc118_delete_pendingClaimThrowsDeleteBlocked() {
         deletablePost();
         when(claims.existsByPost_IdAndStatusIn(10L, ACTIVE_CLAIMS)).thenReturn(true);
         assertEquals(ErrorCode.CLAIM_POST_DELETE_BLOCKED, deleteError());
     }
 
     @Test
-    void utc130_delete_onlyRejectedClaimsStillDeletes() {
+    void utc119_delete_onlyRejectedClaimsStillDeletes() {
         Post post = deletablePost();
         service.delete(10L, new DeletePostRequest("No longer needed"), user);
         assertNotNull(post.getDeletedAt());
@@ -321,21 +321,21 @@ class PostManagementServiceTest {
     }
 
     @Test
-    void utc131_delete_postWithReceiptThrowsNotEditable() {
+    void utc120_delete_postWithReceiptThrowsNotEditable() {
         deletablePost();
         when(receipts.existsByPostId(10L)).thenReturn(true);
         assertEquals(ErrorCode.POST_NOT_EDITABLE, deleteError());
     }
 
     @Test
-    void utc132_delete_alreadyDeletedPostThrowsOwnerRequired() {
+    void utc121_delete_alreadyDeletedPostThrowsOwnerRequired() {
         Post post = deletablePost();
         ReflectionTestUtils.setField(post, "deletedAt", OffsetDateTime.now());
         assertEquals(ErrorCode.POST_OWNER_REQUIRED, deleteError());
     }
 
     @Test
-    void utc133_delete_notOwnedPostThrowsOwnerRequired() {
+    void utc122_delete_notOwnedPostThrowsOwnerRequired() {
         when(posts.findManagedForUpdate(10L, 5L)).thenReturn(Optional.empty());
         assertEquals(ErrorCode.POST_OWNER_REQUIRED, deleteError());
     }

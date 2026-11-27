@@ -135,9 +135,9 @@ class ChatMessageServiceTest {
                 ReflectionTestUtils.setField(conversation, "lastMessageSequence", 5L);
         }
 
-        // UTC271 - text enforces custom maxLength=2000 (default 4000 also verified)
+        // UTC258 - text enforces custom maxLength=2000 (default 4000 also verified)
         @Test
-        void utc271_text_enforcesConfiguredMaxLengthDefault4000AndCustom2000() {
+        void utc258_text_enforcesConfiguredMaxLengthDefault4000AndCustom2000() {
                 assertEquals("hello", service.text("  hello  "));
 
                 String len4000 = "a".repeat(4000);
@@ -149,15 +149,15 @@ class ChatMessageServiceTest {
 
                 assertNull(service.text("   "));
 
-                // UTC271 - configured maxLength=2000 rejects 2001 characters with CHAT_INPUT_INVALID
+                // UTC258 - configured maxLength=2000 rejects 2001 characters with CHAT_INPUT_INVALID
                 properties.setMessageMaxLength(2000);
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID,
                                 assertThrows(AppException.class, () -> service.text("a".repeat(2001))).getErrorCode());
         }
 
-        // UTC266 - send saves trimmed message, increments sequence, emits MESSAGE_CREATED, and notifies recipient
+        // UTC253 - send saves trimmed message, increments sequence, emits MESSAGE_CREATED, and notifies recipient
         @Test
-        void utc266_send_whenNewValidTextMessage_persistsIncrementsSequenceEmitsEventAndNotifiesRecipient() {
+        void utc253_send_whenNewValidTextMessage_persistsIncrementsSequenceEmitsEventAndNotifiesRecipient() {
                 UUID clientMsgId = UUID.randomUUID();
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
@@ -185,7 +185,7 @@ class ChatMessageServiceTest {
         }
 
         @Test
-        void utc272_send_sameClientIdAndBodyReturnsExisting() {
+        void utc259_send_sameClientIdAndBodyReturnsExisting() {
                 UUID clientMsgId = stubExistingTextMessage("Same body");
                 ChatMessageDto reused = service.send(800L, new SendChatRequest(clientMsgId, "Same body"), claimantUser);
                 assertEquals(901L, reused.id());
@@ -193,7 +193,7 @@ class ChatMessageServiceTest {
         }
 
         @Test
-        void utc273_send_sameClientIdDifferentBodyThrowsDuplicatePayload() {
+        void utc260_send_sameClientIdDifferentBodyThrowsDuplicatePayload() {
                 UUID clientMsgId = stubExistingTextMessage("Same body");
                 assertEquals(ErrorCode.CHAT_DUPLICATE_PAYLOAD, assertThrows(AppException.class,
                                 () -> service.send(800L, new SendChatRequest(clientMsgId, "Different body"), claimantUser))
@@ -213,9 +213,9 @@ class ChatMessageServiceTest {
                 return clientMsgId;
         }
 
-        // UTC274 - send throws CHAT_UNAVAILABLE when conversation is read-only
+        // UTC261 - send throws CHAT_UNAVAILABLE when conversation is read-only
         @Test
-        void utc274_send_whenConversationReadOnly_throwsChatUnavailable() {
+        void utc261_send_whenConversationReadOnly_throwsChatUnavailable() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 when(chatService.requireMember(800L, 20L)).thenReturn(conversation);
                 when(conversations.findForUpdate(800L)).thenReturn(Optional.of(conversation));
@@ -247,39 +247,39 @@ class ChatMessageServiceTest {
         }
 
         @Test
-        void utc267_send_nullRequestThrowsInputInvalid() {
+        void utc254_send_nullRequestThrowsInputInvalid() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.send(800L, null, claimantUser)).getErrorCode());
         }
 
         @Test
-        void utc268_send_nullClientMessageIdThrowsInputInvalid() {
+        void utc255_send_nullClientMessageIdThrowsInputInvalid() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.send(800L, new SendChatRequest(null, "hi"), claimantUser)).getErrorCode());
         }
 
         @Test
-        void utc269_send_blankBodyThrowsInputInvalid() {
+        void utc256_send_blankBodyThrowsInputInvalid() {
                 when(policy.actor(claimantUser)).thenReturn(claimant);
                 assertEquals(ErrorCode.CHAT_INPUT_INVALID, assertThrows(AppException.class,
                                 () -> service.send(800L, new SendChatRequest(UUID.randomUUID(), "   "), claimantUser))
                                 .getErrorCode());
         }
 
-        // UTC270 - text accepts boundary 2000 characters when ChatProperties.messageMaxLength=2000
+        // UTC257 - text accepts boundary 2000 characters when ChatProperties.messageMaxLength=2000
         @Test
-        void utc270_text_whenConfigured2000AndBodyAt2000Chars_acceptsBoundary() {
+        void utc257_text_whenConfigured2000AndBodyAt2000Chars_acceptsBoundary() {
                 properties.setMessageMaxLength(2000);
                 String exact2000 = "m".repeat(2000);
 
                 assertEquals(exact2000, service.text(exact2000));
         }
 
-        // UTC275 - send truncates notification preview to 120 chars + "..." when body is 150 chars
+        // UTC262 - send truncates notification preview to 120 chars + "..." when body is 150 chars
         @Test
-        void utc275_send_whenBody150Chars_truncatesNotificationPreviewTo120PlusEllipsis() {
+        void utc262_send_whenBody150Chars_truncatesNotificationPreviewTo120PlusEllipsis() {
                 UUID reqId = UUID.randomUUID();
                 String body150 = "k".repeat(150);
                 stubWritableLock(20L);

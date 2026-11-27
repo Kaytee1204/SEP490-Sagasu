@@ -47,7 +47,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc086_createCategory_collapsesSpacesAndStrips() {
+    void utc075_createCategory_collapsesSpacesAndStrips() {
         when(repository.existsByNameIgnoreCase("Điện thoại")).thenReturn(false);
         when(repository.saveAndFlush(any(Category.class))).thenAnswer(inv -> {
             Category c = inv.getArgument(0);
@@ -62,7 +62,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc087_createCategory_existingInactiveName_throwsCategoryNameExists() {
+    void utc076_createCategory_existingInactiveName_throwsCategoryNameExists() {
         when(repository.existsByNameIgnoreCase("ví")).thenReturn(true);
 
         assertThatThrownBy(() -> service.createCategory("ví"))
@@ -75,7 +75,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc088_createCategory_blankName_throwsBadRequest() {
+    void utc077_createCategory_blankName_throwsBadRequest() {
         assertThatThrownBy(() -> service.createCategory("   "))
                 .isInstanceOf(AppException.class)
                 .satisfies(ex -> {
@@ -86,7 +86,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc089_createCategory_nullName_throwsBadRequest() {
+    void utc078_createCategory_nullName_throwsBadRequest() {
         assertThatThrownBy(() -> service.createCategory(null))
                 .isInstanceOf(AppException.class)
                 .extracting(ex -> ((AppException) ex).getErrorCode())
@@ -94,7 +94,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc090_createCategory_100Chars_accepted() {
+    void utc079_createCategory_100Chars_accepted() {
         String name = "a".repeat(100);
         when(repository.existsByNameIgnoreCase(name)).thenReturn(false);
         when(repository.saveAndFlush(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -105,7 +105,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc091_createCategory_101Chars_throwsBadRequest() {
+    void utc080_createCategory_101Chars_throwsBadRequest() {
         String name = "a".repeat(101);
 
         assertThatThrownBy(() -> service.createCategory(name))
@@ -115,7 +115,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc092_createCategory_uniqueConstraintRace_throwsCategoryNameExists() {
+    void utc081_createCategory_uniqueConstraintRace_throwsCategoryNameExists() {
         when(repository.existsByNameIgnoreCase("Ví")).thenReturn(false);
         when(repository.saveAndFlush(any(Category.class)))
                 .thenThrow(new DataIntegrityViolationException("dup", new RuntimeException("constraint [uq_category_name]")));
@@ -127,7 +127,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc093_createCategory_otherIntegrityViolation_rethrows() {
+    void utc082_createCategory_otherIntegrityViolation_rethrows() {
         when(repository.existsByNameIgnoreCase("Ví")).thenReturn(false);
         DataIntegrityViolationException ex = new DataIntegrityViolationException("other", new RuntimeException("other_constraint"));
         when(repository.saveAndFlush(any(Category.class))).thenThrow(ex);
@@ -137,7 +137,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc094_updateCategory_valid_updatesName() {
+    void utc083_updateCategory_valid_updatesName() {
         Category existing = cat(1L, "Old", true);
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameIgnoreCaseAndCategoryIdNot("Laptop", 1L)).thenReturn(false);
@@ -149,7 +149,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc095_updateCategory_sameOwnName_accepted() {
+    void utc084_updateCategory_sameOwnName_accepted() {
         Category existing = cat(1L, "Laptop", true);
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameIgnoreCaseAndCategoryIdNot("Laptop", 1L)).thenReturn(false);
@@ -162,7 +162,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc096_updateCategory_duplicateNameOtherCategory_throwsCategoryNameExists() {
+    void utc085_updateCategory_duplicateNameOtherCategory_throwsCategoryNameExists() {
         Category existing = cat(1L, "Laptop", true);
         when(repository.findById(1L)).thenReturn(Optional.of(existing));
         when(repository.existsByNameIgnoreCaseAndCategoryIdNot("VÍ", 1L)).thenReturn(true);
@@ -174,7 +174,7 @@ class CategoryServiceTest {
     }
 
     @Test
-    void utc097_updateCategory_notFound_throwsCategoryNotFound() {
+    void utc086_updateCategory_notFound_throwsCategoryNotFound() {
         when(repository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateCategory(999L, "X"))

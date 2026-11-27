@@ -108,9 +108,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(validator, storage, posts);
     }
 
-    // UTC098 - createLost valid request with 2 images trims text and persists ordered images
+    // UTC087 - createLost valid request with 2 images trims text and persists ordered images
     @Test
-    void utc098_createLost_whenValidWithTwoImages_createsTrimmedPostWithOrderedImages() {
+    void utc087_createLost_whenValidWithTwoImages_createsTrimmedPostWithOrderedImages() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, " Lost wallet ", " Black leather ", 3L, " Hall A ",
                 OffsetDateTime.now().minusDays(1), null);
@@ -153,9 +153,9 @@ class PostCreationServiceTest {
         assertTrue(saved.getImages().get(1).getStorageKey().matches("posts/7/[0-9a-f\\-]+\\.jpg"));
     }
 
-    // UTC099 - createLost with no images throws BAD_REQUEST because at least 1 image is required
+    // UTC088 - createLost with no images throws BAD_REQUEST because at least 1 image is required
     @Test
-    void utc099_createLost_whenNoImages_throwsBadRequest() {
+    void utc088_createLost_whenNoImages_throwsBadRequest() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost keys", "Silver", 3L, "Hall B",
                 OffsetDateTime.now().minusHours(5), null);
@@ -169,9 +169,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(storage, posts);
     }
 
-    // UTC100 - createLost throws when selected category is inactive without uploading images
+    // UTC089 - createLost throws when selected category is inactive without uploading images
     @Test
-    void utc100_createLost_whenCategoryInactive_throwsWithoutUploading() {
+    void utc089_createLost_whenCategoryInactive_throwsWithoutUploading() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -184,9 +184,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(validator, storage);
     }
 
-    // UTC101 - createLost propagates exception when validator rejects unsupported file
+    // UTC090 - createLost propagates exception when validator rejects unsupported file
     @Test
-    void utc101_createLost_whenValidatorRejectsFile_propagatesException() {
+    void utc090_createLost_whenValidatorRejectsFile_propagatesException() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -203,9 +203,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(storage);
     }
 
-    // UTC102 - createLost deletes both uploaded keys when second storage put fails
+    // UTC091 - createLost deletes both uploaded keys when second storage put fails
     @Test
-    void utc102_createLost_whenSecondStoragePutFails_cleansUpBothKeysAndRethrows() {
+    void utc091_createLost_whenSecondStoragePutFails_cleansUpBothKeysAndRethrows() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -225,9 +225,9 @@ class PostCreationServiceTest {
         verify(storage, times(2)).delete(anyString());
     }
 
-    // UTC103 - createLost throws FORBIDDEN and cleans up uploaded images when account locked mid-request
+    // UTC092 - createLost throws FORBIDDEN and cleans up uploaded images when account locked mid-request
     @Test
-    void utc103_createLost_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImages() {
+    void utc092_createLost_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImages() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -245,9 +245,9 @@ class PostCreationServiceTest {
         verify(storage, times(1)).delete(anyString());
     }
 
-    // UTC104 - createLost throws UNAUTHORIZED when principal user is null
+    // UTC093 - createLost throws UNAUTHORIZED when principal user is null
     @Test
-    void utc104_createLost_whenUserNull_throwsUnauthorized() {
+    void utc093_createLost_whenUserNull_throwsUnauthorized() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), null);
@@ -258,9 +258,9 @@ class PostCreationServiceTest {
         assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
     }
 
-    // UTC105 - createLost stores trimmed privateIdentifiers on newly created post
+    // UTC094 - createLost stores trimmed privateIdentifiers on newly created post
     @Test
-    void utc105_createLost_whenPrivateIdentifiersProvided_storesTrimmedIdentifiers() {
+    void utc094_createLost_whenPrivateIdentifiersProvided_storesTrimmedIdentifiers() {
         CreateLostPostRequest request = new CreateLostPostRequest(
                 null, "Lost phone", "Blue", 3L, "Hall A",
                 OffsetDateTime.now().minusDays(1), "  Serial ABC123  ");
@@ -286,7 +286,7 @@ class PostCreationServiceTest {
     // Supplementary (PostCreationService.createLost): existing clientRequestId returns cached post without uploading
     @Test
     @SuppressWarnings("unchecked")
-    void utc106_createLost_whenRequestIdAlreadyProcessed_returnsExistingWithoutUpload() {
+    void utc095_createLost_whenRequestIdAlreadyProcessed_returnsExistingWithoutUpload() {
         UUID reqId = UUID.randomUUID();
         CreateLostPostRequest request = new CreateLostPostRequest(
                 reqId, "Lost wallet", "Black", 3L, "Hall A",
@@ -304,7 +304,7 @@ class PostCreationServiceTest {
     // Supplementary (PostCreationService.createLost): concurrent duplicate clientRequestId reuses persisted post and deletes uploaded images
     @Test
     @SuppressWarnings("unchecked")
-    void utc107_createLost_whenConcurrentRequestIdWinsInsideTransaction_reusesExistingAndDeletesUploadedImages() {
+    void utc096_createLost_whenConcurrentRequestIdWinsInsideTransaction_reusesExistingAndDeletesUploadedImages() {
         UUID reqId = UUID.randomUUID();
         CreateLostPostRequest request = new CreateLostPostRequest(
                 reqId, "Lost wallet", "Black", 3L, "Hall A",
@@ -328,10 +328,10 @@ class PostCreationServiceTest {
         verify(posts, never()).saveAndFlush(any());
     }
 
-    // UTC108 - createFound with custodyMode=null and new clientRequestId creates P2P FOUND post and records request
+    // UTC097 - createFound with custodyMode=null and new clientRequestId creates P2P FOUND post and records request
     @Test
     @SuppressWarnings("unchecked")
-    void utc108_createFound_whenValidWithNullCustodyAndNewRequestId_createsP2pFoundPostAndRecordsRequest() {
+    void utc097_createFound_whenValidWithNullCustodyAndNewRequestId_createsP2pFoundPostAndRecordsRequest() {
         UUID reqId = UUID.randomUUID();
         CreateFoundPostRequest request = new CreateFoundPostRequest(
                 reqId, " Found card ", " Student ID ", 3L, " Library ",
@@ -361,9 +361,9 @@ class PostCreationServiceTest {
         verify(jdbc).update(anyString(), eq(7L), eq(reqId), eq(103L));
     }
 
-    // UTC109 - createFound throws POST_CUSTODY_INVALID when custodyMode="OFFICE"
+    // UTC098 - createFound throws POST_CUSTODY_INVALID when custodyMode="OFFICE"
     @Test
-    void utc109_createFound_whenCustodyOffice_throwsPostCustodyInvalid() {
+    void utc098_createFound_whenCustodyOffice_throwsPostCustodyInvalid() {
         CreateFoundPostRequest request = new CreateFoundPostRequest(
                 null, "Found wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusHours(2), "OFFICE", null, null);
@@ -374,9 +374,9 @@ class PostCreationServiceTest {
         assertEquals(ErrorCode.POST_CUSTODY_INVALID, ex.getErrorCode());
     }
 
-    // UTC110 - createFound throws POST_HANDOVER_TIME_DISABLED when handoverRequestedAt is provided
+    // UTC099 - createFound throws POST_HANDOVER_TIME_DISABLED when handoverRequestedAt is provided
     @Test
-    void utc110_createFound_whenHandoverRequestedAtProvided_throwsPostHandoverTimeDisabled() {
+    void utc099_createFound_whenHandoverRequestedAtProvided_throwsPostHandoverTimeDisabled() {
         CreateFoundPostRequest request = new CreateFoundPostRequest(
                 null, "Found wallet", "Black", 3L, "Hall A",
                 OffsetDateTime.now().minusHours(2), "P2P", null, OffsetDateTime.now().plusDays(1));
@@ -404,9 +404,9 @@ class PostCreationServiceTest {
 
     private static final ValidatedImage JPG = new ValidatedImage(new byte[]{1}, "image/jpeg", "jpg", 100, 100, "h1");
 
-    // UTC111 - createFound with custodyMode="P2P" publishes a P2P FOUND post that is OPEN and VISIBLE
+    // UTC100 - createFound with custodyMode="P2P" publishes a P2P FOUND post that is OPEN and VISIBLE
     @Test
-    void utc111_createFound_whenCustodyP2p_createsVisibleP2pFoundPost() {
+    void utc100_createFound_whenCustodyP2p_createsVisibleP2pFoundPost() {
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
         when(validator.validate(any())).thenReturn(List.of(JPG));
         stubFoundSave(104L);
@@ -421,9 +421,9 @@ class PostCreationServiceTest {
         verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
 
-    // UTC112 - createFound with no images throws BAD_REQUEST because at least 1 image is required
+    // UTC101 - createFound with no images throws BAD_REQUEST because at least 1 image is required
     @Test
-    void utc112_createFound_whenNoImages_throwsBadRequest() {
+    void utc101_createFound_whenNoImages_throwsBadRequest() {
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
         when(validator.validate(List.of())).thenReturn(List.of());
 
@@ -435,9 +435,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(storage, posts);
     }
 
-    // UTC113 - createFound with an inactive category throws POST_CATEGORY_UNAVAILABLE before any upload
+    // UTC102 - createFound with an inactive category throws POST_CATEGORY_UNAVAILABLE before any upload
     @Test
-    void utc113_createFound_whenCategoryInactive_throwsWithoutUploading() {
+    void utc102_createFound_whenCategoryInactive_throwsWithoutUploading() {
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(false);
 
         AppException ex = assertThrows(AppException.class,
@@ -447,9 +447,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(validator, storage, posts);
     }
 
-    // UTC114 - createFound throws UNAUTHORIZED when there is no logged-in user
+    // UTC103 - createFound throws UNAUTHORIZED when there is no logged-in user
     @Test
-    void utc114_createFound_whenUserNull_throwsUnauthorized() {
+    void utc103_createFound_whenUserNull_throwsUnauthorized() {
         AppException ex = assertThrows(AppException.class,
                 () -> service.createFound(foundRequest(null, null), List.of(), null));
 
@@ -457,9 +457,9 @@ class PostCreationServiceTest {
         verifyNoInteractions(categories, validator, storage, posts);
     }
 
-    // UTC115 - createFound throws FORBIDDEN and deletes the uploaded image when the account is no longer active
+    // UTC104 - createFound throws FORBIDDEN and deletes the uploaded image when the account is no longer active
     @Test
-    void utc115_createFound_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImage() {
+    void utc104_createFound_whenAccountLockedAfterUpload_throwsForbiddenAndDeletesUploadedImage() {
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
         when(validator.validate(any())).thenReturn(List.of(JPG));
         when(accounts.findActiveAccountForPostCreation(7L)).thenReturn(Optional.empty());
@@ -472,9 +472,9 @@ class PostCreationServiceTest {
         verify(posts, never()).saveAndFlush(any());
     }
 
-    // UTC116 - createFound deletes the partially uploaded image and rethrows when R2 upload fails (SRS UC-16 E3)
+    // UTC105 - createFound deletes the partially uploaded image and rethrows when R2 upload fails (SRS UC-16 E3)
     @Test
-    void utc116_createFound_whenStoragePutFails_cleansUpAndRethrows() {
+    void utc105_createFound_whenStoragePutFails_cleansUpAndRethrows() {
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
         when(validator.validate(any())).thenReturn(List.of(JPG));
         doThrow(new RuntimeException("R2 down")).when(storage).put(anyString(), any(), anyString());
@@ -487,9 +487,9 @@ class PostCreationServiceTest {
         verify(posts, never()).saveAndFlush(any());
     }
 
-    // UTC117 - createFound stores trimmed private identifiers; blank identifiers are stored as null
+    // UTC106 - createFound stores trimmed private identifiers; blank identifiers are stored as null
     @Test
-    void utc117_createFound_whenPrivateIdentifiersProvided_storesTrimmedOrNull() {
+    void utc106_createFound_whenPrivateIdentifiersProvided_storesTrimmedOrNull() {
         when(categories.existsByCategoryIdAndActiveTrue(3L)).thenReturn(true);
         when(validator.validate(any())).thenReturn(List.of(JPG));
         stubFoundSave(105L);

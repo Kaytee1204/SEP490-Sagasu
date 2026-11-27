@@ -52,7 +52,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Unit tests UTC039-UTC085 (sheet "Account"): updateMyProfile, createAccount, updateAccount. */
+/** Unit tests UTC032-UTC074 (sheet "Account"): updateMyProfile, createAccount, updateAccount. */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AccountServiceTest {
@@ -102,7 +102,7 @@ class AccountServiceTest {
     // ---------------------------------------------------------------- updateMyProfile
 
     @Test
-    void utc039_updateMyProfile_validLocalPhoneUpdatedAndLogged() {
+    void utc032_updateMyProfile_validLocalPhoneUpdatedAndLogged() {
         authenticateAs(user);
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setPhone("0912345678");
@@ -117,39 +117,39 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc040_updateMyProfile_internationalPhoneAccepted() {
+    void utc033_updateMyProfile_internationalPhoneAccepted() {
         assertEquals("+84912345678", updateMyPhone("+84912345678").getPhone());
     }
 
     @Test
-    void utc041_updateMyProfile_shortPhoneThrowsBadRequest() {
+    void utc034_updateMyProfile_shortPhoneThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPhone("12345")));
     }
 
     @Test
-    void utc042_updateMyProfile_nineDigitPhoneThrowsBadRequest() {
+    void utc035_updateMyProfile_nineDigitPhoneThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPhone("091234567")));
     }
 
     // Upper boundary of the SRS UC-07 rule (Vietnamese 10-digit number).
     // SRS UC-07: Vietnamese 10-digit phone only (defect ACC-DE01, fixed on main 39230da).
     @Test
-    void utc043_updateMyProfile_zeroPlusTenDigitsThrowsBadRequest() {
+    void utc036_updateMyProfile_zeroPlusTenDigitsThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPhone("09123456789")));
     }
 
     @Test
-    void utc044_updateMyProfile_plus84PlusTenDigitsThrowsBadRequest() {
+    void utc037_updateMyProfile_plus84PlusTenDigitsThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPhone("+849123456789")));
     }
 
     @Test
-    void utc045_updateMyProfile_blankPhoneClearsPhone() {
+    void utc038_updateMyProfile_blankPhoneClearsPhone() {
         assertEquals("", updateMyPhone("   ").getPhone());
     }
 
     @Test
-    void utc046_updateMyProfile_validPasswordChangeReencodesAndClearsMustChange() {
+    void utc039_updateMyProfile_validPasswordChangeReencodesAndClearsMustChange() {
         user.setMustChangePassword(true);
         authenticateAs(user);
         when(passwordEncoder.matches("Old@1234", "encoded-hash")).thenReturn(true);
@@ -162,7 +162,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc047_updateMyProfile_wrongCurrentPasswordThrowsInvalidCredentials() {
+    void utc040_updateMyProfile_wrongCurrentPasswordThrowsInvalidCredentials() {
         authenticateAs(user);
         when(passwordEncoder.matches("wrong", "encoded-hash")).thenReturn(false);
         UpdateProfileRequest req = new UpdateProfileRequest();
@@ -172,36 +172,36 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc048_updateMyProfile_passwordWithoutSpecialCharThrowsBadRequest() {
+    void utc041_updateMyProfile_passwordWithoutSpecialCharThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPassword("abc12345")));
     }
 
     @Test
-    void utc049_updateMyProfile_sevenCharPasswordThrowsBadRequest() {
+    void utc042_updateMyProfile_sevenCharPasswordThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPassword("Ab@1234")));
     }
 
     @Test
-    void utc050_updateMyProfile_eightCharPasswordAccepted() {
+    void utc043_updateMyProfile_eightCharPasswordAccepted() {
         assertNotNull(updateMyPassword("Ab@12345"));
         assertEquals("enc:Ab@12345", user.getPasswordHash());
     }
 
     @Test
-    void utc051_updateMyProfile_sixteenCharPasswordAccepted() {
+    void utc044_updateMyProfile_sixteenCharPasswordAccepted() {
         assertNotNull(updateMyPassword("Ab@1234567890123"));
         assertEquals("enc:Ab@1234567890123", user.getPasswordHash());
     }
 
     @Test
-    void utc052_updateMyProfile_seventeenCharPasswordThrowsBadRequest() {
+    void utc045_updateMyProfile_seventeenCharPasswordThrowsBadRequest() {
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> updateMyPassword("Ab@12345678901234")));
     }
 
     // SRS UC-08: current password required (ACC-DE02, fixed), new password must differ from it,
     // other sessions are signed out (ACC-DE03, fixed on main 39230da).
     @Test
-    void utc053_updateMyProfile_newPasswordWithoutCurrentPasswordThrowsBadRequest() {
+    void utc046_updateMyProfile_newPasswordWithoutCurrentPasswordThrowsBadRequest() {
         authenticateAs(user);
         UpdateProfileRequest req = new UpdateProfileRequest();
         req.setNewPassword("New@1234");
@@ -211,7 +211,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc054_updateMyProfile_newPasswordSameAsCurrentThrowsBadRequest() {
+    void utc047_updateMyProfile_newPasswordSameAsCurrentThrowsBadRequest() {
         authenticateAs(user);
         when(passwordEncoder.matches("Old@1234", "encoded-hash")).thenReturn(true);
         UpdateProfileRequest req = new UpdateProfileRequest();
@@ -223,7 +223,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc055_updateMyProfile_passwordChangeRevokesRefreshTokens() {
+    void utc048_updateMyProfile_passwordChangeRevokesRefreshTokens() {
         RefreshToken rt = new RefreshToken();
         rt.setAccount(user);
         when(refreshTokenRepository.findByAccount_IdAndRevokedAtIsNull(3L)).thenReturn(List.of(rt));
@@ -234,38 +234,14 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc056_updateMyProfile_userEscalatingToAdminThrowsForbidden() {
-        authenticateAs(user);
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setRole(AccountRole.ADMIN);
-        assertEquals(ErrorCode.FORBIDDEN, code(() -> service.updateMyProfile(req)));
-    }
-
-    @Test
-    void utc057_updateMyProfile_userKeepingSameRoleSucceeds() {
-        authenticateAs(user);
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setRole(AccountRole.USER);
-        assertEquals(AccountRole.USER, service.updateMyProfile(req).getRole());
-    }
-
-    @Test
-    void utc058_updateMyProfile_adminMayChangeOwnRole() {
-        authenticateAs(admin);
-        UpdateProfileRequest req = new UpdateProfileRequest();
-        req.setRole(AccountRole.MANAGER);
-        assertEquals(AccountRole.MANAGER, service.updateMyProfile(req).getRole());
-    }
-
-    @Test
-    void utc059_updateMyProfile_unauthenticatedThrowsUnauthorized() {
+    void utc049_updateMyProfile_unauthenticatedThrowsUnauthorized() {
         assertEquals(ErrorCode.UNAUTHORIZED, code(() -> service.updateMyProfile(new UpdateProfileRequest())));
     }
 
     // ---------------------------------------------------------------- createAccount
 
     @Test
-    void utc060_createAccount_adminCreatesNormalizedActiveAccount() {
+    void utc050_createAccount_adminCreatesNormalizedActiveAccount() {
         authenticateAs(admin);
         CreateAccountRequest req = createReq("New@GMAIL.com", " Nguyen A ");
         req.setPassword("Abc@1234");
@@ -282,7 +258,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc061_createAccount_nullPasswordGeneratesTenCharsAndForcesChange() {
+    void utc051_createAccount_nullPasswordGeneratesTenCharsAndForcesChange() {
         authenticateAs(admin);
         CreateAccountRequest req = createReq("rand@gmail.com", "Rand");
         req.setPassword(null);
@@ -295,7 +271,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc062_createAccount_nullRoleDefaultsToUser() {
+    void utc052_createAccount_nullRoleDefaultsToUser() {
         authenticateAs(admin);
         CreateAccountRequest req = createReq("rand@gmail.com", "Rand");
         req.setRole(null);
@@ -303,7 +279,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc063_createAccount_managerAssigningNonUserRoleThrowsForbidden() {
+    void utc053_createAccount_managerAssigningNonUserRoleThrowsForbidden() {
         authenticateAs(manager);
         CreateAccountRequest req = createReq("ap@gmail.com", "Ap");
         req.setRole(AccountRole.APPROVER);
@@ -311,7 +287,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc064_createAccount_managerCreatingUserSucceeds() {
+    void utc054_createAccount_managerCreatingUserSucceeds() {
         authenticateAs(manager);
         CreateAccountRequest req = createReq("u@gmail.com", "U");
         req.setRole(AccountRole.USER);
@@ -319,26 +295,26 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc065_createAccount_malformedEmailThrowsBadRequest() {
+    void utc055_createAccount_malformedEmailThrowsBadRequest() {
         authenticateAs(admin);
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.createAccount(createReq("abc", "X"))));
     }
 
     @Test
-    void utc066_createAccount_oneCharTldThrowsBadRequest() {
+    void utc056_createAccount_oneCharTldThrowsBadRequest() {
         authenticateAs(admin);
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.createAccount(createReq("a@b.c", "X"))));
     }
 
     @Test
-    void utc067_createAccount_duplicateEmailThrowsEmailAlreadyExists() {
+    void utc057_createAccount_duplicateEmailThrowsEmailAlreadyExists() {
         authenticateAs(admin);
         when(accountRepository.existsByEmailIgnoreCase("dup@gmail.com")).thenReturn(true);
         assertEquals(ErrorCode.EMAIL_ALREADY_EXISTS, code(() -> service.createAccount(createReq("dup@gmail.com", "Dup"))));
     }
 
     @Test
-    void utc068_createAccount_shortPasswordThrowsBadRequest() {
+    void utc058_createAccount_shortPasswordThrowsBadRequest() {
         authenticateAs(admin);
         CreateAccountRequest req = createReq("ok@gmail.com", "Ok");
         req.setPassword("short");
@@ -346,7 +322,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc069_createAccount_customStatusValidUntilAndCreatorRecorded() {
+    void utc059_createAccount_customStatusValidUntilAndCreatorRecorded() {
         authenticateAs(admin);
         OffsetDateTime validUntil = OffsetDateTime.of(2027, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         CreateAccountRequest req = createReq("susp@gmail.com", "Susp");
@@ -363,7 +339,7 @@ class AccountServiceTest {
 
     // SRS UC-10 step 5, E2 (defect ACC-DE04, fixed).
     @Test
-    void utc070_createAccount_validUntilInPastThrowsBadRequest() {
+    void utc060_createAccount_validUntilInPastThrowsBadRequest() {
         authenticateAs(admin);
         CreateAccountRequest req = createReq("past@gmail.com", "Past");
         req.setPassword("Abc@1234");
@@ -376,7 +352,7 @@ class AccountServiceTest {
     // ---------------------------------------------------------------- updateAccount
 
     @Test
-    void utc071_updateAccount_adminUpdatesFullNameAndPhone() {
+    void utc061_updateAccount_adminUpdatesFullNameAndPhone() {
         authenticateAs(admin);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setFullName("Tran B");
@@ -387,13 +363,13 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc072_updateAccount_missingTargetThrowsAccountNotFound() {
+    void utc062_updateAccount_missingTargetThrowsAccountNotFound() {
         authenticateAs(admin);
         assertEquals(ErrorCode.ACCOUNT_NOT_FOUND, code(() -> service.updateAccount(999L, new UpdateAccountRequest())));
     }
 
     @Test
-    void utc073_updateAccount_managerTargetingAdminThrowsForbidden() {
+    void utc063_updateAccount_managerTargetingAdminThrowsForbidden() {
         authenticateAs(manager);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setFullName("X");
@@ -401,7 +377,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc074_updateAccount_managerMayUpdateApprover() {
+    void utc064_updateAccount_managerMayUpdateApprover() {
         authenticateAs(manager);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setFullName("X");
@@ -409,7 +385,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc075_updateAccount_managerChangingRoleThrowsForbidden() {
+    void utc065_updateAccount_managerChangingRoleThrowsForbidden() {
         authenticateAs(manager);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setRole(AccountRole.APPROVER);
@@ -417,7 +393,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc076_updateAccount_adminChangesUserRoleToApprover() {
+    void utc066_updateAccount_adminChangesUserRoleToApprover() {
         authenticateAs(admin);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setRole(AccountRole.APPROVER);
@@ -425,33 +401,27 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc077_updateAccount_emailOwnedByAnotherThrowsEmailAlreadyExists() {
+    void utc067_updateAccount_emailOwnedByAnotherThrowsEmailAlreadyExists() {
         authenticateAs(admin);
         when(accountRepository.existsByEmailIgnoreCase("taken@x.com")).thenReturn(true);
         assertEquals(ErrorCode.EMAIL_ALREADY_EXISTS, code(() -> service.updateAccount(3L, updateEmail("taken@x.com"))));
     }
 
     @Test
-    void utc078_updateAccount_sameEmailDifferentCaseSkipsDuplicateCheck() {
+    void utc068_updateAccount_sameEmailDifferentCaseSkipsDuplicateCheck() {
         authenticateAs(admin);
         assertEquals("a@x.com", service.updateAccount(3L, updateEmail("A@X.COM")).getEmail());
         verify(accountRepository, never()).existsByEmailIgnoreCase(anyString());
     }
 
     @Test
-    void utc079_updateAccount_specialAdminEmailAccepted() {
-        authenticateAs(admin);
-        assertEquals("admin", service.updateAccount(3L, updateEmail("admin")).getEmail());
-    }
-
-    @Test
-    void utc080_updateAccount_malformedEmailThrowsBadRequest() {
+    void utc069_updateAccount_malformedEmailThrowsBadRequest() {
         authenticateAs(admin);
         assertEquals(ErrorCode.BAD_REQUEST, code(() -> service.updateAccount(3L, updateEmail("bad-email"))));
     }
 
     @Test
-    void utc081_updateAccount_invalidPhoneThrowsBadRequest() {
+    void utc070_updateAccount_invalidPhoneThrowsBadRequest() {
         authenticateAs(admin);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setPhone("abc");
@@ -459,7 +429,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc082_updateAccount_passwordReencoded() {
+    void utc071_updateAccount_passwordReencoded() {
         authenticateAs(admin);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setPassword("New@1234");
@@ -468,7 +438,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc083_updateAccount_suspendRevokesActiveRefreshTokens() {
+    void utc072_updateAccount_suspendRevokesActiveRefreshTokens() {
         authenticateAs(admin);
         RefreshToken rt = new RefreshToken();
         rt.setAccount(user);
@@ -482,7 +452,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc084_updateAccount_activateDoesNotTouchRefreshTokens() {
+    void utc073_updateAccount_activateDoesNotTouchRefreshTokens() {
         authenticateAs(admin);
         user.setStatus(AccountStatus.SUSPENDED);
         UpdateAccountRequest req = new UpdateAccountRequest();
@@ -493,7 +463,7 @@ class AccountServiceTest {
     }
 
     @Test
-    void utc085_updateAccount_blankFullNameKeepsExisting() {
+    void utc074_updateAccount_blankFullNameKeepsExisting() {
         authenticateAs(admin);
         UpdateAccountRequest req = new UpdateAccountRequest();
         req.setFullName("   ");

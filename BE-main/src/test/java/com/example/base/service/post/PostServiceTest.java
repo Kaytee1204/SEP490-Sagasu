@@ -63,9 +63,9 @@ class PostServiceTest {
     @InjectMocks
     private PostService service;
 
-    // UTC134 - listVisible with empty filter queries findVisibleIds and attaches office receipts
+    // UTC123 - listVisible with empty filter queries findVisibleIds and attaches office receipts
     @Test
-    void utc134_listVisible_whenEmptyFilter_usesFindVisibleIdsAndAttachesOfficeReceipts() {
+    void utc123_listVisible_whenEmptyFilter_usesFindVisibleIdsAndAttachesOfficeReceipts() {
         Account owner = account(5L);
         Category cat = category(3L, "Wallet");
         Post p1 = foundPost(1L, owner, cat);
@@ -90,9 +90,9 @@ class PostServiceTest {
         verify(posts, never()).searchVisibleIds(any(), any(), any(), any(), any(), any(), any());
     }
 
-    // UTC135 - listVisible with filter uses searchVisibleIds
+    // UTC124 - listVisible with filter uses searchVisibleIds
     @Test
-    void utc135_listVisible_whenFilterProvided_usesSearchVisibleIds() {
+    void utc124_listVisible_whenFilterProvided_usesSearchVisibleIds() {
         PostSearchFilter filter = new PostSearchFilter("wallet", null, "LOST", "", null, null);
         when(posts.searchVisibleIds("wallet", null, "LOST", "", null, null, PageRequest.of(0, 20)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
@@ -105,20 +105,20 @@ class PostServiceTest {
     }
 
     @Test
-    void utc136_listVisible_pageZeroThrowsPaginationInvalid() {
+    void utc125_listVisible_pageZeroThrowsPaginationInvalid() {
         assertEquals(ErrorCode.POST_PAGINATION_INVALID,
                 assertThrows(AppException.class, () -> service.listVisible(0, 20, PostSearchFilter.empty())).getErrorCode());
     }
 
     @Test
-    void utc137_listVisible_sizeZeroThrowsPaginationInvalid() {
+    void utc126_listVisible_sizeZeroThrowsPaginationInvalid() {
         assertEquals(ErrorCode.POST_PAGINATION_INVALID,
                 assertThrows(AppException.class, () -> service.listVisible(1, 0, PostSearchFilter.empty())).getErrorCode());
     }
 
-    // UTC138 - listVisible returns empty page and skips batch fetch and receipt lookup when no visible IDs
+    // UTC127 - listVisible returns empty page and skips batch fetch and receipt lookup when no visible IDs
     @Test
-    void utc138_listVisible_whenNoVisibleIds_skipsBatchFetchAndReceipts() {
+    void utc127_listVisible_whenNoVisibleIds_skipsBatchFetchAndReceipts() {
         var pageable = PageRequest.of(0, 20);
         when(posts.findVisibleIds(pageable)).thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
