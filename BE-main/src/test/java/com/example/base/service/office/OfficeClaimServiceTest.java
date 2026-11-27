@@ -417,17 +417,17 @@ class OfficeClaimServiceTest {
     }
 
     @Test
-    void utc222_review_scheduledAtTooSoon_throwsBadRequest() {
+    void utc222_review_scheduledAtInPast_throwsBadRequest() {
         CustomUserDetails ud = reviewer();
         givenReviewClaim("PENDING", user7, 0L);
-        OfficePickupSchedule schedule = new OfficePickupSchedule("");
+        OfficeAppointmentSchedule schedule = new OfficeAppointmentSchedule("");
         doAnswer(inv -> {
-            schedule.validate(inv.getArgument(0), inv.getArgument(1));
+            schedule.validatePickup(inv.getArgument(0), inv.getArgument(1));
             return null;
         }).when(invitations).validatePickupSchedule(any(), any());
 
-        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().plusHours(12), "Room 101", null), ud),
-                "Giờ hẹn cần cách hiện tại hơn 12 giờ và 1 phút");
+        assertBad(() -> service.review(30L, approve(OffsetDateTime.now().minusHours(1), "Room 101", null), ud),
+                "Vui lòng chọn giờ hẹn sau thời điểm hiện tại.");
         assertNoApprovalSaved();
         verify(invitations, never()).send(anyLong());
     }

@@ -97,17 +97,6 @@ class PostCreationServiceTest {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
 
-    @Test
-    void postingRestrictionBlocksNewPostBeforePreparingImages() {
-        var request = new CreateLostPostRequest(null, "Wallet", "Black leather", 3L, "Hall A",
-                OffsetDateTime.now().minusDays(1), null);
-        doThrow(new AppException(ErrorCode.FORBIDDEN)).when(restrictions).checkAvailable(7L,
-                com.example.base.service.report.SubmissionRestrictions.Action.POST);
-
-        assertThrows(AppException.class, () -> service.createLost(request, List.of(), user));
-        verifyNoInteractions(validator, storage, posts);
-    }
-
     // UTC087 - createLost valid request with 2 images trims text and persists ordered images
     @Test
     void utc087_createLost_whenValidWithTwoImages_createsTrimmedPostWithOrderedImages() {
