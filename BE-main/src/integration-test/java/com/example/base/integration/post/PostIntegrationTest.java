@@ -8,7 +8,7 @@ import com.example.base.entity.Post;
 import com.example.base.entity.PostImage;
 import com.example.base.exception.AppException;
 import com.example.base.exception.ErrorCode;
-import com.example.base.integration.ScenarioTestBase;
+import com.example.base.integration.IntegrationTestBase;
 import com.example.base.repository.CategoryRepository;
 import com.example.base.repository.PostRepository;
 import com.example.base.storage.ImageStorage;
@@ -54,7 +54,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * ImageStorage (R2) is mocked; the Python AI service is a local stub HTTP server (up or down per case).
  * Field checks of the create form are unit-tested (Report-5.1 Post UTC098-UTC117); the Smart Match scoring formula has no unit test.
  */
-class PostScenarioIntegrationTest extends ScenarioTestBase {
+class PostIntegrationTest extends IntegrationTestBase {
 
     static final String MSG_CREATED = "Đăng bài thành công";
     static final String MSG_NOT_VISIBLE = "Bài đăng không tồn tại hoặc không còn hiển thị";

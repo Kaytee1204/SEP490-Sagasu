@@ -4,7 +4,7 @@ import com.example.base.entity.Account;
 import com.example.base.entity.AccountRole;
 import com.example.base.entity.AccountStatus;
 import com.example.base.entity.RefreshToken;
-import com.example.base.integration.ScenarioTestBase;
+import com.example.base.integration.IntegrationTestBase;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Field validation (phone / password / e-mail format, missing current password, Manager role scope, create with a past date)
  * is covered by Report-5.1 Account UTC039-UTC085.
  */
-class AccountScenarioIntegrationTest extends ScenarioTestBase {
+class AccountIntegrationTest extends IntegrationTestBase {
 
     static final String NEW1 = "sagasunewtest01@gmail.com";
     static final String NEW2 = "sagasunewtest02@gmail.com";
