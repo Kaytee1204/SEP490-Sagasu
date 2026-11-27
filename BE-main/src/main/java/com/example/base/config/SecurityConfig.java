@@ -72,7 +72,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // DaiHV: token-only intake appointment responses, without exposing other office APIs.
                         .requestMatchers(HttpMethod.GET, "/ws/chat").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/news", "/api/news/**").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/swagger-ui/**",

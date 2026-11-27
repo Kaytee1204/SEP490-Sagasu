@@ -1,5 +1,5 @@
 // src/components/layouts/admin/adminNavConfig.js
-import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Package, AlertTriangle, Users, Tags, ClipboardList, Warehouse, FileCheck, FileWarning, Shield } from 'lucide-react';
 import { reportReviewNavItems, reportReviewRoot } from '@/features/report-review/routes';
 
 export const ADMIN_NAV_SECTIONS = [
@@ -39,14 +39,6 @@ export const ADMIN_NAV_SECTIONS = [
         path: '/approver/storage',
         icon: Warehouse,
         badgeKey: 'storedItems',
-        badgeTone: 'neutral',
-        roles: ['APPROVER'],
-      },
-      {
-        label: 'Tin tức hệ thống',
-        path: '/approver/news',
-        icon: Newspaper,
-        badgeKey: 'newsArticles',
         badgeTone: 'neutral',
         roles: ['APPROVER'],
       },
@@ -91,14 +83,6 @@ export const ADMIN_NAV_SECTIONS = [
         icon: Package,
         badgeKey: 'pendingPosts',
         badgeTone: 'warning',
-        roles: ['MANAGER'],
-      },
-      {
-        label: 'Tin tức hệ thống',
-        path: '/admin/news',
-        icon: Newspaper,
-        badgeKey: 'newsArticles',
-        badgeTone: 'neutral',
         roles: ['MANAGER'],
       },
       {

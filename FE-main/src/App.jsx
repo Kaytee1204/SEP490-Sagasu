@@ -41,7 +41,6 @@ import CategoryManagementPage from '@/features/category/pages/CategoryManagement
 import ReceiptQueuePage from '@/features/approver/pages/ReceiptQueuePage';
 import IntakeFormPage from '@/features/approver/pages/IntakeFormPage';
 import IntakeDetailPage from '@/features/approver/pages/IntakeDetailPage';
-import ApproverNewsPage from '@/features/approver/pages/ApproverNewsPage';
 import ChatPage from '@/features/chat/pages/ChatPage';
 import MyReportsPage from '@/features/reports/pages/MyReportsPage';
 import ReportDetailPage from '@/features/reports/pages/ReportDetailPage';
@@ -197,7 +196,6 @@ function AppRoutes() {
         <Route path="reports/khang-cao" element={<ProtectedRoute managerOnly><AdminReportsPage kind="CLAIM_APPEAL" /></ProtectedRoute>} />
         <Route path="reports/:id" element={<ProtectedRoute managerOnly><ReportReviewDetailPage /></ProtectedRoute>} />
         <Route path="categories" element={<ProtectedRoute managerOnly><CategoryManagementPage /></ProtectedRoute>} />
-        <Route path="news" element={<ProtectedRoute managerOnly><ApproverNewsPage /></ProtectedRoute>} />
       </Route>
 
       
@@ -216,7 +214,6 @@ function AppRoutes() {
         <Route path="receipts/new" element={<IntakeFormPage />} />
         <Route path="receipts/:id/edit" element={<IntakeFormPage />} />
         <Route path="receipts/:id" element={<IntakeDetailPage />} />
-        <Route path="news" element={<ApproverNewsPage />} />
       </Route>
       <Route path="/dashboard" element={<Navigate to={postLoginRedirect} replace />} />
       <Route path="/quan-tri" element={<Navigate to="/admin" replace />} />

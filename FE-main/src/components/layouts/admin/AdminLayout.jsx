@@ -9,7 +9,6 @@ import { reviewApi } from '@/features/report-review/api';
 import { officeApi } from '@/features/office/api/officeApi';
 import { workflowApi } from '@/features/office/api/workflowApi';
 import { approverApi } from '@/features/approver/api/approverApi';
-import { newsApi } from '@/features/news/api/newsApi';
 import './AdminSidebar.css';
 
 function readTotal(settled) {
@@ -34,12 +33,11 @@ export default function AdminLayout() {
 
     const load = async () => {
       if (role === 'MANAGER') {
-        const [reportsRes, postsRes, transfersRes, storedRes, newsRes] = await Promise.allSettled([
+        const [reportsRes, postsRes, transfersRes, storedRes] = await Promise.allSettled([
           reviewApi.list({ queue: 'READY' }),
           officeApi.posts({ page: 1, moderation: 'PENDING' }),
           workflowApi.transfers({ page: 1, status: 'PENDING', mine: false }),
           officeApi.stored({ page: 1 }),
-          newsApi.listForApprover({ page: 1, size: 1 }),
         ]);
         if (!active) return;
         setNavBadges({
@@ -48,15 +46,13 @@ export default function AdminLayout() {
           pendingPosts: readTotal(postsRes),
           pendingTransfers: readTotal(transfersRes),
           storedItems: readTotal(storedRes),
-          newsArticles: readTotal(newsRes),
         });
       } else if (role === 'APPROVER') {
-        const [claimsRes, transfersRes, receiptsRes, storedRes, newsRes] = await Promise.allSettled([
+        const [claimsRes, transfersRes, receiptsRes, storedRes] = await Promise.allSettled([
           officeApi.claims({ page: 1, status: 'PENDING' }, false),
           workflowApi.transfers({ page: 1, status: 'PENDING', mine: false }),
           approverApi.list({ page: 1, filter: 'DRAFT' }),
           officeApi.stored({ page: 1 }),
-          newsApi.listForApprover({ page: 1, size: 1 }),
         ]);
         if (!active) return;
         setNavBadges({
@@ -64,7 +60,6 @@ export default function AdminLayout() {
           pendingTransfers: readTotal(transfersRes),
           draftReceipts: readTotal(receiptsRes),
           storedItems: readTotal(storedRes),
-          newsArticles: readTotal(newsRes),
         });
       } else {
         if (active) setNavBadges({});
