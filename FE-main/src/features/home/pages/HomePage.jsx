@@ -78,7 +78,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const [keyword, setKeyword] = useState('');
 
-  const orgName = user?.organizationName || user?.unitName || 'Trường Đại học Sakura';
+  const orgName = user?.organizationName || user?.unitName || 'Trường học';
 
   const handleSearchSubmit = (event) => {
     event.preventDefault();

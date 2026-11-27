@@ -178,7 +178,7 @@ public class DataInitializer {
             Account testUser = accountRepository.findByEmailIgnoreCase("user").orElse(null);
             if (testUser == null) {
                 testUser = new Account();
-                testUser.setFullName("Người dùng Test (User)");
+                testUser.setFullName("Người dùng Test");
                 testUser.setEmail("user");
                 testUser.setPasswordHash(passwordEncoder.encode("123"));
                 testUser.setRole(AccountRole.USER);
@@ -187,6 +187,9 @@ public class DataInitializer {
                 testUser.setCreatedBy(admin);
                 accountRepository.save(testUser);
             } else {
+                if (testUser.getFullName() != null && testUser.getFullName().contains("(User)")) {
+                    testUser.setFullName("Người dùng Test");
+                }
                 testUser.setPasswordHash(passwordEncoder.encode("123"));
                 testUser.setRole(AccountRole.USER);
                 testUser.setStatus(AccountStatus.ACTIVE);
@@ -211,12 +214,12 @@ public class DataInitializer {
                 accountRepository.save(thirdUser);
             }
 
-            // 4b. Seed tài khoản APPROVER: tuelam332@gmail.com / 123
+            // 4b. Seed tài khoản STAFF: tuelam332@gmail.com / 123
             String approverEmail = "tuelam332@gmail.com";
             Account approverUser = accountRepository.findByEmailIgnoreCase(approverEmail).orElse(null);
             if (approverUser == null) {
                 approverUser = new Account();
-                approverUser.setFullName("Tuệ Lâm (Approver)");
+                approverUser.setFullName("Tuệ Lâm");
                 approverUser.setEmail(approverEmail);
                 approverUser.setPasswordHash(passwordEncoder.encode("123"));
                 approverUser.setRole(AccountRole.APPROVER);
@@ -225,8 +228,10 @@ public class DataInitializer {
                 approverUser.setCreatedBy(admin);
                 accountRepository.save(approverUser);
             } else {
-                if (!StringUtils.hasText(approverUser.getFullName())) {
-                    approverUser.setFullName("Tuệ Lâm (Approver)");
+                if (!StringUtils.hasText(approverUser.getFullName())
+                        || approverUser.getFullName().contains("(Approver)")
+                        || approverUser.getFullName().contains("(APPROVER)")) {
+                    approverUser.setFullName("Tuệ Lâm");
                 }
                 approverUser.setPasswordHash(passwordEncoder.encode("123"));
                 approverUser.setRole(AccountRole.APPROVER);
