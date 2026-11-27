@@ -365,7 +365,7 @@ class AuthScenarioIntegrationTest extends ScenarioTestBase {
         Object[][] matrix = {
                 {USER01, new int[]{200, 403, 403, 403, 403}},
                 {STAFF01, new int[]{200, 200, 403, 403, 403}},
-                {MANAGER01, new int[]{200, 403, 200, 200, 200}},
+                {MANAGER01, new int[]{200, 403, 200, 200, 403}},
                 {ADMIN01, new int[]{200, 403, 403, 200, 200}},
         };
         for (Object[] row : matrix) {

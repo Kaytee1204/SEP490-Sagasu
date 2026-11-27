@@ -15,10 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+@PreAuthorize("hasRole('ADMIN')")
 @Tag(
         name = "02. Account Management - Quản lý tài khoản & Hồ sơ",
-        description = "Hồ sơ cá nhân (/me), Lịch sử đăng nhập & Audit Logs hệ thống, Dashboard thống kê quản trị, CRUD tài khoản, Xóa mềm và Import/Export Excel (ADMIN & MANAGER)"
+        description = "Hồ sơ cá nhân (/me), Lịch sử đăng nhập & Audit Logs hệ thống, Dashboard thống kê quản trị, CRUD tài khoản, Xóa mềm và Import/Export Excel"
 )
 public class AdminGovernanceController {
 
@@ -26,7 +26,7 @@ public class AdminGovernanceController {
 
     @GetMapping("/dashboard")
     @Operation(
-            summary = "[2.11] Thống kê tổng quan Bảng điều khiển Quản trị (ADMIN & MANAGER Dashboard)",
+            summary = "[2.11] Thống kê tổng quan Bảng điều khiển Quản trị (ADMIN Dashboard)",
             description = "Trả về toàn bộ chỉ số KPI thời gian thực (Tài khoản, Bài đăng Lost/Found, Kho văn phòng, Claim P2P/Office, Báo cáo vi phạm, Xu hướng 7 ngày, Danh mục hàng đầu và Hoạt động gần đây)."
     )
     public ApiResponse<Map<String, Object>> getDashboardOverview() {
@@ -35,7 +35,7 @@ public class AdminGovernanceController {
 
     @GetMapping("/audit-logs")
     @Operation(
-            summary = "[2.12] Quản lý & Tra cứu Nhật ký Hệ thống hợp nhất (Audit Logs) dành cho ADMIN & MANAGER",
+            summary = "[2.12] Quản lý & Tra cứu Nhật ký Hệ thống hợp nhất (Audit Logs) dành cho ADMIN",
             description = "Hợp nhất nhật ký bảo mật & đăng nhập (SECURITY), nhật ký xử lý yêu cầu nhận đồ (CLAIM) và nhật ký điều tra báo cáo (REPORT). Hỗ trợ lọc theo nguồn (source), loại sự kiện (eventType), vai trò (role), trạng thái thành công (success), khoảng ngày và từ khóa."
     )
     public ApiResponse<Map<String, Object>> getAuditLogs(
